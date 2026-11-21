@@ -489,7 +489,12 @@ class LibraryScreen(
         renderDocs()
     }
 
+    /** PERF 6: observable count of listing requests, for the cold-start budget test. */
+    internal var reloadRequests: Int = 0
+        private set
+
     fun reload() {
+        reloadRequests++
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
             // No lifecycle (unit-only host): keep the old synchronous behaviour.
@@ -2629,27 +2634,43 @@ class LibraryScreen(
         return "$pages · ${size(doc)} · ${whenDay(doc)}$tags"
     }
 
+    /**
+     * PERF 1: the repository already measured every byte while listing the library. Never
+     * stat a file on the main thread just to reformat a number we already have.
+     */
     private fun size(doc: ScanDocument): String {
-        val bytes = runCatching {
-            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
-        }.getOrDefault(0L)
-        // CP1: one decimal unit helper (KB = 1000, MB = 1,000,000). The other screens keep a
-        // number and its unit together by post-processing the shared label with an NBSP; do the
-        // same here. A missing/unreadable size stays "—" instead of pretending to be "0 B".
-        if (bytes <= 0) return "—"
+        val bytes = doc.cachedSize
+        // CP1: one decimal unit helper (KB = 1000, MB = 1,000,000). Keep a number and its
+        // unit together with an NBSP. A missing size stays "—", never a pretend "0 B".
+        if (bytes <= 0L) return "—"
         return SizeUnits.format(bytes).replace(' ', '\u00A0')
     }
 
+    /**
+     * PERF 2: one formatter and two Calendar instances per locale, not three allocations on
+     * every bind. Recreated only when the app language actually changes (not device locale).
+     */
+    private var dayFormatter: SimpleDateFormat? = null
+    private var dayFormatterLocale: java.util.Locale? = null
+    private val dayDocCalendar = Calendar.getInstance()
+    private val dayTodayCalendar = Calendar.getInstance()
+
     private fun whenDay(doc: ScanDocument): String {
-        val docDay = Calendar.getInstance().apply { timeInMillis = doc.createdAt }
-        val today = Calendar.getInstance()
-        val fmt = SimpleDateFormat("d MMM", AppLocale.of(context))
-        val sameDay = docDay.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-            docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+        val locale = AppLocale.of(context)
+        val fmt = if (dayFormatter == null || dayFormatterLocale != locale) {
+            SimpleDateFormat("d MMM", locale).also {
+                dayFormatter = it
+                dayFormatterLocale = locale
+            }
+        } else dayFormatter!!
+        dayDocCalendar.timeInMillis = doc.createdAt
+        dayTodayCalendar.timeInMillis = System.currentTimeMillis()
+        val sameDay = dayDocCalendar.get(Calendar.YEAR) == dayTodayCalendar.get(Calendar.YEAR) &&
+            dayDocCalendar.get(Calendar.DAY_OF_YEAR) == dayTodayCalendar.get(Calendar.DAY_OF_YEAR)
         if (sameDay) return context.getString(R.string.shell_today)
-        today.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterday = docDay.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-            docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+        dayTodayCalendar.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterday = dayDocCalendar.get(Calendar.YEAR) == dayTodayCalendar.get(Calendar.YEAR) &&
+            dayDocCalendar.get(Calendar.DAY_OF_YEAR) == dayTodayCalendar.get(Calendar.DAY_OF_YEAR)
         if (yesterday) return context.getString(R.string.shell_yesterday)
         return fmt.format(Date(doc.createdAt))
     }

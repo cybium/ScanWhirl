@@ -104,6 +104,37 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private lateinit var toolsHub: ToolsHubScreen
     private lateinit var vaultScreen: VaultScreen
     private lateinit var meScreen: MeScreen
+    private var toolsHubCreated = false
+    private var vaultScreenCreated = false
+    private var meScreenCreated = false
+
+    /** PERF 6: the first onResume must not re-list a library onCreate already listed. */
+    private var skipFirstResumeReload = false
+
+    private fun ensureToolsHub() {
+        if (toolsHubCreated) return
+        toolsHub = ToolsHubScreen(this, this)
+        toolsHubCreated = true
+    }
+
+    private fun ensureVaultScreen() {
+        if (vaultScreenCreated) return
+        vaultScreen = VaultScreen(this)
+        vaultScreenCreated = true
+    }
+
+    private fun ensureMeScreen() {
+        if (meScreenCreated) return
+        meScreen = MeScreen(this, object : MeScreen.Callbacks {
+            override fun onPro() = showPro()
+            override fun onSettings() = startActivity(SettingsActivity.intent(this@ShellActivity))
+            override fun onBackup() =
+                startActivity(com.scanwhirl.app.ui.backup.BackupActivity.intent(this@ShellActivity))
+            override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
+            override fun onAbout() = showAbout()
+        })
+        meScreenCreated = true
+    }
     private lateinit var proScreen: ProScreen
 
     private val scanLauncher: ScanLauncher by lazy {
@@ -237,15 +268,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
 
         library = LibraryScreen(this, this, repo, libraryCallbacks)
-        toolsHub = ToolsHubScreen(this, this)
-        vaultScreen = VaultScreen(this)
-        meScreen = MeScreen(this, object : MeScreen.Callbacks {
-            override fun onPro() = showPro()
-            override fun onSettings() = startActivity(SettingsActivity.intent(this@ShellActivity))
-            override fun onBackup() = startActivity(com.scanwhirl.app.ui.backup.BackupActivity.intent(this@ShellActivity))
-            override fun onTrash() = startActivity(TrashActivity.intent(this@ShellActivity))
-            override fun onAbout() = showAbout()
-        })
+        // PERF 6: only Library is visible at cold start. The other three tabs are built on
+        // their first showTab, so their view trees and fonts are not paid for up front.
+        skipFirstResumeReload = true
         // Play's localized price: this query only fills ProBilling's cache. No Pro screen exists
         // yet, and the callback may arrive before or after one does, so it must never touch UI.
         com.scanwhirl.app.util.ProBilling.prefetchPrice(this)
@@ -427,7 +452,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // Cheap once-per-process ownership check: a purchase on another phone / after a reinstall
         // unlocks, and a refund locks Pro again (release builds only).
         com.scanwhirl.app.util.ProBilling.refreshOwned(this)
-        if (::library.isInitialized) library.reload()
+        // PERF 6: onCreate's showTab already listed the library once on a cold start.
+        if (skipFirstResumeReload) {
+            skipFirstResumeReload = false
+        } else if (::library.isInitialized) {
+            library.reload()
+        }
         // T27-FIX-TRASH: a move made on the document screen closed that screen; its
         // "Moved to Trash" Undo is shown here, on the next resume.
         TrashActions.takePending()?.let { showMovedNotice(it) }
@@ -444,8 +474,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         lastProState = pro
         if (!hadState) return
         if (::library.isInitialized) library.refreshProState()
-        if (::toolsHub.isInitialized) toolsHub.refreshProState()
-        if (::meScreen.isInitialized) meScreen.refreshProState()
+        if (toolsHubCreated) toolsHub.refreshProState()
+        if (meScreenCreated) meScreen.refreshProState()
     }
 
     override fun onStop() {
@@ -648,12 +678,19 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 library.reload()
                 scroll(library)
             }
-            Tab.TOOLS -> scroll(toolsHub).also { toolsHub.clearSearch() }
+            Tab.TOOLS -> {
+                ensureToolsHub()
+                scroll(toolsHub).also { toolsHub.clearSearch() }
+            }
             Tab.VAULT -> {
+                ensureVaultScreen()
                 vaultScreen.refreshStatus()
                 scroll(vaultScreen)
             }
-            Tab.ME -> scroll(meScreen)
+            Tab.ME -> {
+                ensureMeScreen()
+                scroll(meScreen)
+            }
         }
         val target = view
         // v2 UI: 74_motion — tabs fade through instead of snapping.

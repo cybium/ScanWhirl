@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane V2L: new view ids only; existing shared ids are untouched. -->
+<resources>
+    <item name="v2lSuggestedName" type="id" />
+    <item name="v2lFolderControl" type="id" />
+    <item name="v2lFilterControl" type="id" />
+    <item name="v2lSortControl" type="id" />
+</resources>
