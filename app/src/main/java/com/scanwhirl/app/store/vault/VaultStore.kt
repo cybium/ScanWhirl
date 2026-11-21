@@ -162,6 +162,14 @@ class VaultStore(
     private val openDir: File
         get() = File(context.cacheDir, OPEN_DIR)
 
+    init {
+        // V2: one process-wide session, so it owns the lifetime of every decrypted copy.
+        // The callback only touches this app's vault_open directory, never a library file.
+        VaultSession.registerOpenCopyWipe {
+            File(context.applicationContext.cacheDir, OPEN_DIR).deleteRecursively()
+        }
+    }
+
     // ------------------------------------------------------------------
     // Setup and unlock
     // ------------------------------------------------------------------
