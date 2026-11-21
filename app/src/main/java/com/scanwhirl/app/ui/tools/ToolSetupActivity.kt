@@ -29,6 +29,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressTarget
+import com.scanwhirl.app.tools.CompressionPresentation
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentActionDispatcher
 import com.scanwhirl.app.ui.DocumentViewerActivity
@@ -689,14 +690,18 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildCompressOptions() {
         // The document's compress sheet wording, in the same order: quality first, smallest last.
+        // L3-03: the same ordered labels as the Compress sheet, from one shared table.
         val levels = listOf(
-            CompressLevel(R.string.compress_level_low, 0, R.id.toolSetupLevelBest),
-            CompressLevel(R.string.compress_level_medium, 1, R.id.toolSetupLevelBalanced),
-            CompressLevel(R.string.compress_level_high, 2, R.id.toolSetupLevelSmaller),
-            CompressLevel(R.string.compress_level_ultra, 3, R.id.toolSetupLevelSmallest)
+            CompressLevel(CompressionPresentation.levelLabels[0], 0, R.id.toolSetupLevelBest),
+            CompressLevel(CompressionPresentation.levelLabels[1], 1, R.id.toolSetupLevelBalanced),
+            CompressLevel(CompressionPresentation.levelLabels[2], 2, R.id.toolSetupLevelSmaller),
+            CompressLevel(CompressionPresentation.levelLabels[3], 3, R.id.toolSetupLevelSmallest)
         )
         levelRows.clear()
         levelSizes.clear()
+        // L3-03: at larger fonts the measured size drops below its label instead of being
+        // squeezed beside it. Engine parameters are untouched (see CompressionPresentation).
+        val stackEstimate = resources.configuration.fontScale > 1.15f
         // Full-width rows, one level per line: Hindi labels ("सबसे अच्छी क्वालिटी") never fit a
         // three-up chip row at 360 dp, which is what clipped "Mediu / m" on the owner's phone.
         val stack = LinearLayout(this).apply {
@@ -719,8 +724,8 @@ class ToolSetupActivity : BaseActivity() {
                 id = R.id.toolSetupLevelLabel
                 tag = CHIP_TAG
                 text = getString(level.titleRes)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
+                // L3-03: no definite truncation — a long Hindi label wraps to a second line.
+                maxLines = Int.MAX_VALUE
                 gravity = Gravity.CENTER_VERTICAL
             }
             val size = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
@@ -730,12 +735,15 @@ class ToolSetupActivity : BaseActivity() {
             }
             val row = LinearLayout(this).apply {
                 id = level.id
-                orientation = LinearLayout.HORIZONTAL
+                orientation = if (stackEstimate) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 isFocusable = true
+                // L3-03: wrap height with a 48dp floor, never a fixed clipped row.
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
                 val pad = SwStyle.dp(this@ToolSetupActivity, 12f)
-                setPadding(pad, 0, pad, 0)
+                val padV = SwStyle.dp(this@ToolSetupActivity, if (stackEstimate) 8f else 0f)
+                setPadding(pad, padV, pad, padV)
                 background = chipBackground(false)
                 setOnClickListener {
                     this@ToolSetupActivity.level = level.index
@@ -747,18 +755,34 @@ class ToolSetupActivity : BaseActivity() {
             }
             row.addView(check, LinearLayout.LayoutParams(
                 SwStyle.dp(this@ToolSetupActivity, 20f), SwStyle.dp(this@ToolSetupActivity, 20f)
-            ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+            ).apply {
+                marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+                if (stackEstimate) bottomMargin = SwStyle.dp(this@ToolSetupActivity, 4f)
+            })
             row.addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
             })
-            row.addView(size)
+            row.addView(size, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { if (stackEstimate) topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
             levelRows += row
             levelSizes += size
             stack.addView(row, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
         }
         optionsHost.addView(stack)
+        // L3-03: an explicit aim label; the field's own judged hint stays unchanged so
+        // existing parity and fit checks still describe the same field.
+        optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+                text = getString(CompressionPresentation.aimForSize)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 8f) }
+        )
         // The sheet ends with "Custom size"; the setup page does the same.
         optionsHost.addView(field(
             R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,

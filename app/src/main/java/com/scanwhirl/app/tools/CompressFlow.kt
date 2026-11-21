@@ -63,13 +63,13 @@ class CompressFlow(
         val dpi: Float
     )
 
+    // L3-03: one ordered label table for both setup surfaces. The engine numbers on the right
+    // are intentionally unchanged — CP1's best tier still caps at 3000 px.
     private val levels = listOf(
-        // CP1: the best-quality tier also caps at 3000 px, the ceiling import uses. Earlier it
-        // rendered at 4096, which could OOM a budget phone while the rest of the app stayed at 3000.
-        Level(R.string.compress_level_low, 80, 3000, 200f),
-        Level(R.string.compress_level_medium, 65, 2000, 150f),
-        Level(R.string.compress_level_high, 50, 1600, 130f),
-        Level(R.string.compress_level_ultra, 38, 1200, 110f)
+        Level(CompressionPresentation.levelLabels[0], 80, 3000, 200f),
+        Level(CompressionPresentation.levelLabels[1], 65, 2000, 150f),
+        Level(CompressionPresentation.levelLabels[2], 50, 1600, 130f),
+        Level(CompressionPresentation.levelLabels[3], 38, 1200, 110f)
     )
 
     /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
@@ -89,24 +89,23 @@ class CompressFlow(
 
     fun start() {
         devicePages = null
+        val candidates = docs()
         // No saved scans yet: the source is necessarily an external file.
-        if (docs().isEmpty()) {
+        if (candidates.isEmpty()) {
             pickPdf()
             return
         }
+        // L3-03: one combined library picker. The last row is the honest route to a
+        // phone file, instead of a source sheet followed by a second picker.
+        val labels = candidates.map { it.name } +
+            activity.getString(CompressionPresentation.fromPhoneStorage)
         com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
-            .setTitle(R.string.compress_title)
-            .setOptions(
-                listOf(
-                    activity.getString(R.string.compress_source_scan),
-                    activity.getString(R.string.compress_source_file)
-                )
-            ) { which, _ ->
-                when (which) {
-                    0 -> FlowUtil.pickScan(
-                        activity, R.string.compress_pick_scan, docs()
-                    ) { doc -> startWith(doc) }
-                    1 -> pickPdf()
+            .setTitle(R.string.compress_pick_scan)
+            .setOptions(labels) { which, _ ->
+                if (which == candidates.size) {
+                    pickPdf()
+                } else {
+                    candidates.getOrNull(which)?.let { startWith(it) }
                 }
             }
             .setSecondary(android.R.string.cancel)

@@ -5,4 +5,8 @@
     <!-- L3-02: compact, truthful result hierarchy. -->
     <string name="ux130_l3_result_remove_copy">Remove this new copy</string>
     <string name="ux130_l3_result_remove_copy_consequence">Removes this new copy and the Documents/ScanWhirl copy saved with this run. Your original is not touched.</string>
+
+    <!-- L3-03: one compression vocabulary across the sheet and the setup page. -->
+    <string name="ux130_l3_compress_aim_size">Aim for a size</string>
+    <string name="ux130_l3_compress_from_phone_storage">From phone storage</string>
 </resources>

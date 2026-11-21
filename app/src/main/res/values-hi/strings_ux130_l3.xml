@@ -4,4 +4,8 @@
     <!-- L3-02: परिणाम पदानुक्रम. -->
     <string name="ux130_l3_result_remove_copy">यह नई प्रत हटाएँ</string>
     <string name="ux130_l3_result_remove_copy_consequence">इससे यह नई प्रत और इसी कार्य के दौरान Documents/ScanWhirl में सहेजी गई प्रत हट जाती है। आपकी मूल फ़ाइल को हाथ नहीं लगाया जाता।</string>
+
+    <!-- L3-03: compress setup labels. -->
+    <string name="ux130_l3_compress_aim_size">आकार तय करें</string>
+    <string name="ux130_l3_compress_from_phone_storage">फ़ोन के संग्रहण से</string>
 </resources>
