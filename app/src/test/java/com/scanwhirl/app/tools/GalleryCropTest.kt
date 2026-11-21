@@ -46,6 +46,7 @@ class GalleryCropTest {
         Prefs.setGalleryAutoCrop(app, true)
         GalleryCrop.startOverride = null
         GalleryCrop.pickOverride = null
+        GalleryCrop.resetForTest()
     }
 
     @After
@@ -99,7 +100,7 @@ class GalleryCropTest {
         var got: List<Uri> = emptyList()
         GalleryCrop.startOverride = { true }
         launch { activity ->
-            launchGalleryCrop(activity, 30, onResult = { got = it })
+            launchGalleryCrop(activity, 30, onResult = { _, _, uris -> got = uris })
             GalleryCrop.deliver(
                 activity,
                 listOf(Uri.parse("content://crop/page_1.jpg"), Uri.parse("content://crop/page_2.jpg"))
@@ -121,8 +122,8 @@ class GalleryCropTest {
         launch { activity ->
             launchGalleryCrop(
                 activity, 30,
-                onResult = { cropped = it },
-                onFallback = { fallback = it }
+                onResult = { _, _, uris -> cropped = uris },
+                onFallback = { _, _, uris -> fallback = uris }
             )
             idle()
             assertTrue("nothing was auto-cropped", cropped.isEmpty())
@@ -138,7 +139,7 @@ class GalleryCropTest {
             GalleryCrop.deliverFallback(activity, listOf(Uri.parse("content://raw/only.jpg")))
         }
         launch { activity ->
-            launchGalleryCrop(activity, 30, onResult = { got = it })
+            launchGalleryCrop(activity, 30, onResult = { _, _, uris -> got = uris })
             idle()
             assertEquals(1, got.size)
         }

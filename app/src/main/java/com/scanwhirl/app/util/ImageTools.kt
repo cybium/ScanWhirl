@@ -288,6 +288,28 @@ object ImageTools {
     @Volatile
     internal var galleryDecode: ((ByteArray, BitmapFactory.Options) -> Bitmap?)? = null
 
+    /**
+     * S1: test seam for a decoded container's EXIF orientation. Real photos read the tag from
+     * the bytes; a synthetic BMP fixture cannot carry EXIF, so a test can supply it here.
+     * Null = read ExifInterface.
+     */
+    @Volatile
+    internal var galleryOrientationOverride: Int? = null
+
+    /** The fallback's EXIF orientation: same tag and same "unknown = normal" rule as normalizePage. */
+    private fun galleryOrientation(bytes: ByteArray): Int {
+        galleryOrientationOverride?.let { return it }
+        return try {
+            bytes.inputStream().use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            }
+        } catch (e: java.io.IOException) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+    }
+
     /** Bounded decode of a container [normalizePage] rejects (HEIC/HEIF, BMP, GIF, ...). */
     private fun galleryFallback(bytes: ByteArray, rejected: IllegalArgumentException): ByteArray {
         fun unreadable(): IllegalArgumentException = IllegalArgumentException(
@@ -306,25 +328,38 @@ object ImageTools {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        val bitmap = try {
+        val decoded = try {
             (galleryDecode ?: ::decodeBytes)(bytes, options)
         } catch (e: OutOfMemoryError) {
             throw PhotoTooLargeException(e)
         } ?: throw unreadable()
+        var working = decoded
         try {
             // A decoder that ignored inSampleSize is refused instead of encoded.
-            if (bitmap.width > WORK_DIM || bitmap.height > WORK_DIM ||
-                bitmap.width.toLong() * bitmap.height > MAX_PAGE_PIXELS
+            if (working.width > WORK_DIM || working.height > WORK_DIM ||
+                working.width.toLong() * working.height > MAX_PAGE_PIXELS
             ) {
                 throw PhotoTooLargeException()
             }
+            // S1: a HEIC's EXIF orientation is not applied by the platform decoder on every
+            // API level. Apply the same eight transforms normalizePage uses before encoding.
+            val matrix = orientationMatrix(galleryOrientation(bytes))
+            if (!matrix.isIdentity) {
+                val oriented = try {
+                    Bitmap.createBitmap(working, 0, 0, working.width, working.height, matrix, true)
+                } catch (e: OutOfMemoryError) {
+                    throw PhotoTooLargeException(e)
+                }
+                if (oriented !== working) working.recycle()
+                working = oriented
+            }
             return try {
-                encodeJpeg(bitmap, 92)
+                encodeJpeg(working, 92)
             } catch (e: OutOfMemoryError) {
                 throw PhotoTooLargeException(e)
             }
         } finally {
-            bitmap.recycle()
+            working.recycle()
         }
     }
 

@@ -156,11 +156,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 return@registerForActivityResult
             }
             lifecycleScope.launch {
+                var failure: Throwable? = null
                 val files = withContext(Dispatchers.IO) {
-                    runCatching { copyInsertUris(uris) }.getOrNull()
+                    runCatching { copyInsertUris(uris) }
+                        .onFailure { failure = it }
+                        .getOrNull()
                 }
                 if (files.isNullOrEmpty()) {
-                    toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                    toast(getString(R.string.s1_insert_photo_failed, insertReason(failure)), Toast.LENGTH_LONG)
                 } else {
                     askInsertPosition(files)
                 }
@@ -177,11 +180,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             )
             pendingPhotoBatch = batch
             lifecycleScope.launch {
+                var failure: Throwable? = null
                 val files = try {
                     withContext(Dispatchers.IO) {
                         try {
                             copyInsertUris(uris, batch.dir)
                         } catch (e: Exception) {
+                            failure = e
+                            null
+                        } catch (e: OutOfMemoryError) {
+                            failure = e
                             null
                         } finally {
                             // The screen may have gone away (Back/rotation/finish) while this
@@ -197,7 +205,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 if (files.isNullOrEmpty()) {
                     batch.dir.deleteRecursively()
                     if (pendingPhotoBatch === batch) pendingPhotoBatch = null
-                    if (!batch.abandoned) toast(R.string.insert_none, Toast.LENGTH_SHORT)
+                    if (!batch.abandoned) {
+                        toast(getString(R.string.s1_insert_photo_failed, insertReason(failure)), Toast.LENGTH_LONG)
+                    }
                     return@launch
                 }
                 if (batch.abandoned || pendingPhotoBatch !== batch) {
@@ -1083,7 +1093,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .addOnFailureListener { e ->
                 Toast.makeText(
                     this,
-                    getString(R.string.scanner_failed, e.message),
+                    getString(R.string.scanner_failed, getString(R.string.s1_reason_scanner_failed)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1098,6 +1108,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             askInsertPosition(source.pageFiles)
         }
     }
+
+    /** S1 defect 6: a localized reason, never the decoder's raw English/JVM text. */
+    private fun insertReason(failure: Throwable?): String = getString(
+        if (failure != null && ImageTools.isTooLargePhoto(failure)) R.string.s1_reason_too_large
+        else R.string.s1_reason_unreadable
+    )
 
     /** Copies picked camera/photo URIs into a new temp folder of normalised JPEG pages. */
     private fun copyInsertUris(uris: List<android.net.Uri>): List<File> =
@@ -1118,7 +1134,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             val bytes = contentResolver.openInputStream(uri)?.use(ImageTools::readPageBytes)
                 ?: throw IllegalArgumentException("Page ${index + 1} could not be read")
             val file = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", index))
-            Durable.writeFile(file, ImageTools.normalizePage(bytes))
+            // S1 defect 4: gallery photos can be HEIC/HEIF or another container. The shared
+            // normalizer keeps the JPEG fast path and re-encodes the others with EXIF respected.
+            Durable.writeFile(file, ImageTools.normalizeGalleryPhoto(bytes))
             files += file
         }
         return files

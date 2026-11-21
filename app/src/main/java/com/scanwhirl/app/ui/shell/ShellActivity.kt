@@ -245,11 +245,17 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // reloads when it finishes so a document an interrupted Replace took away is back.
         val app = ScanWhirlApp.from(this)
         app.startStorageRecovery()
+        // S1 defect 1 / review P1: the launcher owns the "unfinished scan" offer once the
+        // recovery that can restore a document has finished. The once-per-process guard lives in
+        // ScanLauncher.show(), so a rotation before the offer is shown does not lose it.
         if (!app.storageRecovered.value) {
             lifecycleScope.launch {
                 app.storageRecovered.first { it }
                 if (::library.isInitialized) library.reload()
+                scanLauncher.offerUnfinishedScan()
             }
+        } else {
+            scanLauncher.offerUnfinishedScan()
         }
         revealFromIntent(intent)
         lastProState = com.scanwhirl.app.util.ProGate.isPro(this)
@@ -915,10 +921,19 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 com.scanwhirl.app.util.Prefs.setGalleryAutoCrop(this, which == 0)
                 if (which == 0) {
                     com.scanwhirl.app.tools.launchGalleryCrop(
-                        this,
+                        activity = this,
                         maxPages = 30,
-                        onResult = { uris -> if (uris.isNotEmpty()) scanLauncher.saveScanned(uris) },
-                        onFallback = { uris -> if (uris.isNotEmpty()) scanLauncher.stageAndReview(uris) }
+                        // S1 review P0: the handler runs on whichever instance receives the result.
+                        onResult = { host, _, uris ->
+                            if (host is ShellActivity && uris.isNotEmpty()) {
+                                host.applyGalleryCrop(uris, autoCropped = true)
+                            }
+                        },
+                        onFallback = { host, _, uris ->
+                            if (host is ShellActivity && uris.isNotEmpty()) {
+                                host.applyGalleryCrop(uris, autoCropped = false)
+                            }
+                        }
                     )
                 } else {
                     pickGalleryImages.launch("image/*")
@@ -927,6 +942,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             .setSecondary(R.string.sheet_cancel)
             .build()
             .show()
+    }
+
+    /** S1 review P0: applies a crop result on the live screen, not a captured old one. */
+    private fun applyGalleryCrop(uris: List<android.net.Uri>, autoCropped: Boolean) {
+        if (autoCropped) scanLauncher.saveScanned(uris) else scanLauncher.stageAndReview(uris)
     }
 
     /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */

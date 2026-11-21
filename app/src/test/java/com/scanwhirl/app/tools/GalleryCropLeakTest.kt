@@ -29,6 +29,7 @@ class GalleryCropLeakTest {
         app = ApplicationProvider.getApplicationContext()
         GalleryCrop.startOverride = { true }
         GalleryCrop.pickOverride = {}
+        GalleryCrop.resetForTest()
     }
 
     @After
@@ -48,7 +49,8 @@ class GalleryCropLeakTest {
             GalleryCrop.hostCountForTest()
         )
 
-        GalleryCrop.launch(activity, maxPages = 30, onCropped = {}, onFallback = {})
+        GalleryCrop.launch(activity, maxPages = 30, request = CropRequest("leak_test"),
+            onCropped = { _, _, _ -> }, onFallback = { _, _, _ -> })
         assertEquals("the launched screen is waiting for a result", 1, GalleryCrop.pendingCountForTest())
 
         controller.pause().stop().destroy()

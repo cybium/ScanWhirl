@@ -233,15 +233,20 @@ class BusinessCardActivity : BaseActivity() {
         launchGalleryCrop(
             activity = this,
             maxPages = 1,
-            onResult = { uris ->
-                val uri = uris.firstOrNull()
-                if (uri == null) showCaptureSheet() else readImage(uri)
+            // S1 review P0: no captured Activity; the live receiver handles the result.
+            onResult = { host, _, uris ->
+                if (host is BusinessCardActivity) host.handleGalleryCrop(uris)
             },
-            onFallback = { uris ->
-                val uri = uris.firstOrNull()
-                if (uri == null) showCaptureSheet() else readImage(uri)
+            onFallback = { host, _, uris ->
+                if (host is BusinessCardActivity) host.handleGalleryCrop(uris)
             }
         )
+    }
+
+    /** S1 review P0: runs on the activity that actually received the picker result. */
+    private fun handleGalleryCrop(uris: List<Uri>) {
+        val uri = uris.firstOrNull()
+        if (uri == null) showCaptureSheet() else readImage(uri)
     }
 
     private fun readImage(uri: Uri) {

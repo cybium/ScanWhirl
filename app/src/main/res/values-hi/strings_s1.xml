@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- S1 defect 5: सच्ची जानकारी और काम करने वाला विकल्प। -->
+    <string name="s1_scanner_photo_fallback">दस्तावेज़ स्कैनर Google Play services से आता है और इसे फ़ोन में एक बार लाना पड़ सकता है। आप फ़ोटो चुन सकते हैं और उन्हें वैसे ही रख सकते हैं।</string>
+    <string name="s1_pick_photos">फ़ोटो चुनें</string>
+
+    <!-- S1 defect 6: स्थानीय कारण, कच्चा त्रुटि संदेश नहीं। -->
+    <string name="s1_reason_scanner_unavailable">इस फ़ोन पर स्कैनर उपलब्ध नहीं है</string>
+    <string name="s1_reason_scanner_failed">स्कैनर शुरू नहीं हो सका</string>
+    <string name="s1_reason_unreadable">फ़ोटो पढ़ी नहीं जा सकी</string>
+    <string name="s1_reason_too_large">फ़ोटो इस फ़ोन के लिए बहुत बड़ी है</string>
+    <string name="s1_insert_photo_failed">फ़ोटो जोड़ी नहीं जा सकीं: %1$s</string>
+
+    <!-- S1 defect 7: स्मृति पूरी होना मतलब बहुत बड़ा, क्रैश नहीं। -->
+    <string name="s1_scan_too_large">स्कैन इस फ़ोन के लिए बहुत बड़ा है। कम पन्ने या छोटी फ़ोटो आज़माएँ।</string>
+    <string name="s1_scan_too_large_review">स्कैन इस फ़ोन के लिए बहुत बड़ा है। पन्ने यहाँ सुरक्षित हैं; जाँचकर फिर सहेजें।</string>
+
+    <!-- S1 defect 2: जिस परिणाम को जोड़ा न जा सके, उसे चुपचाप नहीं छोड़ा जाता। -->
+    <string name="s1_gallery_result_lost">चुनी हुई फ़ोटो को इस ऐप से जोड़ा नहीं जा सका। कृपया फिर से कोशिश करें।</string>
+</resources>
