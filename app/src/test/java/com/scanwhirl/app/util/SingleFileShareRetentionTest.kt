@@ -171,6 +171,26 @@ class SingleFileShareRetentionTest {
         }
     }
 
+    @Test fun aBoundedCopyRefusalShowsItsSpecificReason() {
+        assertEquals(
+            app.getString(com.scanwhirl.app.R.string.l1_copy_no_space),
+            ShareUtils.shareFailureMessage(app, BoundedCopy.Refused(BoundedCopy.Result.NO_SPACE, app))
+        )
+        assertEquals(
+            app.getString(com.scanwhirl.app.R.string.l1_copy_too_large),
+            ShareUtils.shareFailureMessage(app, BoundedCopy.Refused(BoundedCopy.Result.TOO_LARGE, app))
+        )
+        assertEquals(
+            "an unreadable file is still just nothing to share",
+            app.getString(com.scanwhirl.app.R.string.nothing_to_share),
+            ShareUtils.shareFailureMessage(app, BoundedCopy.Refused(BoundedCopy.Result.UNREADABLE, app))
+        )
+        assertEquals(
+            app.getString(com.scanwhirl.app.R.string.nothing_to_share),
+            ShareUtils.shareFailureMessage(app, java.io.IOException("chooser failed"))
+        )
+    }
+
     @Test fun emptySourceDoesNotShareHalfCopy() {
         assertRefused(source("Empty.zip").apply { writeBytes(byteArrayOf()) })
     }

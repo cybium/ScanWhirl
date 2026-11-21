@@ -141,14 +141,32 @@ object ShareUtils {
                 issued = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // No chooser, URI grant or misleading success after a failed/partial copy.
-                Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+                // A bounded-copy refusal carries the real reason (no space / too large), so say
+                // that instead of pretending there was simply nothing to share.
+                Toast.makeText(context, shareFailureMessage(context, e), Toast.LENGTH_LONG).show()
             } finally {
                 if (!issued) withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
                     target?.parentFile?.deleteRecursively()
                 }
             }
+        }
+    }
+
+    /**
+     * C1: when [BoundedCopy] refuses with a specific, localised reason, surface it. Every other
+     * failure of the copy/chooser path keeps the honest, generic "nothing to share".
+     */
+    internal fun shareFailureMessage(context: Context, error: Exception): String {
+        val refused = error as? BoundedCopy.Refused
+        return if (refused?.result == BoundedCopy.Result.NO_SPACE ||
+            refused?.result == BoundedCopy.Result.TOO_LARGE
+        ) {
+            refused.message?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.nothing_to_share)
+        } else {
+            context.getString(R.string.nothing_to_share)
         }
     }
 

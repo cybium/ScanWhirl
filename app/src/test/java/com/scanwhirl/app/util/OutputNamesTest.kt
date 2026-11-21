@@ -35,6 +35,18 @@ class OutputNamesTest {
     }
 
     @Test
+    fun `comma page lists are stripped like page ranges`() {
+        assertEquals(
+            "Document 1 - Compressed",
+            OutputNames.forTool("Document 1 - Pages 1, 10", "Compressed", emptyList())
+        )
+        assertEquals(
+            "Document 1 - Signed",
+            OutputNames.forTool("Document 1 (pages 1, 3-5, 9)", "Signed", emptyList())
+        )
+    }
+
+    @Test
     fun `an existing name gets the next number`() {
         assertEquals(
             "Document 1 - Signed (2)",

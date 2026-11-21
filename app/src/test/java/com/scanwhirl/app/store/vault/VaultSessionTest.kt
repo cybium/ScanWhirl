@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.ScanRepository
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -16,6 +17,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * The process-wide Vault session (design §4.1): one key for every screen, dropped after the
@@ -95,6 +98,41 @@ class VaultSessionTest {
         VaultSession.onForeground(121_000L)
         assertFalse(VaultSession.isUnlocked(121_000L))
         assertNull(VaultSession.keyOrNull(121_000L))
+    }
+
+    @Test
+    fun `a stale duplicate close does not wipe a second time`() {
+        VaultSession.open(ByteArray(32) { 1 })
+        var wipes = 0
+        VaultSession.registerOpenCopyWipe { wipes++ }
+        VaultSession.close()
+        VaultSession.close() // another screen's stale close, after the key is already gone
+        assertEquals("one wipe per session, even with a duplicate close", 1, wipes)
+    }
+
+    @Test
+    fun `a close already wiping cannot wipe a fresh unlock's copies`() {
+        VaultSession.open(ByteArray(32) { 2 })
+        val fresh = File(app.cacheDir, "vault_open/fresh.pdf")
+        val entered = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        VaultSession.registerOpenCopyWipe {
+            entered.countDown()
+            proceed.await(3, TimeUnit.SECONDS)
+            File(app.cacheDir, "vault_open").deleteRecursively()
+        }
+        val closer = Thread { VaultSession.close() }
+        closer.start()
+        assertTrue("the old close reached its wipe", entered.await(3, TimeUnit.SECONDS))
+        // Release the wipe shortly after the user unlocks again. The old close must not get to
+        // delete plaintext that belongs to the new session.
+        Thread { Thread.sleep(120); proceed.countDown() }.start()
+        VaultSession.open(ByteArray(32) { 3 })
+        fresh.parentFile?.mkdirs()
+        fresh.writeText("fresh plaintext")
+        closer.join(3_000)
+        assertTrue("fresh copies survive the stale close", fresh.exists())
+        assertTrue("fresh key survives", VaultSession.isUnlocked())
     }
 
     @Test

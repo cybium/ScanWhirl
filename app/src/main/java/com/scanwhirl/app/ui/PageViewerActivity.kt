@@ -186,6 +186,23 @@ class PageViewerActivity : BaseActivity() {
         outState.putStringArray(KEY_FILTER_IDS, filterChoice.values.map { it.name }.toTypedArray())
     }
 
+    /**
+     * C1: [filterChoice] is keyed by page index. Once a page is really gone, the choice for its
+     * index is dropped and every later page shifts down by one; otherwise a neighbour inherits a
+     * filter the person never chose for it.
+     */
+    private fun remapFilterChoiceAfterDelete(deletedIndex: Int) {
+        val shifted = filterChoice.mapNotNull { (index, filter) ->
+            when {
+                index == deletedIndex -> null
+                index > deletedIndex -> (index - 1) to filter
+                else -> index to filter
+            }
+        }.toMap()
+        filterChoice.clear()
+        filterChoice.putAll(shifted)
+    }
+
     /** Re-reads the current page list (minus pending deletes) into the pager. */
     private fun reload(): Boolean {
         val dir = stagingDir
@@ -278,6 +295,15 @@ class PageViewerActivity : BaseActivity() {
         dir.listFiles { f -> f.name.endsWith(DEL_SUFFIX) && f.length() > 0 }
             ?.forEach { hidden ->
                 val originalPath = hidden.path.removeSuffix(DEL_SUFFIX)
+                val tombstone = File(originalPath + TOMBSTONE_SUFFIX)
+                if (tombstone.exists()) {
+                    // C1: a commit that failed to delete left a tombstone. This page was
+                    // deliberately removed, not orphaned by a process death: keep it deleted and
+                    // clean up both markers now that no Undo window owns them.
+                    hidden.delete()
+                    tombstone.delete()
+                    return@forEach
+                }
                 if (originalPath != pendingDelete) {
                     val original = File(originalPath)
                     if (!original.exists()) hidden.renameTo(original)
@@ -373,13 +399,16 @@ class PageViewerActivity : BaseActivity() {
         val id = docId ?: return
         lifecycleScope.launch {
             try {
-                // Land any pending delete first so `pos` matches disk indices.
+                // Land any pending delete first, then read the page position again: the
+                // committed delete shifts every later index down by one.
                 withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                val checked = filters.indexOf(selectedFilter(pos))
+                val livePos = currentPosition().takeIf { it in pages.indices } ?: currentPos
+                if (livePos !in pages.indices) return@launch
+                val checked = filters.indexOf(selectedFilter(livePos))
                 com.scanwhirl.app.ui.kit.SwSheet.builder(this@PageViewerActivity)
                     .setTitle(R.string.filter_title)
                     .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
-                        applyFilter(id, pos, filters[which])
+                        applyFilter(id, livePos, filters[which])
                     }
                     .setSecondary(android.R.string.cancel)
                     .build()
@@ -620,21 +649,31 @@ class PageViewerActivity : BaseActivity() {
         pendingDelete = null
         if (stagingDir != null) {
             // Hidden since the rename; only now does the file really go.
-            File(path + DEL_SUFFIX).takeIf { it.exists() }?.delete()
+            val hidden = File(path + DEL_SUFFIX)
+            if (hidden.exists() && !stagingHiddenDelete(hidden)) {
+                // C1: the file could not be deleted. Without a tombstone the next load's orphan
+                // restore would rename it back and resurrect a deliberately deleted page.
+                runCatching { File(path + TOMBSTONE_SUFFIX).writeText("1") }
+            }
             return
         }
         val id = docId ?: return
         committingDeletes.add(path)
         deleteScope.launch {
+            var deletedIndex = -1
             try {
                 val now = repo.draftPages(id)
                 val idx = now.indexOfFirst { it.path == path }
-                if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
+                if (idx >= 0 && now.size > 1) {
+                    repo.draftDelete(id, idx)
+                    deletedIndex = idx
+                }
             } catch (_: Exception) {
                 // Best effort; a failed delete leaves the page in place.
             }
             committingDeletes.remove(path)
             runOnUiThread {
+                if (deletedIndex >= 0) remapFilterChoiceAfterDelete(deletedIndex)
                 if (!isFinishing && !isDestroyed) {
                     val keep = currentPosition().takeIf { it in pages.indices } ?: currentPos
                     reload()
@@ -654,7 +693,10 @@ class PageViewerActivity : BaseActivity() {
         try {
             val now = repo.draftPages(id)
             val idx = now.indexOfFirst { it.path == path }
-            if (idx >= 0 && now.size > 1) repo.draftDelete(id, idx)
+            if (idx >= 0 && now.size > 1) {
+                repo.draftDelete(id, idx)
+                withContext(Dispatchers.Main) { remapFilterChoiceAfterDelete(idx) }
+            }
         } catch (_: Exception) {
             // Best effort.
         }
@@ -736,6 +778,13 @@ class PageViewerActivity : BaseActivity() {
         private const val EXTRA_STAGING = "staging_dir"
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
+        /** C1: a hidden page that failed to delete is marked, so orphan restore leaves it gone. */
+        private const val TOMBSTONE_SUFFIX = ".gone"
+
+        /** C1 seam: the staged page's real delete, overridable by tests that force a failure. */
+        @androidx.annotation.VisibleForTesting
+        internal var stagingHiddenDelete: (File) -> Boolean = { it.delete() }
+
         private const val KEY_FILTER_INDICES = "e1_filter_indices"
         private const val KEY_FILTER_IDS = "e1_filter_ids"
 

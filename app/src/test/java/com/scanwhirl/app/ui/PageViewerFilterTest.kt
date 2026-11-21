@@ -14,6 +14,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.ScanFilter
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -136,6 +137,37 @@ class PageViewerFilterTest {
                 "the preview must be the file exactly as saved, not the filter applied again",
                 differs(shown, asSaved)
             )
+        }
+        currentScenario = null
+    }
+
+    @Test
+    fun `a filter choice is dropped with the page it was set on`() {
+        val id = DocFixtures.saved(repo, context, pages = 3)
+        currentScenario = launch(id)
+        currentScenario!!.use { scenario ->
+            idle()
+            pickFilter(1) // ENHANCE on page 0
+            waitFor("the filter replacement to be written") {
+                runBlocking { repo.draftPages(id) }.first().name.startsWith("r_")
+            }
+            // Delete the filtered page. Opening the filter sheet commits the pending delete
+            // before it reads the checked row, so indices must have been remapped already.
+            scenario.onActivity { screen ->
+                screen.findViewById<View>(R.id.btnDelete).performClick()
+            }
+            idle()
+            scenario.onActivity { screen ->
+                screen.findViewById<View>(R.id.btnFilter).performClick()
+            }
+            waitFor("the filter sheet after the delete") { shownSheetItems() != null }
+            scenario.onActivity { screen ->
+                assertEquals(
+                    "the deleted page's filter must not move onto its neighbour",
+                    ScanFilter.ORIGINAL,
+                    screen.selectedFilter(0)
+                )
+            }
         }
         currentScenario = null
     }

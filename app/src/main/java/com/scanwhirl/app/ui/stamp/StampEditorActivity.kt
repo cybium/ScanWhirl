@@ -1,5 +1,6 @@
 package com.scanwhirl.app.ui.stamp
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -83,6 +84,9 @@ class StampEditorActivity : BaseActivity() {
 
         private const val DISABLED_ALPHA = 0.38f
 
+        /** C1 item 4: Back is held only this long during a Save, then the person may leave. */
+        internal var saveTimeoutMs: Long = 60_000L
+
         // H5-1: recreation (rotation, dark mode, font size, language) must not lose user work.
         private const val KEY_MARKS_FILE = "com.scanwhirl.app.ui.stamp.MARKS_FILE"
         private const val KEY_PENDING_PHOTO = "com.scanwhirl.app.ui.stamp.PENDING_PHOTO"
@@ -158,6 +162,7 @@ class StampEditorActivity : BaseActivity() {
     internal var findScanner: (suspend (List<File>) -> FindOutcome)? = null
 
     private var saving = false
+    private var savingStartedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,6 +194,8 @@ class StampEditorActivity : BaseActivity() {
             return
         }
         document = doc
+        // C1: the process-scoped save reports to whichever screen is alive when it finishes.
+        StampSaveRunner.setReceiver(doc.id, applicationContext) { deliverSave(it) }
         editor = StampEditorState(doc.pageCount)
         if (savedInstanceState != null) restoreEditorState(savedInstanceState)
 
@@ -337,11 +344,13 @@ class StampEditorActivity : BaseActivity() {
      * one, so the library never gains a silent duplicate. The marks stay on screen meanwhile.
      */
     private fun resumeRunningSave() {
-        val pending = StampSaveRunner.pendingFor(document.id) ?: return
+        if (StampSaveRunner.pendingFor(document.id) == null) return
         saving = true
+        savingStartedAt = System.currentTimeMillis()
         binding.saveCopy.setText(R.string.stamp_saving)
         refreshSelection()
-        lifecycleScope.launch { deliverSave(pending.await()) }
+        // The runner's single process-scope watcher (started by writeCopy) reports to the
+        // receiver registered in onCreate, so a recreation must not start a second delivery.
     }
 
     override fun onDestroy() {
@@ -743,7 +752,11 @@ class StampEditorActivity : BaseActivity() {
                     words.page.width,
                     words.page.height,
                     kinds,
-                    keepLast4
+                    keepLast4,
+                    // C1: "Keep last 4 digits" applies to cards too. Unchecked, every box covers
+                    // the whole match, including the card's last four digits (no PCI exception
+                    // in this copy). Checked, cards keep their last four as before.
+                    fullMask = !keepLast4
                 )
                 out += found.map { index to it }
                 return@forEachIndexed
@@ -752,7 +765,9 @@ class StampEditorActivity : BaseActivity() {
                 com.scanwhirl.app.util.OcrEngine.recognizeFile(file).page
             }.getOrNull()
             if (page != null && page.lines.any { it.text.isNotBlank() }) {
-                out += SensitiveScan.find(page, kinds, keepLast4).map { index to it }
+                out += SensitiveScan.find(
+                    page, kinds, keepLast4, fullMask = !keepLast4
+                ).map { index to it }
             } else {
                 unreadable += index
             }
@@ -805,7 +820,8 @@ class StampEditorActivity : BaseActivity() {
             added += boxes.size
         }
         hideMode = true
-        hideLabelRes = R.string.private_info_label
+        // C1: only claim "private info hidden" when every found item was actually hidden.
+        hideLabelRes = if (checked.all { it }) R.string.private_info_label else R.string.c1_redacted_label
         disarm()
         refresh()
         showPage()
@@ -831,7 +847,7 @@ class StampEditorActivity : BaseActivity() {
         refresh()
     }
 
-    private fun refresh() {
+    internal fun refresh() {
         binding.canvas.marks = editor.marks()
         refreshSelection()
         binding.canvas.invalidate()
@@ -887,6 +903,7 @@ class StampEditorActivity : BaseActivity() {
     private fun writeCopy() {
         if (saving || editor.isEmpty()) return
         saving = true
+        savingStartedAt = System.currentTimeMillis()
         binding.saveCopy.isEnabled = false
         binding.saveCopy.setText(R.string.stamp_saving)
         val docId = document.id
@@ -898,7 +915,7 @@ class StampEditorActivity : BaseActivity() {
         // H5-1: the copy is written on a scope that outlives this screen. A recreation re-joins
         // the same job (resumeRunningSave) instead of cancelling it and silently leaving either a
         // half-written file or a second copy after the person presses Save again.
-        val pending = StampSaveRunner.pendingFor(docId) ?: StampSaveRunner.submit(docId) {
+        StampSaveRunner.pendingFor(docId) ?: StampSaveRunner.submit(docId) {
             withContext(Dispatchers.IO) {
                 val writer = ScanRepository(app)
                 val suggested = if (hide) {
@@ -910,29 +927,35 @@ class StampEditorActivity : BaseActivity() {
                 writer.stampDocument(docId, edits, suggested)
             }
         }
-        lifecycleScope.launch { deliverSave(pending.await()) }
+        // Delivery is owned by the runner's process scope, not this screen's lifecycleScope: a
+        // person who leaves after the new bounded timeout still gets the receipt as a Toast.
     }
 
     /** Reports the finished save on whichever instance of the screen is alive, exactly once. */
     private fun deliverSave(result: Result<ScanDocument>) {
         StampSaveRunner.consume(document.id)
+        val alive = !isFinishing && !isDestroyed
         result.onSuccess { copy ->
-            setResult(
-                RESULT_OK,
-                Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id)
-            )
-            Toast.makeText(
-                this,
-                if (hideMode) getString(R.string.private_info_saved, copy.name)
-                else getString(R.string.stamp_saved, copy.name),
-                Toast.LENGTH_LONG
-            ).show()
-            finish()
+            if (alive) setResult(RESULT_OK, Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id))
+            val saved = if (hideMode) {
+                val savedRes = if (hideLabelRes == R.string.private_info_label)
+                    R.string.private_info_saved else R.string.c1_redacted_saved
+                getString(savedRes, copy.name)
+            } else getString(R.string.stamp_saved, copy.name)
+            // App context even when the screen is gone: the receipt must never be lost just
+            // because the person left during the bounded Save wait.
+            Toast.makeText(applicationContext, saved, Toast.LENGTH_LONG).show()
+            if (alive) finish()
         }.onFailure { error ->
-            saving = false
-            binding.saveCopy.setText(R.string.stamp_save_copy)
-            binding.saveCopy.isEnabled = true
-            note(getString(R.string.stamp_save_failed, error.message ?: ""))
+            val failed = getString(R.string.stamp_save_failed, error.message ?: "")
+            if (alive) {
+                saving = false
+                binding.saveCopy.setText(R.string.stamp_save_copy)
+                binding.saveCopy.isEnabled = true
+                note(failed)
+            } else {
+                Toast.makeText(applicationContext, failed, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -944,7 +967,15 @@ class StampEditorActivity : BaseActivity() {
         // dead screen) and invite a duplicate Save on reopen. Keep the screen until the write
         // reports back; a real close with marks still asks to discard as before.
         if (saving) {
-            note(getString(R.string.stamp_saving_wait))
+            if (System.currentTimeMillis() - savingStartedAt >= saveTimeoutMs) {
+                // C1: a bounded wait. The write keeps running in the process-scoped runner and
+                // its receipt is reported by deliverSave (app-context Toast), so leaving here
+                // cannot lose the copy or its receipt.
+                note(getString(R.string.c1_saving_timed_out))
+                finish()
+            } else {
+                note(getString(R.string.stamp_saving_wait))
+            }
             return
         }
         if (editor.isEmpty()) {
@@ -1240,6 +1271,16 @@ internal object StampSaveRunner {
 
     private var docId: String? = null
     private var pending: kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>>? = null
+    private var receiverId: String? = null
+    private var receiver: ((Result<ScanDocument>) -> Unit)? = null
+    private var appContext: Context? = null
+
+    /** C1: the live screen that should receive this save's receipt, if any. */
+    fun setReceiver(id: String, context: Context, cb: (Result<ScanDocument>) -> Unit) {
+        receiverId = id
+        receiver = cb
+        appContext = context.applicationContext
+    }
 
     /** The save already running for [id], if any: the recreated screen joins it. */
     fun pendingFor(id: String): kotlinx.coroutines.CompletableDeferred<Result<ScanDocument>>? =
@@ -1254,9 +1295,30 @@ internal object StampSaveRunner {
         docId = id
         pending = promise
         scope.launch {
-            promise.complete(runCatching { block() })
+            // Capture the app context now: an onDestroy after a bounded-timeout exit clears the
+            // runner's fields, but this save must still be able to report its receipt.
+            val ctx = appContext
+            val result = runCatching { block() }
+            promise.complete(result)
+            // One process-scope delivery. If no screen is alive for this document, still report
+            // the receipt with an app-context Toast so a bounded-timeout exit cannot lose it.
+            val live = receiver?.takeIf { docId == id && receiverId == id }
+            if (live != null) {
+                live(result)
+            } else if (ctx != null) {
+                fallbackReceipt(result, ctx, id)
+            }
         }
         return promise
+    }
+
+    private fun fallbackReceipt(result: Result<ScanDocument>, ctx: Context, id: String) {
+        result.onSuccess { copy ->
+            Toast.makeText(ctx, ctx.getString(R.string.stamp_saved, copy.name), Toast.LENGTH_LONG).show()
+        }.onFailure { error ->
+            Toast.makeText(ctx, ctx.getString(R.string.stamp_save_failed, error.message ?: ""), Toast.LENGTH_LONG).show()
+        }
+        consume(id)
     }
 
     /** Drops the finished save so a later Save starts fresh. */
@@ -1264,6 +1326,9 @@ internal object StampSaveRunner {
         if (docId == id) {
             docId = null
             pending = null
+            receiverId = null
+            receiver = null
+            appContext = null
         }
     }
 }
