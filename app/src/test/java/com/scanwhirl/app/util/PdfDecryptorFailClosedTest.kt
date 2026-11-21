@@ -1189,6 +1189,37 @@ class PdfDecryptorFailClosedTest {
     }
 
     @Test
+    fun `well formed shapes we cannot rewrite are not reported as damaged`() {
+        val xrefStream =
+            "5 0 obj\n<< /Type /XRef /Size 6 /W [1 2 1] /Root 1 0 R /Length 0 >>\nstream\n\nendstream\nendobj\n"
+        val cases = listOf(
+            "incremental update" to build(Spec(version = 4, revision = 4, extraTrailer = " /Prev 1234")).bytes,
+            "hybrid XRefStm" to build(Spec(version = 4, revision = 4, extraTrailer = " /XRefStm 1234")).bytes,
+            "xref stream" to ("%PDF-1.7\n" + xrefStream + "startxref\n9\n%%EOF\n")
+                .toByteArray(Charsets.ISO_8859_1),
+            "embedded files" to build(
+                Spec(
+                    version = 4, revision = 4, catalogExtra = " /Names 9 0 R",
+                    rawObjects = mapOf(
+                        9 to "<< /EmbeddedFiles << /Names [(statement) 10 0 R] >> >>",
+                        10 to "<< /Type /Filespec /F (statement.txt) /EF << /F 11 0 R >> >>"
+                    )
+                )
+            ).bytes,
+            "object stream" to replaceOnce(build(Spec(version = 4, revision = 4)).bytes, "/Type /Metadata", "/Type /ObjStm")
+        )
+        for ((label, bytes) in cases) {
+            val failure = assertThrows(PdfDecryptor.Unsupported::class.java) {
+                PdfDecryptor.decrypt(bytes, "user-pass")
+            }
+            assertFalse(
+                "$label is a valid PDF shape ScanWhirl cannot rewrite, not a damaged file",
+                failure is PdfDecryptor.Damaged
+            )
+        }
+    }
+
+    @Test
     fun `an unknown password format is reported as UnsupportedScheme`() {
         // V6/R7 is a standard-security-handler version this offline decoder does not implement.
         val built = build(Spec(version = 6, revision = 7, lengthBits = 256))

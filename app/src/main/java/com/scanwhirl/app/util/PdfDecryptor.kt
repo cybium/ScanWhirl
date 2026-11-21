@@ -55,6 +55,13 @@ object PdfDecryptor {
     class UnsupportedScheme(message: String) : Unsupported(message)
 
     /**
+     * A valid PDF shape this rewriter deliberately refuses (incremental updates, xref streams,
+     * embedded files, object streams, per-stream crypt filters, or a file over the work budget).
+     * The file is not damaged: telling the owner to fetch another copy would be false advice.
+     */
+    class CannotRewrite(message: String) : Unsupported(message)
+
+    /**
      * Largest protected PDF this phone can decrypt in memory, in bytes.
      *
      * [decrypt] needs the whole file at once and holds roughly five copies of it (the raw
@@ -87,6 +94,8 @@ object PdfDecryptor {
         throw e
     } catch (e: UnsupportedScheme) {
         throw e
+    } catch (e: CannotRewrite) {
+        throw e
     } catch (e: Unsupported) {
         // Every remaining refusal is about the file's bytes or structure, not about a password
         // format the decoder does not know. The UI can now tell those two cases apart.
@@ -102,16 +111,16 @@ object PdfDecryptor {
         val xref = readXref(raw)
         if (xref.entries.isEmpty()) throw Unsupported("This PDF has no objects ScanWhirl can read")
         if (xref.entries.size > MAX_OBJECTS) {
-            throw Unsupported("This PDF has too many objects to decrypt safely")
+            throw CannotRewrite("This PDF has too many objects to decrypt safely")
         }
 
         val trailer = xref.trailer
         val trailerDict = trailer.dict ?: throw Unsupported("This PDF has no trailer ScanWhirl can read")
         if (trailerDict.containsKey("Prev")) {
-            throw Unsupported("This PDF is an incremental update, which ScanWhirl cannot rewrite safely")
+            throw CannotRewrite("This PDF is an incremental update, which ScanWhirl cannot rewrite safely")
         }
         if (trailerDict.containsKey("XRefStm")) {
-            throw Unsupported("This PDF mixes an xref stream with its table, which ScanWhirl cannot rewrite")
+            throw CannotRewrite("This PDF mixes an xref stream with its table, which ScanWhirl cannot rewrite")
         }
 
         val objects = orderedObjects(raw, xref)
@@ -416,7 +425,7 @@ object PdfDecryptor {
         val c = Cursor(raw, offset, raw.size)
         c.skip()
         if (!c.atWord("xref")) {
-            throw Unsupported("This PDF stores its objects in an xref stream, which ScanWhirl cannot rewrite")
+            throw CannotRewrite("This PDF stores its objects in an xref stream, which ScanWhirl cannot rewrite")
         }
         c.pos += 4
         val entries = ArrayList<Entry>()
@@ -436,11 +445,11 @@ object PdfDecryptor {
             if (count <= 0) throw Unsupported("This PDF's xref table has an empty subsection")
             // Ranges are checked as 64-bit sums: "first + count" must never wrap or escape the budget.
             if (first.toLong() + count > MAX_OBJECTS) {
-                throw Unsupported("This PDF's xref table is too large to rewrite safely")
+                throw CannotRewrite("This PDF's xref table is too large to rewrite safely")
             }
             rows += count
             if (rows > MAX_XREF_ROWS) {
-                throw Unsupported("This PDF's xref table is too large to rewrite safely")
+                throw CannotRewrite("This PDF's xref table is too large to rewrite safely")
             }
             repeat(count) { i ->
                 val number = first + i
@@ -609,13 +618,13 @@ object PdfDecryptor {
      */
     private fun refuseEmbeddedFiles(dict: LinkedHashMap<String, Pv>) {
         if (dict.containsKey("EmbeddedFiles") || dict.containsKey("EF") || dict["Type"]?.name == "EmbeddedFile") {
-            throw Unsupported("This PDF carries embedded files, which ScanWhirl cannot unlock faithfully")
+            throw CannotRewrite("This PDF carries embedded files, which ScanWhirl cannot unlock faithfully")
         }
     }
 
     private fun refuseCryptFilter(dict: LinkedHashMap<String, Pv>) {
         if (filterNames(dict).contains("Crypt")) {
-            throw Unsupported(
+            throw CannotRewrite(
                 "This PDF encrypts individual streams with their own crypt filter, which ScanWhirl cannot rewrite"
             )
         }
@@ -1026,7 +1035,7 @@ object PdfDecryptor {
             // plaintext, so the security handler and its dictionary have no meaning any more.
             if (entry.number == encryptObject) continue
             if (out.size().toLong() + (entry.end - entry.offset).toLong() * 2 + 64 > cap) {
-                throw Unsupported("This PDF would grow too large to decrypt safely")
+                throw CannotRewrite("This PDF would grow too large to decrypt safely")
             }
             val offset = out.size()
             writeObject(raw, entry, scheme, encryptObject, out)
@@ -1040,7 +1049,7 @@ object PdfDecryptor {
         } else null
 
         val size = highest + 1
-        if (size > MAX_XREF_ROWS) throw Unsupported("This PDF has too many object numbers to rewrite")
+        if (size > MAX_XREF_ROWS) throw CannotRewrite("This PDF has too many object numbers to rewrite")
 
         val xrefOffset = out.size()
         val table = StringBuilder()
@@ -1120,10 +1129,10 @@ object PdfDecryptor {
         if (map != null) {
             val type = map["Type"]?.name
             if (type == "ObjStm") {
-                throw Unsupported("This PDF packs its objects into an object stream, which ScanWhirl cannot rewrite")
+                throw CannotRewrite("This PDF packs its objects into an object stream, which ScanWhirl cannot rewrite")
             }
             if (type == "XRef") {
-                throw Unsupported("This PDF stores its objects in an xref stream, which ScanWhirl cannot rewrite")
+                throw CannotRewrite("This PDF stores its objects in an xref stream, which ScanWhirl cannot rewrite")
             }
         }
 
@@ -1158,7 +1167,7 @@ object PdfDecryptor {
         // An explicit /Crypt filter takes its name from the /DecodeParms slot of its own position in
         // /Filter; resolving it by name is refused (see refuseCryptFilter) rather than guessed.
         if (filterNames(map).contains("Crypt")) {
-            throw Unsupported(
+            throw CannotRewrite(
                 "This PDF encrypts individual streams with their own crypt filter, which ScanWhirl cannot rewrite"
             )
         }
