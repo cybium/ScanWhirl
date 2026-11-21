@@ -48,6 +48,23 @@ class FlowSelectorsTest(unittest.TestCase):
             # x centre 300; span 500 => start 700-62=638, end 200+62=262 (finger up).
             adb.assert_called_once_with("shell", "input", "swipe", 300, 638, 300, 262, 800)
 
+    def test_long_press_node_holds_at_clickable_ancestor(self):
+        root = ET.Element("hierarchy")
+        parent = self.node(clickable="true", bounds="[100,200][500,400]")
+        label = self.node(text="e2e-three-pages")
+        root.append(parent)
+        parent.append(label)
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.long_press_node(root, label)
+            adb.assert_called_once_with("shell", "input", "swipe", 300, 300, 300, 300, 900)
+
+    def test_swipe_reveal_right_uses_live_bounds(self):
+        node = self.node(bounds="[100,200][500,400]")
+        with patch.object(f, "adb") as adb, patch.object(f.time, "sleep"):
+            f.swipe_reveal_right(node, y_fraction=0.75)
+            # span 400 => start 500-66=434, end 100+66=166; y=200+150=350.
+            adb.assert_called_once_with("shell", "input", "swipe", 434, 350, 166, 350, 600)
+
     def test_missing_and_zero_area_controls_fail_closed(self):
         root = ET.Element("hierarchy")
         root.append(self.node(text="Compress", bounds="[0,0][0,0]"))

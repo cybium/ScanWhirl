@@ -135,6 +135,21 @@ def tap(**want):
     time.sleep(0.4)
 
 
+def long_press_node(root, node, duration=900):
+    """Hold a control past the platform long-press timeout (no fixed coordinates)."""
+    ancestor = clickable_ancestor(root, node)
+    target = ancestor if ancestor is not None else node
+    x1, y1, x2, y2 = bounds(target)
+    x, y = (x1 + x2) // 2, (y1 + y2) // 2
+    adb("shell", "input", "swipe", x, y, x, y, duration)
+    time.sleep(0.6)
+
+
+def long_press(**want):
+    root = hierarchy()
+    long_press_node(root, find(root, **want))
+
+
 def back():
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     time.sleep(0.5)
@@ -158,6 +173,17 @@ def seek(**want):
         except AssertionError:
             scroll()
     raise AssertionError(f"Not found after bounded scroll: {want}")
+
+
+def swipe_reveal_right(node, duration=600, y_fraction=0.5):
+    """Pan a horizontal action row so its trailing chips come into view."""
+    x1, y1, x2, y2 = bounds(node)
+    y = y1 + int((y2 - y1) * y_fraction)
+    span = x2 - x1
+    start = x2 - max(24, span // 6)
+    end = x1 + max(24, span // 6)
+    adb("shell", "input", "swipe", start, y, end, y, duration)
+    time.sleep(0.5)
 
 
 def swipe_reveal_below(node, duration=800):
@@ -487,20 +513,18 @@ def f8():
 
 def f9():
     locale()
-    # The named card's overflow (swDocMore) opens the per-document Actions sheet.
-    # Its Trash row (rowMoreDelete) sits below the CappedScrollView's 62% viewport,
-    # so scroll THAT container only - the full-screen Library list behind the
-    # dialog is larger and would steal a generic scroll() gesture.
-    root = hierarchy()
-    label = find(root, text=NAME)
-    card = clickable_ancestor(root, label)
-    assert card is not None, "Named document card has no clickable ancestor"
-    tap_node(root, find_within(card, rid="swDocMore"))
-    wait(rid="swSheetContent")
-    root, trash = seek_in("swSheetContent", rid="rowMoreDelete")
-    capture("F9_actions_trash_row")
-    tap_node(root, trash)
-    # confirmTrash asks once more; its primary is "Move to Trash" (swSheetPrimary).
+    # Current UX-L1 Library flow: long-press the named card to enter selection
+    # (the Actions sheet's Trash row is clipped inside a capped scroll view).
+    # The selection bar's Delete chip is a stable resource-id, not English copy.
+    long_press(text=NAME)
+    wait(rid="swSelectionBar")
+    # The action chips live in a horizontal scroller; pan it so the trailing
+    # Delete chip is on screen before tapping it (bounds-derived, no fixed coords).
+    for _ in range(3):
+        swipe_reveal_right(find(hierarchy(), rid="swSelectionBar"), y_fraction=0.75)
+    capture("F9_selection")
+    tap(rid="swSelDelete")
+    # confirmDeleteSelection(): "Move N documents to Trash?" -> primary confirms.
     wait(rid="swSheetPrimary")
     tap(rid="swSheetPrimary")
     time.sleep(1)
@@ -513,7 +537,7 @@ def f9():
     wait(desc="Library")
     wait(text=strings("en")["home_search_hint"])
     capture("F9_cold_library")
-    return "Named imported item moved to Trash via Actions sheet; verified in Trash; force-stop/cold start opens Library"
+    return "Named imported item moved to Trash via Library selection; verified in Trash; force-stop/cold start opens Library"
 
 
 def main():
