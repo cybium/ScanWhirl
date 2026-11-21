@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.os.Looper
@@ -29,6 +31,7 @@ import java.time.Duration
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class PageDeleteRotationTest {
+
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -74,7 +77,7 @@ class PageDeleteRotationTest {
         return shown
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rotation keeps deleted page hidden and Undo restores it byte identically`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val before = PdfInvariants.dirDigest(File(repo.docsDir, id))
@@ -93,7 +96,7 @@ class PageDeleteRotationTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rotation does not restart the Undo window and expiry deletes only from draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val before = PdfInvariants.dirDigest(File(repo.docsDir, id))
@@ -112,7 +115,7 @@ class PageDeleteRotationTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `repeated rotation keeps one Undo and it cannot delete the restored page later`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -133,7 +136,7 @@ class PageDeleteRotationTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rotation after Undo does not resurrect a pending delete`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -151,7 +154,7 @@ class PageDeleteRotationTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `leaving the viewer still commits an unconfirmed page delete to the draft only`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val before = PdfInvariants.dirDigest(File(repo.docsDir, id))
@@ -164,7 +167,7 @@ class PageDeleteRotationTest {
         assertEquals(before, PdfInvariants.dirDigest(File(repo.docsDir, id)))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an import with a pending page edit is kept rather than offered Discard on Back`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(

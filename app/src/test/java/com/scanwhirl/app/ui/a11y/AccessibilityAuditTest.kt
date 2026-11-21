@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.a11y
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -83,6 +85,7 @@ import kotlin.math.pow
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class AccessibilityAuditTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -204,7 +207,7 @@ class AccessibilityAuditTest {
 
     // ------------------------------------------------------------------ screens
 
-    @Test
+    @Test(timeout = 60_000)
     fun `shell tabs are accessible`() {
         atScales {
             auditShell("Library")
@@ -251,7 +254,7 @@ class AccessibilityAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `organize grid and document viewer are accessible`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Audit document")
         atScales {
@@ -297,7 +300,7 @@ class AccessibilityAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page editor and stamp editor are accessible`() {
         val pages = DocFixtures.saved(repo, app, pages = 2, name = "Audit pages")
         val stampId = DocFixtures.saved(repo, app, pages = 1, name = "Audit stamp")
@@ -316,7 +319,7 @@ class AccessibilityAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `text settings tools and vault are accessible`() {
         val docId = runBlocking {
             repo.saveScan(
@@ -359,7 +362,7 @@ class AccessibilityAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review and protect sheets are accessible`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Audit review")
         val actionsDoc = DocFixtures.saved(repo, app, pages = 2, name = "Audit actions")
@@ -395,7 +398,7 @@ class AccessibilityAuditTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `insert and mask sheets are accessible`() {
         val doc = DocFixtures.saved(repo, app, pages = 2, name = "Audit sheets")
         atScales {

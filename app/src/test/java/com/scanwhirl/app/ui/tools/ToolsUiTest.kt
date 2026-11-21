@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Context
@@ -47,6 +49,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ToolsUiTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -99,7 +102,7 @@ class ToolsUiTest {
 
     // ---- registry wiring ---------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `every L4 tool is Ready and launches its own setup screen`() {
         val host = RecordingHost(app)
         for (id in l4Tools) {
@@ -130,7 +133,7 @@ class ToolsUiTest {
         assertTrue("a ready tool must not fall back to Coming soon", host.events.isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the other lanes' tools keep their own launch behaviour`() {
         val host = RecordingHost(app)
         for (id in listOf("sign", "to_excel", "qr_code")) {
@@ -143,7 +146,7 @@ class ToolsUiTest {
 
     // ---- setup screen ------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `split setup validates the ranges before anything is written`() {
         val before = repo.listDocuments().map { it.id }.toSet()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
@@ -171,7 +174,7 @@ class ToolsUiTest {
         assertEquals("a refused range must create nothing", before, repo.listDocuments().map { it.id }.toSet())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pdf to images setup offers JPG PNG and a quality control`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "pdf_to_images")).use { scenario ->
             scenario.onActivity { activity ->
@@ -189,7 +192,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress setup offers a target size`() {        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
                 assertNotNull("Compress needs a target-size field", activity.findViewById<View>(R.id.toolSetupTarget))
@@ -198,7 +201,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `to word setup offers the page pictures option and toggles it`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_word")).use { scenario ->
             scenario.onActivity { activity ->
@@ -213,7 +216,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress level rows show one selected choice and an estimate`() {
         // v2 UI: 03_tools_setup_picker — the four compress-sheet levels, each with its size.
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -249,7 +252,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `to excel setup offers tables only and all text`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_excel")).use { scenario ->
             scenario.onActivity { activity ->
@@ -265,7 +268,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `to excel tables only offers all text when no page has a table`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Plain letter")
         repo.ocrStore.putPage(
@@ -296,7 +299,7 @@ class ToolsUiTest {
         assertEquals("one all-text workbook is written", 1, workbooks.size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `to powerpoint setup explains the slides and notes`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "to_powerpoint")).use { scenario ->
             scenario.onActivity { activity ->
@@ -318,7 +321,7 @@ class ToolsUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `running split opens the result screen with the new document`() {
         val doc = repo.listDocuments().first()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
@@ -339,7 +342,7 @@ class ToolsUiTest {
 
     // ---- result screen -----------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `result screen offers Open Share Save Show in library and Undo`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Result doc")
         val intent = ToolResultActivity.intent(app, "split", docIds = listOf(id))
@@ -397,7 +400,7 @@ class ToolsUiTest {
         assertNull("the source of a result must be gone only through Undo", repo.getDocument(id))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `result screen acts on exported files too`() {
         val jpeg = File(app.cacheDir, "documents/result_page.jpg").apply {
             parentFile?.mkdirs()

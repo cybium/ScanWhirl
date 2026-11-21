@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -41,6 +43,7 @@ import java.util.Locale
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class ToolSetupPickerUiTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -116,7 +119,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 1. source rows ----------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `every source row shows the real first page as a thumbnail`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
             scenario.onActivity { activity ->
@@ -158,7 +161,7 @@ class ToolSetupPickerUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the selected row shows a check as well as its tint`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "merge")).use { scenario ->
             scenario.onActivity { activity ->
@@ -176,7 +179,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 2. section labels -------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `section labels are sentence case not all caps`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
             scenario.onActivity { activity ->
@@ -211,7 +214,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 3. compress options match the document sheet ----------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress offers the document sheet's four levels with their sizes`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
@@ -292,7 +295,7 @@ class ToolSetupPickerUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `no option chip clips at 360 dp in English`() {
         for (tool in listOf("compress", "pdf_to_images", "to_excel")) {
             ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, tool)).use { scenario ->
@@ -304,7 +307,7 @@ class ToolSetupPickerUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `no option chip clips at 360 dp in Hindi`() {
         for (tool in listOf("compress", "pdf_to_images", "to_excel")) {
@@ -318,7 +321,7 @@ class ToolSetupPickerUiTest {
     }
 
     /** The narrowest phone still supported: the same chips must fit there too. */
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "w320dp-h640dp-xhdpi")
     fun `no option chip clips at 320 dp in English and Hindi`() {
         for (qualifiers in listOf("w320dp-h640dp-xhdpi", "hi-w320dp-h640dp-xhdpi")) {
@@ -337,7 +340,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 5. the long list shows a scrollbar --------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the long source list keeps a visible scrollbar`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
             scenario.onActivity { activity ->
@@ -373,7 +376,7 @@ class ToolSetupPickerUiTest {
         return bottom
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the action button is pinned below the list and visible without scrolling`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
             scenario.onActivity { activity ->
@@ -415,7 +418,7 @@ class ToolSetupPickerUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the longest list ends above the pinned bar and the last row stays reachable`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "split")).use { scenario ->
             scenario.onActivity { activity ->
@@ -439,7 +442,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 7. the compress help line and the glossary ------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress explains the level-or-size choice in plain words`() {
         assertEquals(
             "Choose a level, or type the size you need.",
@@ -455,7 +458,7 @@ class ToolSetupPickerUiTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `Hindi labels follow the judged glossary`() {
         // JUDGE_HINDI: "Custom size | अपनी ज़रूरत का आकार (चाहें तो)"; no वैकल्पिक.
@@ -472,12 +475,12 @@ class ToolSetupPickerUiTest {
         assertEquals("जारी रखें", app.getString(R.string.tools_setup_run))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the custom size hint fits its field at 360 dp in English`() {
         assertHintFits(R.string.tools_pick_custom_size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `the custom size hint fits its field at 360 dp in Hindi`() {
         assertHintFits(R.string.tools_pick_custom_size)
@@ -501,7 +504,7 @@ class ToolSetupPickerUiTest {
 
     // ---- 8. Batch compress says the same four levels -----------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `batch compress offers the document sheet's four levels too`() {
         val ids = repo.listDocuments().map { it.id }
         ActivityScenario.launch<BatchActivity>(BatchActivity.intent(app, ids)).use { scenario ->

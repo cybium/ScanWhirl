@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -36,6 +38,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class BusinessCardFlowTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -97,7 +100,7 @@ class BusinessCardFlowTest {
         })
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancelled capture shows the scan and gallery choice`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             scenario.onActivity {
@@ -113,7 +116,7 @@ class BusinessCardFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the gallery choice goes through the shared scanner crop`() {
         var started = false
         com.scanwhirl.app.tools.GalleryCrop.startOverride = { started = true; true }
@@ -136,7 +139,7 @@ class BusinessCardFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `parsed card prefills the editable fields`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             openForm(scenario)
@@ -169,7 +172,7 @@ class BusinessCardFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `save to contacts opens the prefilled insert intent`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             openForm(scenario)
@@ -193,7 +196,7 @@ class BusinessCardFlowTest {
         assertTrue("contacts must not create a document", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `share as vcard writes a vcf and opens the sharesheet`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             openForm(scenario)
@@ -221,7 +224,7 @@ class BusinessCardFlowTest {
         assertTrue(text.endsWith("END:VCARD\r\n"))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `save card image publishes one document and opens the result`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             openForm(scenario)
@@ -245,7 +248,7 @@ class BusinessCardFlowTest {
         assertEquals(1, doc.pageCount)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `leaving without an action creates nothing`() {
         ActivityScenario.launch(BusinessCardActivity::class.java).use { scenario ->
             openForm(scenario)

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -52,6 +54,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class HomeSlice2Test {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -143,7 +146,7 @@ class HomeSlice2Test {
 
     // ---- library sizes ------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `zero documents show the honest empty state and both dock actions`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -160,7 +163,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `one and two documents render rows with real first pages`() {
         fixture("Electricity bill", color = Color.BLUE, category = CategoryRules.RECEIPTS)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -200,7 +203,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `forty and one hundred documents scroll, filter and search without losing rows`() {
         repeat(100) { i ->
             fixture(
@@ -248,7 +251,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `forty documents fit the default phone with header and dock clear`() {
         repeat(40) { fixture("Receipt %02d".format(it), category = CategoryRules.RECEIPTS) }
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -265,7 +268,7 @@ class HomeSlice2Test {
 
     // ---- thumbnails: privacy and placeholders --------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `locked and private documents never decode a page image`() {
         val locked = fixture("Bank statement", color = Color.RED)
         File(locked, "locked.meta").writeText("x")
@@ -299,7 +302,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pdf-only, zero-page and unreadable documents get purposeful placeholders`() {
         val pdfOnly = fixture("Imported contract", pages = 0)
         val broken = fixture("Damaged scan", pageBytes = "not a jpeg at all".toByteArray())
@@ -326,7 +329,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a recycled view never shows the previous document's page`() {
         val red = doc(fixture("Red", color = Color.RED, pages = 1))
         val blue = doc(fixture("Blue", color = Color.BLUE, pages = 1))
@@ -336,29 +339,32 @@ class HomeSlice2Test {
         DocThumbBinder.bind(image, glyph, red)
         DocThumbBinder.bind(image, glyph, blue)
         assertTrue(pollUntil { shownBitmap(image) != null })
-        Thread.sleep(200) // let the stale red job finish too
-        shadowOf(android.os.Looper.getMainLooper()).idle()
+        // PageThumbLoader runs inline under Robolectric and posts its results to the main
+        // looper. Advancing the shadow looper's virtual clock drains the stale red job and its
+        // cross-fade deterministically — no wall-clock sleep.
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(DocThumbBinder.FADE_MS + 100L))
         assertTrue("the view shows B, never A", isBlueish(centreColor(shownBitmap(image)!!)))
 
         // Recycling drops the request: a late result never lands on the recycled view.
         val green = doc(fixture("Green", color = Color.GREEN, pages = 1))
         DocThumbBinder.bind(image, glyph, green)
         DocThumbBinder.unbind(image, glyph)
-        Thread.sleep(200)
-        shadowOf(android.os.Looper.getMainLooper()).idle()
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(DocThumbBinder.FADE_MS + 100L))
         assertNull("unbound view keeps only the placeholder", shownBitmap(image))
 
         // An edited first page (new mtime/length) is a new request, not the stale thumb.
         val redFile = red.pageFiles.first()
         redFile.writeBytes(jpeg(Color.BLUE, 130, 180))
-        redFile.setLastModified(System.currentTimeMillis() + 5_000)
+        // A relative bump is enough to change the thumb-cache key without depending on the
+        // host clock (a future timestamp could be clamped by the filesystem).
+        redFile.setLastModified(redFile.lastModified() + 5_000)
         DocThumbBinder.bind(image, glyph, repo.getDocument(red.id)!!)
         assertTrue(pollUntil { shownBitmap(image)?.let { isBlueish(centreColor(it)) } == true })
     }
 
     // ---- honest text status ---------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `text status comes from the pending marker and stored page text only`() {
         val waiting = fixture("Waiting", pages = 2)
         File(waiting, "ocr_pending").writeText("")
@@ -413,7 +419,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the indexer finishing a document re-reads its status`() {
         val waiting = fixture("Lecture notes", pages = 1)
         File(waiting, "ocr_pending").writeText("")
@@ -436,7 +442,7 @@ class HomeSlice2Test {
 
     // ---- entry points that must survive the redesign ---------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `scan import tools settings pro private select more and long-press all still work`() {
         fixture("Hall ticket", category = CategoryRules.UNSORTED)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -502,7 +508,7 @@ class HomeSlice2Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings stays in the app bar and no starfield remains`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -520,7 +526,7 @@ class HomeSlice2Test {
 
     // ---- copy, contrast and large text ---------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home copy never promises unbuilt features`() {
         val res = app.resources
         val homeCopy = listOf(
@@ -551,7 +557,7 @@ class HomeSlice2Test {
         return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home text tokens meet WCAG AA on the ink desk and surfaces`() {
         fun c(id: Int) = app.getColor(id)
         val backgrounds = listOf(R.color.rv_bg, R.color.rv_surface, R.color.rv_surface_2)
@@ -580,7 +586,7 @@ class HomeSlice2Test {
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class HomeSlice2LargeTextTest {
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rows status and dock fit at 200 percent on 320dp`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val repo = ScanRepository(app)

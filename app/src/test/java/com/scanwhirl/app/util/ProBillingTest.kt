@@ -1,4 +1,6 @@
 package com.scanwhirl.app.util
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -27,6 +29,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class ProBillingTest {
+
 
     private lateinit var app: Application
 
@@ -115,7 +118,7 @@ class ProBillingTest {
         app.getSharedPreferences("scanwhirl_prefs", 0).edit().clear().commit()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `acknowledge is asynchronous - Finishing first, Pro only after the callback`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -135,7 +138,7 @@ class ProBillingTest {
         assertTrue("Pro recorded after the acknowledge", purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an acknowledge failure reports Failed and keeps Pro locked`() {
         val gateway = FakeGateway().apply { ackResult = false }
         val states = mutableListOf<ProBilling.State>()
@@ -150,7 +153,7 @@ class ProBillingTest {
         assertFalse(purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an already acknowledged purchase unlocks without a second acknowledge`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -165,7 +168,7 @@ class ProBillingTest {
         assertTrue(purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a start-up purchase that was never acknowledged gets acknowledged`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -183,7 +186,7 @@ class ProBillingTest {
         assertTrue(purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `older malformed billing preferences do not crash or grant Pro`() {
         app.getSharedPreferences("scanwhirl_prefs", 0).edit()
             .putString("pro_unlocked", "true")
@@ -193,7 +196,7 @@ class ProBillingTest {
         assertTrue(ProGate.isPro(app, testBuild = true))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a failed query keeps Pro (offline or Play busy)`() {
         ProGate.setPro(app, true)
         val gateway = FakeGateway()
@@ -208,7 +211,7 @@ class ProBillingTest {
         assertTrue("no state is reported", states.isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an OK answer without the product locks Pro in a release build`() {
         ProGate.setPro(app, true)
         val gateway = FakeGateway()
@@ -219,7 +222,7 @@ class ProBillingTest {
         assertFalse("a refund locks Pro again", purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pending update is not revocation but a successful pending-only query is`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -240,7 +243,7 @@ class ProBillingTest {
         assertTrue("nothing is acknowledged before payment", gateway.acknowledged.isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancel does nothing and a test build unlocks without the store`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -256,7 +259,7 @@ class ProBillingTest {
         assertEquals("no billing connection in a test build", 0, gateway.launches)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a phone without Play Store reports no price instead of crashing`() {
         ProBilling.gatewayFactory = { throw IllegalStateException("no Play Store") }
         var price: String? = "sentinel"
@@ -264,7 +267,7 @@ class ProBillingTest {
         assertNull(price)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the localized price is used when the store answers`() {
         val gateway = FakeGateway()
         ProBilling.gatewayFactory = { gateway }
@@ -274,7 +277,7 @@ class ProBillingTest {
         assertEquals("₹100", price)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `buy asks the store for the product again when the first query failed`() {
         val gateway = FakeGateway().apply { priceText = null }
         ProBilling.gatewayFactory = { gateway }
@@ -292,7 +295,7 @@ class ProBillingTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `buy launches the purchase sheet once the product details arrive`() {
         val gateway = FakeGateway()
         ProBilling.gatewayFactory = { gateway }
@@ -307,7 +310,7 @@ class ProBillingTest {
     }
 
     /** Play answers on its own thread; the launch and every state must still land on main. */
-    @Test
+    @Test(timeout = 60_000)
     fun `a worker-thread product answer launches the sheet on the main thread`() {
         val gateway = FakeGateway().apply { deliverOnWorker = true }
         ProBilling.gatewayFactory = { gateway }
@@ -326,7 +329,7 @@ class ProBillingTest {
         assertTrue("no state may reach the UI off main", deliveredOnMain)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a worker-thread failure reports Failed on the main thread`() {
         val gateway = FakeGateway().apply {
             deliverOnWorker = true
@@ -351,7 +354,7 @@ class ProBillingTest {
         assertFalse("the failed operation is released", ProBilling.isPurchaseInFlight())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a double tap opens one billing flow and a cancel releases the tap`() {
         val gateway = FakeGateway()
         ProBilling.gatewayFactory = { gateway }
@@ -375,7 +378,7 @@ class ProBillingTest {
         assertEquals("a later tap starts a new operation", 2, gateway.priceCalls)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a launch exception is reported and the tap is released`() {
         val gateway = FakeGateway().apply { launchThrows = true }
         ProBilling.gatewayFactory = { gateway }
@@ -396,7 +399,7 @@ class ProBillingTest {
         assertEquals("a retry can open the sheet", 2, gateway.launches)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a failed first tap can be retried and its buy-time price fills the cache`() {
         val gateway = FakeGateway().apply { priceText = null }
         ProBilling.gatewayFactory = { gateway }
@@ -420,7 +423,7 @@ class ProBillingTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an ownership answer that started before the purchase never revokes Pro`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -442,7 +445,7 @@ class ProBillingTest {
         assertTrue("the fresh purchase must not be revoked by an older answer", purchased())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an older pending snapshot does not interrupt a signed purchase waiting for ack`() {
         val gateway = FakeGateway()
         val states = mutableListOf<ProBilling.State>()
@@ -460,7 +463,7 @@ class ProBillingTest {
         assertEquals(ProBilling.State.Owned, states.last())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the cached price belongs to the locale Play answered for`() {
         val gateway = FakeGateway().apply { priceText = "$4.99" }
         ProBilling.gatewayFactory = { gateway }

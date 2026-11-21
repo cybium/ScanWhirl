@@ -1,4 +1,6 @@
 package com.scanwhirl.app
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -55,6 +57,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class FixCopyTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -156,7 +159,7 @@ class FixCopyTest {
         return started!!.requestCode to started.intent
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the recovery screen offers Save as file and never puts the code on the clipboard`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -202,7 +205,7 @@ class FixCopyTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `saving the recovery code writes the code and one instruction line`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -231,7 +234,7 @@ class FixCopyTest {
         assertFalse("no long dashes in the saved file", text.contains("\u2014") || text.contains("\u2013"))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the save control is a 48 dp focusable target like the other Vault rows`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -247,7 +250,7 @@ class FixCopyTest {
         assertTrue("the save control must be clickable", action.isClickable)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a rotation while the picker is open still writes the code`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -275,7 +278,7 @@ class FixCopyTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `process death while the picker is open deletes the empty file and says so`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -319,7 +322,7 @@ class FixCopyTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancelling the picker writes nothing and says nothing`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -342,7 +345,7 @@ class FixCopyTest {
         assertTrue("the recovery sheet is still there", recovery.isShowing)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a write failure shows a clear message and does not crash`() {
         controller = Robolectric.buildActivity(VaultActivity::class.java).setup()
         val activity = controller!!.get()
@@ -374,7 +377,7 @@ class FixCopyTest {
         assertFalse("the activity is still there", activity.isFinishing)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compression levels read best quality first and each level is smaller`() {
         val source = File("src/main/java/com/scanwhirl/app/tools/CompressFlow.kt").readText(Charsets.UTF_8)
         val levels = Regex(
@@ -395,7 +398,7 @@ class FixCopyTest {
         assertEquals("Smallest", en["compress_level_ultra"])
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the eight critique wordings are plain in English and Hindi`() {
         val expected = mapOf(
             "compress_level_low" to "Best quality",

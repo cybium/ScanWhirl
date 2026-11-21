@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.widget.EditText
@@ -39,6 +41,7 @@ import java.io.File
 @Config(sdk = [35])
 class OrganizeDraftUiTest {
 
+
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
@@ -73,7 +76,7 @@ class OrganizeDraftUiTest {
 
     private fun draftChanges(id: String): Int = runBlocking { repo.draftOf(id)?.changes ?: 0 }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rotating in the editor leaves the saved document byte identical until Save`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
@@ -90,7 +93,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `back with changes offers Save as new copy Discard and Keep editing`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -125,7 +128,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `discard restores the original page list`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
@@ -166,7 +169,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Save as new copy creates the edited copy and keeps the original`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Draft save")
         val doc = repo.getDocument(id)!!
@@ -197,7 +200,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Replace original asks to confirm and puts the previous version in Trash`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Draft replace")
         val doc = repo.getDocument(id)!!
@@ -252,7 +255,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `selection bar rotate and delete act on the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
@@ -297,7 +300,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `insert pages writes the draft and discard drops them`() {
         val target = DocFixtures.saved(repo, app, pages = 2)
         val source = DocFixtures.saved(repo, app, pages = 1, name = "Source")
@@ -332,7 +335,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the organize pages tool is coming soon instead of a dead reorder tile`() {
         DocFixtures.saved(repo, app, pages = 1)
         val host = Robolectric.buildActivity(Host::class.java).setup().get()
@@ -347,7 +350,7 @@ class OrganizeDraftUiTest {
         assertNull(shadowOf(host).nextStartedActivity)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a long press drag moves the tile and the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val baseFirst = repo.getDocument(id)!!.pageFiles.first().path
@@ -379,7 +382,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `selection more has rotate duplicate insert and extract and duplicate works`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
@@ -422,7 +425,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `insert pages at the start middle and end in the organizer`() {        fun insertedWidths(position: Int): List<Int> {
             val target = DocFixtures.saved(repo, app, pages = 3)
             val source = runBlocking {
@@ -459,7 +462,7 @@ class OrganizeDraftUiTest {
      * B9: the camera/gallery copies only exist to be inserted. Their `cacheDir/insert_<id>/`
      * folder used to stay behind forever, holding full-page plaintext JPEGs.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `the temp folder of picked insert pages is removed after the insert`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val dir = File(app.cacheDir, "insert_abcd1234").apply { mkdirs() }
@@ -481,7 +484,7 @@ class OrganizeDraftUiTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
