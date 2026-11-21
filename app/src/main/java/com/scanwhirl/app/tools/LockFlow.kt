@@ -7,6 +7,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -117,7 +118,7 @@ class LockFlow(
                 progress.dismiss()
                 Toast.makeText(
                     activity,
-                    activity.getString(R.string.page_op_failed, e.message),
+                    activity.getString(R.string.lock_op_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -176,27 +177,43 @@ class LockFlow(
                 vaultAvailable = vaultAvailable,
                 onUseVault = useVault
             ) { password, done ->
-                activity.lifecycleScope.launch {
-                    val progress = host.showProgress()
+                // The decrypt is slower than a rotation: it must finish and publish the document
+                // even when this Activity is gone. The app scope outlives the screen; every side
+                // effect that needs a live window (progress, refresh, viewer) is gated below.
+                val app = ScanWhirlApp.from(activity)
+                app.appScope.launch {
+                    fun hostAlive(): Boolean = !activity.isFinishing && !activity.isDestroyed &&
+                        activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                    val progress = withContext(Dispatchers.Main) {
+                        if (hostAlive()) host.showProgress() else null
+                    }
+                    fun dismissProgress() {
+                        if (progress != null && hostAlive()) runCatching { progress!!.dismiss() }
+                    }
                     try {
                         val doc = withContext(Dispatchers.IO) {
                             importProtected?.invoke(uri, suggestedName, password)
                                 ?: repo.importProtectedPdfAsScan(uri, suggestedName, password)
                         }
-                        progress.dismiss()
-                        ScanWhirlApp.from(activity).indexer.enqueue(doc.id)
-                        host.refreshList()
-                        activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
-                        done(ImportUnlockSheet.Result.OK)
+                        // Indexing is host independent: a document created after rotation still has
+                        // to be searchable and visible when the Library next loads.
+                        app.indexer.enqueue(doc.id)
+                        withContext(Dispatchers.Main) {
+                            dismissProgress()
+                            if (hostAlive()) {
+                                host.refreshList()
+                                activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
+                            }
+                            done(ImportUnlockSheet.Result.OK)
+                        }
                     } catch (e: PdfDecryptor.WrongPassword) {
-                        progress.dismiss()
-                        done(ImportUnlockSheet.Result.WRONG)
+                        withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.WRONG) }
+                    } catch (e: PdfDecryptor.UnsupportedScheme) {
+                        withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.UNSUPPORTED) }
                     } catch (e: PdfDecryptor.Unsupported) {
-                        progress.dismiss()
-                        done(ImportUnlockSheet.Result.UNSUPPORTED)
+                        withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.DAMAGED) }
                     } catch (e: Exception) {
-                        progress.dismiss()
-                        done(ImportUnlockSheet.Result.FAILED)
+                        withContext(Dispatchers.Main) { dismissProgress(); done(ImportUnlockSheet.Result.FAILED) }
                     }
                 }
             }
@@ -255,7 +272,7 @@ class LockFlow(
                     progress.dismiss()
                     Toast.makeText(
                         activity,
-                        activity.getString(R.string.page_op_failed, e.message),
+                        activity.getString(R.string.lock_op_failed),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -448,7 +465,7 @@ class LockFlow(
                 progress.dismiss()
                 Toast.makeText(
                     activity,
-                    activity.getString(R.string.page_op_failed, e.message),
+                    activity.getString(R.string.lock_op_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -484,7 +501,7 @@ class LockFlow(
                 progress.dismiss()
                 Toast.makeText(
                     activity,
-                    activity.getString(R.string.page_op_failed, e.message),
+                    activity.getString(R.string.lock_op_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -548,7 +565,7 @@ class LockFlow(
                 progress.dismiss()
                 Toast.makeText(
                     activity,
-                    activity.getString(R.string.page_op_failed, e.message),
+                    activity.getString(R.string.lock_op_failed),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -668,7 +685,9 @@ class LockFlow(
                 }
                 if (text.isEmpty()) {
                     field.setError(
-                        activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                        activity.getString(
+                            R.string.unlock_wrong_tries, cooldown.triesLeft, cooldown.nextPauseSeconds()
+                        )
                     )
                     return
                 }
@@ -698,7 +717,9 @@ class LockFlow(
                         tickPause()
                     } else {
                         field.setError(
-                            activity.getString(R.string.unlock_wrong_tries, cooldown.triesLeft, 30)
+                            activity.getString(
+                                R.string.unlock_wrong_tries, cooldown.triesLeft, cooldown.nextPauseSeconds()
+                            )
                         )
                     }
                 }
