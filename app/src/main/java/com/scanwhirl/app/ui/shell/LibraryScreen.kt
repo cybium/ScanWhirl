@@ -437,6 +437,14 @@ class LibraryScreen(
         super.onAttachedToWindow()
         installChrome()
         installSelectionPin()
+        // G6: the dock grows with wrapped nav labels, so re-measure the list's reserved
+        // clearance after the shell's own layout pass, not only on the first render.
+        addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val inset = listBottomInset()
+            if (docList.paddingBottom != inset) {
+                docList.setPadding(docList.paddingLeft, docList.paddingTop, docList.paddingRight, inset)
+            }
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -612,7 +620,8 @@ class LibraryScreen(
                 LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT
             ).apply {
                 val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 4f), m, 0)
+                val top = if (resources.configuration.fontScale >= 1.6f) 1f else 4f
+                setMargins(m, SwStyle.dp(context, top), m, 0)
             }
         }
         fun label(id: Int, textRes: Int): TextView = SwStyle.text(
@@ -636,6 +645,8 @@ class LibraryScreen(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = SwStyle.dp(context, 48f)
+            // G3: the control text sits on the same near-opaque surface as the cards.
+            background = readableBand()
             addView(
                 label(id, textRes),
                 LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
@@ -677,7 +688,7 @@ class LibraryScreen(
         listHeader = line(R.id.uxL1SortLabel, R.string.ux130_l1_sort_label)
         recentHeader = sectionHeader(
             context.getString(R.string.home_recent), context.getString(R.string.home_newest)
-        ) { showSortSheet() }
+        ) { showSortSheet() }.apply { background = readableBand() }
         listHeader.addView(recentHeader, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true).apply {
             id = R.id.swDocCount

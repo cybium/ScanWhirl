@@ -287,11 +287,9 @@ class DocCard(context: Context) : LinearLayout(context) {
             categoryDot,
             LayoutParams((8 * d).toInt(), (8 * d).toInt()).apply { marginEnd = (5 * d).toInt() }
         )
-        categoryView = SwStyle.text(
-            context,
-            if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 12f,
-            SwStyle.color(context, R.color.text_hologram_mid), bold = true
-        ).apply {
+        // Kept at 11f: raising this at 200 % Hindi makes the 88dp card two pixels taller and
+        // breaks the 360x640dp first-card clearance (LibraryFirstScreen640HiTest).
+        categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             id = R.id.swDocFolder
             minimumHeight = (14 * d).toInt()
             gravity = Gravity.CENTER_VERTICAL

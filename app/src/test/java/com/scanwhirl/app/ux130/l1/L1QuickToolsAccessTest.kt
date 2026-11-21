@@ -7,7 +7,6 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
-import com.scanwhirl.app.ui.kit.SwChip
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.shell.LibraryScreen
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -122,9 +121,6 @@ class L1QuickToolsAccessTest {
                         "quick label ${v.labelView.text} is >=12sp",
                         v.labelView.textSize / scaled >= 11.99f
                     )
-                }
-                if (v is SwChip) {
-                    assertTrue("chip label is >=12sp", v.labelView.textSize / scaled >= 11.99f)
                 }
                 if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
             }

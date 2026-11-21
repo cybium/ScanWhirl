@@ -482,6 +482,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 gravity = Gravity.CENTER
                 isClickable = true
                 isFocusable = true
+                minimumHeight = SwStyle.dp(this@ShellActivity, 48f)
                 contentDescription = getString(label)
                 setOnClickListener { showTab(tab) }
             }
@@ -513,6 +514,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
                     //noinspection WrongConstant
                     breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+                    // Tight but readable two-line leading keeps the grown dock from eating the
+                    // first card at 200 % on a 360x640dp phone.
+                    setLineSpacing(0f, 0.92f)
                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
                 },
                 LinearLayout.LayoutParams(
@@ -656,13 +660,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             clipToPadding = false
             setPadding(0, 0, 0, dockClearancePx())
             addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                // G6: the dock grows with wrapped labels, so re-measure on every layout pass.
+                // Applied directly (not posted) so a growing dock cannot leave stale clearance.
                 val pad = dockClearancePx()
                 if (v.paddingBottom != pad) {
-                    v.post {
-                        if (v.paddingBottom != dockClearancePx()) {
-                            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, dockClearancePx())
-                        }
-                    }
+                    v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, pad)
                 }
             }
             addView(
