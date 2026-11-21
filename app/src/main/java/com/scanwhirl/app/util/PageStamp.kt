@@ -168,11 +168,13 @@ object PageStamp {
      * "Suggest" for the Redact tool now runs the same [SensitiveScan] detector as the Find flow,
      * so email addresses, cards, bank identifiers (IFSC/UPI) and every other supported kind are
      * found too. Each hit carries the element-level box computed from the OCR character positions;
-     * two items on one line produce two boxes. Nothing is redacted until the user accepts them.
+     * two items on one line produce two boxes. [SensitiveScan.find] is asked for full masks so a
+     * card's last four digits cannot stay visible on the hidden copy — the Find flow is the only
+     * place that deliberately keeps them. Nothing is redacted until the user accepts them.
      */
     fun suggestRedactions(page: com.scanwhirl.app.model.OcrPage): List<Suggestion> {
         if (page.width <= 0 || page.height <= 0) return emptyList()
-        return SensitiveScan.find(page).map { hit ->
+        return SensitiveScan.find(page, fullMask = true).map { hit ->
             Suggestion(
                 box = hit.box,
                 kind = when (hit.kind) {
