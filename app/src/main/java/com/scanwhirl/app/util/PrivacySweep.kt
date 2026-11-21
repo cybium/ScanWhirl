@@ -21,10 +21,25 @@ import java.io.File
  * Android may restart this process to serve it. They are therefore reclaimed by age in
  * [ShareUtils.pruneShareCopies] (after 24 h), not wiped on sight.
  *
+ * The capture tools' caches are the other exception: this sweep also runs after a process death,
+ * when IdCard/Passport/Business card still need their saved photo to restore the person's work.
+ * Entries in [CAPTURE_CACHE_DIRS] are therefore only reclaimed once they are older than
+ * [CAPTURE_CACHE_MAX_AGE_MS] (24 h), long past any restore; a real screen exit deletes them at once.
+ *
  * Only app-owned cache directories are touched; the library (`filesDir/documents`), the Vault
  * (`filesDir/vault2`) and user exports are never included.
  */
 object PrivacySweep {
+
+    /**
+     * Age after which an abandoned capture-cache entry may be swept. A cold start following a
+     * process death happens within seconds, so 24 h keeps every restorable capture intact while
+     * still reclaiming caches from long-abandoned flows. Matches the share-copy retention window.
+     */
+    internal const val CAPTURE_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+
+    /** Capture caches that need to survive a process-death restore and are swept by age only. */
+    internal val CAPTURE_CACHE_DIRS = setOf("t1_passport", "t1_business_card", "id_card_state")
 
     /** Cache directories (relative to cacheDir) that only ever hold plaintext copies. */
     internal val CACHE_DIRS = listOf(
@@ -32,7 +47,12 @@ object PrivacySweep {
         "vault_verify",
         "pdfa",
         "exports",
-        "fullbackup"
+        "fullbackup",
+        // T1 capture tools: plaintext card/ID photos cached for rotation and process-death
+        // restore; swept by age in [CAPTURE_CACHE_DIRS], not on sight.
+        "t1_passport",
+        "t1_business_card",
+        "id_card_state"
     )
 
     /** Cache files (relative to cacheDir) whose names start with a marker. */
@@ -64,8 +84,14 @@ object PrivacySweep {
         com.scanwhirl.app.store.backup.FullBackup.isRunning
     }
 
+    /** Injectable delete operations: one failing entry must never abort the rest of the sweep. */
+    internal var deleteDirectory: (File) -> Boolean = { it.deleteRecursively() }
+    internal var deleteFile: (File) -> Boolean = { it.delete() }
+
     internal fun resetForTests() {
         backupRunning = { com.scanwhirl.app.store.backup.FullBackup.isRunning }
+        deleteDirectory = { it.deleteRecursively() }
+        deleteFile = { it.delete() }
     }
 
     /** Runs the sweep; returns how many entries were removed (for tests and diagnostics). */
@@ -80,7 +106,11 @@ object PrivacySweep {
         // and readers (including a reader retained across rotation) alone.
         listOf("pdf_fd", "pdf_open").forEach { name ->
             File(cache, name).listFiles()?.forEach { file ->
-                if (BoundedCopy.removeIfUnowned(file)) removed++
+                try {
+                    if (BoundedCopy.removeIfUnowned(file)) removed++
+                } catch (e: Exception) {
+                    // T1: an unremovable entry is left for another launch; keep sweeping.
+                }
             }
         }
         CACHE_DIRS.forEach { name ->
@@ -90,7 +120,27 @@ object PrivacySweep {
             // `fullbackup` holds the archive a running backup is writing or sharing.
             if (name == "fullbackup" && jobRunning) return@forEach
             val dir = File(cache, name)
-            if (dir.exists() && dir.deleteRecursively()) removed++
+            if (!dir.exists()) return@forEach
+            if (name in CAPTURE_CACHE_DIRS) {
+                // A process killed mid-flow needs these bytes on the next start: only entries
+                // older than a day are abandoned. Each delete stays independent.
+                val now = System.currentTimeMillis()
+                dir.listFiles()?.forEach { entry ->
+                    if (now - entry.lastModified() <= CAPTURE_CACHE_MAX_AGE_MS) return@forEach
+                    try {
+                        val gone = if (entry.isDirectory) deleteDirectory(entry) else deleteFile(entry)
+                        if (gone) removed++
+                    } catch (e: Exception) {
+                        // Leave this entry for another launch; keep sweeping the others.
+                    }
+                }
+            } else {
+                try {
+                    if (deleteDirectory(dir)) removed++
+                } catch (e: Exception) {
+                    // T1: one bad entry must not skip the remaining plaintext copies.
+                }
+            }
         }
         // `documents` is the FileProvider tree: viewer/batch scratch plus the per-share copies.
         // Everything except the share folder is scratch and is wiped; share copies follow the
@@ -99,10 +149,18 @@ object PrivacySweep {
         if (documents.isDirectory) {
             documents.listFiles()?.forEach { child ->
                 if (child.name == "share") return@forEach
-                val gone = if (child.isDirectory) child.deleteRecursively() else child.delete()
-                if (gone) removed++
+                try {
+                    val gone = if (child.isDirectory) deleteDirectory(child) else deleteFile(child)
+                    if (gone) removed++
+                } catch (e: Exception) {
+                    // T1: keep sweeping the other scratch folders.
+                }
             }
-            removed += ShareUtils.pruneShareCopies(context)
+            removed += try {
+                ShareUtils.pruneShareCopies(context)
+            } catch (e: Exception) {
+                0
+            }
         }
         cache.listFiles()?.forEach { file ->
             val plainFile = file.isFile && CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }
@@ -111,16 +169,17 @@ object PrivacySweep {
             // decrypted archive plus its document tree of an interrupted restore
             // (`restore-<id>.tmp`, `restore-<id>/`). A live job keeps its own.
             val backupTemp = BACKUP_CACHE_PREFIXES.any { file.name.startsWith(it) }
-            when {
-                plainFile -> if (file.delete()) removed++
-                plainDir -> if (file.deleteRecursively()) removed++
-                backupTemp && !jobRunning -> {
-                    if (file.isDirectory) {
-                        if (file.deleteRecursively()) removed++
-                    } else if (file.delete()) {
-                        removed++
+            try {
+                when {
+                    plainFile -> if (deleteFile(file)) removed++
+                    plainDir -> if (deleteDirectory(file)) removed++
+                    backupTemp && !jobRunning -> {
+                        val gone = if (file.isDirectory) deleteDirectory(file) else deleteFile(file)
+                        if (gone) removed++
                     }
                 }
+            } catch (e: Exception) {
+                // T1: keep sweeping the remaining cache entries.
             }
         }
         return removed

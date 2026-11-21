@@ -65,6 +65,8 @@ object IdCard {
     private const val MAX_DECODE = 1600
     private const val QUALITY = 92
     private const val CARD_WIDTH_FRACTION = 0.86f
+    /** Print density of the composed page, matching the PDF generator's 150 dpi pages. */
+    private const val PAGE_DPI = 150
 
     /** One page: front on top and, when [back] is given, the back below it. */
     fun compose(
@@ -80,7 +82,7 @@ object IdCard {
             canvas.drawColor(Color.WHITE)
             drawIntoCard(canvas, front, frontRect(paper))
             back?.let { drawIntoCard(canvas, it, backRect(paper)) }
-            return ImageTools.encodeJpeg(page, QUALITY)
+            return ImageTools.patchJpegDpi(ImageTools.encodeJpeg(page, QUALITY), PAGE_DPI)
         } finally {
             page.recycle()
         }
@@ -94,7 +96,7 @@ object IdCard {
             val canvas = Canvas(page)
             canvas.drawColor(Color.WHITE)
             drawIntoCard(canvas, side, singleRect(paper))
-            return ImageTools.encodeJpeg(page, QUALITY)
+            return ImageTools.patchJpegDpi(ImageTools.encodeJpeg(page, QUALITY), PAGE_DPI)
         } finally {
             page.recycle()
         }

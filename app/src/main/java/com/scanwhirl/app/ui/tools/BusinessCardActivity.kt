@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
@@ -52,12 +53,17 @@ import java.io.File
  * it with the app's existing on-device OCR, parse it with the pure [ContactParser], then show an
  * editable kit form. Actions: Save to contacts (`ACTION_INSERT`, no permission), Share as vCard
  * (a `.vcf` through FileProvider) and Save card image (a normal document through the publish
- * path). Nothing is written until one of those actions is used; leaving creates nothing.
+ * path). A short-lived cache copy keeps the card and the edited fields through rotation and is
+ * deleted when the screen really closes; no document is written until one of those actions is
+ * used, and leaving without an action creates nothing in the library.
  */
 class BusinessCardActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
     private var cardBytes: ByteArray? = null
+    /** Cache path of the captured card; the Bundle only carries this string. */
+    @Volatile
+    private var imagePath: String? = null
     private var busy = false
 
     private lateinit var preview: ImageView
@@ -90,10 +96,72 @@ class BusinessCardActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         setContentView(buildRoot())
-        // v2 UI run4a: always start with the same camera/gallery choice as ID card; the camera is
-        // one tap away, and people without a good camera angle can pick a photo instead.
-        showCaptureSheet()
+        if (savedInstanceState?.getString(KEY_IMAGE_PATH) != null) {
+            // T1: restore the captured image and the edited form directly. Running OCR again here
+            // would throw the person's corrections away.
+            restoreState(savedInstanceState)
+        } else {
+            // v2 UI run4a: always start with the same camera/gallery choice as ID card; the camera is
+            // one tap away, and people without a good camera angle can pick a photo instead.
+            showCaptureSheet()
+        }
     }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_IMAGE_PATH, imagePath)
+        outState.putBoolean(KEY_HAS_FORM, form.childCount > 0)
+        outState.putStringArray(KEY_FIELDS, currentFieldValues())
+    }
+
+    private fun currentFieldValues(): Array<String> = arrayOf(
+        nameField?.text?.toString().orEmpty(),
+        companyField?.text?.toString().orEmpty(),
+        jobField?.text?.toString().orEmpty(),
+        phoneField?.text?.toString().orEmpty(),
+        emailField?.text?.toString().orEmpty(),
+        websiteField?.text?.toString().orEmpty(),
+        addressField?.text?.toString().orEmpty()
+    )
+
+    private fun restoreState(state: Bundle) {
+        val path = state.getString(KEY_IMAGE_PATH) ?: return
+        val values = state.getStringArray(KEY_FIELDS)
+        progress.isVisible = true
+        lifecycleScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching { File(path).takeIf { it.isFile && it.length() > 0L }?.readBytes() }.getOrNull()
+            }
+            progress.isVisible = false
+            if (bytes == null) {
+                fail(getString(R.string.tools_setup_image_failed))
+                showCaptureSheet()
+                return@launch
+            }
+            cardBytes = bytes
+            preview.setImageBitmap(runCatching { ImageTools.decodeSampled(bytes, 800) }.getOrNull())
+            preview.isVisible = true
+            hintView.isVisible = false
+            if (state.getBoolean(KEY_HAS_FORM, false) && values != null && values.size == FORM_FIELDS) {
+                buildForm(values)
+            } else {
+                showCaptureSheet()
+            }
+        }
+    }
+
+    private fun writeImageCache(bytes: ByteArray): String? = runCatching {
+        val dir = File(cacheDir, "t1_business_card").apply { mkdirs() }
+        val final = File(dir, "card.jpg")
+        val tmp = File(dir, "card.jpg.tmp")
+        tmp.writeBytes(bytes)
+        if (final.exists()) final.delete()
+        if (!tmp.renameTo(final)) {
+            tmp.delete()
+            return@runCatching null
+        }
+        final.absolutePath
+    }.getOrNull()
 
     // ---- screen -----------------------------------------------------------
 
@@ -281,6 +349,13 @@ class BusinessCardActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val text = withContext(Dispatchers.IO) {
+                    // T1: cache the captured card off the main thread so rotation can restore it
+                    // without asking the person to capture (and re-read) it again. The path is
+                    // published inside IO, immediately after the complete tmp+rename write.
+                    writeImageCache(bytes)?.let { path ->
+                        imagePath = path
+                        cacheWriteGate?.invoke()
+                    }
                     recognizeForTest?.invoke(bytes) ?: OcrEngine.recognizeBytes(bytes)
                 }
                 progress.isVisible = false
@@ -300,22 +375,25 @@ class BusinessCardActivity : BaseActivity() {
 
     // ---- form -------------------------------------------------------------
 
-    private fun buildForm(contact: ContactParser.Contact) {
+    private fun buildForm(contact: ContactParser.Contact) = buildForm(
+        arrayOf(
+            contact.name, contact.company, contact.jobTitle,
+            contact.phones.joinToString(", "), contact.emails.joinToString(", "),
+            contact.website, contact.address
+        )
+    )
+
+    /** Builds the editable form from seven saved values, without re-running OCR. */
+    private fun buildForm(values: Array<String>) {
         form.removeAllViews()
-        nameField = field(R.string.tools_bc_name, R.drawable.ic_sym_person, R.id.bcName, contact.name)
-        companyField = field(R.string.tools_bc_company, R.drawable.ic_sym_contacts, R.id.bcCompany, contact.company)
-        jobField = field(R.string.tools_bc_job, R.drawable.ic_sym_badge, R.id.bcJob, contact.jobTitle)
-        phoneField = field(
-            R.string.tools_bc_phone, R.drawable.bc_ic_phone, R.id.bcPhone,
-            contact.phones.joinToString(", ")
-        )
-        emailField = field(
-            R.string.tools_bc_email, R.drawable.bc_ic_mail, R.id.bcEmail,
-            contact.emails.joinToString(", ")
-        )
-        websiteField = field(R.string.tools_bc_website, R.drawable.ic_sym_language, R.id.bcWebsite, contact.website)
+        nameField = field(R.string.tools_bc_name, R.drawable.ic_sym_person, R.id.bcName, values[0])
+        companyField = field(R.string.tools_bc_company, R.drawable.ic_sym_contacts, R.id.bcCompany, values[1])
+        jobField = field(R.string.tools_bc_job, R.drawable.ic_sym_badge, R.id.bcJob, values[2])
+        phoneField = field(R.string.tools_bc_phone, R.drawable.bc_ic_phone, R.id.bcPhone, values[3])
+        emailField = field(R.string.tools_bc_email, R.drawable.bc_ic_mail, R.id.bcEmail, values[4])
+        websiteField = field(R.string.tools_bc_website, R.drawable.ic_sym_language, R.id.bcWebsite, values[5])
         addressField = field(
-            R.string.tools_bc_address, R.drawable.bc_ic_place, R.id.bcAddress, contact.address,
+            R.string.tools_bc_address, R.drawable.bc_ic_place, R.id.bcAddress, values[6],
             multiLine = true
         )
         for (edit in listOfNotNull(nameField, companyField, jobField, phoneField, emailField, websiteField, addressField)) {
@@ -428,7 +506,15 @@ class BusinessCardActivity : BaseActivity() {
         val contact = currentContact()
         if (contact.name.isBlank()) return fail(getString(R.string.tools_bc_need_name))
         try {
-            startActivity(ContactIntents.insert(contact))
+            val intent = ContactIntents.insert(contact)
+            val dropped = intent.getIntExtra(ContactIntents.EXTRA_DROPPED, 0)
+            startActivity(intent)
+            // T1: never silently lose phone numbers or emails that did not fit the Insert slots.
+            if (dropped > 0) {
+                Toast.makeText(
+                    this, getString(R.string.tools_bc_contacts_dropped, dropped), Toast.LENGTH_LONG
+                ).show()
+            }
         } catch (_: ActivityNotFoundException) {
             fail(getString(R.string.tools_bc_contacts_failed))
         }
@@ -491,9 +577,26 @@ class BusinessCardActivity : BaseActivity() {
         errorView.isVisible = true
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // T1: rotation keeps the cache copy; a real exit removes the plaintext card photo.
+        if (isFinishing && !isChangingConfigurations) {
+            runCatching { File(cacheDir, "t1_business_card").deleteRecursively() }
+        }
+    }
+
     companion object {
         /** Test seam: replaces the on-device OCR with a fixed text in UI tests. */
         internal var recognizeForTest: ((ByteArray) -> String)? = null
+
+        /** Tests: held inside IO right after the cache path is published. */
+        @Volatile
+        internal var cacheWriteGate: (() -> Unit)? = null
+
+        private const val KEY_IMAGE_PATH = "t1_bc_image_path"
+        private const val KEY_HAS_FORM = "t1_bc_has_form"
+        private const val KEY_FIELDS = "t1_bc_fields"
+        private const val FORM_FIELDS = 7
 
         fun intent(context: Context): Intent = Intent(context, BusinessCardActivity::class.java)
     }

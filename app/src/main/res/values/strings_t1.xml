@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- T1 capture data safety. English first; Hindi parity in values-hi/strings_t1.xml. -->
+<resources>
+    <!-- Passport: a clear way back to the picker when no photo is loaded. -->
+    <string name="tools_passport_pick">Pick a photo</string>
+    <!-- Business card: ACTION_INSERT has room for three numbers and three emails. -->
+    <string name="tools_bc_contacts_dropped">Only 3 phone numbers and 3 emails fit in the contacts editor. %1$d more were left out.</string>
+    <!-- ID card: the back cannot be laid out before the front exists. -->
+    <string name="tools_id_need_front">Capture the front side first.</string>
+    <!-- Batch: a cancelled run leaves some requested documents unprocessed. -->
+    <string name="tools_batch_summary_title_t1">%1$d done, %2$d failed, %3$d not processed</string>
+</resources>
