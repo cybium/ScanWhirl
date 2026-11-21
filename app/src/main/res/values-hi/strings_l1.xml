@@ -41,7 +41,7 @@
     <string name="home_chip_all">सभी %1$d</string>
     <string name="home_chip_category">%1$s %2$d</string>
     <string name="home_empty_title">अपना पहला दस्तावेज़ स्कैन करें</string>
-    <string name="home_empty_body">आपके स्कैन इसी फ़ोन पर रहते हैं। कोई खाता नहीं, कुछ इंटरनेट पर नहीं जाता।</string>
+    <string name="home_empty_body">आपके स्कैन इसी फ़ोन पर रहते हैं। खाता ज़रूरी नहीं; कागज़ात अपने-आप इंटरनेट पर नहीं भेजे जाते।</string>
     <string name="home_no_match">आपकी खोज से कोई दस्तावेज़ नहीं मिला।</string>
     <string name="home_page_count">%1$d पन्ने</string>
     <string name="home_protected">सुरक्षित</string>
