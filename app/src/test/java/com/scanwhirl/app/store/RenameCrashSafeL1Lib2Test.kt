@@ -130,7 +130,7 @@ class RenameCrashSafeL1Lib2Test {
     }
 
     @Test
-    fun `reconciliation on next library load adds a folder name missing from folders txt`() {
+    fun `reconciliation on startup adds a folder name missing from folders txt`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Receipt")
         val file = File(File(repo.docsDir, id), "meta.txt")
         val lines = file.readLines().toMutableList()
@@ -138,7 +138,11 @@ class RenameCrashSafeL1Lib2Test {
         file.writeText(lines.joinToString("\n") + "\n")
         assertFalse("the folder is not in folders.txt yet", repo.listFolders().contains("Travelling file"))
 
+        // Reconciliation is startup-only (off-main recoverOperations), never in the
+        // main-thread listDocuments getter.
         assertEquals(1, repo.listDocuments().size)
-        assertTrue("next load reconciles the folder name", repo.listFolders().contains("Travelling file"))
+        assertFalse("listing never writes folders.txt", repo.listFolders().contains("Travelling file"))
+        repo.recoverOperations()
+        assertTrue("startup reconciles the folder name", repo.listFolders().contains("Travelling file"))
     }
 }

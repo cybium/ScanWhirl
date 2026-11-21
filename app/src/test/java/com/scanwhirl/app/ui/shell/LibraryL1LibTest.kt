@@ -267,28 +267,32 @@ class LibraryL1LibTest {
     // ---- L1lib2 P2: Devanagari names and OCR with matras stay searchable --
 
     @Test
-    fun `Hindi names and OCR text with matras are found by word search`() {
+    fun `Hindi word boundaries beat plain substring matching`() {
         Prefs.setLocaleTag(app, "hi")
+        // "किराया" is a whole word in the first name but only a substring of "अकिराया"
+        // (the query is preceded by the Devanagari letter अ). Plain substring search,
+        // which the unfixed Library used, matches BOTH; word-boundary matching must not.
         val rent = DocFixtures.saved(repo, app, pages = 1, name = "किराया पर्ची")
-        val power = DocFixtures.saved(repo, app, pages = 1, name = "बिजली बिल")
+        val embedded = DocFixtures.saved(repo, app, pages = 1, name = "अकिराया")
         repo.ocrStore.putTexts(rent, mapOf("page_000.jpg" to "किराया पर्ची अक्टूबर"))
-        repo.ocrStore.putTexts(power, mapOf("page_000.jpg" to "बिजली बिल समय पर"))
+        repo.ocrStore.putTexts(embedded, mapOf("page_000.jpg" to "अकिराया पुराना"))
 
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 waitFor("the Hindi cards render") { cards(activity).size == 2 }
 
                 search(activity, "किराया")
-                waitFor("the Devanagari name hit appears") {
-                    cards(activity).singleOrNull()?.doc?.id == rent
+                waitFor("the whole-word Devanagari hit settles") {
+                    cards(activity).any { it.doc?.id == rent } &&
+                        cards(activity).none { it.doc?.id == embedded }
                 }
-                assertEquals("matra-bearing Hindi name matches", rent, cards(activity).single().doc?.id)
+                assertEquals("the whole-word Devanagari name matches", rent, cards(activity).single().doc?.id)
 
-                search(activity, "बिजली")
-                waitFor("the Devanagari OCR hit appears") {
-                    cards(activity).singleOrNull()?.doc?.id == power
+                search(activity, "अकिराया")
+                waitFor("the embedded-word name still matches itself") {
+                    cards(activity).singleOrNull()?.doc?.id == embedded
                 }
-                assertEquals("matra-bearing Hindi OCR text matches", power, cards(activity).single().doc?.id)
+                assertEquals(embedded, cards(activity).single().doc?.id)
             }
         }
     }

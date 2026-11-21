@@ -174,13 +174,11 @@ class ScanRepository(private val context: Context) {
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         readProbe?.invoke(Thread.currentThread().name)
-        val loaded = docsDir.listFiles { f -> f.isDirectory }
+        return docsDir.listFiles { f -> f.isDirectory }
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { dir -> loadDocument(dir) }
+            ?.filter { includeVaulted || !it.isVaulted }
             ?: emptyList()
-        // L1lib2 P1: next-load reconciliation reuses the metas we just read; no extra scan.
-        reconcileFrom(loaded.mapNotNull { it.folder })
-        return if (includeVaulted) loaded else loaded.filterNot { it.isVaulted }
     }
 
     /** Documents hidden inside the 4-digit PIN Pro Vault. */
@@ -474,9 +472,20 @@ class ScanRepository(private val context: Context) {
 
     // ------------------------------------------------------------------
     // Library organisation: folders and tags (v2 UI: 03_tools_hub)
+    //
+    // L1lib3: every write to folders.txt has a proven safe order, so a crash can never
+    // leave a document pointing at a name that is absent from the folder list:
+    //  * createFolder        list first, no document can reference the name yet.
+    //  * renameFolder        list with BOTH names, documents, then final list.
+    //  * setFolder (move)    create the target folder first, then rewrite documents.
+    //  * deleteFolder        documents first, then list; a tombstone completes a delete
+    //                        interrupted between the two on the next startup.
+    // Reconciliation is startup-only (recoverOperations), never in listDocuments(): that
+    // getter is called on the main thread and must never write folders.txt.
     // ------------------------------------------------------------------
 
     private val foldersFile: File get() = File(context.filesDir, "library_folders.txt")
+    private val deletingFile: File get() = File(context.filesDir, "library_folders_deleting.txt")
 
     /** Folder names created explicitly (empty folders survive a restart), sorted. */
     fun listFolders(): List<String> = synchronized(META_LOCK) {
@@ -571,9 +580,10 @@ class ScanRepository(private val context: Context) {
     }
 
     /**
-     * L1lib2 P1: re-add any folder name that is still used by a document but missing from
-     * folders.txt (e.g. after a process death between the two rename writes). Documents
-     * are never silently moved into "All only".
+     * L1lib2 P1 / L1lib3 P2: startup-only. Re-add any VALID folder name still used by a
+     * document but missing from folders.txt (e.g. after a process death between the two
+     * rename writes). Documents are never silently moved into "All only". Never called
+     * from [listDocuments]: that getter can run on the main thread and is read-only.
      */
     fun reconcileFolders() {
         synchronized(META_LOCK) {
@@ -587,20 +597,58 @@ class ScanRepository(private val context: Context) {
         }
     }
 
-    /** Adds [folders] missing from folders.txt; callers hold no lock beyond this method. */
+    /**
+     * Adds [folders] missing from folders.txt, applying the SAME rules as a user-created
+     * folder (normalizeFolder: trimmed, whitespace-collapsed, <=40 chars). A name that is
+     * blank, overlong, or not already in normal form is ignored, never written back.
+     */
     private fun reconcileFrom(folders: Collection<String>) {
-        if (folders.isEmpty()) return
+        val valid = folders.mapNotNull { name ->
+            val clean = LibraryMeta.normalizeFolder(name)
+            if (clean != null && clean == name) clean else null
+        }.toSet()
+        if (valid.isEmpty()) return
         synchronized(META_LOCK) {
             val known = listFolders()
-            val missing = folders.filter { name -> known.none { it.equals(name, true) } }
+            val missing = valid.filter { name -> known.none { it.equals(name, true) } }
             if (missing.isNotEmpty()) writeFolders(known + missing)
         }
     }
 
-    /** Deletes a folder; its documents move to "All" and stay in the library. */
+    /**
+     * Deletes a folder; its documents move to "All" and stay in the library.
+     *
+     * L1lib3 P1: rewrite DOCUMENTS first, then remove the name from folders.txt. The old
+     * order removed the name first, so a death before the document rewrites left documents
+     * referencing a folder that startup reconciliation would faithfully re-add, resurrecting
+     * a folder the user had deleted. A tombstone written before the first step lets startup
+     * finish an interrupted delete instead.
+     */
     fun deleteFolder(name: String) {
+        val clean = LibraryMeta.normalizeFolder(name) ?: return
         synchronized(META_LOCK) {
-            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            Durable.atomicWriteText(deletingFile, clean)
+            forEachDocumentDir { dir ->
+                updateMeta(dir) { lines ->
+                    val meta = LibraryMeta.read(lines)
+                    if (meta.folder != null && meta.folder.equals(clean, true)) {
+                        LibraryMeta.write(lines, null, meta.tags)
+                    }
+                }
+            }
+            writeFolders(listFolders().filterNot { it.equals(clean, true) })
+            deletingFile.delete()
+        }
+    }
+
+    /** L1lib3 P1: finish a delete interrupted by process death or a disk failure. */
+    private fun finishPendingDelete() {
+        val raw = runCatching { deletingFile.readText().trim() }.getOrNull() ?: return
+        val name = LibraryMeta.normalizeFolder(raw) ?: run {
+            deletingFile.delete()
+            return
+        }
+        synchronized(META_LOCK) {
             forEachDocumentDir { dir ->
                 updateMeta(dir) { lines ->
                     val meta = LibraryMeta.read(lines)
@@ -609,6 +657,8 @@ class ScanRepository(private val context: Context) {
                     }
                 }
             }
+            writeFolders(listFolders().filterNot { it.equals(name, true) })
+            deletingFile.delete()
         }
     }
 
@@ -2808,9 +2858,12 @@ class ScanRepository(private val context: Context) {
         val filesDir = context.filesDir
         var rolledForward = 0
 
-        // L1lib2 P1: startup reconciliation first. A process death between the two
-        // rename writes can leave a document folder name absent from folders.txt; add
-        // it back before any UI reads the folder list.
+        // L1lib3 P1: finish an interrupted folder delete BEFORE reconciliation, so a
+        // name the user deleted is not re-added from documents that still carry it.
+        finishPendingDelete()
+        // L1lib2 P1: startup reconciliation. A process death between the two rename
+        // writes can leave a document folder name absent from folders.txt; add it back
+        // before any UI reads the folder list. Startup runs off the main thread.
         reconcileFolders()
 
         // 1. Roll forward.
