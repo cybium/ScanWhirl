@@ -43,6 +43,7 @@ import com.scanwhirl.app.util.OcrCleanup
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguage
 import com.scanwhirl.app.util.OcrLanguageSettings
+import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.TextHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -277,7 +278,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun loadDocOcr(id: String) {
         val texts = repo.ocrDoc(id)
         val pageKeys = repo.getDocument(id)?.pageFiles?.map { it.name } ?: emptyList()
-        val keys = (pageKeys + texts.keys).distinct().sorted()
+        val keys = (pageKeys + texts.keys).distinct().sortedWith(PageOrder.keyComparator)
             .ifEmpty { listOf("page_000.jpg") }
         unreadKeys.clear()
         unreadKeys.addAll(keys.filter { it !in texts })
@@ -324,7 +325,7 @@ class OcrEditorActivity : BaseActivity() {
         val doc = runCatching { repo.getDocument(id) }.getOrNull()
         val keys = (
             (doc?.pageFiles?.map { it.name } ?: emptyList()) + stored.keys + pageTexts.keys
-            ).distinct().sorted().ifEmpty { listOf("page_000.jpg") }
+            ).distinct().sortedWith(PageOrder.keyComparator).ifEmpty { listOf("page_000.jpg") }
 
         var currentPageChanged = false
         for (key in keys) {
@@ -368,7 +369,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun askAboutNewText() {
         if (pendingNewText.isEmpty() || isFinishing) return
         if (newTextSheet?.isShowing == true) return
-        val keys = pendingNewText.keys.sorted()
+        val keys = pendingNewText.keys.sortedWith(PageOrder.keyComparator)
         val pages = keys.joinToString(", ") { pageNumberOf(it).toString() }
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ocr_g1text_new_text_title)
@@ -552,7 +553,7 @@ class OcrEditorActivity : BaseActivity() {
         }
         chipGroup.visibility = View.VISIBLE
 
-        for (key in pageTexts.keys.sorted()) {
+        for (key in pageTexts.keys.sortedWith(PageOrder.keyComparator)) {
             val chip = Chip(this).apply {
                 text = if (key in unreadKeys) {
                     getString(R.string.ocr_page_label_unread, pageNumberOf(key))
@@ -1069,7 +1070,7 @@ class OcrEditorActivity : BaseActivity() {
             else -> resources.getQuantityString(
                 R.plurals.ocr_status_partial, total,
                 total - unread, total,
-                unreadKeys.sorted().joinToString(", ") { pageNumberOf(it).toString() }
+                unreadKeys.sortedWith(PageOrder.keyComparator).joinToString(", ") { pageNumberOf(it).toString() }
             )
         }
         binding.ocrStatus.isVisible = message != null
@@ -1651,7 +1652,7 @@ class OcrEditorActivity : BaseActivity() {
 
     /** Renders all pages with localized "Page N" headings. Omits headings for a single page. */
     private fun renderAllPages(): String {
-        val entries = pageTexts.entries.sortedBy { it.key }
+        val entries = pageTexts.entries.sortedWith { a, b -> PageOrder.keyComparator.compare(a.key, b.key) }
         return if (entries.size <= 1) {
             entries.firstOrNull()?.value ?: ""
         } else {
