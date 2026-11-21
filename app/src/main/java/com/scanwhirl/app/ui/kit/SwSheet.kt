@@ -35,6 +35,8 @@ class SwSheet private constructor(
     val contentContainer: LinearLayout
     val primaryButton: TextView
     val secondaryButton: TextView
+    private val bodyColumn: LinearLayout
+    private var bodyScroll: androidx.core.widget.NestedScrollView
 
     init {
         val density = context.resources.displayMetrics.density
@@ -63,7 +65,20 @@ class SwSheet private constructor(
                 bottomMargin = (14 * density).toInt()
             }
         }
-        root.addView(grab)
+        bodyColumn = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        bodyScroll = object : androidx.core.widget.NestedScrollView(context) {
+            override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean =
+                if (!dialog.behavior.isDraggable) false else super.onInterceptTouchEvent(event)
+        }.apply {
+            isFillViewport = false
+            addView(bodyColumn)
+        }
+        // Only this viewport can shrink. The wrapping actions remain siblings below it,
+        // including when ADJUST_RESIZE gives us a shorter window for the keyboard.
+        root.addView(bodyScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ))
+        bodyColumn.addView(grab)
 
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -87,14 +102,14 @@ class SwSheet private constructor(
             setOnClickListener { dialog.dismiss() }
         }
         header.addView(closeButton)
-        root.addView(header)
+        bodyColumn.addView(header)
 
         messageView = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
             id = R.id.swSheetMessage
             setLineSpacing(0f, 1.25f)
             isVisible = false
         }
-        root.addView(
+        bodyColumn.addView(
             messageView,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -106,9 +121,9 @@ class SwSheet private constructor(
             orientation = LinearLayout.VERTICAL
             isVisible = false
         }
-        root.addView(contentContainer)
+        bodyColumn.addView(contentContainer)
 
-        primaryButton = TextView(context).apply {
+        primaryButton = actionText(context).apply {
             id = R.id.swSheetPrimary
             gravity = Gravity.CENTER
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
@@ -132,24 +147,27 @@ class SwSheet private constructor(
             ).apply { topMargin = (16 * density).toInt() }
         )
 
-        secondaryButton = TextView(context).apply {
+        secondaryButton = actionText(context).apply {
             id = R.id.swSheetSecondary
             gravity = Gravity.CENTER
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
             typeface = SwType.bold(context)
             setTextColor(SwStyle.color(context, R.color.text_hologram_mid))
             minHeight = (48 * density).toInt()
+            val padV = (8 * density).toInt()
+            setPadding(0, padV, 0, padV)
             isVisible = false
         }
         root.addView(
             secondaryButton,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, (48 * density).toInt()
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = (8 * density).toInt() }
         )
 
         view = root
         dialog.setContentView(root)
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         dialog.window?.setDimAmount(0.66f)
         dialog.behavior.peekHeight = (context.resources.displayMetrics.heightPixels * 0.45f).toInt()
     }
@@ -169,32 +187,33 @@ class SwSheet private constructor(
     fun setMessage(res: Int): SwSheet = setMessage(view.context.getString(res))
 
     fun setContent(content: View): SwSheet = apply {
+        if (content is androidx.core.widget.NestedScrollView) {
+            setScrollableContent(content)
+            return@apply
+        }
         contentContainer.removeAllViews()
         contentContainer.addView(content)
         contentContainer.isVisible = true
     }
 
     /**
-     * Opt in to one viewport for the whole form. Even in a short keyboard-resized window the
-     * title and actions can scroll away, rather than leaving too little room for a field.
+     * Reuse the caller's viewport and scrollbar for title and form, never for the footer.
+     * No nested scroll view: fields remain reachable above the pinned actions with the IME.
      */
     private fun setScrollableContent(content: androidx.core.widget.NestedScrollView): SwSheet = apply {
         val root = view as LinearLayout
-        val column = LinearLayout(view.context).apply { orientation = LinearLayout.VERTICAL }
         // Reuse the existing viewport (and its scrollbar) rather than nesting scroll views.
         val form = checkNotNull(content.getChildAt(0))
         content.removeView(form)
         setContent(form)
-        while (root.childCount > 0) {
-            val child = root.getChildAt(0)
-            root.removeViewAt(0)
-            column.addView(child)
-        }
-        content.addView(column, ViewGroup.LayoutParams(
+        bodyScroll.removeView(bodyColumn)
+        root.removeView(bodyScroll)
+        content.addView(bodyColumn, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
-        root.addView(content, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        bodyScroll = content
+        root.addView(content, 0, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
         ))
     }
 
@@ -333,19 +352,16 @@ class SwSheet private constructor(
         val scroll = androidx.core.widget.NestedScrollView(context).apply {            isFillViewport = false
             addView(list)
         }
-        val tall = labels.size > 8
         setContent(scroll)
         SwMotion.stagger(list)
-        if (tall) {
-            scroll.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (context.resources.displayMetrics.heightPixels * 0.5f).toInt()
-            )
-        }
     }
 
-    fun setPrimary(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet = apply {
+    fun setPrimary(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet =
+        setPrimary(text, null, onClick)
+
+    fun setPrimary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
         primaryButton.text = text
+        setActionIcon(primaryButton, iconRes)
         primaryButton.isVisible = true
         primaryButton.setOnClickListener {
             onClick?.invoke()
@@ -356,8 +372,15 @@ class SwSheet private constructor(
     fun setPrimary(res: Int, onClick: (() -> Unit)? = null): SwSheet =
         setPrimary(view.context.getString(res), onClick)
 
-    fun setSecondary(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet = apply {
+    fun setPrimary(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet =
+        setPrimary(view.context.getString(res), iconRes, onClick)
+
+    fun setSecondary(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet =
+        setSecondary(text, null, onClick)
+
+    fun setSecondary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
         secondaryButton.text = text
+        setActionIcon(secondaryButton, iconRes)
         secondaryButton.isVisible = true
         secondaryButton.setOnClickListener {
             onClick?.invoke()
@@ -367,6 +390,33 @@ class SwSheet private constructor(
 
     fun setSecondary(res: Int, onClick: (() -> Unit)? = null): SwSheet =
         setSecondary(view.context.getString(res), onClick)
+
+    fun setSecondary(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet =
+        setSecondary(view.context.getString(res), iconRes, onClick)
+
+    /** TextView compound drawables are decorative: accessibility reads only the action text. */
+    private fun setActionIcon(button: TextView, iconRes: Int?) {
+        val icon = iconRes?.let {
+            androidx.core.content.ContextCompat.getDrawable(button.context, it)?.mutate()?.apply {
+                val size = SwStyle.dp(button.context, 20f)
+                setBounds(0, 0, size, size)
+                androidx.core.graphics.drawable.DrawableCompat.setTint(this, button.currentTextColor)
+            }
+        }
+        button.setCompoundDrawablesRelative(icon, null, null, null)
+        button.compoundDrawablePadding = if (icon == null) 0 else SwStyle.dp(button.context, 8f)
+        val padH = if (icon == null) 0 else SwStyle.dp(button.context, 16f)
+        button.setPadding(padH, button.paddingTop, padH, button.paddingBottom)
+    }
+
+    private fun actionText(context: Context): TextView =
+        object : androidx.appcompat.widget.AppCompatTextView(context) {
+            override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
+            override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(info)
+                info.className = android.widget.Button::class.java.name
+            }
+        }
 
     /** Closes on the primary button; disable for a form that validates itself. */
     fun keepOpenOnPrimary() = apply {
@@ -382,14 +432,21 @@ class SwSheet private constructor(
      * A primary whose work decides when to close: the sheet stays open (a
      * failed save keeps the retry in place) and the caller dismisses it.
      */
-    fun setPrimaryStayOpen(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet = apply {
+    fun setPrimaryStayOpen(text: CharSequence, onClick: (() -> Unit)? = null): SwSheet =
+        setPrimaryStayOpen(text, null, onClick)
+
+    fun setPrimaryStayOpen(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
         primaryButton.text = text
+        setActionIcon(primaryButton, iconRes)
         primaryButton.isVisible = true
         primaryButton.setOnClickListener { onClick?.invoke() }
     }
 
     fun setPrimaryStayOpen(res: Int, onClick: (() -> Unit)? = null): SwSheet =
         setPrimaryStayOpen(view.context.getString(res), onClick)
+
+    fun setPrimaryStayOpen(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet =
+        setPrimaryStayOpen(view.context.getString(res), iconRes, onClick)
 
     fun show(): SwSheet = apply {
         dialog.setOnShowListener {
@@ -459,13 +516,28 @@ class SwSheet private constructor(
         }
 
         fun setPrimary(res: Int, onClick: (() -> Unit)? = null) = apply { sheet.setPrimary(res, onClick) }
+        fun setPrimary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null) = apply {
+            sheet.setPrimary(text, iconRes, onClick)
+        }
+        fun setPrimary(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null) = apply {
+            sheet.setPrimary(res, iconRes, onClick)
+        }
         fun setSecondary(text: CharSequence, onClick: (() -> Unit)? = null) = apply {
             sheet.setSecondary(text, onClick)
         }
 
         fun setSecondary(res: Int, onClick: (() -> Unit)? = null) = apply { sheet.setSecondary(res, onClick) }
+        fun setSecondary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null) = apply {
+            sheet.setSecondary(text, iconRes, onClick)
+        }
+        fun setSecondary(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null) = apply {
+            sheet.setSecondary(res, iconRes, onClick)
+        }
         fun setPrimaryStayOpen(res: Int, onClick: (() -> Unit)? = null) = apply {
             sheet.setPrimaryStayOpen(res, onClick)
+        }
+        fun setPrimaryStayOpen(res: Int, iconRes: Int?, onClick: (() -> Unit)? = null) = apply {
+            sheet.setPrimaryStayOpen(res, iconRes, onClick)
         }
         fun build(): SwSheet = sheet
     }
