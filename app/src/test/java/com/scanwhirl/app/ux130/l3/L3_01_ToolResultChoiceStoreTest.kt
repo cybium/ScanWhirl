@@ -11,6 +11,7 @@ import com.scanwhirl.app.util.Sha256
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -20,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 import java.io.IOException
 
 /**
@@ -218,6 +220,28 @@ class L3_01_ToolResultChoiceStoreTest {
         repo.listTrash().first { it.key == key }.document.pageFiles.first().writeBytes("tampered".toByteArray())
         assertThrows(IOException::class.java) { repo.restoreToolSource(key, fp) }
         assertNull("still in Trash, nothing overwritten", repo.getDocument(source))
+    }
+
+    @Test
+    fun `a forced library id collision restores under a new id and overwrites nothing`() {
+        val source = doc("collision-source")
+        val output = doc("collision-out")
+        val before = bytes(source)
+        val fp = requireNotNull(repo.toolSourceFingerprint(source))
+        val key = repo.moveToolSourceToTrash(source, fp)
+
+        // Force the exact acceptance case: while the original is in Trash, a
+        // different live document now occupies its old id.
+        val squatter = doc("squatter")
+        val squatterBefore = bytes(squatter)
+        File(repo.docsDir, squatter).copyRecursively(File(repo.docsDir, source))
+        assertNotNull("the id is genuinely taken", repo.getDocument(source))
+
+        val restored = repo.restoreToolSource(key, fp)
+        assertNotEquals("the squatter was not overwritten", source, restored.id)
+        assertEquals(before, bytes(restored.id))
+        assertEquals(squatterBefore, bytes(source))
+        assertNotNull("the output copy is still here", repo.getDocument(output))
     }
 
     @Test

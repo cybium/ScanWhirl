@@ -13,6 +13,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -117,6 +118,31 @@ class L3_01_ResultDecisionUiTest {
             eventually { repo.getDocument(source) != null }
             assertEquals(before, fileHashes(source))
         }
+    }
+
+    @Test
+    fun `a multi input merge result never offers Replace even with provenance extras`() {
+        val a = DocFixtures.saved(repo, app, pages = 1, name = "part-a")
+        val b = DocFixtures.saved(repo, app, pages = 1, name = "part-b")
+        val intent = ToolResultActivity.intent(
+            app, "merge", docIds = listOf(a, b),
+            sourceId = a, outputId = a,
+            operationId = "merge-$a", operation = "compress",
+            sourceFingerprint = requireNotNull(repo.toolSourceFingerprint(a))
+        )
+        ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
+            scenario.onActivity {
+                assertNull("multiple inputs: no Replace",
+                    it.findViewById<android.view.View>(R.id.ux130_l3_replace_original))
+                assertNull("multiple inputs: no Keep both card",
+                    it.findViewById<android.view.View>(R.id.ux130_l3_keep_both))
+                assertNull("multiple inputs: no Restore route",
+                    it.findViewById<android.view.View>(R.id.ux130_l3_restore_original))
+            }
+        }
+        assertNotNull("no library document moved", repo.getDocument(a))
+        assertNotNull("no library document moved", repo.getDocument(b))
+        assertTrue("nothing entered Trash", repo.listTrash().isEmpty())
     }
 
     @Test

@@ -330,8 +330,8 @@ abstract class CompressResultHonestyBase {
                 idle()
                 val undo = activity.findViewById<TextView>(R.id.toolResultUndo)
                 assertEquals(
-                    "B3: the Undo action says what it removes",
-                    app.getString(R.string.compress_undo),
+                    "L3-02: the Undo action names the new copy it removes",
+                    app.getString(R.string.ux130_l3_result_remove_copy),
                     undo.text.toString()
                 )
                 undo.performClick()

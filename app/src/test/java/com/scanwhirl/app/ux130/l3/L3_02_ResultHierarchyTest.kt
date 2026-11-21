@@ -31,7 +31,7 @@ class L3_02_ResultHierarchyTest {
         )
         // Natural Hindi: "प्रत" for copy, never the rejected "कॉपी"; the Documents
         // folder name stays in English so it is not a false location.
-        assertEquals("यह नई प्रत हटाएँ", hi["ux130_l3_result_remove_copy"])
+        assertEquals("यह नई प्रति हटाएँ", hi["ux130_l3_result_remove_copy"])
         assertTrue(
             "Hindi consequence keeps the real Documents/ScanWhirl location",
             hi["ux130_l3_result_remove_copy_consequence"].orEmpty().contains("Documents/ScanWhirl")

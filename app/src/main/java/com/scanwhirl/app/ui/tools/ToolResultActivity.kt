@@ -521,14 +521,9 @@ class ToolResultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
-        val undoLabel = getString(
-            when {
-                // The result-copy removal is named for proven results too; the
-                // legacy label stays only for callers that never supplied provenance.
-                isCompressResult && !replaceEligible -> R.string.compress_undo
-                else -> R.string.ux130_l3_result_remove_copy
-            }
-        )
+        // L3-02 (lead-authorized): one label for the same action everywhere,
+        // including compress results without provenance. One-tap removal stays.
+        val undoLabel = getString(R.string.ux130_l3_result_remove_copy)
         column.addView(
             button(undoLabel, R.id.toolResultUndo, icon = R.drawable.ic_sym_undo) { undo() },
             LinearLayout.LayoutParams(
