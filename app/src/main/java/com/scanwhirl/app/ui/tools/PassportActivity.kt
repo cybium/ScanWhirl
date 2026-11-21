@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -298,18 +299,22 @@ class PassportActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             try {
-                val doc = withContext(Dispatchers.IO) {
-                    repo.createDocument(getString(R.string.tools_passport_name), listOf(bytes))
+                val (doc, identity) = withContext(Dispatchers.IO) {
+                    val created = repo.createDocument(getString(R.string.tools_passport_name), listOf(bytes))
+                    created to ToolResultActivity.captureOutputIdentityBlocking(
+                        this@PassportActivity, listOf(created.id), emptyList()
+                    )
                 }
                 progress.isVisible = false
-                startActivity(ToolResultActivity.intent(this@PassportActivity, "passport", docIds = listOf(doc.id)))
+                startActivity(ToolResultActivity.intent(this@PassportActivity, "passport",
+                    docIds = listOf(doc.id), outputIdentity = identity))
                 finish()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 progress.isVisible = false
                 busy = false
-                errorView.text = getString(R.string.tools_passport_failed_with, e.message ?: "")
+                errorView.text = L3FailureCopy.message(this@PassportActivity, e)
                 errorView.isVisible = true
             }
         }

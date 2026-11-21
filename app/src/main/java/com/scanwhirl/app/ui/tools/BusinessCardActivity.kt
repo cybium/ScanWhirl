@@ -552,14 +552,18 @@ class BusinessCardActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             try {
-                val doc = withContext(Dispatchers.IO) {
+                val (doc, identity) = withContext(Dispatchers.IO) {
                     val page = ImageTools.normalizePage(bytes)
                     val name = contact.name.ifBlank { fallbackName }
-                    repo.createDocument(name, listOf(page))
+                    val created = repo.createDocument(name, listOf(page))
+                    created to ToolResultActivity.captureOutputIdentityBlocking(
+                        this@BusinessCardActivity, listOf(created.id), emptyList()
+                    )
                 }
                 progress.isVisible = false
                 startActivity(
-                    ToolResultActivity.intent(this@BusinessCardActivity, "business_card", docIds = listOf(doc.id))
+                    ToolResultActivity.intent(this@BusinessCardActivity, "business_card",
+                        docIds = listOf(doc.id), outputIdentity = identity)
                 )
                 finish()
             } catch (e: CancellationException) {

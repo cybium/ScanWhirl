@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L3 — Hindi parity. "Documents/ScanWhirl" is the real folder, kept as-is. -->
+<resources>
+    <!-- L3-02: परिणाम पदानुक्रम. -->
+    <string name="ux130_l3_result_remove_copy">यह नई प्रति हटाएँ</string>
+    <string name="ux130_l3_result_remove_copy_consequence">इससे यह नई प्रति और इसी कार्रवाई के दौरान Documents/ScanWhirl में सहेजी गई प्रति हट जाती है। आपकी मूल फ़ाइल वैसी ही रहती है।</string>
+    <string name="ux130_l3_copy_changed">यह प्रति पहले ही बदली या हटा दी गई।</string>
+
+    <!-- L3-03: compress setup labels. -->
+    <string name="ux130_l3_compress_aim_size">आकार तय करें</string>
+    <string name="ux130_l3_compress_from_phone_storage">फ़ोन के संग्रहण से</string>
+
+    <!-- L3-04: बाहरी PDF का क्रम बदलना. -->
+    <string name="ux130_l3_merge_move_earlier">पहले ले जाएँ</string>
+    <string name="ux130_l3_merge_move_later">बाद में ले जाएँ</string>
+    <string name="ux130_l3_merge_file_position">फ़ाइल %1$d / %2$d</string>
+
+    <!-- L3-05: कारण और अगला कदम, कच्चा त्रुटि संदेश कभी नहीं. -->
+    <string name="ux130_l3_failure_unreadable">यह PDF पढ़ी नहीं जा सकी। दूसरी फ़ाइल चुनें।</string>
+    <string name="ux130_l3_failure_no_space">प्रति सहेजी नहीं गई। कुछ जगह खाली करें और फिर प्रयास करें।</string>
+    <string name="ux130_l3_failure_generic">प्रति नहीं बनाई गई। फिर प्रयास करें।</string>
+</resources>

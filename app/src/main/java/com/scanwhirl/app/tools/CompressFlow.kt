@@ -63,14 +63,21 @@ class CompressFlow(
         val dpi: Float
     )
 
+    // L3-03: the engine numbers are intentionally unchanged — CP1's best tier
+    // still caps at 3000 px. The literal resource names stay here because a
+    // long-standing source-contract test reads them verbatim; the real
+    // single-source-of-truth check below fails fast if the order ever drifts
+    // from the shared table used by ToolSetupActivity.
     private val levels = listOf(
-        // CP1: the best-quality tier also caps at 3000 px, the ceiling import uses. Earlier it
-        // rendered at 4096, which could OOM a budget phone while the rest of the app stayed at 3000.
         Level(R.string.compress_level_low, 80, 3000, 200f),
         Level(R.string.compress_level_medium, 65, 2000, 150f),
         Level(R.string.compress_level_high, 50, 1600, 130f),
         Level(R.string.compress_level_ultra, 38, 1200, 110f)
-    )
+    ).also { declared ->
+        require(declared.map { it.nameRes } == CompressionPresentation.levelLabels) {
+            "Compression levels drifted from the shared presentation table"
+        }
+    }
 
     /** The pages chosen in the device-PDF gate (null until a device PDF is picked). */
     private var devicePages: List<Int>? = null
@@ -89,24 +96,23 @@ class CompressFlow(
 
     fun start() {
         devicePages = null
+        val candidates = docs()
         // No saved scans yet: the source is necessarily an external file.
-        if (docs().isEmpty()) {
+        if (candidates.isEmpty()) {
             pickPdf()
             return
         }
+        // L3-03: one combined library picker. The last row is the honest route to a
+        // phone file, instead of a source sheet followed by a second picker.
+        val labels = candidates.map { it.name } +
+            activity.getString(CompressionPresentation.fromPhoneStorage)
         com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
-            .setTitle(R.string.compress_title)
-            .setOptions(
-                listOf(
-                    activity.getString(R.string.compress_source_scan),
-                    activity.getString(R.string.compress_source_file)
-                )
-            ) { which, _ ->
-                when (which) {
-                    0 -> FlowUtil.pickScan(
-                        activity, R.string.compress_pick_scan, docs()
-                    ) { doc -> startWith(doc) }
-                    1 -> pickPdf()
+            .setTitle(R.string.compress_pick_scan)
+            .setOptions(labels) { which, _ ->
+                if (which == candidates.size) {
+                    pickPdf()
+                } else {
+                    candidates.getOrNull(which)?.let { startWith(it) }
                 }
             }
             .setSecondary(android.R.string.cancel)
@@ -443,7 +449,8 @@ class CompressFlow(
                 val out = repo.compressScan(doc.id, level.quality, level.maxDim)
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
-                showCompressResult(out, before, after, sourceKept = true)
+                showCompressResult(out, before, after, sourceKept = true,
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
@@ -477,7 +484,8 @@ class CompressFlow(
                     activity.runOnUiThread { progress.setProgress(done, total) }
                 })
                 host.refreshList()
-                showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true)
+                showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true,
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 activity.runOnUiThread {
                     Toast.makeText(
@@ -505,6 +513,13 @@ class CompressFlow(
      * never the document the person compressed. [target] is the exact size asked for, so the
      * result can still say honestly when that size was not reached.
      */
+    /** L3-02 P1: hash the new document on IO, never on the Main thread. */
+    private suspend fun outputIdentity(out: ScanDocument): String? = withContext(Dispatchers.IO) {
+        com.scanwhirl.app.ui.tools.ToolResultActivity.captureOutputIdentityBlocking(
+            activity, listOf(out.id), emptyList()
+        )
+    }
+
     private fun showCompressResult(
         out: ScanDocument,
         before: Long,
@@ -512,7 +527,11 @@ class CompressFlow(
         target: Long? = null,
         sourceKept: Boolean = false,
         /** Honest "Before: N pages of M (X MB)" for a picked PDF's selected pages. */
-        beforeLine: String? = null
+        beforeLine: String? = null,
+        /** L3-02 P2: library source used only to derive the "original kept" receipt from state. */
+        receiptSourceId: String? = null,
+        /** L3-02 P1: identity captured by the caller on Dispatchers.IO. */
+        outputIdentity: String? = null
     ) {
         val missed = target != null && after > target
         val grew = before > 0L && after > before
@@ -543,7 +562,9 @@ class CompressFlow(
                 beforeBytes = if (beforeLine == null) before else null,
                 sourceKept = sourceKept,
                 compressTargetMissed = missed,
-                compressGrew = grew
+                compressGrew = grew,
+                receiptSourceId = receiptSourceId,
+                outputIdentity = outputIdentity
             )
         )
     }
@@ -635,7 +656,8 @@ class CompressFlow(
                 sheet?.dismiss()
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
-                showCompressResult(out, before, after, beforeLine = deviceBeforeLine(before))
+                showCompressResult(out, before, after, beforeLine = deviceBeforeLine(before),
+                    outputIdentity = outputIdentity(out))
             } catch (e: CancellationException) {
                 sheet?.dismiss()
                 activity.runOnUiThread {
@@ -685,7 +707,8 @@ class CompressFlow(
                 host.refreshList()
                 showCompressResult(
                     out, before, out.pdfFile.length(), target,
-                    beforeLine = deviceBeforeLine(before)
+                    beforeLine = deviceBeforeLine(before),
+                    outputIdentity = outputIdentity(out)
                 )
             } catch (e: CancellationException) {
                 sheet?.dismiss()

@@ -29,6 +29,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressTarget
+import com.scanwhirl.app.tools.CompressionPresentation
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentActionDispatcher
 import com.scanwhirl.app.ui.DocumentViewerActivity
@@ -689,14 +690,18 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildCompressOptions() {
         // The document's compress sheet wording, in the same order: quality first, smallest last.
+        // L3-03: the same ordered labels as the Compress sheet, from one shared table.
         val levels = listOf(
-            CompressLevel(R.string.compress_level_low, 0, R.id.toolSetupLevelBest),
-            CompressLevel(R.string.compress_level_medium, 1, R.id.toolSetupLevelBalanced),
-            CompressLevel(R.string.compress_level_high, 2, R.id.toolSetupLevelSmaller),
-            CompressLevel(R.string.compress_level_ultra, 3, R.id.toolSetupLevelSmallest)
+            CompressLevel(CompressionPresentation.levelLabels[0], 0, R.id.toolSetupLevelBest),
+            CompressLevel(CompressionPresentation.levelLabels[1], 1, R.id.toolSetupLevelBalanced),
+            CompressLevel(CompressionPresentation.levelLabels[2], 2, R.id.toolSetupLevelSmaller),
+            CompressLevel(CompressionPresentation.levelLabels[3], 3, R.id.toolSetupLevelSmallest)
         )
         levelRows.clear()
         levelSizes.clear()
+        // L3-03: at larger fonts the measured size drops below its label instead of being
+        // squeezed beside it. Engine parameters are untouched (see CompressionPresentation).
+        val stackEstimate = resources.configuration.fontScale > 1.15f
         // Full-width rows, one level per line: Hindi labels ("सबसे अच्छी क्वालिटी") never fit a
         // three-up chip row at 360 dp, which is what clipped "Mediu / m" on the owner's phone.
         val stack = LinearLayout(this).apply {
@@ -719,8 +724,8 @@ class ToolSetupActivity : BaseActivity() {
                 id = R.id.toolSetupLevelLabel
                 tag = CHIP_TAG
                 text = getString(level.titleRes)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
+                // L3-03: no definite truncation — a long Hindi label wraps to a second line.
+                maxLines = Int.MAX_VALUE
                 gravity = Gravity.CENTER_VERTICAL
             }
             val size = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
@@ -730,12 +735,15 @@ class ToolSetupActivity : BaseActivity() {
             }
             val row = LinearLayout(this).apply {
                 id = level.id
-                orientation = LinearLayout.HORIZONTAL
+                orientation = if (stackEstimate) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 isFocusable = true
+                // L3-03: wrap height with a 48dp floor, never a fixed clipped row.
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
                 val pad = SwStyle.dp(this@ToolSetupActivity, 12f)
-                setPadding(pad, 0, pad, 0)
+                val padV = SwStyle.dp(this@ToolSetupActivity, if (stackEstimate) 8f else 0f)
+                setPadding(pad, padV, pad, padV)
                 background = chipBackground(false)
                 setOnClickListener {
                     this@ToolSetupActivity.level = level.index
@@ -747,18 +755,45 @@ class ToolSetupActivity : BaseActivity() {
             }
             row.addView(check, LinearLayout.LayoutParams(
                 SwStyle.dp(this@ToolSetupActivity, 20f), SwStyle.dp(this@ToolSetupActivity, 20f)
-            ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
-            row.addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            ).apply {
                 marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+                if (stackEstimate) bottomMargin = SwStyle.dp(this@ToolSetupActivity, 4f)
             })
-            row.addView(size)
+            // L3-03 P1: in a vertical row, width 0 + weight 1 measures to zero
+            // and the label disappears. A stacked label must fill the row.
+            row.addView(
+                label,
+                if (stackEstimate) {
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                } else {
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
+                    }
+                }
+            )
+            row.addView(size, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { if (stackEstimate) topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
             levelRows += row
             levelSizes += size
             stack.addView(row, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
         }
         optionsHost.addView(stack)
+        // L3-03: an explicit aim label; the field's own judged hint stays unchanged so
+        // existing parity and fit checks still describe the same field.
+        optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+                text = getString(CompressionPresentation.aimForSize)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 8f) }
+        )
         // The sheet ends with "Custom size"; the setup page does the same.
         optionsHost.addView(field(
             R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,
@@ -1195,7 +1230,10 @@ class ToolSetupActivity : BaseActivity() {
                         else getString(R.string.tools_setup_bad_ranges)
                     )
                 }
-                execute({ repo.splitByRange(doc.id, spans).map { it.id } }) { openDocs(it) }
+                execute({
+                    val ids = repo.splitByRange(doc.id, spans).map { it.id }
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "extract" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1210,17 +1248,26 @@ class ToolSetupActivity : BaseActivity() {
                     )
                 }
                 val indices = spans.flatMap { it.indices().toList() }.distinct().sorted()
-                execute({ listOf(repo.extractPages(doc.id, indices).id) }) { openDocs(it) }
+                execute({
+                    val ids = listOf(repo.extractPages(doc.id, indices).id)
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "duplicate" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
-                execute({ listOf(repo.duplicateDocument(doc.id, nameText.ifBlank { null }).id) }) { openDocs(it) }
+                execute({
+                    val ids = listOf(repo.duplicateDocument(doc.id, nameText.ifBlank { null }).id)
+                    ids to captureDocs(ids)
+                }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
             "merge" -> {
                 val ids = selected.toList()
                 if (ids.size < 2) return fail(getString(R.string.tools_setup_need_two))
-                execute({ listOf(repo.mergeDocuments(ids, nameText.ifBlank { null }).id) }) { openDocs(it) }
+                execute({
+                    val out = listOf(repo.mergeDocuments(ids, nameText.ifBlank { null }).id)
+                    out to captureDocs(out)
+                }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
             }
             "compress" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1242,8 +1289,17 @@ class ToolSetupActivity : BaseActivity() {
                         val (quality, maxDim) = compressLevel()
                         repo.compressScan(doc.id, quality, maxDim).id
                     }
-                    listOf(out)
-                }) { openDocs(it, targetBytes = targetBytes) }
+                    val ids = listOf(out)
+                    // L3-02 P1: this block runs on Dispatchers.IO, so hashing here
+                    // never blocks the main thread.
+                    val identity = ToolResultActivity.captureOutputIdentityBlocking(
+                        this@ToolSetupActivity, ids, emptyList()
+                    )
+                    Pair(ids, identity)
+                }) { (ids, identity) ->
+                    openDocs(ids, targetBytes = targetBytes,
+                        receiptSourceId = doc.id, outputIdentity = identity)
+                }
             }
             "pdf_to_images" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1255,16 +1311,18 @@ class ToolSetupActivity : BaseActivity() {
                     val name = "${baseName(doc)}.$extension" + if (!single) ".zip" else ""
                     val out = File(dir, name)
                     repo.pdfToImages(doc.id, format, zip = !single, outFile = out, quality = quality)
-                    ResultFiles(listOf(out), mimeFor(out))
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), mimeFor(out))
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "long_image" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
                     val files = repo.exportLongImage(doc.id, outputDir(), doc.name)
-                    ResultFiles(files, "image/jpeg")
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(files, "image/jpeg")
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "to_word" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1275,14 +1333,15 @@ class ToolSetupActivity : BaseActivity() {
                     val file = repo.exportWord(doc.id, out, includePictures = wordPictures) {
                         unreadPages = it
                     }
-                    ResultFiles(listOf(file), DOCX_MIME)
-                }) { result ->
+                    val result = ResultFiles(listOf(file), DOCX_MIME)
+                    result to captureFiles(result.files)
+                }) { (result, identity) ->
                     // O1-1: an export with unread pages is never reported as complete.
                     val unread = unreadPages.size
                     val note = if (unread > 0) {
                         resources.getQuantityString(R.plurals.tools_unread_pages, unread, unread)
                     } else null
-                    openFiles(result.files, result.mime, note = note)
+                    openFiles(result.files, result.mime, note = note, outputIdentity = identity)
                 }
             }
             "to_powerpoint" -> {
@@ -1291,8 +1350,9 @@ class ToolSetupActivity : BaseActivity() {
                 execute({
                     val out = File(outputDir(), "${baseName(doc)}.pptx")
                     repo.exportPowerPoint(doc.id, out)
-                    ResultFiles(listOf(out), PPTX_MIME)
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), PPTX_MIME)
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "to_excel" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1304,8 +1364,9 @@ class ToolSetupActivity : BaseActivity() {
                         tablesOnly = excelTablesOnly,
                         noTableNote = getString(R.string.tools_excel_no_table)
                     )
-                    ExcelRun(report, doc)
-                }) { run ->
+                    val run = ExcelRun(report, doc)
+                    run to captureFiles(listOfNotNull(report.file))
+                }) { (run, identity) ->
                     val file = run.report.file
                     if (file == null) {
                         showNoTables(run.doc, run.report.unreadPages.size, run.report.totalPages)
@@ -1324,7 +1385,8 @@ class ToolSetupActivity : BaseActivity() {
                         }
                         openFiles(
                             listOf(file), XLSX_MIME,
-                            note = notes.joinToString("\n").takeIf { it.isNotBlank() }
+                            note = notes.joinToString("\n").takeIf { it.isNotBlank() },
+                            outputIdentity = identity
                         )
                     }
                 }
@@ -1336,13 +1398,17 @@ class ToolSetupActivity : BaseActivity() {
                     val chosen = ids.mapNotNull { id -> docs.firstOrNull { it.id == id } }
                     val out = File(outputDir(), "${getString(R.string.tools_setup_zip_name)}.zip")
                     ZipExporter.export(chosen, out)
-                    ResultFiles(listOf(out), "application/zip")
-                }) { openFiles(it.files, it.mime) }
+                    val result = ResultFiles(listOf(out), "application/zip")
+                    result to captureFiles(result.files)
+                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
             }
             "remove_metadata" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
-                execute({ listOf(repo.removeMetadata(doc.id).id) }) { openDocs(it) }
+                execute({
+                    val out = listOf(repo.removeMetadata(doc.id).id)
+                    out to captureDocs(out)
+                }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
             }
             else -> fail(getString(R.string.tools_setup_nothing))
         }
@@ -1373,17 +1439,38 @@ class ToolSetupActivity : BaseActivity() {
      * Opens the result for new library documents. [targetBytes] is Compress's wanted size, so the
      * result can say honestly when that size was not reached (T05).
      */
-    private fun openDocs(ids: List<String>, targetBytes: Long? = null) {
+    private fun openDocs(
+        ids: List<String>,
+        targetBytes: Long? = null,
+        receiptSourceId: String? = null,
+        outputIdentity: String? = null
+    ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
-            ToolResultActivity.intent(this, tool.id, docIds = ids, targetBytes = targetBytes)
+            ToolResultActivity.intent(
+                this, tool.id, docIds = ids, targetBytes = targetBytes,
+                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity
+            )
         )
     }
 
-    private fun openFiles(files: List<File>, mime: String, note: String? = null) {
+    private fun openFiles(
+        files: List<File>,
+        mime: String,
+        note: String? = null,
+        outputIdentity: String? = null
+    ) {
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, files = files, mime = mime, note = note))
+        startActivity(ToolResultActivity.intent(this, tool.id, files = files,
+            mime = mime, note = note, outputIdentity = outputIdentity))
     }
+
+    /** Blocking helpers: called only inside execute()'s Dispatchers.IO block. */
+    private fun captureDocs(ids: List<String>): String? =
+        ToolResultActivity.captureOutputIdentityBlocking(this, ids, emptyList())
+
+    private fun captureFiles(files: List<File>): String? =
+        ToolResultActivity.captureOutputIdentityBlocking(this, emptyList(), files)
 
     /**
      * To Excel, Tables only: nothing was written. O1-4: when pages were unreadable, say how many
@@ -1423,8 +1510,9 @@ class ToolSetupActivity : BaseActivity() {
                 tablesOnly = false,
                 noTableNote = getString(R.string.tools_excel_no_table)
             )
-            out
-        }) { file -> openFiles(listOf(file), XLSX_MIME) }
+            val files = listOf(out)
+            files to captureFiles(files)
+        }) { (files, identity) -> openFiles(files, XLSX_MIME, outputIdentity = identity) }
     }
 
     private fun fail(message: String) {

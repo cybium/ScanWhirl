@@ -7,8 +7,10 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -20,6 +22,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.databinding.ActivityMergePdfBinding
 import com.scanwhirl.app.databinding.ItemMergePdfBinding
 import kotlinx.coroutines.Dispatchers
@@ -203,7 +206,7 @@ class MergePdfActivity : BaseActivity() {
                 } else {
                     Toast.makeText(
                         this@MergePdfActivity,
-                        getString(R.string.merge_pdf_failed, e.message),
+                        L3FailureCopy.message(this@MergePdfActivity, e),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -211,7 +214,7 @@ class MergePdfActivity : BaseActivity() {
                 sheet?.dismiss()
                 Toast.makeText(
                     this@MergePdfActivity,
-                    getString(R.string.merge_pdf_failed, e.message),
+                    L3FailureCopy.message(this@MergePdfActivity, e),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -243,6 +246,22 @@ class MergePdfActivity : BaseActivity() {
         fun bind(position: Int) {
             val item = picked[position]
             binding.pdfName.text = item.name
+            // L3-04: the spoken/visible position and named reorder actions make the
+            // drag handle optional — TalkBack and keyboard can set the merge order.
+            val where = getString(R.string.ux130_l3_merge_file_position, position + 1, picked.size)
+            binding.root.findViewById<TextView>(R.id.ux130_l3_merge_position).text = where
+            val earlier = binding.root.findViewById<View>(R.id.ux130_l3_merge_move_earlier)
+            val later = binding.root.findViewById<View>(R.id.ux130_l3_merge_move_later)
+            earlier.contentDescription = "${getString(R.string.ux130_l3_merge_move_earlier)}, $where"
+            later.contentDescription = "${getString(R.string.ux130_l3_merge_move_later)}, $where"
+            earlier.setOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos > 0) adapter.move(pos, pos - 1)
+            }
+            later.setOnClickListener {
+                val pos = bindingAdapterPosition
+                if (pos in 0 until picked.size - 1) adapter.move(pos, pos + 1)
+            }
             binding.btnPreview.setOnClickListener {
                 startActivity(
                     PdfViewerActivity.uriIntent(

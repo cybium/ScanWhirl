@@ -26,6 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -71,6 +72,7 @@ class ToolResultActivity : BaseActivity() {
     private var files: MutableList<File> = mutableListOf()
     private var mime = "application/pdf"
     private var undone = false
+    private var undoChecking = false
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
@@ -106,6 +108,13 @@ class ToolResultActivity : BaseActivity() {
      */
     private var beforeBytes: Long? = null
 
+    /**
+     * L3-02 P1: identity of the output, captured by [intent] at creation time.
+     * Undo only removes a document that still has these exact bytes, so a stale
+     * id that was later reused by another document is never deleted.
+     */
+    private var outputIdentity: String? = null
+
     /** F1: the ID card flow's own result actions (Keep / Discard). */
     private val idCardFlow: Boolean get() = toolId == "id_card"
 
@@ -127,9 +136,12 @@ class ToolResultActivity : BaseActivity() {
     private var documentsExistingName: String? = null
 
     /**
-     * UI-B3 (#9-now): the compressed source was a library document and was left in place, so the
-     * result can say where the original is. Export-only results never show this line.
+     * L3-02 P2: the "original kept" receipt is derived from the library's ACTUAL
+     * state at render time (is the source document still there?), not from a
+     * producer's boolean. [sourceKept] is the derived value; the legacy boolean
+     * extra is only a fallback for callers that supply no source id.
      */
+    private var receiptSourceId: String? = null
     private var sourceKept = false
 
     /**
@@ -150,7 +162,13 @@ class ToolResultActivity : BaseActivity() {
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
-        sourceKept = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
+        // L3-02 P1: the identity was captured when this intent was built, before
+        // any later owner of the id could replace the output.
+        outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
+        // L3-02 P2: derive the original-kept receipt from the library right now.
+        receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
+        val legacyClaim = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
+        sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: legacyClaim
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -361,22 +379,40 @@ class ToolResultActivity : BaseActivity() {
             return root
         }
 
-        column.addView(
-            button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
-        )
-        // UI-B3 (#12): Open is the filled action; Share is secondary; "Also save in Documents"
-        // stays visible for every result, including a compress that missed its target.
-        // T05-RESULT-SLICE: one tap keeps a copy in Documents for the person's own files app and
-        // USB, for a document result and for an exported file alike.
-        column.addView(
-            button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-        )
+        // L3-02: Open is the one filled decision, Share is secondary. They sit side by side with
+        // an 8dp gap while both labels fit; at 200% type they stack so neither is squeezed.
+        val open = button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
+        val share = button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() }
+        if (pairPrimaryActions()) {
+            val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.addView(open, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = SwStyle.dp(this@ToolResultActivity, 8f) })
+            pair.addView(share, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ))
+            column.addView(
+                pair,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            )
+        } else {
+            column.addView(
+                open,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            )
+            column.addView(
+                share,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+            )
+        }
+        // UI-B3 (#12): "Also save in Documents" stays plainly visible for every result,
+        // including a compress that missed its target (T05-RESULT-SLICE). It is added below.
         column.addView(
             button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave, icon = R.drawable.ic_sym_download) { alsoSave() },
             LinearLayout.LayoutParams(
@@ -432,19 +468,38 @@ class ToolResultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
-        // B3 (#9-now): Undo names what it removes; for compress that is this new copy (and the
-        // Documents copy this run saved, when there is one).
-        val undoLabel = getString(
-            if (isCompressResult) R.string.compress_undo else R.string.tools_result_undo
+        // L3-02: the output removal is named ("Remove this new copy") and its exact
+        // consequence is stated above the action, before the person taps it. The
+        // original is never a candidate here (B2-H1 / T10-FIX-PDFA-UNDO).
+        column.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                text = getString(R.string.ux130_l3_result_remove_copy_consequence)
+                setLineSpacing(0f, 1.2f)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
+        // L3-02 (lead-authorized): one label for the same action everywhere,
+        // including compress results without provenance. One-tap removal stays.
+        val undoLabel = getString(R.string.ux130_l3_result_remove_copy)
         column.addView(
             button(undoLabel, R.id.toolResultUndo, icon = R.drawable.ic_sym_undo) { undo() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
         return root
     }
+
+    /** L3-02: at 200% type a paired row would clip, so the actions stack in full-width rows. */
+    private fun stacksActionsAtLargeFont(): Boolean =
+        resources.configuration.fontScale > 1.15f
+
+    /** L3-02: pair Open/Share only where both labels and icons fit side by side. */
+    private fun pairPrimaryActions(): Boolean =
+        !stacksActionsAtLargeFont() && resources.configuration.screenWidthDp >= 320
 
     /** H7: a result made of exported files only (no library document behind it). */
     private fun isExportOnlyResult(): Boolean = docIds.isEmpty() && files.isNotEmpty()
@@ -487,7 +542,8 @@ class ToolResultActivity : BaseActivity() {
                 setCompoundDrawablesRelative(glyph, null, null, null)
                 compoundDrawablePadding = SwStyle.dp(this@ToolResultActivity, 12f)
             }
-            minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
+            // L3-02: every primary/secondary action clears the 56dp decision target.
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, 56f)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
             } else {
@@ -1114,27 +1170,53 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun undo() {
-        if (undone) return
-        undone = true
-        val outs = files.toList()
-        // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
-        // generated file is an export whose docIds are inputs, not copies. No tool legitimately
-        // creates that shape — document copies pass docIds only, exports pass files only — and
-        // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
-        // files and keeps the document: the safe direction for an unknown caller.
-        val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
-        val recordDoc = docIds.singleOrNull()
-        // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
-        // removes it too — the confirmation bar is no longer the only way, and pressing Undo
-        // after that bar has gone no longer leaves the copy behind. Only the copy this run
-        // created is a candidate, and only while it still holds exactly the bytes it wrote.
-        val copy = savedCopy
-        savedCopy = null
-        documentsExistingName = null
-        docIds.clear()
-        files.clear()
-        locationLines.clear()
+        if (undone || undoChecking) return
+        undoChecking = true
+        val undoButton: View? = findViewById(R.id.toolResultUndo)
+        undoButton?.isEnabled = false
         lifecycleScope.launch {
+            // L3-02 P1: the re-check hashes on IO, never on Main, while the
+            // button is disabled so a second tap cannot race the first.
+            val allowed = try {
+                withContext(Dispatchers.IO) {
+                    val expected = outputIdentity
+                    when {
+                        expected == null -> docIds.isEmpty() && files.isEmpty()
+                        expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
+                            cheapIdentity(this@ToolResultActivity, docIds, files) == expected
+                        else -> captureOutputIdentityBlocking(
+                            this@ToolResultActivity, docIds, files
+                        ) == expected
+                    }
+                }
+            } finally {
+                // P2: a cancelled re-check must never leave Undo disabled.
+                undoChecking = false
+                undoButton?.isEnabled = true
+            }
+            if (!allowed) {
+                fail(getString(R.string.ux130_l3_copy_changed))
+                return@launch
+            }
+            undone = true
+            val outs = files.toList()
+            // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
+            // generated file is an export whose docIds are inputs, not copies. No tool legitimately
+            // creates that shape — document copies pass docIds only, exports pass files only — and
+            // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
+            // files and keeps the document: the safe direction for an unknown caller.
+            val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
+            val recordDoc = docIds.singleOrNull()
+            // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
+            // removes it too — the confirmation bar is no longer the only way, and pressing Undo
+            // after that bar has gone no longer leaves the copy behind. Only the copy this run
+            // created is a candidate, and only while it still holds exactly the bytes it wrote.
+            val copy = savedCopy
+            savedCopy = null
+            documentsExistingName = null
+            docIds.clear()
+            files.clear()
+            locationLines.clear()
             val copyUndo = copy?.let { saved ->
                 withContext(Dispatchers.IO) {
                     val result = try {
@@ -1279,6 +1361,13 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_COMPRESS_MISSED = "compress_missed"
         private const val EXTRA_COMPRESS_GREW = "compress_grew"
 
+        /** L3-02 P1: output identity captured at result creation, checked before removal. */
+        private const val EXTRA_OUTPUT_IDENTITY = "l3_output_identity"
+        private const val CHEAP_IDENTITY_PREFIX = "C:"
+
+        /** L3-02 P2: the library source used to derive the "original kept" receipt. */
+        private const val EXTRA_RECEIPT_SOURCE_ID = "l3_receipt_source_id"
+
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
         private const val KEY_COPY_URI = "w3_copy_uri"
@@ -1313,7 +1402,11 @@ class ToolResultActivity : BaseActivity() {
             /** CP1: the typed target was missed, so the header must not claim "Compressed". */
             compressTargetMissed: Boolean = false,
             /** CP1: after > before, so the result must admit the copy is larger. */
-            compressGrew: Boolean = false
+            compressGrew: Boolean = false,
+            /** L3-02 P2: library source, used only to derive the receipt from actual state. */
+            receiptSourceId: String? = null,
+            /** L3-02 P1: identity captured by the producer OFF the main thread. */
+            outputIdentity: String? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1326,6 +1419,90 @@ class ToolResultActivity : BaseActivity() {
                 if (sourceKept) putExtra(EXTRA_SOURCE_KEPT, true)
                 if (compressTargetMissed) putExtra(EXTRA_COMPRESS_MISSED, true)
                 if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
+                if (receiptSourceId != null) putExtra(EXTRA_RECEIPT_SOURCE_ID, receiptSourceId)
+                // No hashing here: intent() runs on Main. Producers capture the
+                // full identity in their own IO work; any caller that did not gets
+                // a cheap stat-only identity (id + createdAt + size + mtime), so
+                // the identity is always recorded BEFORE the user can reach Undo.
+                val identity = outputIdentity ?: cheapIdentity(context, docIds, files)
+                if (identity != null) putExtra(EXTRA_OUTPUT_IDENTITY, identity)
             }
+
+        /**
+         * Cheap identity: ordinary file stats only, no content hashing. Safe to
+         * call on Main. Used for callers that did not supply a producer identity.
+         */
+        fun cheapIdentity(context: Context, docIds: List<String>, files: List<File>): String? {
+            return try {
+                if (files.isNotEmpty()) {
+                    val parts = files.sortedBy { it.path }.map { f ->
+                        "${f.path}|${f.length()}|${f.lastModified()}"
+                    }
+                    "C:F:" + parts.joinToString(";")
+                } else if (docIds.isNotEmpty()) {
+                    val repo = ScanWhirlApp.from(context).repository
+                    val parts = docIds.sorted().map { id ->
+                        val doc = repo.getDocument(id) ?: return null
+                        val pdf = doc.pdfFile
+                        val size = if (pdf.isFile) pdf.length() else -1L
+                        val modified = if (pdf.isFile) pdf.lastModified() else -1L
+                        "$id|${doc.createdAt}|$size|$modified"
+                    }
+                    "C:D:" + parts.joinToString(";")
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        /** Test seam: observes the thread that performs identity hashing. */
+        @Volatile
+        internal var identityThreadProbe: ((Thread) -> Unit)? = null
+
+        /**
+         * L3-02 P1: hash the exact outputs. BLOCKING — callers must already be on
+         * Dispatchers.IO. A later document that merely reuses an id has different
+         * bytes and can never satisfy the same identity, so Undo cannot delete it.
+         */
+        fun captureOutputIdentityBlocking(
+            context: Context,
+            docIds: List<String>,
+            files: List<File>
+        ): String? {
+            identityThreadProbe?.invoke(Thread.currentThread())
+            return try {
+                if (files.isNotEmpty()) {
+                    val parts = mutableListOf<String>()
+                    for (file in files.sortedBy { it.path }) {
+                        if (!file.exists()) return null
+                        // A result may name a directory (a failed export folder);
+                        // keep those removable so the honest "not every copy was
+                        // removed" path still works on base behavior.
+                        parts += if (file.isFile) {
+                            "${file.path}|${file.length()}|${Sha256.of(file)}"
+                        } else {
+                            "${file.path}|dir|${file.lastModified()}"
+                        }
+                    }
+                    "F:" + parts.joinToString(";")
+                } else if (docIds.isNotEmpty()) {
+                    val repo = ScanWhirlApp.from(context).repository
+                    val parts = mutableListOf<String>()
+                    for (id in docIds.sorted()) {
+                        val doc = repo.getDocument(id) ?: return null
+                        val pdf = doc.pdfFile
+                        if (!pdf.isFile) return null
+                        parts += "$id|${doc.createdAt}|${pdf.length()}|${Sha256.of(pdf)}"
+                    }
+                    "D:" + parts.joinToString(";")
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 }
