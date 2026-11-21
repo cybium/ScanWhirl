@@ -10,8 +10,11 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.io.Closeable
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -29,6 +32,11 @@ import kotlin.coroutines.resumeWithException
  *
  * The recognizers are behind [rawReader] / [rawBitmapReader] so Robolectric tests can supply
  * synthetic pages (ML Kit cannot run in a JVM).
+ *
+ * PERF item 5: one recognizer is created per script and reused for the whole multi-page job
+ * instead of being created/closed for every page. A [Mutex] keeps recognition to one job at a
+ * time (ML Kit recognizers are not guaranteed thread-safe). [closeRecognizers] closes the cached
+ * instances; a failed/unavailable recognizer is dropped and closed immediately.
  */
 object OcrEngine {
 
@@ -136,43 +144,11 @@ object OcrEngine {
         val bitmap = ImageTools.decodeSampledFile(page, OCR_MAX_DIM)
         val rotation = exifRotation(page)
         try {
-            val recognizer = OcrScriptRecognizers.create(OcrScript.LATIN)
-            val text = try {
-                suspendCancellableCoroutine<Text> { cont ->
-                    recognizer.process(InputImage.fromBitmap(bitmap, rotation))
-                        .addOnSuccessListener { result -> if (cont.isActive) cont.resume(result) }
-                        .addOnFailureListener { e -> if (cont.isActive) cont.resumeWithException(e) }
-                }
-            } finally {
-                recognizer.close()
+            val analysis = withScriptRecognizer(OcrScript.LATIN) { it.analyze(bitmap, rotation) }
+            val lines = analysis.lines.map { line ->
+                OcrLine(line.text, line.box.left, line.box.top, line.box.right, line.box.bottom)
             }
-            val lines = text.textBlocks.flatMap { block ->
-                block.lines.filter { it.text.isNotBlank() }.map { line ->
-                    val box = line.boundingBox ?: block.boundingBox
-                    OcrLine(
-                        text = line.text,
-                        left = box?.left ?: 0,
-                        top = box?.top ?: 0,
-                        right = box?.right ?: 0,
-                        bottom = box?.bottom ?: 0
-                    )
-                }
-            }
-            val words = text.textBlocks
-                .flatMap { it.lines }
-                .flatMap { it.elements }
-                .mapNotNull { element ->
-                    val box = element.boundingBox ?: return@mapNotNull null
-                    if (element.text.isBlank()) null
-                    else WordBox(
-                        element.text,
-                        box.left,
-                        box.top,
-                        box.right,
-                        box.bottom
-                    )
-                }
-            WordsResult(OcrPage(bitmap.width, bitmap.height, lines), words)
+            WordsResult(OcrPage(bitmap.width, bitmap.height, lines), analysis.words)
         } finally {
             if (!bitmap.isRecycled) bitmap.recycle()
         }
@@ -248,9 +224,25 @@ object OcrEngine {
         return OcrResult(OcrMerge.assemble(page), OcrPage(page.width, page.height, lines))
     }
 
-    private suspend fun mlKit(bitmap: Bitmap, script: OcrScript, rotationDegrees: Int = 0): OcrRawPage {
-        val recognizer = OcrScriptRecognizers.create(script)
-        try {
+    /**
+     * The boundary around a native recognizer. The extraction here is the same
+     * code the per-page path used before PERF item 5; only its lifetime changed.
+     */
+    internal interface ScriptRecognizer : Closeable {
+        suspend fun analyze(bitmap: Bitmap, rotationDegrees: Int): Analysis
+        override fun close()
+    }
+
+    /** Lines and element boxes extracted from one ML Kit result for one script. */
+    internal data class Analysis(
+        val lines: List<OcrRawLine>,
+        val words: List<WordBox>
+    )
+
+    private class MlKitRecognizer(private val script: OcrScript) : ScriptRecognizer {
+        private val recognizer: TextRecognizer = OcrScriptRecognizers.create(script)
+
+        override suspend fun analyze(bitmap: Bitmap, rotationDegrees: Int): Analysis {
             val text = suspendCancellableCoroutine<Text> { cont ->
                 recognizer.process(InputImage.fromBitmap(bitmap, rotationDegrees))
                     .addOnSuccessListener { result -> if (cont.isActive) cont.resume(result) }
@@ -270,10 +262,75 @@ object OcrEngine {
                         )
                     }
             }
-            return OcrRawPage(bitmap.width, bitmap.height, lines)
-        } finally {
+            val words = text.textBlocks
+                .flatMap { it.lines }
+                .flatMap { it.elements }
+                .mapNotNull { element ->
+                    val box = element.boundingBox ?: return@mapNotNull null
+                    if (element.text.isBlank()) null
+                    else WordBox(
+                        element.text,
+                        box.left,
+                        box.top,
+                        box.right,
+                        box.bottom
+                    )
+                }
+            return Analysis(lines, words)
+        }
+
+        override fun close() {
             recognizer.close()
         }
+    }
+
+    /** One recognizer per script, reused for the whole job. */
+    private val recognizers = LinkedHashMap<OcrScript, ScriptRecognizer>()
+    private val recognizerMutex = Mutex()
+
+    /** Test seam: fakes count create/analyze/close instead of loading ML Kit models. */
+    @Volatile
+    internal var recognizerFactory: (OcrScript) -> ScriptRecognizer = { MlKitRecognizer(it) }
+
+    /**
+     * One job at a time: the mutex is held for the whole analysis, so a shared
+     * recognizer is never used concurrently. Cancellation releases the mutex;
+     * an unavailable/OOM-failed recognizer is closed and removed so a retry
+     * starts from a clean native instance.
+     */
+    private suspend fun <T> withScriptRecognizer(
+        script: OcrScript,
+        block: suspend (ScriptRecognizer) -> T
+    ): T = recognizerMutex.withLock {
+        val recognizer = recognizers[script] ?: recognizerFactory(script).also {
+            recognizers[script] = it
+        }
+        try {
+            block(recognizer)
+        } catch (e: Throwable) {
+            if (isUnavailable(e) || e is OutOfMemoryError) {
+                recognizers.remove(script)?.close()
+            }
+            throw e
+        }
+    }
+
+    /**
+     * Closes every cached recognizer (process trim / OOM policy or test teardown).
+     * The next recognition creates a fresh one per script.
+     */
+    suspend fun closeRecognizers() = recognizerMutex.withLock {
+        recognizers.values.forEach { it.close() }
+        recognizers.clear()
+    }
+
+    private suspend fun mlKit(
+        bitmap: Bitmap,
+        script: OcrScript,
+        rotationDegrees: Int = 0
+    ): OcrRawPage = withScriptRecognizer(script) { recognizer ->
+        val analysis = recognizer.analyze(bitmap, rotationDegrees)
+        OcrRawPage(bitmap.width, bitmap.height, analysis.lines)
     }
 
     /** Does the text look like the script that produced it? Used when two scripts disagree. */

@@ -8,6 +8,7 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import java.io.Closeable
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -20,22 +21,96 @@ import kotlin.math.roundToInt
  * is copied once into cacheDir and opened from there. That single copy is what
  * fixes the "file descriptor not seekable" failure when editing, merging,
  * compressing, OCR-ing or locking a device PDF.
+ *
+ * PERF item 4: a native PdfRenderer is opened once for a whole multi-page
+ * operation ([withRenderer]) instead of once per page. [pageCount] and
+ * [renderPageJpeg] keep their one-shot behaviour for legacy single-page callers,
+ * but loops should hold one [Renderer] and call [renderPageJpeg] on it.
  */
 object PdfPageRenderer {
 
-    /**
-     * M07: `PdfRenderer` takes ownership of the descriptor it is given and closes it
-     * when the renderer closes. Callers here open one renderer per call on a shared
-     * descriptor ([pageCount], then [renderPageJpeg] for each page), so every
-     * renderer gets its own duplicate. Before this, the first `pageCount` closed the
-     * caller's descriptor and every later page failed with "file descriptor not
-     * seekable" (seen on an Android 14 phone: no PDF could be imported, merged,
-     * compressed or OCR'd from a device file).
-     */
-    private fun open(fd: ParcelFileDescriptor): PdfRenderer = PdfRenderer(fd.dup())
+    /** One page of an open renderer. Closeable so bitmap/native state is released per page. */
+    interface Page : Closeable {
+        val width: Int
+        val height: Int
+        fun render(bitmap: Bitmap, transform: Matrix, mode: Int)
+        override fun close()
+    }
 
-    /** Number of pages in the PDF (opens the renderer briefly). */
-    fun pageCount(fd: ParcelFileDescriptor): Int = open(fd).use { it.pageCount }
+    /**
+     * A native renderer (or a test fake) held open for a whole render pass.
+     * The renderer owns the duplicate descriptor it was opened with and closes
+     * it in [close].
+     */
+    interface Renderer : Closeable {
+        val pageCount: Int
+        fun openPage(index: Int): Page
+        override fun close()
+    }
+
+    private class AndroidRenderer(fd: ParcelFileDescriptor) : Renderer {
+        // PdfRenderer takes ownership of the descriptor it is given and closes it
+        // when the renderer closes. The caller keeps its own descriptor (M07).
+        private val renderer: PdfRenderer = PdfRenderer(fd.dup())
+
+        override val pageCount: Int get() = renderer.pageCount
+
+        override fun openPage(index: Int): Page = AndroidPage(renderer.openPage(index))
+
+        override fun close() {
+            renderer.close()
+        }
+
+        private class AndroidPage(private val page: PdfRenderer.Page) : Page {
+            override val width: Int get() = page.width
+            override val height: Int get() = page.height
+
+            override fun render(bitmap: Bitmap, transform: Matrix, mode: Int) {
+                page.render(bitmap, null, transform, mode)
+            }
+
+            override fun close() {
+                page.close()
+            }
+        }
+    }
+
+    private fun open(fd: ParcelFileDescriptor): Renderer = AndroidRenderer(fd)
+
+    /**
+     * Test seam: Robolectric cannot construct a real [PdfRenderer], so tests
+     * supply fakes that count opens/closes and return deterministic pages.
+     */
+    @Volatile
+    internal var rendererFactory: (ParcelFileDescriptor) -> Renderer = { open(it) }
+
+    /**
+     * Opens exactly one renderer for [block] and closes it on every path —
+     * success, exception, cancellation and OutOfMemoryError. This is the
+     * multi-page entry point: loops must render all their pages inside [block].
+     */
+    fun <T> withRenderer(fd: ParcelFileDescriptor, block: (Renderer) -> T): T =
+        rendererFactory(fd).use { renderer -> block(renderer) }
+
+    /**
+     * Suspending counterpart for callers that dispatch to Main (or otherwise
+     * suspend) between pages. Closes the renderer on success, failure,
+     * cancellation and OutOfMemoryError, exactly like [withRenderer].
+     */
+    suspend fun <T> withRendererSuspend(
+        fd: ParcelFileDescriptor,
+        block: suspend (Renderer) -> T
+    ): T {
+        val renderer = rendererFactory(fd)
+        try {
+            return block(renderer)
+        } finally {
+            renderer.close()
+        }
+    }
+
+    /** Number of pages in the PDF (opens the renderer briefly, for legacy callers). */
+    fun pageCount(fd: ParcelFileDescriptor): Int = withRenderer(fd) { it.pageCount }
 
     /**
      * Copies [uri] into a cache file, opens it seekably, and runs [block].
@@ -59,16 +134,16 @@ object PdfPageRenderer {
         }
     }
 
-    /** Renders a single page to JPEG bytes. */
+    /** Renders a single page to JPEG bytes from an already-open [renderer]. */
     fun renderPageJpeg(
-        fd: ParcelFileDescriptor,
+        renderer: Renderer,
         index: Int,
         dpi: Float,
         maxDim: Int,
         quality: Int
-    ): ByteArray = open(fd).use { renderer ->
+    ): ByteArray {
         require(index in 0 until renderer.pageCount) { "No such page" }
-        renderer.openPage(index).use { page ->
+        return renderer.openPage(index).use { page ->
             var scale = dpi / 72f
             val longest = maxOf(page.width, page.height)
             if (longest * scale > maxDim) {
@@ -80,44 +155,35 @@ object PdfPageRenderer {
             val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             Canvas(bitmap).drawColor(Color.WHITE)
             val matrix = Matrix().apply { setScale(w.toFloat() / page.width, h.toFloat() / page.height) }
-            page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            page.render(bitmap, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             val jpeg = ImageTools.encodeJpeg(bitmap, quality)
             bitmap.recycle()
             jpeg
         }
     }
 
+    /** One-shot single-page entry point for legacy callers; opens and closes its own renderer. */
+    fun renderPageJpeg(
+        fd: ParcelFileDescriptor,
+        index: Int,
+        dpi: Float,
+        maxDim: Int,
+        quality: Int
+    ): ByteArray = withRenderer(fd) { renderPageJpeg(it, index, dpi, maxDim, quality) }
+
     /**
      * @param dpi nominal resolution (72 = PDF points). Result capped at [maxDim] longest side.
-     * @return one JPEG per page, in document order.
+     * @return one JPEG per page, in document order, from a single native renderer.
      */
     fun renderJpegs(
         fd: ParcelFileDescriptor,
         dpi: Float,
         maxDim: Int,
         quality: Int
-    ): List<ByteArray> = open(fd).use { renderer ->
+    ): List<ByteArray> = withRenderer(fd) { renderer ->
         require(renderer.pageCount > 0) { "PDF has no pages" }
         (0 until renderer.pageCount).map { index ->
-            renderer.openPage(index).use { page ->
-                var scale = dpi / 72f
-                val longest = maxOf(page.width, page.height)
-                if (longest * scale > maxDim) {
-                    scale = maxDim.toFloat() / longest
-                }
-                val w = (page.width * scale).roundToInt().coerceAtLeast(1)
-                val h = (page.height * scale).roundToInt().coerceAtLeast(1)
-
-                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                Canvas(bitmap).drawColor(Color.WHITE)
-
-                val matrix = Matrix().apply { setScale(w.toFloat() / page.width, h.toFloat() / page.height) }
-                page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-
-                val jpeg = ImageTools.encodeJpeg(bitmap, quality)
-                bitmap.recycle()
-                jpeg
-            }
+            renderPageJpeg(renderer, index, dpi, maxDim, quality)
         }
     }
 }
