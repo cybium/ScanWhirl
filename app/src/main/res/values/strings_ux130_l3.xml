@@ -9,4 +9,9 @@
     <!-- L3-03: one compression vocabulary across the sheet and the setup page. -->
     <string name="ux130_l3_compress_aim_size">Aim for a size</string>
     <string name="ux130_l3_compress_from_phone_storage">From phone storage</string>
+
+    <!-- L3-04: accessible external merge reorder. -->
+    <string name="ux130_l3_merge_move_earlier">Move earlier</string>
+    <string name="ux130_l3_merge_move_later">Move later</string>
+    <string name="ux130_l3_merge_file_position">File %1$d of %2$d</string>
 </resources>

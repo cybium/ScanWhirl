@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- UX 1.3.0 lane L3 — new view ids, lane-prefixed so they never collide with shared ids. -->
 <resources>
+    <!-- L3-04: named merge reorder actions and the spoken file position. -->
+    <item name="ux130_l3_merge_move_earlier" type="id" />
+    <item name="ux130_l3_merge_move_later" type="id" />
+    <item name="ux130_l3_merge_position" type="id" />
 </resources>

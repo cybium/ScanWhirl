@@ -8,4 +8,9 @@
     <!-- L3-03: compress setup labels. -->
     <string name="ux130_l3_compress_aim_size">आकार तय करें</string>
     <string name="ux130_l3_compress_from_phone_storage">फ़ोन के संग्रहण से</string>
+
+    <!-- L3-04: बाहरी पीडीएफ़ का क्रम बदलना. -->
+    <string name="ux130_l3_merge_move_earlier">पहले ले जाएँ</string>
+    <string name="ux130_l3_merge_move_later">बाद में ले जाएँ</string>
+    <string name="ux130_l3_merge_file_position">फ़ाइल %1$d / %2$d</string>
 </resources>

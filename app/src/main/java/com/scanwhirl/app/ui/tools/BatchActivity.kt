@@ -547,10 +547,10 @@ class BatchActivity : BaseActivity() {
             paintFormat()
         }
         val formatRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        formatRow.addView(jpg, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 40f), 1f).apply {
+        formatRow.addView(jpg, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f).apply {
             marginEnd = SwStyle.dp(this@BatchActivity, 8f)
         })
-        formatRow.addView(png, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 40f), 1f))
+        formatRow.addView(png, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f))
         content.addView(formatRow)
         paintFormat()
 
@@ -563,10 +563,10 @@ class BatchActivity : BaseActivity() {
         perDoc.setOnClickListener { oneZip = false; paintZip() }
         all.setOnClickListener { oneZip = true; paintZip() }
         val zipRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        zipRow.addView(perDoc, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 40f), 1f).apply {
+        zipRow.addView(perDoc, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f).apply {
             marginEnd = SwStyle.dp(this@BatchActivity, 8f)
         })
-        zipRow.addView(all, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 40f), 1f))
+        zipRow.addView(all, LinearLayout.LayoutParams(0, SwStyle.dp(this@BatchActivity, 48f), 1f))
         content.addView(zipRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@BatchActivity, 10f) })
@@ -681,7 +681,15 @@ class BatchActivity : BaseActivity() {
             }
             list.addView(line)
         }
-        sheet.setContent(list)
+        // L3-04: a 100-document summary scrolls inside its own bounded area, so
+        // "Share all" in the sheet footer stays reachable at 200% type.
+        val SUMMARY_MAX_HEIGHT = resources.displayMetrics.heightPixels / 2
+        sheet.setContent(androidx.core.widget.NestedScrollView(this).apply {
+            addView(list)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, SUMMARY_MAX_HEIGHT
+            )
+        })
         if (results.any { it.ok }) {
             sheet.setPrimary(R.string.tools_batch_share_all) { shareAll(results) }
         }
@@ -745,9 +753,12 @@ class BatchActivity : BaseActivity() {
             this.id = id
             this.text = text
             gravity = Gravity.CENTER
+            // L3-04: wrap height with a 48dp floor, never a clipped 40dp chip.
+            maxLines = Int.MAX_VALUE
+            minimumHeight = SwStyle.dp(this@BatchActivity, 48f)
             setPadding(
-                SwStyle.dp(this@BatchActivity, 8f), 0,
-                SwStyle.dp(this@BatchActivity, 8f), 0
+                SwStyle.dp(this@BatchActivity, 8f), SwStyle.dp(this@BatchActivity, 8f),
+                SwStyle.dp(this@BatchActivity, 8f), SwStyle.dp(this@BatchActivity, 8f)
             )
             background = SwStyle.rounded(
                 this@BatchActivity,
@@ -777,6 +788,14 @@ class BatchActivity : BaseActivity() {
             if (selected) R.drawable.ic_sym_check else 0, 0, 0, 0
         )
         chipView.compoundDrawablePadding = SwStyle.dp(this, 6f)
+        // L3-04: TalkBack hears the choice as a checked state, not just a colour/tick.
+        chipView.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.isCheckable = true
+                info.isChecked = selected
+            }
+        }
     }
 
     companion object {
