@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.net.Uri
@@ -45,6 +47,7 @@ import org.robolectric.shadows.ShadowToast
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class FreeLegacyVaultEntryPointTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -150,7 +153,7 @@ class FreeLegacyVaultEntryPointTest {
 
     // ---- Tools sheet → tile_vault ------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free tools vault tile with existing pin shows PIN dialog not the Pro panel`() {
         seedDoc("Public doc")
         Prefs.setVaultPin(app, "2580")
@@ -166,7 +169,7 @@ class FreeLegacyVaultEntryPointTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free wrong PIN keeps the vault closed and correct PIN opens it`() {
         seedDoc("Public doc")
         val secretId = seedDoc("Secret doc")
@@ -203,7 +206,7 @@ class FreeLegacyVaultEntryPointTest {
         assertTrue("vaulted doc untouched", repo.getDocument(secretId)!!.isVaulted)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free vault tile without a PIN is not offered and creates nothing`() {
         seedDoc("Public doc")
         assertFalse(Prefs.hasVaultPin(app))
@@ -220,7 +223,7 @@ class FreeLegacyVaultEntryPointTest {
         assertFalse("no PIN was created", Prefs.hasVaultPin(app))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro vault tile without a PIN is also absent - setup disabled for everyone`() {
         ProGate.setTestOverride(app, true)
         seedDoc("Public doc")
@@ -235,7 +238,7 @@ class FreeLegacyVaultEntryPointTest {
         assertFalse(Prefs.hasVaultPin(app))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `adding from inside an open vault is blocked in Free and Pro`() {
         for (pro in listOf(false, true)) {
             ProGate.setTestOverride(app, pro)
@@ -279,7 +282,7 @@ class FreeLegacyVaultEntryPointTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free user can remove an existing vaulted doc and sees no Pro badge`() {
         val id = seedDoc("Vaulted doc")
         repo.setVaulted(id, true)
@@ -299,7 +302,7 @@ class FreeLegacyVaultEntryPointTest {
         assertTrue("PDF intact", after.pdfFile.length() > 0)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free user cannot add a doc to the vault and is not sent to the Pro panel`() {
         val id = seedDoc("Plain doc")
         withMoreSheet(id) { _, sheet ->
@@ -311,7 +314,7 @@ class FreeLegacyVaultEntryPointTest {
         assertFalse("doc was not vaulted", repo.getDocument(id)!!.isVaulted)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro user cannot add a doc to the vault either`() {
         ProGate.setTestOverride(app, true)
         val id = seedDoc("Plain doc")
@@ -323,7 +326,7 @@ class FreeLegacyVaultEntryPointTest {
         assertFalse(repo.getDocument(id)!!.isVaulted)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free user can unlock an existing locked PDF from More and sees no Pro badge`() {
         val id = seedDoc("Locked doc")
         runBlocking { repo.protectPdf(id, "1234") }
@@ -351,7 +354,7 @@ class FreeLegacyVaultEntryPointTest {
         assertTrue("PDF still present after unlock", repo.getDocument(id)!!.pdfFile.length() > 0)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free user can protect an unlocked doc from More and sees no Pro badge`() {
         val id = seedDoc("Open doc")
         withMoreSheet(id) { activity, sheet ->
@@ -374,7 +377,7 @@ class FreeLegacyVaultEntryPointTest {
 
     // ---- Home selection bar → Free ZIP export -------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free selection export builds a ZIP and opens the export result without the Pro panel`() {
         seedDoc("Export me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

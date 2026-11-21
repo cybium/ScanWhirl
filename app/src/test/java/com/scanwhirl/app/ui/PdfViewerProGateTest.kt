@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.os.Looper
@@ -36,6 +38,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class PdfViewerProGateTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -75,7 +78,7 @@ class PdfViewerProGateTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Free - the reader dock Sign opens the Pro offer instead of the stamp editor`() {
         ProGate.setTestOverride(app, false)
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
@@ -92,7 +95,7 @@ class PdfViewerProGateTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Free - the stamp editor refuses to open and offers Pro instead`() {
         ProGate.setTestOverride(app, false)
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
@@ -111,7 +114,7 @@ class PdfViewerProGateTest {
         controller.pause().stop().destroy()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Pro - the dock Sign still opens the stamp editor`() {
         ProGate.setTestOverride(app, true)
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Sign me")
@@ -137,7 +140,7 @@ class PdfViewerProGateTest {
 
     private fun editorIntent(id: String) = StampEditorActivity.intent(app, id, StampEditorActivity.TOOL_SIGN)
 
-    @Test
+    @Test(timeout = 60_000)
     fun `default TEST_BUILD really creates the stamp editor`() {
         ProGate.setPro(app, false)
         ProGate.setTestOverride(app, null)
@@ -154,7 +157,7 @@ class PdfViewerProGateTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a recorded production purchase opens the editor and survives recreation`() {
         // Release rule: only the recorded purchase counts (no test override, no test-build default).
         ProOffer.testBuildForTests = false
@@ -176,7 +179,7 @@ class PdfViewerProGateTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a release build without a recorded purchase refuses the editor`() {
         ProOffer.testBuildForTests = false
         ProGate.setTestOverride(app, null)

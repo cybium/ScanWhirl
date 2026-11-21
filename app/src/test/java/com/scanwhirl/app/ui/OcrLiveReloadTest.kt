@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -50,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class OcrLiveReloadTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -113,7 +116,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a Hindi reread replaces the mojibake on the open screen`() {
         val id = seed("dqDrh iqDrh", "dqDrh")
         Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
@@ -136,7 +139,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Save edits after a reread keeps the new stored text byte-identical`() {
         val id = seed("dqDrh iqDrh")
         Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
@@ -160,7 +163,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an edited page is never replaced by a reread without asking`() {
         val id = seed("old line", "second old line")
         Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
@@ -203,7 +206,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Save edits refuses to write over text that changed underneath`() {
         val id = seed("first page")
         Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
@@ -238,7 +241,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `recreation after a Hindi reread displays fresh OCR without an unsaved warning`() {
         val id = seed("HRT HYO old Latin OCR")
         val hindi = "\u092d\u093e\u0930\u0924 \u0938\u0930\u0915\u093e\u0930"
@@ -269,7 +272,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `recreation keeps a real unsaved correction instead of replacing it`() {
         val id = seed("original saved line")
         Robolectric.buildActivity(OcrEditorActivity::class.java, intent(id)).setup().use { c ->
@@ -289,7 +292,7 @@ class OcrLiveReloadTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pages that used up their automatic retries say so`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Damaged page")
         val calls = AtomicInteger()

@@ -359,13 +359,14 @@ class VaultStoreTest {
     @Test
     fun `no page or PDF plaintext exists anywhere under filesDir vault2`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
+        val needles = plantPlaintextMarker(id)
         val store = store()
         store.setupConfirmed("246810")
         store.addDocument(id)
 
         val vault2 = File(app.filesDir, "vault2")
-        val leaks = vault2.walkTopDown().filter { it.isFile }.filter { leaksPlaintext(it.readBytes()) }.toList()
-        assertTrue("plaintext leaves a visible format header: $leaks", leaks.isEmpty())
+        val leaks = vault2.walkTopDown().filter { it.isFile }.filter { leaksPlaintext(it.readBytes(), needles) }.toList()
+        assertTrue("planted plaintext leaked under vault2: $leaks", leaks.isEmpty())
         assertFalse("the original directory is gone", File(app.filesDir, "documents/$id").exists())
     }
 
@@ -534,6 +535,7 @@ class VaultStoreTest {
     @Test
     fun `backup contains no readable page or PDF and restores byte-identically with the code`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Medical report")
+        val needles = plantPlaintextMarker(id)
         val original = snapshot(File(app.filesDir, "documents/$id"))
         val store = store()
         val setup = store.setupConfirmed("246810")
@@ -542,7 +544,10 @@ class VaultStoreTest {
         val backup = File(app.cacheDir, "test.swvault")
         store.exportBackup(backup)
         assertTrue(backup.isFile)
-        assertTrue("the backup is encrypted", !leaksPlaintext(backup.readBytes()))
+        assertTrue(
+            "the backup holds none of the planted plaintext marker or file prefixes",
+            !leaksPlaintext(backup.readBytes(), needles)
+        )
 
         store.wipeAll()
         assertFalse(store.isSetUp())
@@ -575,19 +580,43 @@ class VaultStoreTest {
     private fun hasStagingFolder(): Boolean =
         File(app.filesDir, "vault2").listFiles().orEmpty().any { it.name.startsWith(".incoming-") }
 
-    /** True when a byte range holds a JPEG, PNG, PDF or ZIP header: the content was not encrypted. */
-    private fun leaksPlaintext(bytes: ByteArray): Boolean {
-        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())
-        val pdf = "%PDF".toByteArray()
-        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
-        val zip = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
+    /**
+     * Plants a long, unique ASCII canary in the real fixture's page and PDF bytes and returns the
+     * exact plaintext to look for: the canary itself plus the first 64 bytes of each planted file.
+     *
+     * The old check searched ciphertext for 3-4 byte format magic (%PDF, FF D8 FF, ...). Those
+     * appear by chance in a few-hundred-KB ciphertext in a small percentage of runs, so the test
+     * failed randomly even though encryption was sound. Searching for bytes we actually put in
+     * is both sound and strictly stronger: a single unencrypted page or PDF now always fails.
+     */
+    private fun plantPlaintextMarker(id: String): List<ByteArray> {
+        val dir = File(app.filesDir, "documents/$id")
+        val marker = (
+            "SW-VAULT-CANARY-" +
+                java.util.UUID.randomUUID().toString().replace("-", "") +
+                "-UNIQUE-PLAINTEXT-MARKER-DO-NOT-LEAK-"
+            ).toByteArray(Charsets.US_ASCII)
+        val needles = mutableListOf<ByteArray>(marker)
+        dir.walkTopDown().filter { it.isFile && (it.name == "scan.pdf" || it.extension == "jpg") }
+            .forEach { file ->
+                val original = file.readBytes()
+                file.writeBytes(original + marker)
+                if (original.isNotEmpty()) needles += original.copyOf(minOf(64, original.size))
+            }
+        check(needles.size > 1) { "the fixture must contain a page or PDF to plant the marker in" }
+        return needles
+    }
+
+    /** True when a byte range holds one of the exact plaintext needles we planted. */
+    private fun leaksPlaintext(bytes: ByteArray, needles: List<ByteArray>): Boolean {
         fun at(needle: ByteArray): Boolean {
+            if (needle.isEmpty() || needle.size > bytes.size) return false
             outer@ for (i in 0..bytes.size - needle.size) {
                 for (j in needle.indices) if (bytes[i + j] != needle[j]) continue@outer
                 return true
             }
             return false
         }
-        return at(jpeg) || at(pdf) || at(png) || at(zip)
+        return needles.any(::at)
     }
 }

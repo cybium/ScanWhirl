@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -46,6 +48,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class Phase5ScreensTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -180,7 +183,7 @@ class Phase5ScreensTest {
 
     // --- 5A Settings --------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings hides the theme row and pins orbital dark`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -195,7 +198,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings shows its rows - hiding About and Trash never blanks the page`() {
         // Regression (lead phone check 11-15): hideSection(rowTrash) hid the whole page.
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
@@ -226,7 +229,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings rows carry cyan icons and no text chevrons`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -274,7 +277,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings switches carry explicit sel_switch tints`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -300,7 +303,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings groups rows into glass section cards with hairline dividers`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -367,7 +370,7 @@ class Phase5ScreensTest {
 
     // --- 5B page grid -------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page grid cells are glass ripple cards with chip badges and selection state`() {
         val id = seedDoc("Grid glass", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -405,7 +408,7 @@ class Phase5ScreensTest {
 
     // --- 5C document viewer -------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document viewer shows the category chip and glass dock`() {
         val id = seedDoc("Chip doc")
         // The doc is recategorised straight after seeding (setCategory is not suspend).
@@ -483,7 +486,7 @@ class Phase5ScreensTest {
     // Written before the fix against existing symbols only (R.id.docCategoryChip,
     // R.id.pickerRows), so both cases run red first.
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document category chip opens the picker`() {
         val id = seedDoc("Chip doc")
         repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
@@ -513,7 +516,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `picker choice recategorises the document and repaints the chip`() {
         val id = seedDoc("Chip doc")
         repo.setCategory(id, com.scanwhirl.app.util.CategoryRules.STUDY)
@@ -553,7 +556,7 @@ class Phase5ScreensTest {
 
     // --- T5.2 (§4.5): toolbar, More sheet, Select pages ---------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document toolbar carries no save action, the panel's labelled Save PDF is the only one`() {
         val id = seedDoc("Toolbar doc")
         val intent = DocumentViewerActivity.intent(app, id)
@@ -595,7 +598,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document more sheet is the single home for secondary actions`() {
         val id = seedDoc("More sheet", pages = 1)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -666,7 +669,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free users see no pro pills and Protect opens the free sheet`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         val id = seedDoc("More sheet free", pages = 1)
@@ -697,7 +700,7 @@ class Phase5ScreensTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `long press selects a page and shows the selection bars`() {
         // v2 UI: Organize pages grid (owner revision) - no toggle row, no checkbox outside selection.
         val id = seedDoc("Select pages", pages = 3)
@@ -776,7 +779,7 @@ class Phase5ScreensTest {
 
     // --- 5B/5D docks --------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review and page viewer use inset glass docks with dock-styled buttons`() {
         // ScanReview: the Save PDF dock.
         val staging = File(app.cacheDir, "phase5_dock_${System.nanoTime()}")
@@ -830,7 +833,7 @@ class Phase5ScreensTest {
 
     // --- renders ------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `renders settings and review screens to png`() {
         val settingsPng = File("/tmp/opencode/ui_settings.png")
         val reviewPng = File("/tmp/opencode/ui_review.png")

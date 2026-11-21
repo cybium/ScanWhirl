@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -55,6 +57,7 @@ import java.security.MessageDigest
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class RetrievalSlice5Test {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -189,7 +192,7 @@ class RetrievalSlice5Test {
 
     // ---- Home: page evidence ---------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `unique word on page 2 of 5 shows a Page 2 link with its real excerpt and opens that page`() {
         val doc = fixture("Scholarship application", 5, text(5, mapOf(1 to "Reference ZEPHYRQUILL 77")))
         val before = snapshotLibrary()
@@ -223,7 +226,7 @@ class RetrievalSlice5Test {
         assertEquals(1, repo.listDocuments().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `terms spread across pages say document match and offer no page`() {
         fixture("Rent file", 4, text(4, mapOf(0 to "annual", 2 to "income")))
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -238,7 +241,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `name-only match shows neither pages nor a scope line`() {
         fixture("Zephyrquill notes", 3, text(3))
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -256,7 +259,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `many matching pages list three and a See all link into Find`() {
         fixture("Lab book", 8, text(8, (0 until 8).associateWith { if (it % 2 == 1) "titration" else "" }))
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -274,7 +277,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `external viewer preference keeps ordinary opens external and page links say they open here`() {
         Prefs.setDefaultViewer(app, Prefs.VIEWER_SYSTEM)
         fixture("Bill", 3, text(3, mapOf(2 to "kilowatt")))
@@ -295,7 +298,7 @@ class RetrievalSlice5Test {
         assertEquals("no silent preference change", Prefs.VIEWER_SYSTEM, Prefs.defaultViewer(app))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `locked document is not found by its content and shows no page count or link`() {
         fixture("Locked pay slip", 3, text(3, mapOf(1 to "gratuity")), locked = true)
         fixture("Open memo", 2, text(2, mapOf(0 to "gratuity")))
@@ -314,7 +317,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `locked document found by name carries no OCR hint, count, link or snippet and still needs the password`() {
         fixture("Locked pay slip", 3, text(3, mapOf(1 to "gratuity")), locked = true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -342,7 +345,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a recycled or stale row never shows OCR hints for a document that is locked now`() {
         val open = fixture("Payroll", 3, text(3, mapOf(1 to "gratuity")))
         val lockedNow = open.copy(isLocked = true)
@@ -382,7 +385,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `changing the viewer preference while Home shows page links updates the note without a new search`() {
         // Device-found (API 37): after Settings → System PDF app → Back, the same rows were
         // kept by DiffUtil and the "opens in the ScanWhirl reader" note never appeared.
@@ -411,7 +414,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a query typed inside Private is not restored after recreation, an ordinary one is`() {
         fixture("Visible", 2, text(2, mapOf(0 to "orchid")))
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -435,7 +438,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `vaulted documents leak no row, count or page outside Private`() {
         fixture("Visible", 2, text(2, mapOf(0 to "orchid")))
         fixture("Hidden", 2, text(2, mapOf(1 to "orchid zephyrquill")), vaulted = true)
@@ -453,7 +456,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a changed search rebinds rows and each link opens its own document`() {
         val a = fixture("Alpha doc", 3, text(3, mapOf(1 to "aardvark")))
         val b = fixture("Beta doc", 4, text(4, mapOf(3 to "aardvark bison")))
@@ -476,7 +479,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a row never shows a match computed for another document or revision`() {
         val a = fixture("A", 2, text(2, mapOf(1 to "walrus")))
         val b = fixture("B", 2, text(2, mapOf(1 to "walrus")))
@@ -501,7 +504,7 @@ class RetrievalSlice5Test {
             strips(bound(HomeRow(b, HomeDocInfo.UNKNOWN, matches[b.id]), selecting = true)).isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page matches follow the current order after a real page move`() {
         val doc = fixture("Moved", 4, text(4, mapOf(1 to "quokka")))
         kotlinx.coroutines.runBlocking { repo.movePage(doc.id, 1, 3) }
@@ -525,7 +528,7 @@ class RetrievalSlice5Test {
     private fun indicator(a: PdfViewerActivity) = a.findViewById<TextView>(R.id.pdfPageIndicator).text.toString()
     private fun status(a: PdfViewerActivity) = a.findViewById<TextView>(R.id.findStatus).text.toString()
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page link lands on page 2 of 5 and Find shows the genuine match`() {
         val doc = fixture("Scholarship application", 5, text(5, mapOf(1 to "Reference ZEPHYRQUILL 77")))
         val intent = PdfViewerActivity.pageIntent(app, doc.id, doc.name, 1, "page_001.jpg", "zephyrquill")
@@ -546,7 +549,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `invalid start pages open at page 1 with an honest message`() {
         val doc = fixture("Five", 5, text(5, mapOf(1 to "zephyrquill")))
         for ((page, key) in listOf(9 to "page_009.jpg", -1 to "page_001.jpg", 2 to "page_001.jpg")) {
@@ -586,7 +589,7 @@ class RetrievalSlice5Test {
         assertEquals(1, PdfViewerActivity.startPage(1, "b", 5, listOf("a", "b", "c", "d", "e")))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `ordinary open still starts at page 1 with Find closed`() {
         val doc = fixture("Plain", 3, text(3))
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -600,7 +603,7 @@ class RetrievalSlice5Test {
 
     // ---- Reader: Find --------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Find on 30 pages steps Next and Previous across pages and wraps`() {
         val doc = fixture("Thirty", 30, text(30, mapOf(2 to "alpha", 9 to "alpha and alpha", 24 to "ALPHA")))
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -637,7 +640,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `no match, partial text and pending text are said plainly`() {
         val doc = fixture("Partial", 5, mapOf(0 to "invoice total", 3 to "invoice"), pending = true)
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -663,7 +666,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a scan with no text and an external PDF explain instead of pretending`() {
         val doc = fixture("Unread", 2, ocr = null)
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -686,7 +689,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Find re-reads edited text and never shows stale results`() {
         val doc = fixture("Edited", 3, text(3, mapOf(1 to "Recieved")))
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -702,7 +705,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `recreation keeps an ordinary query but never a private one`() {
         val doc = fixture("Ordinary", 4, text(4, mapOf(3 to "heron")))
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -730,7 +733,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `back closes Find before the reader, and zoom hides then restores the panel`() {
         val doc = fixture("Backable", 2, text(2, mapOf(0 to "egret")))
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, doc.id, doc.name)).use { scenario ->
@@ -756,7 +759,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "w320dp-h640dp-xhdpi")
     fun `Find panel at 200 percent text on a 320dp phone stays capped and keeps 48dp controls`() {
         RuntimeEnvironment.setFontScale(2.0f)
@@ -780,7 +783,7 @@ class RetrievalSlice5Test {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `opening a page and using Find writes nothing to the library`() {
         val doc = fixture("Integrity", 4, text(4, mapOf(2 to "ibis")))
         val before = snapshotLibrary()

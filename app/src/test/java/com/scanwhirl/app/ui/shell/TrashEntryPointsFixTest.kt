@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -56,6 +58,7 @@ import java.io.File
 @Config(sdk = [35])
 class TrashEntryPointsFixTest {
 
+
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -70,7 +73,7 @@ class TrashEntryPointsFixTest {
 
     // ---- the library row's Actions sheet (DocumentActionsSheet) --------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `row sheet moves the document to Trash and Undo restores it`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Row sheet doc")
 
@@ -127,7 +130,7 @@ class TrashEntryPointsFixTest {
 
     // ---- library multi-select (LibraryScreen.confirmDeleteSelection) --------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `multi-select moves the documents to Trash and Undo restores both`() {
         val one = DocFixtures.saved(repo, app, pages = 3, name = "Selection one")
         val two = DocFixtures.saved(repo, app, pages = 2, name = "Selection two")
@@ -179,7 +182,7 @@ class TrashEntryPointsFixTest {
 
     // ---- the document screen sheet (DocumentViewerActivity) ----------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document screen Move to Trash keeps the document restorable`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Viewer doc")
 
@@ -211,7 +214,7 @@ class TrashEntryPointsFixTest {
 
     // ---- the document screen's Undo lands on Home --------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a move made on the document screen shows Undo on the shell and restores`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Pending notice doc")
         // Exactly what DocumentViewerActivity.moveToTrash does before it closes.
@@ -238,7 +241,7 @@ class TrashEntryPointsFixTest {
 
     // ---- kept on purpose: a legacy Vault item is purged, never trashed -----
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a Vault item is deleted permanently and never appears in Trash`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Vault item")
         repo.setVaulted(id, true)
@@ -275,7 +278,7 @@ class TrashEntryPointsFixTest {
 
     // ---- guard: no other UI file purges a library document -----------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `no UI file purges a library document outside the documented purge sites`() {
         // Where a permanent purge is correct, and how many calls each file may have.
         val allowed = mapOf(
@@ -321,7 +324,7 @@ class TrashEntryPointsFixTest {
      * Trash." even after one document really left Trash, which is false for the part
      * that succeeded. The person must hear how much happened and what is still to finish.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `Empty Trash with one unfinished removal reports the part it deleted`() {
         val one = DocFixtures.saved(repo, app, pages = 1, name = "Partial one")
         val two = DocFixtures.saved(repo, app, pages = 1, name = "Partial two")
@@ -379,7 +382,7 @@ class TrashEntryPointsFixTest {
      * button on every row at 200 % font, not only in the TalkBack actions menu, and
      * permanent delete stays a separate, distinctly worded control.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `every Trash row keeps a visible labelled Restore at 200 percent`() {
         RuntimeEnvironment.setFontScale(2.0f)
         try {
@@ -434,7 +437,7 @@ class TrashEntryPointsFixTest {
     }
 
     /** UI-W8: nothing leaves the phone on the first tap; the sheet confirms first. */
-    @Test
+    @Test(timeout = 60_000)
     fun `Delete permanently waits for the confirmation sheet`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Confirm first")
         repo.moveToTrash(id)

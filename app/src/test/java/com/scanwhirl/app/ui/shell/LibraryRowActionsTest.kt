@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -52,6 +54,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class LibraryRowActionsTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -138,7 +141,7 @@ class LibraryRowActionsTest {
 
     // --- 1. the ⋮ opens the same bound sheet, not the old one -------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the row overflow opens the Actions sheet bound to that row's document`() {
         val older = DocFixtures.saved(repo, app, pages = 2, name = "Rent 2025")
         val shown = DocFixtures.saved(repo, app, pages = 3, name = "Rent 2026")
@@ -171,7 +174,7 @@ class LibraryRowActionsTest {
 
     // --- 2. the row itself still opens the document ---------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tapping the row still opens that document`() {
         val older = DocFixtures.saved(repo, app, pages = 2, name = "Tap me")
         val newer = DocFixtures.saved(repo, app, pages = 1, name = "Not me")
@@ -199,7 +202,7 @@ class LibraryRowActionsTest {
 
     // --- 3. Rename shows in the list immediately -------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Rename from the row sheet updates that row in the library list`() {
         val other = DocFixtures.saved(repo, app, pages = 2, name = "Stay the same")
         val shown = DocFixtures.saved(repo, app, pages = 3, name = "Old name")
@@ -236,7 +239,7 @@ class LibraryRowActionsTest {
 
     // --- 4. Move to Trash from the row sheet: moves, never purges (T27) --------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Move to Trash from the row sheet trashes only that document and Undo restores it`() {
         val kept = DocFixtures.saved(repo, app, pages = 2, name = "Keep me")
         val shown = DocFixtures.saved(repo, app, pages = 3, name = "Trash me")
@@ -308,7 +311,7 @@ class LibraryRowActionsTest {
 
     // --- 5. a locked document: visible rows, disabled with the reason ---------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a locked document's row sheet disables the page rows and shows the reason`() {
         val id = DocFixtures.locked(repo, app, password = "1234", pages = 2)
 
@@ -346,7 +349,7 @@ class LibraryRowActionsTest {
 
     // --- 6. the English words are the shared sheet's, not a second vocabulary --
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the row sheet speaks the shared English row words`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Words")
 
@@ -375,7 +378,7 @@ class LibraryRowActionsTest {
      * W1: two near-identical Indian document names. Share is tapped on the newer row's sheet and
      * the recipient must get THAT row's saved PDF, byte for byte, never the older twin.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `Share from the row sheet sends the tapped row's own PDF`() {
         val older = DocFixtures.saved(repo, app, pages = 2, name = "Electricity bill Oct - FAKE")
         val shown = DocFixtures.saved(repo, app, pages = 3, name = "Electricity bill Oct (2) - FAKE")
@@ -421,7 +424,7 @@ class LibraryRowActionsTest {
     }
 
     /** W1: a row whose document left the library after the sheet opened says so; no chooser. */
-    @Test
+    @Test(timeout = 60_000)
     fun `Share from a row whose document was deleted says so and sends nothing`() {
         val shown = DocFixtures.saved(repo, app, pages = 2, name = "Water bill Aug - FAKE")
 
@@ -450,7 +453,7 @@ class LibraryRowActionsTest {
      * W1: a row whose document has an unsaved page edit asks before sharing, and "Finish editing
      * first" opens that document (nothing is shared or committed).
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `Share from a row with an unsaved draft asks and Finish editing opens the document`() {
         val shown = DocFixtures.saved(repo, app, pages = 2, name = "Electricity bill Sep - FAKE")
         kotlinx.coroutines.runBlocking {

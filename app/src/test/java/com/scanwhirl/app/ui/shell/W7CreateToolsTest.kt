@@ -25,7 +25,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -52,6 +54,7 @@ import kotlin.math.abs
  * "All N tools" door rebuilt the body and dropped keyboard/TalkBack focus entirely.
  */
 abstract class W7CreateBase {
+
 
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
@@ -161,7 +164,7 @@ class W7CreateImportRoutingTest : W7CreateBase() {
         return dialog
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Import PDF opens the PDF picker in one tap with no chooser sheet`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -195,7 +198,7 @@ class W7CreateImportRoutingTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Import photos opens the photo picker and never the scanner`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -238,7 +241,7 @@ class W7CreateImportRoutingTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancelling the PDF picker imports nothing and returns focus to Create`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -268,7 +271,7 @@ class W7CreateImportRoutingTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancelling the photo picker imports nothing and returns focus to Create`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -325,7 +328,7 @@ class W7ToolsExpansionTest : W7CreateBase() {
      * T1 owner-approved 2026-11-20: no hidden tools. Every job lists all of its tools on the
      * first render — no "All N tools" door, no expansion state, nothing behind an extra tap.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `every catalogue tool is visible with zero extra taps`() {
         toolsTab { _, body ->
             val ready = ToolRegistry.all
@@ -357,7 +360,7 @@ class W7ToolsExpansionTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `clearing search keeps focus in the field and brings the jobs back`() {
         toolsTab { activity, body ->
             val search = activity.findViewById<EditText>(R.id.swToolsSearch)
@@ -385,7 +388,7 @@ class W7ToolsExpansionTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `every job row is a READY tool and nothing else`() {
         toolsTab { _, body ->
             val ready = ToolRegistry.all
@@ -434,7 +437,7 @@ class W7ToolsSearchVisibilityTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `typing after scrolling brings the field and its results into view above the keyboard`() {
         RuntimeEnvironment.setFontScale(2.0f)
         toolsTab { activity, body ->
@@ -474,7 +477,7 @@ class W7ToolsSearchVisibilityTest : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the search field grows instead of clipping at 200 percent`() {
         RuntimeEnvironment.setFontScale(2.0f)
         toolsTab { activity, body ->
@@ -535,7 +538,7 @@ abstract class W7ToolsStateBase : W7CreateBase() {
         return null
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a query with no hit says so and offers Clear without a stale row`() {
         toolsTab { activity, body ->
             val search = activity.findViewById<EditText>(R.id.swToolsSearch)
@@ -570,7 +573,7 @@ abstract class W7ToolsStateBase : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `no tools ready is not dressed up as a failed search`() {
         ToolsHubScreen.catalogueSource = { emptyList() }
         toolsTab { activity, body ->
@@ -603,7 +606,7 @@ abstract class W7ToolsStateBase : W7CreateBase() {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a catalogue failure shows an error state and Try again recovers`() {
         ToolsHubScreen.catalogueSource = { throw IllegalStateException("registry fault") }
         toolsTab { activity, body ->
@@ -653,7 +656,7 @@ class W7ToolsStateTest : W7ToolsStateBase()
 @Config(sdk = [35], qualifiers = "hi-w360dp-h740dp-xhdpi")
 class W7ToolsStateHindiTest : W7ToolsStateBase() {
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the new states are written in Hindi, not English`() {
         ToolsHubScreen.catalogueSource = { emptyList() }
         toolsTab { activity, body ->
@@ -693,7 +696,7 @@ class W7ToolsStateHindiTest : W7ToolsStateBase() {
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class W7ToolsNarrowTest : W7CreateBase() {
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the whole catalogue is visible and Clear stays whole at 200 percent on 320dp`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
@@ -769,7 +772,7 @@ class W7ToolsNarrowTest : W7CreateBase() {
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class W7CreateNarrowTest : W7CreateBase() {
 
-    @Test
+    @Test(timeout = 60_000)
     fun `every Create entry label is whole at 200 percent on 320dp`() {
         RuntimeEnvironment.setFontScale(2.0f)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->

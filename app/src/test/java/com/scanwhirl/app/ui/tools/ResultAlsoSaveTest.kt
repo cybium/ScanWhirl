@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -61,6 +63,7 @@ import java.time.Duration
 @Config(sdk = [35])
 class ResultAlsoSaveTest {
 
+
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore
@@ -87,7 +90,7 @@ class ResultAlsoSaveTest {
 
     // ---- 1. the action is offered, in the agreed words ---------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a document result offers Also save in Documents`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -111,7 +114,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a file result offers Also save in Documents too`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -130,7 +133,7 @@ class ResultAlsoSaveTest {
 
     // ---- 2. exactly one verified copy -------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Also save writes exactly one verified copy of the document PDF`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
@@ -162,7 +165,7 @@ class ResultAlsoSaveTest {
 
     // ---- 3. Undo removes only its own copy --------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Undo removes only the new copy and keeps the library document`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         // A file the person put in Documents themselves: Undo must never touch it.
@@ -213,7 +216,7 @@ class ResultAlsoSaveTest {
     // they asked to undo. Undo on the result must undo the run — including the Documents copy it
     // made — however long the person takes, and must never touch a copy this run did not create.
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the result undo removes the Documents copy of a file result after the bar is gone`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -245,7 +248,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the result undo removes the Documents copy of a document result and keeps a person's own file`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         // A file the person put in Documents themselves: no undo may touch it.
@@ -280,7 +283,7 @@ class ResultAlsoSaveTest {
         assertNull("the run's own document is undone", repo.getDocument(id))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a copy that was already there is never removed by the result undo`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
@@ -312,7 +315,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a copy that changed after saving is kept and the screen says so`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -344,7 +347,7 @@ class ResultAlsoSaveTest {
     // transient snackbar is not enough; the receipt stays on the result. The base build showed
     // only a page/size line, so these tests are red against it.
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a document result says the copy is in your Library`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -361,7 +364,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an exported file never claims to be in the library`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -379,7 +382,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Also save leaves a receipt saying the copy is in Documents`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -396,7 +399,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a chosen location is named only after the copy is verified`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
@@ -441,7 +444,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a cancelled picker leaves no success or location claim`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -475,7 +478,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Open hands over exactly the produced bytes`() {
         val docx = docxResult()
         val source = docx.readBytes()
@@ -496,7 +499,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a recreated result still removes the Documents copy it saved`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
@@ -518,7 +521,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `undo never claims a removal that did not happen`() {
         val stubborn = File(app.cacheDir, "documents/stubborn.pdf").apply { mkdirs() }
         File(stubborn, "child.bin").writeBytes(byteArrayOf(1, 2, 3))
@@ -539,7 +542,7 @@ class ResultAlsoSaveTest {
 
     // ---- 4. saving twice makes no duplicate -------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `saving the same document twice reports already saved and keeps one copy`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Rent receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -575,7 +578,7 @@ class ResultAlsoSaveTest {
 
     // ---- 5. an exported file saves its own bytes --------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a Word result saves its own bytes`() {
         val docx = docxResult()
         val bytes = docx.readBytes()
@@ -594,7 +597,7 @@ class ResultAlsoSaveTest {
 
     // ---- 6-8. the compress result tells the truth -------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a compress result reports the size it could not reach`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Compressed receipt")
         val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
@@ -618,7 +621,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a compress result that met the size says nothing about a miss`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Compressed receipt")
         val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
@@ -643,7 +646,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `another tool never claims a target miss`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Split receipt")
         ActivityScenario.launch<ToolResultActivity>(
@@ -657,7 +660,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a compress run hands the size the person asked for to the result`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Compress me")
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -698,7 +701,7 @@ class ResultAlsoSaveTest {
 
     // ---- 9. the ID card keeps Keep and Discard only -----------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the ID card result keeps Keep and Discard and no Also save`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "ID card")
         ActivityScenario.launch<ToolResultActivity>(
@@ -726,7 +729,7 @@ class ResultAlsoSaveTest {
 
     // ---- 10. the words, in both languages ---------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Save as and Also save have the agreed English words`() {
         assertEquals("Save as…", app.getString(R.string.tools_result_save))
         assertEquals("Also save in Documents", app.getString(R.string.tools_result_also_save))
@@ -738,7 +741,7 @@ class ResultAlsoSaveTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h800dp-xhdpi")
     fun `Save as and Also save have the agreed Hindi words`() {
         assertEquals("जगह चुनकर सहेजें…", app.getString(R.string.tools_result_save))

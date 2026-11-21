@@ -1,4 +1,6 @@
 package com.scanwhirl.app.util
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.pm.ProviderInfo
@@ -45,6 +47,7 @@ import java.io.File
 @Config(sdk = [35])
 class DeleteExportsTest {
 
+
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore
@@ -64,7 +67,7 @@ class DeleteExportsTest {
         media.close()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `move to Trash from the document screen keeps the exported copy`() {
         val id = seedDoc("DelEx")
         exportSigned(id, "DelEx")
@@ -85,7 +88,7 @@ class DeleteExportsTest {
         assertEquals("Trash never touches exports", 1, media.scanwhirlPdfs().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `permanent delete from Trash removes the proven copy`() {
         val id = seedDoc("DelEx")
         exportSigned(id, "DelEx")
@@ -97,7 +100,7 @@ class DeleteExportsTest {
         assertTrue("proven copy removed: ${media.scanwhirlPdfs().map { it.name }}", media.scanwhirlPdfs().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `leaving the box unchecked keeps the exported copy`() {
         val id = seedDoc("Unchecked")
         exportSigned(id, "Unchecked")
@@ -108,7 +111,7 @@ class DeleteExportsTest {
         assertEquals("unchecked box → the copy stays", 1, media.scanwhirlPdfs().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a foreign-owned copy is skipped but the document is still deleted`() {
         val id = seedDoc("Foreign")
         exportSigned(id, "Foreign")
@@ -121,7 +124,7 @@ class DeleteExportsTest {
         assertEquals("foreign-owned row kept, no prompt", 1, media.scanwhirlPdfs().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an unsigned older record is not offered and the dialog says older copies stay`() {
         val id = seedDoc("Older")
         val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Older"))
@@ -149,7 +152,7 @@ class DeleteExportsTest {
         assertEquals("the older copy is kept", 1, media.scanwhirlPdfs().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the delete question names exactly the copy it will remove`() {
         val id = seedDoc("Named")
         exportSigned(id, "Named")
@@ -171,7 +174,7 @@ class DeleteExportsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a recorded copy the app cannot prove is named in the sheet and stays`() {
         val id = seedDoc("Older")
         val saved = DownloadSaver.savePdfFile(app, "pdf".toByteArray(), DownloadSaver.pdfNameFor("Older"))
@@ -203,7 +206,7 @@ class DeleteExportsTest {
      * IllegalFormatConversionException and the delete sheet never appeared. The call now passes
      * the count as argument 1 and the names as argument 2 in both locales.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `two recorded copies the app cannot prove are both named and both kept`() {
         val id = seedDoc("Older")
         val first = DownloadSaver.savePdfFile(app, "one".toByteArray(), DownloadSaver.pdfNameFor("Older"))
@@ -235,7 +238,7 @@ class DeleteExportsTest {
     }
 
     /** T46: the same sheet body in Hindi must format too (it is built on every locale). */
-    @Test
+    @Test(timeout = 60_000)
     fun `two recorded copies the app cannot prove format in Hindi without a crash`() {
         val id = seedDoc("Older")
         val first = DownloadSaver.savePdfFile(app, "one".toByteArray(), DownloadSaver.pdfNameFor("Older"))
@@ -265,7 +268,7 @@ class DeleteExportsTest {
         assertEquals("neither recorded copy is deleted", 2, media.scanwhirlPdfs().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `permanent delete removes this document's copy and never another document's`() {
         val a = seedDoc("Same")
         val b = seedDoc("Other")
@@ -287,7 +290,7 @@ class DeleteExportsTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `export twice records identical once and a changed copy separately`() {
         val id = seedDoc("Twice")
         val first = DownloadSaver.savePdfFile(app, "v1".toByteArray(), DownloadSaver.pdfNameFor("Twice"))
@@ -310,7 +313,7 @@ class DeleteExportsTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `old two-line meta reads and survives setCategory`() {
         val id = seedDoc("Legacy")
         val meta = File(app.filesDir, "documents/$id/meta.txt")

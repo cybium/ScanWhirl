@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.net.Uri
@@ -36,6 +38,7 @@ import org.robolectric.shadows.ShadowToast
 @Config(sdk = [35])
 class HomeCategoryActionsTest {
 
+
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -47,7 +50,7 @@ class HomeCategoryActionsTest {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `long press opens the quick actions sheet`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -67,7 +70,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the card category chip opens the picker`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -89,7 +92,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Move in the selection bar opens the picker`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -114,7 +117,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `bulk move recategorizes the selection and exits it`() {
         val id = seed("Electricity bill", CategoryRules.RECEIPTS)
 
@@ -150,7 +153,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `chip move recategorizes the document`() {
         val id = seed("Lecture notes", CategoryRules.STUDY)
 
@@ -176,7 +179,7 @@ class HomeCategoryActionsTest {
     // could not compile before it — same approach as T4.1).
     // ------------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the sheet lists rename move share delete and move opens the picker`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -217,7 +220,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `quick action rename saves the new name`() {
         val id = seed("Lecture notes", CategoryRules.STUDY)
 
@@ -245,7 +248,7 @@ class HomeCategoryActionsTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `quick action Move to Trash removes the document from Home and Undo restores it`() {
         val id = seed("Lecture notes", CategoryRules.STUDY)
 
