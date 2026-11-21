@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX-L4 (viewing, selection and text editing). Lane-prefixed so EN/HI edits
+     cannot collide with another lane. English copy is the decided UX_FIX_PLAN
+     wording; Hindi uses natural words (पृष्ठ, संपादन, प्रतिलिपि) and avoids
+     the rejected loanwords in HindiGlossaryTermsTest. -->
+<resources>
+    <!-- L4-01 -->
+    <string name="ux130_l4_select_pages">Select pages</string>
+    <string name="ux130_l4_select_page">Select page</string>
+    <string name="ux130_l4_discard_unavailable">Discard is unavailable in this layout. Keep the copy or change orientation.</string>
+
+    <!-- L4-02 -->
+    <string name="ux130_l4_all_pages">All pages</string>
+    <string name="ux130_l4_finish_editing">Finish editing</string>
+    <string name="ux130_l4_save_as_txt">Save as .txt</string>
+    <string name="ux130_l4_discard_edits">Discard edits</string>
+    <string name="ux130_l4_discard_edits_confirm">Discard unsaved edits?</string>
+
+    <!-- L4-03 -->
+    <string name="ux130_l4_go_to_page">Go to page</string>
+    <string name="ux130_l4_go_to_page_invalid">Enter a page number from 1 to %1$d.</string>
+    <string name="ux130_l4_page_zoom">Page %1$d of %2$d. Zoom page.</string>
+    <string name="ux130_l4_zoom_page">Zoom page</string>
+    <string name="ux130_l4_close_zoom">Close zoom</string>
+</resources>

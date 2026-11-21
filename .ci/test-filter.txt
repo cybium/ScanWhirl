@@ -1,0 +1,1 @@
+com.scanwhirl.app.ux130.l4.L4StringsTest,com.scanwhirl.app.ux130.l4.L4ViewerEditorTest,com.scanwhirl.app.ux130.l4.L4PdfStampTest
