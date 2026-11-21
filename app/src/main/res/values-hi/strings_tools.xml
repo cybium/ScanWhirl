@@ -80,7 +80,7 @@
     <string name="tools_import_progress_msg">%1$d / %2$d पन्ना</string>
     <string name="tools_import_starting">PDF तैयार हो रही है…</string>
     <string name="tools_import_cancel_note">रद्द करने पर कुछ नहीं जुड़ेगा।</string>
-    <string name="tools_import_no_space">इस PDF को %1$d MB चाहिए और %2$d MB बचेगा। पहले जगह खाली करें।</string>
+    <!-- review --> <string name="tools_import_no_space">इस PDF को %1$s चाहिए और %2$s बचेगा। पहले जगह खाली करें।</string>
     <string name="tools_import_low_space_title">जगह कम है</string>
     <string name="tools_setup_no_text">जिन पन्नों के शब्द अभी पहचाने नहीं गए हैं, उन्हें पहले इसी फ़ोन पर पढ़ा जाएगा। इसमें थोड़ा समय लग सकता है।</string>
     <string name="tools_setup_metadata_note">फ़ोटो कब और किससे ली गई जैसी छिपी जानकारी (EXIF) और छोटी झलक के बिना प्रति। मूल फ़ाइल नहीं बदलती।</string>

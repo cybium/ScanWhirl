@@ -169,8 +169,8 @@ object PdfImportSheets {
             .setMessage(
                 activity.getString(
                     R.string.tools_import_no_space,
-                    plan.estimateBytes / (1024 * 1024),
-                    plan.freeBytes / (1024 * 1024)
+                    SizeUnits.format(plan.estimateBytes),
+                    SizeUnits.format(plan.freeBytes)
                 )
             )
             .setPrimary(R.string.sheet_got_it)
