@@ -92,7 +92,9 @@ class W6PickerPilotTest {
         // Same visible name, different page counts: the sheet must show the pages of the row
         // that was clicked, not of the first file with that name.
         val threePages = DocFixtures.saved(repo, app, pages = 3, name = "SW_TEST_3pages")
-        val onePage = DocFixtures.saved(repo, app, pages = 1, name = "SW_TEST_3pages")
+        // Legacy duplicate keeps the same visible name: the sheet must still review the tapped
+        // document's page count, resolved by id rather than by a now-unique name.
+        val onePage = DocFixtures.savedLegacyDuplicate(repo, app, pages = 1, name = "SW_TEST_3pages")
         launch(LockToolsActivity.MODE_PROTECT).use { scenario ->
             scenario.onActivity { activity ->
                 assertTrue(

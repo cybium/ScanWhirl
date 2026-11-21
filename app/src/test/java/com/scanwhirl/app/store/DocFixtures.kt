@@ -25,6 +25,26 @@ object DocFixtures {
         return runBlocking { repo.saveScan(files.map { Uri.fromFile(it) }, null, name) }.id
     }
 
+    /**
+     * A saved document whose title is written back verbatim, simulating a legacy duplicate that
+     * predates Library title uniquing (those are never retroactively renamed). Picker/search tests
+     * use this to keep two genuinely same-named rows, so they still prove rows are resolved by id
+     * rather than by a now-unique visible name.
+     */
+    fun savedLegacyDuplicate(
+        repo: ScanRepository,
+        app: Application,
+        pages: Int = 3,
+        name: String = "Doc"
+    ): String {
+        val id = saved(repo, app, pages, name)
+        val meta = File(File(repo.docsDir, id), "meta.txt")
+        val lines = meta.readLines().toMutableList()
+        lines[0] = name
+        meta.writeText(lines.joinToString("\n") + "\n")
+        return id
+    }
+
     /** A saved document that has been password-protected. */
     fun locked(repo: ScanRepository, app: Application, password: String = "1234", pages: Int = 3): String {
         val id = saved(repo, app, pages)
