@@ -490,8 +490,10 @@ class ProScreen(
             if (known) 30f else 15f
         )
         priceSuffix.visibility = if (known) View.VISIBLE else View.GONE
-        // A missing price is an honest status, not a claim that payment is unavailable.
-        priceStatus.visibility = if (known) View.GONE else View.VISIBLE
+        // S2 item 9: a missing price is an honest status on the BUY screen, not a claim that
+        // payment is unavailable. An already-owned (active) screen has no price/Unlock row at all,
+        // so a missing Play price must not surface a purchase-price error there.
+        priceStatus.visibility = if (known || active) View.GONE else View.VISIBLE
     }
 
     private fun playEntrance() {

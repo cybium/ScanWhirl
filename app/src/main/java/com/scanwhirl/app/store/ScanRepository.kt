@@ -3168,6 +3168,22 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * S2 item 8: a sealed Replace whose old version is already in Trash but whose replacement has
+     * not been published (the base id is absent) is the user's only copy of the new version. The
+     * tri-state marker logic only knows password-swap/unlock, so the staging sweep would delete it
+     * after a failed roll-forward. Detect it straight from the seal so the sweep preserves it even
+     * when the "replace" recovery step itself failed to run.
+     */
+    private fun isUnpublishedReplace(dir: File): Boolean {
+        val seal = runCatching { OpStaging.readSeal(dir) }.getOrNull() ?: return false
+        val replaces = seal.replaces ?: return false
+        if (File(docsDir, replaces).exists()) return false
+        return runCatching { listTrash() }.getOrDefault(emptyList()).any {
+            it.originalId == replaces && it.previousToken == seal.token
+        }
+    }
+
     private fun pruneRecoveryStaging(work: File) {
         val markerName = when {
             PasswordSwap.read(work) != null -> PasswordSwap.MARKER
@@ -3176,7 +3192,12 @@ class ScanRepository(private val context: Context) {
         }
         when (recoveryMarkerState(work)) {
             MarkerState.STALE -> {
-                work.deleteRecursively()
+                // S2 item 3: an unchecked stale-folder delete used to let plaintext survive while
+                // startup still declared a clean pass. Leave the folder for retry and expose it.
+                if (!recoveryFileDelete(work)) {
+                    recoveryIncomplete = true
+                    android.util.Log.w("ScanWhirl", "startup recovery: stale staging folder could not be removed")
+                }
                 return
             }
             MarkerState.UNKNOWN -> {
@@ -3255,6 +3276,9 @@ class ScanRepository(private val context: Context) {
         // created by a running unlock/password change must never have its scratch removed. Repair
         // steps still visit every folder: a crashed Replace stays live in this process until rollback.
         val deadStagingDirs = { stagingDirs().filterNot { OpStaging.isLive(it) } }
+        // S2 item 8: Replace payloads conclusively shown stale (seal vs bytes) are the only ones
+        // the sweep may reclaim; every other unpublished Replace is preserved for a retry.
+        val staleReplaces = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
         // 1. Roll forward. listTrash() reads every Trash entry's meta.txt; hoist it out of the
         // staging loop (S staging folders × T trash entries becomes one snapshot).
@@ -3268,14 +3292,29 @@ class ScanRepository(private val context: Context) {
                 val trash = trashSnapshot.firstOrNull {
                     it.originalId == replaces && it.previousToken == seal.token
                 } ?: continue
-                val pages = pageFilesIn(dir)
-                if (pages.map { it.name } != seal.pages) continue
-                if (SaveFormat.pagesDigest(pages) != seal.pagesSha256) continue
-                if (Sha256.of(File(dir, "scan.pdf")) != seal.pdfSha256) continue
+                // A committed Replace awaiting publication. Validation must be conclusive: a
+                // transient hash/read failure is UNKNOWN (keep + retry), a genuine mismatch is
+                // verified-stale and may be reclaimed.
+                val valid = try {
+                    val pages = pageFilesIn(dir)
+                    pages.map { it.name } == seal.pages &&
+                        SaveFormat.pagesDigest(pages) == seal.pagesSha256 &&
+                        Sha256.of(File(dir, "scan.pdf")) == seal.pdfSha256
+                } catch (t: Throwable) {
+                    recoveryIncomplete = true
+                    continue // isUnpublishedReplace keeps the intact payload for the next start
+                }
+                if (!valid) {
+                    staleReplaces += dir.name
+                    continue
+                }
                 synchronized(TRASH_LOCK) {
                     if (dir.renameTo(base)) {
                         OpStaging.forget(dir)
                         rolledForward++
+                    } else {
+                        // Failed publication: keep the complete payload and retry next start.
+                        recoveryIncomplete = true
                     }
                 }
             }
@@ -3321,7 +3360,8 @@ class ScanRepository(private val context: Context) {
         recoveryStep("staging-sweep") {
             swept = OpStaging.sweep(filesDir) { dir ->
                 val state = recoveryMarkerState(dir)
-                state == MarkerState.KEEP || state == MarkerState.UNKNOWN
+                state == MarkerState.KEEP || state == MarkerState.UNKNOWN ||
+                    (dir.name !in staleReplaces && isUnpublishedReplace(dir))
             }
         }
 
