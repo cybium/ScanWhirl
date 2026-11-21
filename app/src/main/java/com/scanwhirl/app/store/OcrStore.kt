@@ -8,6 +8,7 @@ import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock as withCoroutineLock
 import kotlin.concurrent.withLock
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
@@ -43,6 +44,43 @@ class OcrStore(private val docsDir: File) {
     private val VAULT_FILE = "vault.flag"
 
     companion object {
+        /**
+         * SECURITY_JUDGE 1.3.0 finding 4: an attacker-authored backup can carry
+         * enormous text files. These caps are shared with restore-time rejection
+         * so a file that was published can always be read within a bounded heap.
+         */
+        internal const val MAX_TEXT_BYTES = 8L * 1024 * 1024
+        internal const val MAX_GEO_BYTES = 8L * 1024 * 1024
+        private const val MAX_LINES = 200_000
+
+        /**
+         * Reads a text file only within [cap]. An oversized or line-bomb file is
+         * treated as damaged (throws [IOException]) instead of being read whole.
+         */
+        internal fun readBoundedLines(file: File, cap: Long): List<String> {
+            if (!file.isFile) return emptyList()
+            if (file.length() > cap) throw IOException("Oversized text file")
+            val bytes = ByteArrayOutputStream()
+            file.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                var total = 0L
+                while (true) {
+                    val want = minOf(buffer.size.toLong(), cap - total + 1).toInt()
+                    val count = input.read(buffer, 0, want)
+                    if (count < 0) break
+                    if (count.toLong() > cap - total) throw IOException("Oversized text file")
+                    bytes.write(buffer, 0, count)
+                    total += count
+                }
+            }
+            val lines = ArrayList<String>()
+            for (line in String(bytes.toByteArray(), Charsets.UTF_8).lineSequence()) {
+                if (lines.size >= MAX_LINES) throw IOException("Too many text lines")
+                lines += line
+            }
+            return lines
+        }
+
         private val lock = ReentrantLock()
 
         private class RecognitionLock(val mutex: Mutex = Mutex(), var users: Int = 0)
@@ -158,7 +196,8 @@ class OcrStore(private val docsDir: File) {
         val file = File(docDir(id), TEXT_FILE)
         if (!file.exists()) return emptyMap()
         return run {
-            val lines = file.readLines()
+            // SEC1 1.3.0: bound every read; a restored 512 MiB file is damaged, not OOM.
+            val lines = readBoundedLines(file, MAX_TEXT_BYTES)
             if (lines.firstOrNull() == OCR_HEADER) {
                 lines.drop(1).mapNotNull { line ->
                     val parts = line.split('\t', limit = 2)
@@ -276,7 +315,7 @@ class OcrStore(private val docsDir: File) {
         val file = File(docDir(id), GEO_FILE)
         if (!file.exists()) return emptyMap()
         return run {
-            val lines = file.readLines()
+            val lines = readBoundedLines(file, MAX_GEO_BYTES)
             if (lines.firstOrNull() != OCR_GEO_HEADER) throw IOException("Malformed OCR geometry")
             else lines.drop(1).mapNotNull { line ->
                 val parts = line.split('\t', limit = 2)

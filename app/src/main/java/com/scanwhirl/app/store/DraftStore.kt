@@ -69,7 +69,8 @@ internal class DraftStore(filesDir: File) {
         val file = manifest(id)
         if (!file.isFile) return null
         val lines = try {
-            file.readLines()
+            // SEC1 1.3.0: a hostile backup cannot make draft recovery read unbounded text.
+            OcrStore.readBoundedLines(file, MAX_MANIFEST_BYTES)
         } catch (_: Exception) {
             throw DraftDamaged("Draft manifest unreadable")
         }
@@ -190,6 +191,8 @@ internal class DraftStore(filesDir: File) {
         internal var loadProbe: (() -> Unit)? = null
 
         const val DIR = "drafts"
+        /** SEC1 1.3.0: shared with restore-time rejection of oversized manifests. */
+        internal const val MAX_MANIFEST_BYTES = 4L * 1024 * 1024
         private const val MANIFEST = "draft.txt"
         private const val HEADER = "scanwhirl-draft-v1"
         private const val DISCARD_PREFIX = ".discard-"
