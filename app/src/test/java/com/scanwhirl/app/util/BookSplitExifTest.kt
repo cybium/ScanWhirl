@@ -67,6 +67,43 @@ class BookSplitExifTest {
     }
 
     @Test
+    fun `mirrored and transposed EXIF orientations match import's upright pixels`() {
+        // 2/4 are mirrors, 5/7 transpose; all four were ignored before the fix. The reference is
+        // ImageTools.decodeOriented — the helper import already uses — so this pins "same helper".
+        for (orientation in listOf(
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL,
+            ExifInterface.ORIENTATION_FLIP_VERTICAL,
+            ExifInterface.ORIENTATION_TRANSPOSE,
+            ExifInterface.ORIENTATION_TRANSVERSE
+        )) {
+            val file = File(
+                ApplicationProvider.getApplicationContext<android.app.Application>().cacheDir,
+                "book_mirror_${orientation}_${System.nanoTime()}.jpg"
+            )
+            val bytes = ImportFixtures.oriented(file, orientation, width = 120, height = 80)
+            val expected = ImageTools.decodeOriented(file, BookSplit.MAX_LONG_SIDE)
+            val actual = BookSplit.decode(bytes, BookSplit.MAX_LONG_SIDE)
+            try {
+                assertEquals("orientation $orientation width", expected!!.width, actual.width)
+                assertEquals("orientation $orientation height", expected.height, actual.height)
+                for (fx in listOf(0.25f, 0.75f)) {
+                    for (fy in listOf(0.25f, 0.75f)) {
+                        val x = (actual.width * fx).toInt()
+                        val y = (actual.height * fy).toInt()
+                        ImportFixtures.assertColor(
+                            expected.getPixel(x, y), actual.getPixel(x, y)
+                        )
+                    }
+                }
+            } finally {
+                expected?.recycle()
+                actual.recycle()
+                file.delete()
+            }
+        }
+    }
+
+    @Test
     fun `a photo without EXIF keeps its decoded size`() {
         val bytes = fixture(120, 80, ExifInterface.ORIENTATION_NORMAL)
         val decoded = BookSplit.decode(bytes, BookSplit.MAX_LONG_SIDE)

@@ -2,4 +2,5 @@
 <!-- G1: honest, localized failure when a page cannot be re-filtered on this phone. -->
 <resources>
     <string name="refilter_out_of_memory">This page is too large to apply the filter on this phone. The original page was not changed.</string>
+    <string name="unlock_lock_not_removed">The PDF was unlocked, but the lock label could not be removed. ScanWhirl will finish this when you restart the app.</string>
 </resources>

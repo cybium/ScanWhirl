@@ -79,6 +79,12 @@ class ScanWhirlApp : Application() {
      */
     val storageRecovered = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /** G1 review: the pass finished (safe to load the Library), even if some folder step failed. */
+    val storageRecoveryFinished = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** G1 review: true when a core recovery step failed; startup must not claim a clean pass. */
+    val storageRecoveryIncomplete = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     /**
      * F1 (hunt H1-1): the storage recovery the legacy Home ran on every start (reclaim abandoned
      * saves, finish interrupted permanent deletes and expire Trash, drop dead import staging,
@@ -104,7 +110,12 @@ class ScanWhirlApp : Application() {
                 runCatching { repository.recoverImports() }
                 runCatching { repository.recoverOperations() }
             } finally {
-                storageRecovered.value = true
+                val incomplete = com.scanwhirl.app.store.ScanRepository.recoveryIncomplete
+                storageRecoveryIncomplete.value = incomplete
+                // Never claim a fully successful pass when a core step failed, but always release
+                // the launcher's wait: folder work that failed is kept on disk for the next start.
+                storageRecovered.value = !incomplete
+                storageRecoveryFinished.value = true
             }
         }
     }

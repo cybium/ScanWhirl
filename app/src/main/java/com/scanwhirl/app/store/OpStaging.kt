@@ -60,9 +60,14 @@ internal object OpStaging {
         live.remove(dir.name)
     }
 
-    /** Deletes every entry that is not live in this process. Returns how many were removed. */
-    fun sweep(filesDir: File): Int = root(filesDir).listFiles().orEmpty()
-        .filter { it.name !in live && it.deleteRecursively() }.size
+    /**
+     * Deletes every entry that is not live in this process, except folders the caller says still
+     * hold an UNRESOLVED recovery marker (a failed lock removal must be retried, not swept).
+     * Returns how many were removed.
+     */
+    fun sweep(filesDir: File, keep: (File) -> Boolean = { false }): Int =
+        root(filesDir).listFiles().orEmpty()
+            .filter { it.name !in live && !keep(it) && it.deleteRecursively() }.size
 
     /** PM-2.2b: writes the seal atomically (after every file is fsynced, before the rename). */
     fun writeSeal(dir: File, seal: Seal) {

@@ -248,9 +248,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // S1 defect 1 / review P1: the launcher owns the "unfinished scan" offer once the
         // recovery that can restore a document has finished. The once-per-process guard lives in
         // ScanLauncher.show(), so a rotation before the offer is shown does not lose it.
-        if (!app.storageRecovered.value) {
+        if (!app.storageRecoveryFinished.value) {
             lifecycleScope.launch {
-                app.storageRecovered.first { it }
+                // The pass always finishes (possibly incomplete); a failed folder step is retried
+                // next start and is never allowed to leave the launcher waiting forever.
+                app.storageRecoveryFinished.first { it }
                 if (::library.isInitialized) library.reload()
                 scanLauncher.offerUnfinishedScan()
             }
