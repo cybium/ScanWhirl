@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.R
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
 import com.scanwhirl.app.util.OcrBox
@@ -30,7 +31,8 @@ import java.util.zip.ZipFile
 
 /**
  * O1 office honesty, data-safe core. Every case uses synthetic pages and fictional text.
- * These tests compile against the base API and fail on behaviour, so they are true RED evidence.
+ * Most cases were RED on the original base commit. The two tests named "regression guard"
+ * already passed on their base and are kept only to stop that data or wording being lost.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -80,8 +82,9 @@ class O1OfficeExportHonestyTest {
 
     // ---- Defects 4 & 6 & 7: Excel honesty ----
 
+    /** Regression guard, not RED on base: the report already carried these indices. */
     @Test
-    fun `tables only with every page unread reports the unread pages, not no table`() {
+    fun `regression guard tables only all unread keeps the unread indices in the report`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Unreadable")
         OcrEngine.rawReader = { _, _ -> throw IllegalStateException("text model is missing") }
 
@@ -94,18 +97,29 @@ class O1OfficeExportHonestyTest {
         assertEquals(2, report.totalPages)
     }
 
+    /**
+     * Regression guard, not RED on fa2c27c7: that commit already made the default a resource.
+     * Pins that a text-only page with no table uses the resource note, never an injected one.
+     */
     @Test
-    fun `excel default note is localized, not hard coded English`() {
-        val id = DocFixtures.saved(repo, app, pages = 1, name = "Unreadable")
-        OcrEngine.rawReader = { _, _ -> throw IllegalStateException("text model is missing") }
+    fun `regression guard excel default no table note is the resource note`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Plain page")
+        val page = repo.getDocument(id)!!.pageFiles.single()
+        // Stored-but-empty text without geometry: no unread page and no lines, so the default
+        // "no table" note is the only cell.
+        repo.ocrStore.putTexts(id, mapOf(page.name to ""))
 
         val out = File(work, "default.xlsx")
         runBlocking { repo.exportExcel(id, out) }
         val sheet = ZipFile(out).use { zip ->
-            zip.getInputStream(zip.getEntry("xl/worksheets/sheet1.xml")).use { String(it.readBytes(), Charsets.UTF_8) }
+            zip.getInputStream(zip.getEntry("xl/worksheets/sheet1.xml")).use {
+                String(it.readBytes(), Charsets.UTF_8)
+            }
         }
-        assertTrue("the sheet must say the page could not be read: $sheet", sheet.contains("could not be read"))
-        assertFalse("the sheet must not show hard-coded English: $sheet", sheet.contains("No table found on this page"))
+        assertTrue(
+            "the default note must be the resource text: $sheet",
+            sheet.contains(app.getString(R.string.tools_excel_no_table))
+        )
     }
 
     // ---- Defect 8: makeSearchable must not rewrite a partially layered PDF ----
