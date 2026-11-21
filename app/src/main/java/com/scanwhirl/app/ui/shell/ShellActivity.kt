@@ -73,6 +73,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private lateinit var repo: ScanRepository
     private lateinit var contentHost: FrameLayout
     private lateinit var navHost: View
+    private var discardActions: com.scanwhirl.app.ui.DiscardActions? = null
     private lateinit var navItems: Map<Tab, LinearLayout>
 
     private var tab = Tab.LIBRARY
@@ -306,6 +307,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // T27-FIX-TRASH: a move made on the document screen closed that screen; its
         // "Moved to Trash" Undo is shown here, on the next resume.
         TrashActions.takePending()?.let { showMovedNotice(it) }
+        showDiscardNotice()
         // The scan disc breathes only while this screen is in front.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
     }
@@ -999,6 +1001,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private fun showMovedNotice(moved: TrashActions.Moved) {
         val root = findViewById<View>(android.R.id.content) ?: return
         TrashActions.showMoved(this, root, navHost, moved) { library.reload() }
+    }
+
+    private fun showDiscardNotice() {
+        if (!::library.isInitialized || !::navHost.isInitialized) return
+        val root = findViewById<View>(android.R.id.content) ?: return
+        val host = discardActions ?: com.scanwhirl.app.ui.DiscardActions(
+            this, root, navHost
+        ) { library.reload() }.also { discardActions = it }
+        host.showPending()
     }
 
     // ---- Import -----------------------------------------------------------

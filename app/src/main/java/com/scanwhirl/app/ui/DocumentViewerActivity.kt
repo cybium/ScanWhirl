@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.view.Gravity
@@ -18,6 +21,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
@@ -103,6 +107,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * closes (leaving = permanent).
      */
     private val pendingDeletes = linkedSetOf<String>()
+    private var pendingDeleteDeadline = 0L
+    private var pendingDeleteBar: Snackbar? = null
+    private val deleteUndoHandler = Handler(Looper.getMainLooper())
+    private val expirePageDelete = Runnable { commitPendingDelete() }
 
     /** Pages whose delete has been triggered but not landed yet (no flash-back). */
     private val committingDeletes = mutableSetOf<String>()
@@ -113,9 +121,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** F5/W2: this viewer is the first look at a just-imported document. */
     private var freshImport = false
 
-    /** F5/W2: the import question was already shown. A failed move allows a retry. */
+    /** F5/W2: the import question was already shown. A failed discard allows a retry. */
     private var freshImportAsked = false
-    private var importTrashInProgress = false
+    private var importDiscardInProgress = false
+    /** UX-007: the live question sheet. Its visibility is the honest "is it on screen" state. */
+    private var importQuestionSheet: SwSheet? = null
 
     /**
      * T44: the user has acted on this import (saved a copy to Documents, shared it, or changed the
@@ -271,6 +281,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // fact that the user already acted on this import.
         freshImportAsked = savedInstanceState?.getBoolean(KEY_IMPORT_ASKED) ?: false
         importKept = savedInstanceState?.getBoolean(KEY_IMPORT_KEPT) ?: false
+        pendingDeletes.addAll(savedInstanceState?.getStringArrayList(KEY_PENDING_DELETES).orEmpty())
+        pendingDeleteDeadline = savedInstanceState?.getLong(KEY_DELETE_DEADLINE) ?: 0L
         // A8: a viewer recreated while the corner crop screen was on top still knows where the
         // confirmed photos go when they come back. A batch whose position was never chosen dies
         // with the old screen (the question is gone), so its picked copies are not kept.
@@ -394,6 +406,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch {
             if (!reloadDocument()) return@launch
             firstLoad = true
+            showPendingDeleteUndo()
             if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_INSERT_PAGES, false)) {
                 startInsertPages()
             }
@@ -404,6 +417,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_IMPORT_ASKED, freshImportAsked)
         outState.putBoolean(KEY_IMPORT_KEPT, importKept)
+        outState.putStringArrayList(KEY_PENDING_DELETES, ArrayList(pendingDeletes))
+        outState.putLong(KEY_DELETE_DEADLINE, pendingDeleteDeadline)
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
         pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
         // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
@@ -413,6 +428,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     override fun onDestroy() {
+        // Detach the OLD bar before dismissing it. Its delayed callbacks must not commit a
+        // delete whose state now belongs to the recreated activity.
+        clearPageDeleteBar()
         // Leaving the screen makes any pending delete permanent (rule: Undo
         // only lives as long as this screen).
         if (!isChangingConfigurations) {
@@ -446,6 +464,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         // Returning from the full-screen page view: a draft edit may have been committed.
         if (document != null && firstLoad) {
+            showPendingDeleteUndo()
             lifecycleScope.launch { reloadDocument() }
         }
     }
@@ -1279,22 +1298,50 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // This snackbar replaces any previous one: the old Undo window is over.
         commitPendingDelete()
 
+        noteImportUsed()
         pendingDeletes.addAll(paths)
+        pendingDeleteDeadline = SystemClock.elapsedRealtime() + TrashActions.undoDurationMs(this)
         selected.clear()
         refreshGrid()
+        showPendingDeleteUndo()
+    }
 
-        val batch = paths.toList()
-        Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_LONG)
+    private fun showPendingDeleteUndo() {
+        if (pendingDeletes.isEmpty()) return
+        val remaining = pendingDeleteDeadline - SystemClock.elapsedRealtime()
+        if (remaining <= 0) {
+            commitPendingDelete()
+            return
+        }
+        deleteUndoHandler.removeCallbacks(expirePageDelete)
+        deleteUndoHandler.postDelayed(expirePageDelete, remaining)
+        if (pendingDeleteBar != null) return
+        val batch = pendingDeletes.toList()
+        // An absolute monotonic deadline controls expiry, not a fresh Snackbar timeout on
+        // every rotation (nor a second accessibility extension of the remaining duration).
+        val bar = Snackbar.make(binding.root, R.string.page_deleted, Snackbar.LENGTH_INDEFINITE)
+        pendingDeleteBar = bar
+        bar
             .setAction(R.string.undo) {
+                clearPageDeleteBar()
                 pendingDeletes.removeAll(batch.toSet())
+                pendingDeleteDeadline = 0L
                 refreshGrid()
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (pendingDeleteBar !== transientBottomBar || isChangingConfigurations || isDestroyed) return
                     if (event != DISMISS_EVENT_ACTION) commitPendingDeletes(batch)
                 }
             })
             .show()
+    }
+
+    private fun clearPageDeleteBar() {
+        deleteUndoHandler.removeCallbacks(expirePageDelete)
+        val old = pendingDeleteBar
+        pendingDeleteBar = null
+        old?.dismiss()
     }
 
     /**
@@ -1348,6 +1395,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val toDelete = paths.filter { pendingDeletes.contains(it) }
         if (toDelete.isEmpty()) return
         pendingDeletes.removeAll(toDelete.toSet())
+        if (pendingDeletes.isEmpty()) {
+            pendingDeleteDeadline = 0L
+            clearPageDeleteBar()
+        }
         committingDeletes.addAll(toDelete)
         deleteScope.launch {
             try {
@@ -1375,6 +1426,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val toDelete = pendingDeletes.toList()
         if (toDelete.isEmpty()) return
         pendingDeletes.removeAll(toDelete.toSet())
+        pendingDeleteDeadline = 0L
+        runOnUiThread { clearPageDeleteBar() }
         for (path in toDelete) {
             val now = repo.draftPages(id)
             val idx = now.indexOfFirst { it.path == path }
@@ -1570,10 +1623,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
-        if (importTrashInProgress) return
+        if (importDiscardInProgress) return
         // T44: the question only exists for an import the user has not touched. Once acted on
-        // (a saved copy, a share, an edit) the import is kept, never offered for Trash here.
-        if (freshImport && !freshImportAsked && !importKept) {
+        // (a saved copy, a share, an edit) the import is kept, never offered for Discard here.
+        if (freshImport && !importKept) {
+            // A dismissed/cancelled/rotated-away question is NOT an answer. Re-ask from disk
+            // truth rather than trusting a dialog OnDismissListener (a BottomSheet hides with
+            // an animation, so that listener may fire late or not at all in a test/recreate).
+            importQuestionSheet?.dismiss()
+            importQuestionSheet = null
+            freshImportAsked = false
             askKeepImported()
             return
         }
@@ -1592,7 +1651,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /**
      * F5/W2: an imported PDF is in the library the moment it arrives, so leaving the first look
-     * asks first. Keep leaves it like any other document; Move to Trash is reversible.
+     * asks first. Keep leaves it like any other document; Discard has its own finite Undo.
      * T44: it is never asked once the user has acted on the import.
      */
     private fun askKeepImported() {
@@ -1607,56 +1666,112 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             return
         }
         freshImportAsked = true
-        val sheet = SwSheet.builder(this)
-            .setTitle(R.string.fixflow_import_keep_title)
-            .setMessage(R.string.r1import_keep_message)
-            .setPrimary(R.string.fixflow_keep) { finish() }
-            .setSecondary(R.string.trash_move) { moveImportToTrash(id) }
-            .build()
-        val actions = sheet.view as LinearLayout
-        val trash = sheet.secondaryButton
-        // The bottom-centre area belongs to the safe answer, not the Trash action.
-        // This sheet alone puts a quiet, wrapping start-aligned action above that area.
-        actions.removeView(trash)
-        actions.addView(trash, actions.indexOfChild(sheet.primaryButton), LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@DocumentViewerActivity, 8f) })
-        trash.apply {
-            val padding = SwStyle.dp(this@DocumentViewerActivity, 8f)
-            minimumWidth = SwStyle.dp(this@DocumentViewerActivity, 48f)
-            setPaddingRelative(padding, padding, padding, padding)
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            isFocusable = true
-            accessibilityDelegate = object : View.AccessibilityDelegate() {
-                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
-                    super.onInitializeAccessibilityNodeInfo(host, info)
-                    info.className = Button::class.java.name
+        val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun choice(label: Int, icon: Int, safe: Boolean): TextView =
+            SwStyle.text(this, 16f, SwStyle.color(this,
+                if (safe) R.color.sw_disc_ink else R.color.text_hologram_mid), bold = true).apply {
+                text = getString(label)
+                this.id = if (safe) R.id.swSheetPrimary else R.id.swSheetSecondary
+                gravity = if (safe) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
+                minHeight = SwStyle.dp(this@DocumentViewerActivity, if (safe) 54f else 48f)
+                minimumWidth = SwStyle.dp(this@DocumentViewerActivity, 48f)
+                val p = SwStyle.dp(this@DocumentViewerActivity, 8f)
+                setPadding(p, p, p, p)
+                compoundDrawablePadding = p
+                val glyph = ContextCompat.getDrawable(context, icon)?.mutate()
+                glyph?.setTint(currentTextColor)
+                val size = SwStyle.dp(this@DocumentViewerActivity, 24f)
+                glyph?.setBounds(0, 0, size, size)
+                setCompoundDrawablesRelative(glyph, null, null, null)
+                if (safe) background = SwStyle.rounded(context,
+                    SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f)
+                isFocusable = true
+                accessibilityDelegate = object : View.AccessibilityDelegate() {
+                    override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                        super.onInitializeAccessibilityNodeInfo(host, info)
+                        info.className = Button::class.java.name
+                    }
                 }
             }
+        val discard = choice(R.string.u1_import_discard, R.drawable.ic_sym_delete, false)
+        val keep = choice(R.string.fixflow_keep, R.drawable.ic_sym_check, true)
+        choices.addView(discard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@DocumentViewerActivity, 8f) })
+        choices.addView(keep, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            // Reserve the entire former Scan/nav zone AND its 24dp exclusion gap for Keep.
+            topMargin = SwStyle.dp(this@DocumentViewerActivity, 96f)
+        })
+        val scroll = androidx.core.widget.NestedScrollView(this).apply {
+            isVerticalScrollBarEnabled = true
+            addView(choices)
         }
-        (sheet.primaryButton.layoutParams as LinearLayout.LayoutParams).topMargin = SwStyle.dp(this, 40f)
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.fixflow_import_keep_title)
+            .setMessage(R.string.u1_import_source_unchanged)
+            .setScrollableContent(scroll)
+            .build()
+        // Local icon+label content, not the shared kit footers (owned by another lane).
+        (sheet.primaryButton.parent as ViewGroup).removeView(sheet.primaryButton)
+        (sheet.secondaryButton.parent as ViewGroup).removeView(sheet.secondaryButton)
+        // Safety is enforced at click time, in one coordinate space, for every viewport/font.
+        // The row is never disabled/dimmed on a speculative layout pass: a BottomSheet lays
+        // itself out in stages, and a transient small height must not silently kill the action.
+        fun safelyPlaced(): Boolean {
+            val decor = sheet.window?.decorView ?: return false
+            val actionAt = IntArray(2)
+            val decorAt = IntArray(2)
+            discard.getLocationOnScreen(actionAt)
+            decor.getLocationOnScreen(decorAt)
+            val bottom = actionAt[1] + discard.height - decorAt[1]
+            // nav ~100dp + 24dp clearance + 24dp for bars/insets.
+            return bottom <= decor.height - SwStyle.dp(this, 148f)
+        }
+        discard.setOnClickListener {
+            if (safelyPlaced()) {
+                importQuestionSheet = null
+                sheet.dismiss()
+                discardImportedCopy(id)
+            }
+        }
+        keep.setOnClickListener {
+            importQuestionSheet = null
+            sheet.dismiss()
+            finish()
+        }
+        importQuestionSheet = sheet
+        // Back/X/outside and rotation leave the copy intact; the next Back re-asks from scratch.
+        sheet.setOnDismissListener {
+            if (importQuestionSheet === sheet) importQuestionSheet = null
+            if (!isFinishing && !importDiscardInProgress) freshImportAsked = false
+        }
         sheet.show()
     }
 
-    private fun moveImportToTrash(id: String) {
-        if (importTrashInProgress) return
-        // T44: never move an import the user has acted on, whatever asked.
+    private fun discardImportedCopy(id: String) {
+        if (importDiscardInProgress) return
+        // T44: never discard an import the user has acted on, whatever asked.
         if (importKept) {
             finish()
             return
         }
-        importTrashInProgress = true
+        importDiscardInProgress = true
         lifecycleScope.launch {
-            val moved = withContext(NonCancellable + Dispatchers.IO) {
-                TrashActions.moveAll(repo, listOf(id))
+            val duration = TrashActions.undoDurationMs(this@DocumentViewerActivity)
+            val token = withContext(NonCancellable + Dispatchers.IO) {
+                runCatching {
+                    com.scanwhirl.app.store.ImportDiscardStore(applicationContext, repo).discard(id, duration)
+                }.getOrNull()
             }
-            importTrashInProgress = false
-            if (moved.keys.isEmpty()) {
+            importDiscardInProgress = false
+            if (token == null) {
                 freshImportAsked = false
-                TrashActions.showMoved(this@DocumentViewerActivity, binding.root, null, moved) {}
+                Snackbar.make(binding.root, R.string.u1_import_discard_failed, Snackbar.LENGTH_LONG).show()
                 return@launch
             }
-            TrashActions.post(moved)
+            DiscardActions.scheduleExpiry(applicationContext, token)
             finish()
         }
     }
@@ -1779,6 +1894,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { repo.discardDraft(docId ?: return@withContext) }
                     pendingDeletes.clear()
+                    pendingDeleteDeadline = 0L
+                    clearPageDeleteBar()
                     reloadDocument()
                 }
             }
@@ -1793,6 +1910,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { repo.discardDraft(id) }
             pendingDeletes.clear()
+            pendingDeleteDeadline = 0L
+            clearPageDeleteBar()
             finish()
         }
     }
@@ -1814,6 +1933,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 runCatching { repo.discardDraft(id) }
             }
             pendingDeletes.clear()
+            pendingDeleteDeadline = 0L
+            clearPageDeleteBar()
             reloadDocument()
         }
     }
@@ -1893,6 +2014,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         /** T44: the keep question and the "user acted on the import" state survive rotation. */
         private const val KEY_IMPORT_ASKED = "import_asked"
         private const val KEY_IMPORT_KEPT = "import_kept"
+        private const val KEY_PENDING_DELETES = "pending_page_deletes"
+        private const val KEY_DELETE_DEADLINE = "page_delete_deadline"
 
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)

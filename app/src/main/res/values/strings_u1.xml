@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="u1_import_source_unchanged">Your original PDF stays unchanged.</string>
+    <string name="u1_import_discard">Discard</string>
+    <string name="u1_import_discarded">Discarded</string>
+    <string name="u1_import_discard_failed">Couldn’t discard. Try again.</string>
+    <string name="u1_import_restore_failed">Couldn’t restore this copy. Try again.</string>
+</resources>

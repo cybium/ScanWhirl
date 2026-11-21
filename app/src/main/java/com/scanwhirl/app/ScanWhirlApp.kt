@@ -90,6 +90,15 @@ class ScanWhirlApp : Application() {
         if (!storageRecoveryStarted.compareAndSet(false, true)) return
         appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
+                // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
+                runCatching {
+                    com.scanwhirl.app.store.ImportDiscardStore(this@ScanWhirlApp, repository).recover()
+                        .forEach { com.scanwhirl.app.ui.DiscardActions.scheduleExpiry(this@ScanWhirlApp, it) }
+                    // Do NOT re-enqueue pending OCR here: enqueue() rewrites each ocr_pending
+                    // marker, which is an observable file change on every cold start. Startup
+                    // indexing is already owned by startLibraryIndexBackfill(); an Undo requeues
+                    // its own restored id via DiscardActions -> TrashActions.queueIndexing.
+                }
                 runCatching { repository.reapAbandonedSaves() }
                 runCatching { repository.recoverTrash() }
                 runCatching { repository.recoverImports() }

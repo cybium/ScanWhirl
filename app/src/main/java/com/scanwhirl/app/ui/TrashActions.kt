@@ -47,6 +47,8 @@ object TrashActions {
     internal fun undoDurationMs(recommendedTimeoutMs: Int?): Int =
         max(UNDO_DURATION_MS, recommendedTimeoutMs ?: 0)
 
+    internal fun undoDurationMs(activity: Activity): Int = undoDurationMs(recommendedTimeout(activity))
+
     /** The system's recommended timeout, or null when unavailable (API < 29, no service). */
     private fun recommendedTimeout(activity: Activity): Int? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
