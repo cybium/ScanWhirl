@@ -1565,10 +1565,27 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after move")
         }
 
-    private fun pageFilesIn(dir: File): List<File> =
+    internal fun pageFilesIn(dir: File): List<File> =
         dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
-            ?.sortedBy { it.nameWithoutExtension }
+            ?.sortedWith { a, b ->
+                val na = pageNumber(a.nameWithoutExtension)
+                val nb = pageNumber(b.nameWithoutExtension)
+                when {
+                    na != null && nb != null -> na.compareTo(nb)          // page_1000 follows page_999
+                    na == null && nb == null -> a.nameWithoutExtension.compareTo(b.nameWithoutExtension)
+                    na != null -> -1                                     // page_* first
+                    else -> 1
+                }
+            }
             ?: emptyList()
+
+    /** Numeric part of `page_001`; other names fall back to the old lexicographic order. */
+    private fun pageNumber(name: String): Long? {
+        val dash = name.lastIndexOf('_')
+        if (dash < 0 || dash == name.length - 1) return null
+        for (i in dash + 1 until name.length) if (name[i] !in '0'..'9') return null
+        return name.substring(dash + 1).toLongOrNull()
+    }
 
     /** Kept original of a filtered page: `page_001.jpg` -> `page_001.orig` (not a .jpg, never listed). */
     private fun origOf(page: File): File =

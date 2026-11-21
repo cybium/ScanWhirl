@@ -10,11 +10,18 @@ package com.scanwhirl.app.util
  *    more than a quarter of free space;
  *  - [Plan.tooLittleSpace] refuses before starting when the import would leave less than
  *    [MIN_FREE_AFTER] free.
+ *
+ * A rendered page exists twice on disk — the staging JPEG and its copy inside `scan.pdf` — so the
+ * authoritative pre-render gate in `PdfImport` reserves [DISK_COPIES] copies per page via its
+ * `EST_PAGE_BYTES`. `estimateBytes` deliberately stays the single-JPEG figure shown to the user.
  */
 object PdfImportBudget {
 
-    /** Typical rendered text page on disk at 2048 px / JPEG 85. */
+    /** Typical rendered text page on disk at 2048 px / JPEG 85 (one copy). */
     const val TYPICAL_PAGE_BYTES = 600_000L
+
+    /** A page is staged as a JPEG and again inside scan.pdf, just like the save path's sources*2. */
+    const val DISK_COPIES = 2
 
     /** Small documents never ask; a page range is offered after this many pages. */
     const val DECISION_PAGE_COUNT = 50

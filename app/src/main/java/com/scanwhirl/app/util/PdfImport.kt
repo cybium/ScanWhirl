@@ -1,13 +1,17 @@
 package com.scanwhirl.app.util
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
+import android.graphics.pdf.RenderParams
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
@@ -37,8 +41,11 @@ object PdfImport {
     /** Most pages one import may hold; range selection handles bigger books. */
     const val MAX_PAGES = 10_000
 
-    /** Rough upper estimate of one rendered page on disk (JPEG + its share of the PDF). */
-    internal const val EST_PAGE_BYTES: Long = PdfImportBudget.TYPICAL_PAGE_BYTES
+    /**
+     * Rough upper estimate of one rendered page on disk: the staging JPEG **and** the copy of
+     * that JPEG embedded in `scan.pdf`. Mirrors the save path's `sources * 2`.
+     */
+    internal const val EST_PAGE_BYTES: Long = PdfImportBudget.TYPICAL_PAGE_BYTES * PdfImportBudget.DISK_COPIES
 
     /** Headroom always left free on the device. */
     internal const val SPACE_MARGIN: Long = 16L * 1024 * 1024
@@ -308,6 +315,16 @@ object PdfImport {
         }
     }
 
+    /** API level from which [RenderParams] can ask the renderer to draw annotations/forms. */
+    internal const val ANNOTATION_API_LEVEL = 35
+
+    internal fun useAnnotatedRender(api: Int): Boolean = api >= ANNOTATION_API_LEVEL
+
+    /**
+     * Renders one page exactly as the platform renderer presents it. Android's PdfRenderer already
+     * applies the page's /Rotate (Pdfium swaps the reported width/height and prepends the page
+     * matrix), so no extra rotation or dimension swap is done here — doing so would double-rotate.
+     */
     private fun renderPage(r: PdfRenderer, index: Int, dpi: Float, maxDim: Int, quality: Int): ByteArray =
         r.openPage(index).use { page ->
             var scale = dpi / 72f
@@ -321,12 +338,35 @@ object PdfImport {
                 val matrix = Matrix().apply {
                     setScale(w.toFloat() / page.width.coerceAtLeast(1), h.toFloat() / page.height.coerceAtLeast(1))
                 }
-                page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                if (Build.VERSION.SDK_INT >= 35 && useAnnotatedRender(Build.VERSION.SDK_INT)) {
+                    try {
+                        renderAnnotated(page, bitmap, matrix)
+                    } catch (e: Throwable) {
+                        if (e is OutOfMemoryError) throw e
+                        // PDF is a mainline module: some API-35 devices still ship a module without
+                        // RenderParams. Fall back to the honest legacy render rather than lose the page.
+                        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    }
+                } else {
+                    page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                }
                 ImageTools.encodeJpeg(bitmap, quality)
             } finally {
                 bitmap.recycle()
             }
         }
+
+    @RequiresApi(ANNOTATION_API_LEVEL)
+    @android.annotation.SuppressLint("NewApi") // guarded above + legacy fallback; PDF module needs ext 13.
+    private fun renderAnnotated(page: PdfRenderer.Page, bitmap: Bitmap, matrix: Matrix) {
+        val params = RenderParams.Builder(RenderParams.RENDER_MODE_FOR_DISPLAY)
+            .setRenderFlags(
+                RenderParams.FLAG_RENDER_HIGHLIGHT_ANNOTATIONS or
+                    RenderParams.FLAG_RENDER_TEXT_ANNOTATIONS
+            )
+            .build()
+        page.render(bitmap, null, matrix, params)
+    }
 
     /** A full disk or a failed write. */
     fun classifyWrite(e: Throwable): ImportException {
