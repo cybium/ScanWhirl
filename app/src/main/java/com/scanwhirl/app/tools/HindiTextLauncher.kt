@@ -10,16 +10,16 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguage
-import com.scanwhirl.app.util.OcrLanguageSettings
 import kotlinx.coroutines.launch
 
 /**
  * v2 UI: 03_tools_hub — the "Hindi text" tool (Text group). Pick a document, read it with the
  * Devanagari recognizer, then open the Text screen on the result.
  *
- * This is an explicit one-shot choice, so it also switches the OCR language setting to Hindi:
- * the next page the user reads stays in the same script. Unreadable pages are explained with
- * the same honest wording as the editor (model unavailable vs nothing found).
+ * This is a one-shot read in Hindi, not a change to the app's Text reading language: the global
+ * setting is left alone because the person did not confirm a setting change here. Unreadable
+ * pages are explained with the same honest wording as the editor (model unavailable vs nothing
+ * found).
  */
 object HindiTextLauncher {
 
@@ -32,8 +32,7 @@ object HindiTextLauncher {
         }
     }
 
-    private fun run(activity: AppCompatActivity, repo: ScanRepository, docId: String) {
-        OcrLanguageSettings.set(activity, OcrLanguage.HINDI)
+    internal fun run(activity: AppCompatActivity, repo: ScanRepository, docId: String) {
         Toast.makeText(activity, R.string.ocr_hindi_reading, Toast.LENGTH_SHORT).show()
         activity.lifecycleScope.launch {
             try {

@@ -36,6 +36,7 @@ import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.OfficeFileCounts
+import com.scanwhirl.app.util.PptxWriter
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.ZipExporter
@@ -741,15 +742,17 @@ class ToolResultActivity : BaseActivity() {
         card.addView(meta, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
-        // T37: a PPTX is a picture deck. Say so on the result instead of letting "slides"
-        // suggest editable text that the writer never creates.
+        // T37 / O1-5: a PPTX is a picture deck. Say so on the result, but only claim speaker
+        // notes when the file actually contains them; otherwise say there was no text to read.
+        var pptxNoteView: TextView? = null
         if (extension == "pptx") {
-            card.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            pptxNoteView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
                 id = R.id.toolResultRasterNote
-                text = getString(R.string.tools_result_pptx_note)
+                text = getString(R.string.tools_result_pptx_no_text_note)
                 gravity = Gravity.CENTER
                 setLineSpacing(0f, 1.2f)
-            }, LinearLayout.LayoutParams(
+            }
+            card.addView(pptxNoteView, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
         }
@@ -762,6 +765,15 @@ class ToolResultActivity : BaseActivity() {
                 meta.text = getString(
                     R.string.tools_result_with_size, StatusLine.formatBytes(file.length()), countLabel(extension, count)
                 )
+            }
+            if (extension == "pptx") {
+                val withNotes = withContext(Dispatchers.IO) { PptxWriter.hasNotes(file) }
+                if (!isFinishing) {
+                    pptxNoteView?.text = getString(
+                        if (withNotes) R.string.tools_result_pptx_note
+                        else R.string.tools_result_pptx_no_text_note
+                    )
+                }
             }
         }
     }

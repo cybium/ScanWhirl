@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O1 office export honesty, हिन्दी। शब्दावली JUDGE_HINDI के अनुसार। -->
+<resources>
+    <!-- जिस पन्ने को लिखावट पढ़ने वाला नहीं पढ़ सका। -->
+    <string name="tools_word_page_unread">पन्ना %1$d नहीं पढ़ा जा सका।</string>
+    <plurals name="tools_unread_pages">
+        <item quantity="one">%1$d पन्ना नहीं पढ़ा जा सका।</item>
+        <item quantity="other">%1$d पन्ने नहीं पढ़े जा सके।</item>
+    </plurals>
+
+    <!-- केवल तालिकाएँ, सभी पन्ने नहीं पढ़े गए। -->
+    <string name="tools_excel_unread_all_title">पन्ने नहीं पढ़े जा सके</string>
+    <string name="tools_excel_unread_all_msg">%2$d में से %1$d पन्ने नहीं पढ़े जा सके। कोई तालिका जाँची नहीं जा सकी।</string>
+    <string name="tools_excel_no_tables_unread_msg">पढ़े गए पन्नों में कोई तालिका नहीं मिली। %2$d में से %1$d पन्ने नहीं पढ़े जा सके।</string>
+
+    <!-- जिस स्लाइड शो में कुछ नहीं पढ़ा गया, उसमें टिप्पणियाँ नहीं होतीं। -->
+    <string name="tools_result_pptx_no_text_note">स्लाइड पर पन्ने की तस्वीर है। कोई लिखा हुआ नहीं पढ़ा गया, इसलिए टिप्पणियाँ नहीं हैं।</string>
+</resources>

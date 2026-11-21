@@ -7,6 +7,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.zip.ZipFile
 import kotlin.math.min
 import kotlin.math.roundToLong
 
@@ -28,6 +29,22 @@ object PptxWriter {
     /** A4 portrait slide, in English Metric Units (21.0 × 29.7 cm). */
     const val A4_WIDTH_EMU = 7_560_000L
     const val A4_HEIGHT_EMU = 10_692_000L
+
+    /**
+     * True when a written deck actually carries speaker notes. Only pages with non-blank note
+     * text get a notes-slide part, so the existence of any such part is the honest signal. The
+     * result screen uses this to avoid claiming notes for a deck that only holds page pictures.
+     * Never throws: an unreadable or incomplete file has no notes to describe.
+     */
+    fun hasNotes(file: File): Boolean = try {
+        ZipFile(file).use { zip ->
+            zip.entries().toList().any {
+                it.name.startsWith("ppt/notesSlides/notesSlide") && it.name.endsWith(".xml")
+            }
+        }
+    } catch (_: Exception) {
+        false
+    }
 
     /** Slides a talk app can show: 4:3 notes area, the PowerPoint default. */
     private const val NOTES_WIDTH_EMU = 6_858_000L
@@ -57,7 +74,7 @@ object PptxWriter {
         val partial = File(outFile.parentFile, outFile.name + ".part")
         try {
             ZipOutputStream(BufferedOutputStream(FileOutputStream(partial))).use { zip ->
-                entry(zip, "[Content_Types].xml", contentTypes(pageCount, withNotes))
+                entry(zip, "[Content_Types].xml", contentTypes(pageCount, notes))
                 entry(zip, "_rels/.rels", rootRels())
                 entry(zip, "ppt/presentation.xml", presentation(pageCount, slideW, slideH, withNotes))
                 entry(zip, "ppt/_rels/presentation.xml.rels", presentationRels(pageCount, withNotes))
@@ -77,12 +94,12 @@ object PptxWriter {
                     entry(
                         zip,
                         "ppt/slides/_rels/slide${index + 1}.xml.rels",
-                        slideRels(index + 1, withNotes)
+                        slideRels(index + 1, notes[index] != null)
                     )
                     binaryEntry(zip, "ppt/media/image${index + 1}.jpeg", jpeg)
                     val text = notes[index]
-                    if (withNotes) {
-                        entry(zip, notesSlidePath(index), notesXml(text ?: ""))
+                    if (text != null) {
+                        entry(zip, notesSlidePath(index), notesXml(text))
                         entry(
                             zip,
                             "ppt/notesSlides/_rels/notesSlide${index + 1}.xml.rels",
@@ -126,7 +143,7 @@ object PptxWriter {
 
     // ---- parts ------------------------------------------------------------
 
-    private fun contentTypes(pageCount: Int, withNotes: Boolean): String = buildString {
+    private fun contentTypes(pageCount: Int, notes: List<String?>): String = buildString {
         append(XML_DECL)
         append("<Types xmlns=\"$CT_NS\">")
         append("<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>")
@@ -154,16 +171,18 @@ object PptxWriter {
                     "ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>"
             )
         }
-        if (withNotes) {
+        if (notes.any { it != null }) {
             append(
                 "<Override PartName=\"/ppt/notesMasters/notesMaster1.xml\" " +
                     "ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml\"/>"
             )
-            for (i in 1..pageCount) {
-                append(
-                    "<Override PartName=\"/ppt/notesSlides/notesSlide$i.xml\" " +
-                        "ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml\"/>"
-                )
+            notes.forEachIndexed { index, text ->
+                if (text != null) {
+                    append(
+                        "<Override PartName=\"/ppt/notesSlides/notesSlide${index + 1}.xml\" " +
+                            "ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml\"/>"
+                    )
+                }
             }
         }
         append("</Types>")
@@ -227,11 +246,11 @@ object PptxWriter {
         }
     }
 
-    private fun slideRels(index: Int, withNotes: Boolean): String {
+    private fun slideRels(index: Int, hasNotes: Boolean): String {
         val items = mutableListOf(
             Triple("rId1", "$R_NS/image", "../media/image$index.jpeg")
         )
-        if (withNotes) {
+        if (hasNotes) {
             items += Triple("rId2", "$R_NS/notesSlide", "../notesSlides/notesSlide$index.xml")
         }
         return relationships(items)
