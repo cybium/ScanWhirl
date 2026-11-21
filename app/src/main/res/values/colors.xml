@@ -110,6 +110,10 @@
     <color name="ok_green">#38EF7D</color>
     <color name="ok_green_soft">#1438EF7D</color>
     <color name="ok_green_hair">#4038EF7D</color>
+    <!-- UX L5: functional boundaries/focus must clear 3:1 against the ink surface.
+         Faint sw_cyan_hair stays only for decorative dividers and capture styling. -->
+    <color name="sw_boundary_functional">#8D979E</color>
+    <color name="sw_divider_boundary">#5C6A72</color>
     <color name="sw_cyan_hair">#2400F0FF</color>
     <color name="sw_cyan_hair_strong">#4700F0FF</color>
     <color name="sw_cyan_soft">#1F00F0FF</color>

@@ -110,7 +110,9 @@ class SwSheet private constructor(
         header.addView(closeButton)
         bodyColumn.addView(header)
 
-        messageView = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
+        messageView = SwStyle.text(
+            context, 14f, SwStyle.color(context, R.color.text_hologram_mid), metadata = true
+        ).apply {
             id = R.id.swSheetMessage
             setLineSpacing(0f, 1.25f)
             isVisible = false
@@ -136,7 +138,7 @@ class SwSheet private constructor(
             typeface = SwType.bold(context)
             setTextColor(SwStyle.color(context, R.color.sw_disc_ink))
             background = SwStyle.rounded(
-                context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f
+                context, SwStyle.color(context, R.color.sw_scan), radiusDp = 16f
             )
             minHeight = (54 * density).toInt()
             // SAFE-UNLOCK-CONSENT a11y: a 54dp fixed height cut a two-line primary at 200% font

@@ -52,7 +52,7 @@ class VaultCard(context: Context) : LinearLayout(context) {
             },
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
-        pageBadge = SwStyle.text(context, 10f, Color.WHITE, bold = true).apply {
+        pageBadge = SwStyle.text(context, 12f, Color.WHITE, bold = true, metadata = true).apply {
             background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 5f)
             setPadding((5 * d).toInt(), 0, (5 * d).toInt(), 0)
         }
@@ -83,7 +83,9 @@ class VaultCard(context: Context) : LinearLayout(context) {
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         info.addView(nameView, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        metaView = SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
+        metaView = SwStyle.text(
+            context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim), metadata = true
+        ).apply {
             id = R.id.vaultEntryMeta
             maxLines = 2
             setLineSpacing(0f, 1.2f)
@@ -100,7 +102,10 @@ class VaultCard(context: Context) : LinearLayout(context) {
         ).apply {
             id = R.id.vaultEntryMore
             contentDescription = context.getString(R.string.more)
-            layoutParams = LayoutParams(SwStyle.dp(context, 36f), SwStyle.dp(context, 36f))
+            // UX5-4/UX5-11: a 36dp overflow is too small. Keep the 24dp glyph, grow the target.
+            layoutParams = LayoutParams(
+                SwStyle.dp(context, 48f), SwStyle.dp(context, 48f)
+            )
         }
         addView(moreButton)
     }
@@ -109,6 +114,7 @@ class VaultCard(context: Context) : LinearLayout(context) {
         this.entry = entry
         nameView.text = entry.name
         metaView.text = meta
+        moreButton.contentDescription = context.getString(R.string.ux130_l5_vault_more, entry.name)
         pageBadge.text = entry.pageCount.toString()
         pageBadge.visibility = if (entry.pageCount > 0) VISIBLE else GONE
         setOnClickListener { onOpen() }
