@@ -500,6 +500,9 @@ class OcrEditorActivity : BaseActivity() {
         // The confirmation replaces unsaved edits, so drop them before recreation
         // instead of restoring them on top of the freshly recognised text.
         setEditing(false)
+        // F-01: the screen recreates when the re-read ends and carries no unsaved text
+        // across it, so nothing may accept new edits while it runs.
+        setRereadLock(true)
         pageTexts.clear()
         pageTexts.putAll(originalTexts)
         isDirty = false
@@ -695,6 +698,7 @@ class OcrEditorActivity : BaseActivity() {
         chip(row1, R.id.btnTidyText, R.drawable.ic_sym_auto_fix_high, R.string.ocr_tidy_text)
             .setOnClickListener {
                 // W5: cleaning text is an edit, so it never changes read-only text.
+                if (rereading) return@setOnClickListener
                 if (!editing) setEditing(true)
                 showTidySheet()
             }
@@ -731,6 +735,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun setupReadRow() {
         binding.btnCopyAll.setOnClickListener { copyAllPages() }
         binding.btnEditText.setOnClickListener {
+            if (rereading) return@setOnClickListener
             setEditing(!editing)
         }
         binding.btnSaveEdits.setOnClickListener { saveEdits() }
@@ -852,6 +857,7 @@ class OcrEditorActivity : BaseActivity() {
      * the text or the page.
      */
     private fun setEditing(edit: Boolean) {
+        if (edit && rereading) return
         editing = edit
         val field = editText
         // setTextIsSelectable() re-applies the current text; without this guard the
@@ -893,6 +899,14 @@ class OcrEditorActivity : BaseActivity() {
         // Read-first keeps one 48dp action line: the edit bar (Undo/Redo/word count)
         // replaces the read line only while the person is editing.
         binding.ocrEditBar.isVisible = edit
+        updateUndoRedoState()
+    }
+
+    /** F-01: while a confirmed re-read runs, every control that edits the text is off. */
+    private fun setRereadLock(locked: Boolean) {
+        binding.btnEditText.isEnabled = !locked
+        binding.btnSaveEdits.isEnabled = !locked
+        findViewById<View>(R.id.btnTidyText)?.isEnabled = !locked
         updateUndoRedoState()
     }
 
@@ -1161,6 +1175,7 @@ class OcrEditorActivity : BaseActivity() {
     // ------------------------------------------------------------------
 
     private fun applyCleanup(transform: (String) -> String) {
+        if (rereading) return
         val snap = editText.text.toString()
         val newText = transform(snap)
         if (newText == snap) return // no-op: nothing changes, no history needed
@@ -1179,6 +1194,7 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     private fun doUndo() {
+        if (rereading) return
         val history = pageHistories[currentPageKey] ?: return
         val previous = history.undo(editText.text.toString()) ?: return
         applyingHistory = true
@@ -1192,6 +1208,7 @@ class OcrEditorActivity : BaseActivity() {
     }
 
     private fun doRedo() {
+        if (rereading) return
         val history = pageHistories[currentPageKey] ?: return
         val next = history.redo(editText.text.toString()) ?: return
         applyingHistory = true
@@ -1206,8 +1223,8 @@ class OcrEditorActivity : BaseActivity() {
 
     private fun updateUndoRedoState() {
         val history = pageHistories[currentPageKey]
-        val canU = history?.canUndo == true
-        val canR = history?.canRedo == true
+        val canU = !rereading && history?.canUndo == true
+        val canR = !rereading && history?.canRedo == true
         btnUndo.isEnabled = canU
         btnUndo.alpha = if (canU) 1f else 0.38f
         btnRedo.isEnabled = canR
@@ -1236,7 +1253,7 @@ class OcrEditorActivity : BaseActivity() {
      * that. The screen closes only after the library write really succeeded.
      */
     private fun saveEdits(finishAfter: Boolean = false) {
-        if (saving) return
+        if (saving || rereading) return
         val id = docId
         if (id == null) {
             Toast.makeText(this, R.string.ocr_w5_not_in_library, Toast.LENGTH_LONG).show()
