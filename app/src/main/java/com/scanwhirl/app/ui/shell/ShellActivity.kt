@@ -11,6 +11,7 @@ import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -473,6 +474,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         val items = LinkedHashMap<Tab, LinearLayout>()
         fun item(tab: Tab, icon: Int, label: Int): LinearLayout {
+            val destination = tab
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -480,6 +482,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 isFocusable = true
                 contentDescription = getString(label)
                 setOnClickListener { showTab(tab) }
+            }
+            // L1-03: real accessibility state, not a manually appended word. The full
+            // label stays in contentDescription; the selected tab is a selectable node.
+            cell.accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.isSelected = this@ShellActivity.tab == destination
+                    info.addAction(AccessibilityNodeInfo.ACTION_SELECT)
+                }
             }
             cell.addView(
                 ImageView(this@ShellActivity).apply {
@@ -590,9 +601,29 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 imageTintList = ColorStateList.valueOf(
                     SwStyle.color(this@ShellActivity, R.color.sw_disc_ink)
                 )
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
             FrameLayout.LayoutParams(SwStyle.dp(this, 34f), SwStyle.dp(this, 34f)).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = SwStyle.dp(this@ShellActivity, 8f)
+            }
+        )
+        // L1-03: a visible, base-12sp caption. It lives INSIDE the disc's single focus
+        // stop, so TalkBack still hears one named Scan action rather than a second node.
+        disc.addView(
+            SwStyle.text(this, 12f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
+                id = R.id.uxL1ScanCaption
+                text = getString(R.string.ux130_l1_scan_caption)
                 gravity = Gravity.CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                isFocusable = false
+                includeFontPadding = false
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = SwStyle.dp(this@ShellActivity, 7f)
             }
         )
         return disc
@@ -736,6 +767,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val idle = SwStyle.color(this, R.color.text_hologram_dim)
         for ((key, cell) in navItems) {
             val on = key == tab && !proOpen
+            cell.isSelected = on
             val icon = if (on) navIconOn[key] else navIconOff[key]
             val glyph = cell.getChildAt(0) as ImageView
             icon?.let { glyph.setImageResource(it) }
