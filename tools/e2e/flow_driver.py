@@ -33,11 +33,16 @@ def bounds(node):
                                       node.get("bounds", "")).groups()))
 
 
-def match(node, text=None, desc=None, regex=None, cls=None):
+def match(node, text=None, desc=None, regex=None, cls=None, rid=None):
+    # Prefer stable resource-ids over copy: a UX copy rename must not break a flow.
+    # uiautomator reports either a fully-qualified "pkg:id/name" or a bare "name".
+    resource_id = node.get("resource-id") or ""
     return ((text is None or node.get("text") == text)
             and (desc is None or node.get("content-desc") == desc)
             and (regex is None or re.search(regex, node.get("text", "") + "\n" + node.get("content-desc", "")))
-            and (cls is None or node.get("class", "").endswith(cls)))
+            and (cls is None or node.get("class", "").endswith(cls))
+            and (rid is None or resource_id == rid or resource_id.endswith("/" + rid)
+                 or resource_id.endswith(":id/" + rid)))
 
 
 def hierarchy():
@@ -47,11 +52,25 @@ def hierarchy():
     return ET.fromstring(data)
 
 
+def _visible_matches(root, **want):
+    return [n for n in root.iter("node") if match(n, **want) and bounds(n)[2] > bounds(n)[0]
+            and bounds(n)[3] > bounds(n)[1]]
+
+
 def find(root, **want):
-    nodes = [n for n in root.iter("node") if match(n, **want) and bounds(n)[2] > bounds(n)[0]
+    nodes = _visible_matches(root, **want)
+    if not nodes:
+        raise AssertionError(f"Missing text/content-desc/resource-id control: {want}")
+    return nodes[0]
+
+
+def find_within(parent, **want):
+    """Find a control inside a specific row/card, so a repeated id stays unambiguous."""
+    # element.iter() includes the element itself; restrict to the parent's subtree.
+    nodes = [n for n in parent.iter("node") if match(n, **want) and bounds(n)[2] > bounds(n)[0]
              and bounds(n)[3] > bounds(n)[1]]
     if not nodes:
-        raise AssertionError(f"Missing text/content-desc control: {want}")
+        raise AssertionError(f"Missing control within parent: {want}")
     return nodes[0]
 
 
@@ -93,16 +112,20 @@ def wait_rotation(expected, timeout=12):
             time.sleep(0.3)
 
 
-def tap_node(root, node):
-    target = node
+def clickable_ancestor(root, node):
+    """Climb to the nearest clickable node, or None if there is none in this tree."""
     parents = {child: parent for parent in root.iter() for child in parent}
     while node.get("clickable") != "true" and node in parents and parents[node].tag == "node":
         node = parents[node]
+    return node if node.get("clickable") == "true" else None
+
+
+def tap_node(root, node):
+    ancestor = clickable_ancestor(root, node)
     # DocumentsUI ListView rows expose no clickable ancestor: click the matched
     # label itself, not the centre of the entire window reached by climbing.
-    if node.get("clickable") != "true":
-        node = target
-    x1, y1, x2, y2 = bounds(node)
+    target = ancestor if ancestor is not None else node
+    x1, y1, x2, y2 = bounds(target)
     adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
 
 
@@ -396,13 +419,15 @@ def f7():
     locale()
     tap(desc="Me")
     tap(text="Backup & restore")
-    tap(text="Back up now")
-    tap(text="Use a backup password")
-    tap(cls="EditText")
+    # UX-L5 renamed "Back up now" -> "Create backup"; target the stable view id.
+    tap(rid="backupNow")
+    tap(text=strings("en")["backup_use_password"])
+    wait(rid="backupPassword")
+    tap(rid="backupPassword")
     # Public fictional fixture, not an owner's password or a signing credential.
     adb("shell", "input", "text", "FictionalE2EBackupOnly2026")
     back()
-    tap(text="Continue")
+    tap(text=strings("en")["backup_continue"])
     wait(timeout=120, text="Backup ready")
     capture("F7_receipt")  # secure screens may be black; XML is authoritative
     root = hierarchy()
@@ -434,25 +459,31 @@ def f8():
 
 
 def f9():
-    open_doc()
-    tap(desc="More document actions")
-    seek(text="Move to Trash")
-    tap(text="Move to Trash")
-    # App may confirm destructive navigation with a named secondary sheet.
-    time.sleep(1)
+    locale()
+    # UX-L1 moved the single-document Trash action into the per-card quick-actions
+    # sheet (the card's swDocMore overflow -> qaDelete), not the viewer's scrolling
+    # Actions sheet. Target stable resource-ids: no English copy, no bounded scroll.
     root = hierarchy()
-    if any(n.get("text") == "Move to Trash" for n in root.iter("node")):
-        tap(text="Move to Trash")
+    label = find(root, text=NAME)
+    card = clickable_ancestor(root, label)
+    assert card is not None, "Named document card has no clickable ancestor"
+    tap_node(root, find_within(card, rid="swDocMore"))
+    wait(rid="qaDelete")
+    capture("F9_quick_actions")
+    # qaDelete -> confirmDelete(): the document moves to Trash immediately and an
+    # Undo snackbar is shown. There is no second confirmation sheet to tap.
+    tap(rid="qaDelete")
+    time.sleep(1)
     launch()
     tap(desc="Me")
-    tap(text="Trash")
+    tap(rid="swMeTrash")
     wait(text=NAME)
     capture("F9_trash")
     launch()
     wait(desc="Library")
     wait(text=strings("en")["home_search_hint"])
     capture("F9_cold_library")
-    return "Named imported item verified in Trash; force-stop/cold start opens Library"
+    return "Named imported item moved to Trash via per-card quick actions; verified in Trash; force-stop/cold start opens Library"
 
 
 def main():

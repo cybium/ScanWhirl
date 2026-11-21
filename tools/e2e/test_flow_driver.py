@@ -19,6 +19,28 @@ class FlowSelectorsTest(unittest.TestCase):
     def test_description_and_hindi_match(self):
         self.assertTrue(f.match(self.node(**{"content-desc": "कागज़ात"}), desc="कागज़ात"))
 
+    def test_resource_id_matches_bare_and_qualified(self):
+        qualified = self.node(**{"resource-id": "com.scanwhirl.app.test:id/backupNow"})
+        self.assertTrue(f.match(qualified, rid="backupNow"))
+        self.assertTrue(f.match(self.node(**{"resource-id": "backupNow"}), rid="backupNow"))
+        self.assertFalse(f.match(qualified, rid="backupRestore"))
+
+    def test_find_within_parent_scopes_repeated_ids(self):
+        root = ET.Element("hierarchy")
+        card = self.node(clickable="true")
+        more = self.node(**{"resource-id": "com.scanwhirl.app.test:id/swDocMore"})
+        card.append(more)
+        root.append(card)
+        self.assertIs(f.find_within(card, rid="swDocMore"), more)
+        with self.assertRaises(AssertionError):
+            f.find_within(card, rid="qaDelete")
+
+    def test_clickable_ancestor_returns_none_without_clickable(self):
+        root = ET.Element("hierarchy")
+        label = self.node()
+        root.append(label)
+        self.assertIsNone(f.clickable_ancestor(root, label))
+
     def test_missing_and_zero_area_controls_fail_closed(self):
         root = ET.Element("hierarchy")
         root.append(self.node(text="Compress", bounds="[0,0][0,0]"))
