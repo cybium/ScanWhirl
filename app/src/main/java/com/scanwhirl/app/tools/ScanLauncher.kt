@@ -27,6 +27,7 @@ import com.scanwhirl.app.util.Durable
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -61,6 +62,20 @@ class ScanLauncher(
         /** Guards against stacking two resume sheets from quick repeated Scan taps. */
         @Volatile
         private var resumeOfferShowing = false
+
+        /** Test seams: block the lookup to exercise cancellation, and observe the guard. */
+        @Volatile
+        internal var beforeResumeLookupForTest: (() -> Unit)? = null
+        @Volatile
+        internal var resumeOfferJobForTest: Job? = null
+
+        internal fun resumeOfferShowingForTest(): Boolean = resumeOfferShowing
+
+        internal fun resetResumeOfferStateForTest() {
+            resumeOfferShowing = false
+            resumeOfferJobForTest = null
+            beforeResumeLookupForTest = null
+        }
 
         internal fun consumeColdStartOffer(): Boolean {
             if (coldStartOfferConsumed) return false
@@ -164,18 +179,28 @@ class ScanLauncher(
         if (PendingScans.all(activity).isEmpty()) return false
         if (resumeOfferShowing) return true
         resumeOfferShowing = true
-        activity.lifecycleScope.launch {
-            val found = withContext(Dispatchers.IO) { findUnfinished() }
-            if (found == null) {
-                resumeOfferShowing = false
-                return@launch
+        val job = activity.lifecycleScope.launch {
+            var sheetShown = false
+            try {
+                val found = withContext(Dispatchers.IO) {
+                    beforeResumeLookupForTest?.invoke()
+                    findUnfinished()
+                }
+                if (found == null) return@launch
+                sheetShown = showResumeFromScanEntry(found)
+            } finally {
+                // A rotation/cancellation during the disk lookup must never leave
+                // the guard set: otherwise no later Scan could offer the pages.
+                resumeOfferJobForTest = null
+                if (!sheetShown) resumeOfferShowing = false
             }
-            showResumeFromScanEntry(found)
         }
+        resumeOfferJobForTest = job
         return true
     }
 
-    private fun showResumeFromScanEntry(found: Unfinished) {
+    /** Returns true once a sheet is actually on screen; its callbacks clear the guard. */
+    private fun showResumeFromScanEntry(found: Unfinished): Boolean {
         val pending = found.dir
         val committed = found.committed
         val primary: CharSequence
@@ -212,6 +237,7 @@ class ScanLauncher(
         // Dismissing without a decision keeps the staging folder for the next Scan.
         sheet.setOnDismissListener { resumeOfferShowing = false }
         sheet.show()
+        return true
     }
 
     /**
@@ -585,7 +611,9 @@ internal fun launchGalleryCropForReview(activity: AppCompatActivity, maxPages: I
 
 /** Appends gallery-crop results to the current Review staging folder, once. */
 internal fun appendGalleryPages(activity: AppCompatActivity, uris: List<Uri>) {
-    (activity as? ScanReviewActivity)?.appendStagedPages(uris)
+    // The module-failure fallback hands over raw gallery photos, which may be
+    // HEIC/HEIF: use the HEIC-aware normalizer, not the JPEG-only page path.
+    (activity as? ScanReviewActivity)?.appendGalleryFallbackPages(uris)
 }
 
 /** The result bridge behind [launchGalleryCrop] (registered by BaseActivity). */

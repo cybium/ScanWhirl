@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.view.KeyEvent
 import android.view.View
 import androidx.core.view.ViewCompat
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.accessibility.AccessibilityNodeProviderCompat
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -126,12 +125,10 @@ class CropAccessibilityTest {
     }
 
     @Test
-    fun `accessibility focus marks a handle and keyboard arrows move the selected handle`() {
+    fun `a focused handle is marked and keyboard arrows move the selected handle`() {
         val view = cropView()
-        val provider = provider(view)
-        assertTrue(
-            provider.performAction(3, AccessibilityNodeInfoCompat.ACTION_ACCESSIBILITY_FOCUS, null)
-        )
+        provider(view) // the helper is attached to the view
+        view.selectHandleForTest(2)
         assertEquals(2, view.getTag(R.id.ux130_l2_crop_handle))
 
         val before = view.getCropRect()

@@ -11,11 +11,11 @@ import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
-import android.view.accessibility.AccessibilityNodeInfo
-import androidx.core.view.AccessibilityDelegateCompat
+import android.view.accessibility.AccessibilityEvent
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.accessibility.AccessibilityNodeProviderCompat
+import androidx.customview.widget.ExploreByTouchHelper
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import kotlin.math.hypot
@@ -104,75 +104,105 @@ class CropView @JvmOverloads constructor(
     internal var lastAnnouncement: String = ""
         private set
 
+    /** Virtual-view ids invalidated after the latest move (test seam). */
+    private val invalidatedForTest = mutableListOf<Int>()
+
+    /** Virtual-view events sent after the latest move (test seam). */
+    private val eventsForTest = mutableListOf<Pair<Int, Int>>()
+
     /**
-     * Eight virtual children (four corners, four edges) let a screen reader move a
-     * handle by name without ever dragging a pixel. Positions, aspect ratio and
-     * clamping are the exact same code the touch path uses.
+     * Eight virtual children (four corners, four edges) exposed through AndroidX's
+     * [ExploreByTouchHelper]. Explore-by-touch hit-testing, node bounds and focus
+     * are managed by the framework; moving a handle still routes through the very
+     * same drag/aspect/clamp code the finger path uses.
      */
-    private val cropNodeProvider = object : AccessibilityNodeProviderCompat() {
-        override fun createAccessibilityNodeInfo(virtualViewId: Int): AccessibilityNodeInfoCompat? {
-            if (virtualViewId != AccessibilityNodeProviderCompat.HOST_VIEW_ID && image == null) return null
-            val screen = IntArray(2).also { getLocationOnScreen(it) }
-            if (virtualViewId == AccessibilityNodeProviderCompat.HOST_VIEW_ID) {
-                val info = AccessibilityNodeInfoCompat.wrap(AccessibilityNodeInfo.obtain(this@CropView))
-                info.setClassName(CropView::class.java.name)
-                info.isFocusable = true
-                info.isEnabled = true
-                info.contentDescription = context.getString(R.string.ux130_l2_crop_frame)
-                info.setBoundsInScreen(
-                    Rect(screen[0], screen[1], screen[0] + width, screen[1] + height)
-                )
-                if (image != null) {
-                    for (handle in 0 until 8) info.addChild(this@CropView, HANDLE_BASE + handle)
+    private inner class CropTouchHelper : ExploreByTouchHelper(this@CropView) {
+        /** Exposes the protected hit test to the host view's test seam. */
+        internal fun hitTest(x: Float, y: Float): Int = getVirtualViewAt(x, y)
+
+        /** The helper's own provider (Robolectric wraps the one on the View). */
+        internal fun providerForTest(): AccessibilityNodeProviderCompat =
+            getAccessibilityNodeProvider(this@CropView)!!
+
+        override fun getVirtualViewAt(x: Float, y: Float): Int {
+            if (image == null) return ExploreByTouchHelper.INVALID_ID
+            val points = handlePoints()
+            var best = ExploreByTouchHelper.INVALID_ID
+            var bestDist = Float.MAX_VALUE
+            for (i in 0 until 8) {
+                val dist = hypot(x - points[i * 2], y - points[i * 2 + 1])
+                // touchRadius is a 24dp radius, i.e. a 48dp effective target.
+                if (dist <= touchRadius && dist < bestDist) {
+                    best = HANDLE_BASE + i
+                    bestDist = dist
                 }
-                return info
             }
+            return best
+        }
+
+        override fun getVisibleVirtualViews(virtualViewIds: MutableList<Int>) {
+            if (image == null) return
+            for (handle in 0 until 8) virtualViewIds.add(HANDLE_BASE + handle)
+        }
+
+        override fun onPopulateNodeForHost(node: AccessibilityNodeInfoCompat) {
+            node.contentDescription = context.getString(R.string.ux130_l2_crop_frame)
+        }
+
+        override fun onPopulateEventForVirtualView(virtualViewId: Int, event: AccessibilityEvent) {
             val handle = virtualViewId - HANDLE_BASE
-            if (handle !in 0..7) return null
-            val info = AccessibilityNodeInfoCompat.obtain(this@CropView, virtualViewId)
-            info.setClassName(CropView::class.java.name)
-            info.isFocusable = true
-            info.isAccessibilityFocused = selectedHandle == handle
-            info.text = handleLabel(handle)
-            info.contentDescription = handleLabel(handle)
+            if (handle in 0..7) event.contentDescription = handleLabel(handle)
+        }
+
+        override fun onPopulateNodeForVirtualView(
+            virtualViewId: Int,
+            node: AccessibilityNodeInfoCompat
+        ) {
+            val handle = virtualViewId - HANDLE_BASE
+            if (handle !in 0..7 || image == null) {
+                node.setBoundsInParent(Rect())
+                return
+            }
+            node.className = CropView::class.java.name
+            node.isFocusable = true
+            node.text = handleLabel(handle)
+            node.contentDescription = handleLabel(handle)
             val points = handlePoints()
             val x = points[handle * 2]
             val y = points[handle * 2 + 1]
-            // touchRadius is a 24dp radius, i.e. a 48dp effective target, not a 24dp dot.
             val r = touchRadius
-            info.setBoundsInParent(Rect((x - r).toInt(), (y - r).toInt(), (x + r).toInt(), (y + r).toInt()))
-            info.setBoundsInScreen(
-                Rect(
-                    (screen[0] + x - r).toInt(), (screen[1] + y - r).toInt(),
-                    (screen[0] + x + r).toInt(), (screen[1] + y + r).toInt()
-                )
-            )
+            val bounds = Rect((x - r).toInt(), (y - r).toInt(), (x + r).toInt(), (y + r).toInt())
+            // ExploreByTouchHelper derives screen bounds from these parent bounds.
+            node.setBoundsInParent(bounds)
             for ((action, label) in moveActionsFor(handle)) {
-                info.addAction(
-                    AccessibilityNodeInfoCompat.AccessibilityActionCompat(action, context.getString(label))
+                node.addAction(
+                    AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                        action, context.getString(label)
+                    )
                 )
             }
-            return info
         }
 
-        override fun performAction(virtualViewId: Int, action: Int, arguments: Bundle?): Boolean {
-            if (virtualViewId == AccessibilityNodeProviderCompat.HOST_VIEW_ID) {
-                return super.performAction(virtualViewId, action, arguments)
-            }
+        override fun onPerformActionForVirtualView(
+            virtualViewId: Int,
+            action: Int,
+            arguments: Bundle?
+        ): Boolean {
             val handle = virtualViewId - HANDLE_BASE
             if (handle !in 0..7) return false
-            // Only advertise (and accept) moves that make sense for this handle.
+            // Only accept moves that make sense for this handle (corners: all four;
+            // horizontal edges: up/down; vertical edges: left/right).
             if (action in ACTION_MOVE_LEFT..ACTION_MOVE_DOWN &&
                 action !in moveActionsFor(handle).map { it.first }
             ) {
                 return false
             }
             return when (action) {
-                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> {
+                android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> {
                     selectHandle(handle)
                     true
                 }
-                AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS -> {
+                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS -> {
                     if (selectedHandle == handle) {
                         selectedHandle = -1
                         invalidate()
@@ -183,24 +213,58 @@ class CropView @JvmOverloads constructor(
                 ACTION_MOVE_RIGHT -> moveHandle(handle, 1f, 0f)
                 ACTION_MOVE_UP -> moveHandle(handle, 0f, -1f)
                 ACTION_MOVE_DOWN -> moveHandle(handle, 0f, 1f)
-                else -> super.performAction(virtualViewId, action, arguments)
+                else -> false
             }
         }
+
+        override fun onVirtualViewKeyboardFocusChanged(virtualViewId: Int, hasFocus: Boolean) {
+            super.onVirtualViewKeyboardFocusChanged(virtualViewId, hasFocus)
+            val handle = virtualViewId - HANDLE_BASE
+            if (hasFocus && handle in 0..7) selectHandle(handle)
+        }
     }
+
+    private val cropTouchHelper = CropTouchHelper()
 
     init {
         // L2-01: the canvas surface is a real accessibility target, not just drawn pixels.
         isFocusable = true
         isFocusableInTouchMode = true
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
-            override fun getAccessibilityNodeProvider(host: View): AccessibilityNodeProviderCompat? =
-                cropNodeProvider
-        })
+        ViewCompat.setAccessibilityDelegate(this, cropTouchHelper)
     }
 
-    /** Test seam: the same provider ViewCompat exposes to TalkBack. */
-    internal fun nodeProviderForTest(): AccessibilityNodeProviderCompat = cropNodeProvider
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean =
+        cropTouchHelper.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        cropTouchHelper.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
+        cropTouchHelper.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
+    }
+
+    /** Test seam: the helper's real provider (TalkBack sees it through ViewCompat). */
+    internal fun nodeProviderForTest(): AccessibilityNodeProviderCompat = cropTouchHelper.providerForTest()
+
+    /** Test seam: explore-by-touch hit test against the existing handle geometry. */
+    internal fun virtualViewAt(x: Float, y: Float): Int = cropTouchHelper.hitTest(x, y)
+
+    internal fun nodeForVirtualViewForTest(id: Int): AccessibilityNodeInfoCompat? =
+        cropTouchHelper.providerForTest().createAccessibilityNodeInfo(id)
+
+    internal fun performVirtualActionForTest(id: Int, action: Int): Boolean =
+        cropTouchHelper.providerForTest().performAction(id, action, null)
+
+    internal fun invalidatedVirtualViewsForTest(): List<Int> = invalidatedForTest.toList()
+
+    internal fun virtualEventsForTest(): List<Pair<Int, Int>> = eventsForTest.toList()
+
+    /** Test seam: ExploreByTouchHelper owns accessibility focus; set the visible focus ring. */
+    internal fun selectHandleForTest(handle: Int) {
+        if (handle in 0..7) selectHandle(handle)
+    }
 
     /** Hands the page bitmap to the view (a display-size copy, never full-res). */
     fun setImage(bitmap: Bitmap) {
@@ -414,6 +478,12 @@ class CropView @JvmOverloads constructor(
         selectHandle(handle)
         if (crop == before) return false
         invalidate()
+        // The virtual node moved: refresh TalkBack's cached bounds and announce it.
+        val virtualId = HANDLE_BASE + handle
+        invalidatedForTest += virtualId
+        cropTouchHelper.invalidateVirtualView(virtualId)
+        eventsForTest += virtualId to AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+        cropTouchHelper.sendEventForVirtualView(virtualId, AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED)
         val announcement = context.getString(R.string.ux130_l2_crop_moved, handleLabel(handle))
         lastAnnouncement = announcement
         try {
@@ -424,7 +494,12 @@ class CropView @JvmOverloads constructor(
         return true
     }
 
-    /** D-pad moves the focused (or first) handle; Tab cycles through the eight. */
+    /**
+     * D-pad moves the focused (or first) handle. Tab only advances while a handle
+     * is focused and there is another one after it; from the last handle (or with
+     * no handle focused) the event belongs to the normal focus order, so Save and
+     * Apply stay reachable.
+     */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (image != null) {
             val direction = when (keyCode) {
@@ -437,8 +512,8 @@ class CropView @JvmOverloads constructor(
             if (direction != null) {
                 val handle = if (selectedHandle in 0..7) selectedHandle else 0
                 if (moveHandle(handle, direction.first, direction.second)) return true
-            } else if (keyCode == KeyEvent.KEYCODE_TAB) {
-                selectHandle(if (selectedHandle in 0..6) selectedHandle + 1 else 0)
+            } else if (keyCode == KeyEvent.KEYCODE_TAB && selectedHandle in 0..6) {
+                selectHandle(selectedHandle + 1)
                 return true
             }
         }
