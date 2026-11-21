@@ -17,7 +17,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import android.view.ContextThemeWrapper
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
@@ -136,9 +135,6 @@ class ScanReviewActivity : BaseActivity() {
     internal var arrangeMode = false
         private set
 
-    /** The owner confirmed the page order ("Order looks right") in this session. */
-    private var orderChecked = false
-
     /** A filter was changed here (filters live in filters.txt, not in file mtimes). */
     private var filtersEdited = false
 
@@ -252,7 +248,6 @@ class ScanReviewActivity : BaseActivity() {
         savedInstanceState?.let {
             currentIndex = it.getInt(STATE_CURRENT, 0)
             arrangeMode = it.getBoolean(STATE_ARRANGE, false)
-            orderChecked = it.getBoolean(STATE_ORDER_OK, false)
             filtersEdited = it.getBoolean(STATE_FILTERS_EDITED, false)
             editedBeforeRecreate = it.getBoolean(STATE_EDITED, false)
         }
@@ -299,7 +294,7 @@ class ScanReviewActivity : BaseActivity() {
                     true
                 }
                 R.id.action_add_gallery -> {
-                    galleryPagesLauncher.launch("image/*")
+                    showGalleryAddSheet()
                     true
                 }
                 else -> false
@@ -375,7 +370,6 @@ class ScanReviewActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt(STATE_CURRENT, currentIndex)
         outState.putBoolean(STATE_ARRANGE, arrangeMode)
-        outState.putBoolean(STATE_ORDER_OK, orderChecked)
         outState.putBoolean(STATE_FILTERS_EDITED, filtersEdited)
         outState.putBoolean(STATE_EDITED, isEdited())
         if (reviewStateReady) {
@@ -783,20 +777,9 @@ class ScanReviewActivity : BaseActivity() {
         binding.btnToolDelete.setOnClickListener {
             pages.getOrNull(currentIndex)?.let { deletePage(it) }
         }
-        binding.orderLink.setOnClickListener { setMode(arrange = true) }
     }
 
     private fun setupArrange() {
-        binding.orderText.text = SpannableStringBuilder().apply {
-            append(getString(R.string.review_order_title), StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            append(' ')
-            append(getString(R.string.review_order_body))
-        }
-        binding.btnOrderOk.setOnClickListener {
-            orderChecked = true
-            haptic(confirmHaptic())
-            renderPages()
-        }
         binding.btnArrEarlier.setOnClickListener {
             reorderStaging(currentIndex, currentIndex - 1, announce = true)
         }
@@ -861,6 +844,7 @@ class ScanReviewActivity : BaseActivity() {
         binding.pageGrid.refresh()
         haptic(HapticFeedbackConstants.CLOCK_TICK)
         renderCurrent()
+        renderStatus()
     }
 
     /** Everything that depends on the page list (after any reload). */
@@ -870,11 +854,8 @@ class ScanReviewActivity : BaseActivity() {
         filmAdapter.notifyDataSetChanged()
         binding.btnSavePdf.text =
             resources.getQuantityString(R.plurals.review_save_pages, pages.size, pages.size)
-        val needsOrderCheck = pages.size > 1 && !orderChecked
-        binding.orderLink.isVisible = needsOrderCheck
-        binding.orderCard.isVisible = needsOrderCheck
-        // The card already says what to do; one instruction at a time keeps the grid tall.
-        binding.arrangeHint.isVisible = !needsOrderCheck
+        // L2-03: no unenforced "Order looks right" ritual. One honest hint stays
+        // visible in Arrange; the accessible Earlier/Later/Move to actions remain.
         renderStatus()
         renderCurrent()
     }
@@ -882,7 +863,8 @@ class ScanReviewActivity : BaseActivity() {
     private fun renderCurrent() {
         val n = pages.size
         val i = currentIndex
-        binding.pageStatus.text = getString(R.string.review_page_of, i + 1, n)
+        // L2-03: the page position now lives in the single reviewStatus line.
+        // pageStatus is an empty, hidden legacy node; no duplicate status is shown.
         binding.btnPrevPage.isVisible = n > 1
         binding.btnNextPage.isVisible = n > 1
         binding.btnPrevPage.isEnabled = i > 0
@@ -898,10 +880,14 @@ class ScanReviewActivity : BaseActivity() {
         pages.getOrNull(i)?.let { loadFocusImage(it) }
     }
 
-    /** "5 pages · Forms · Not saved yet" — the status always names the unsaved state. */
+    /**
+     * L2-03: one status line — "Page %1$d of %2$d · <category> · Not saved yet".
+     * The separate page counter stays as a hidden compatibility node; the owner
+     * sees only this line, and it always names the unsaved state honestly.
+     */
     private fun renderStatus() {
         val text = SpannableStringBuilder()
-        text.append(resources.getQuantityString(R.plurals.review_page_count, pages.size, pages.size))
+        text.append(getString(R.string.ux130_l2_review_status, currentIndex + 1, pages.size))
         if (chosenCategory != CategoryRules.UNSORTED) {
             text.append(" · ").append(CategoryLabels.display(this, chosenCategory))
         }
@@ -992,13 +978,23 @@ class ScanReviewActivity : BaseActivity() {
                 all.indexOf(filters[file.path] ?: ScanFilter.ORIGINAL)
             ) { which, _ ->
                 val chosen = all[which]
-                if (chosen == (filters[file.path] ?: ScanFilter.ORIGINAL) || !file.exists()) return@setOptions
+                val previous = filters[file.path] ?: ScanFilter.ORIGINAL
+                val wasEdited = filtersEdited
+                if (chosen == previous || !file.exists()) return@setOptions
                 filters[file.path] = chosen
                 filtersEdited = true
                 writeFilters()
                 binding.pageGrid.refresh()
                 renderPages()
-                snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes)), null)
+                // L2-03: a filter is reversible. Undo restores the prior choice and
+                // writes filters.txt, so the restored value survives recreation.
+                snack(getString(R.string.review_filter_set, index + 1, getString(chosen.labelRes))) {
+                    filters[file.path] = previous
+                    filtersEdited = wasEdited
+                    writeFilters()
+                    binding.pageGrid.refresh()
+                    renderPages()
+                }
             }
             .setSecondary(android.R.string.cancel)
             .build()
@@ -1024,11 +1020,32 @@ class ScanReviewActivity : BaseActivity() {
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_pages -> launchAddPages()
-                    R.id.action_add_gallery -> galleryPagesLauncher.launch("image/*")
+                    R.id.action_add_gallery -> showGalleryAddSheet()
                 }
                 true
             }
         }.show()
+    }
+
+    /**
+     * L2-02: gallery additions get an explicit corner-adjust step. The primary
+     * action runs the existing gallery-crop pipeline and only appends the
+     * corrected URIs; the secondary keeps the old straight-photo import as an
+     * opt out. Cancel and any failure leave the current page list untouched.
+     */
+    internal fun showGalleryAddSheet() {
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.ux130_l2_add_gallery_title)
+            .setMessage(R.string.ux130_l2_add_gallery_msg)
+            .setPrimary(R.string.ux130_l2_add_gallery_adjust) {
+                com.scanwhirl.app.tools.launchGalleryCropForReview(this)
+            }
+            .setSecondary(R.string.ux130_l2_add_gallery_plain) {
+                galleryPagesLauncher.launch("image/*")
+            }
+            .build()
+        sheet.setOnDismissListener { /* an undecided import never changes staging */ }
+        sheet.show()
     }
 
     /** Move to…: an explicit numbered position, the accessible alternative to dragging. */
@@ -1168,8 +1185,20 @@ class ScanReviewActivity : BaseActivity() {
         }
     }
 
+    /** Which normalizer the latest append used (test seam for the gallery fallback). */
+    internal var lastAppendUsedHeicAwareForTest: Boolean = false
+        private set
+
+    /**
+     * L2-02/L2-04: raw photos handed over by the scanner-module fallback can be
+     * HEIC/HEIF, so normalizeGalleryPhoto (not the JPEG-only page path) is used.
+     */
+    internal fun appendGalleryFallbackPages(uris: List<Uri>) =
+        appendStagedPages(uris, galleryPhotos = true)
+
     /** Copies [uris] into the staging folder with continuing page numbers. */
-    internal fun appendStagedPages(uris: List<Uri>) {
+    internal fun appendStagedPages(uris: List<Uri>, galleryPhotos: Boolean = false) {
+        lastAppendUsedHeicAwareForTest = galleryPhotos
         lifecycleScope.launch {
             var appended = false
             try {
@@ -1182,16 +1211,22 @@ class ScanReviewActivity : BaseActivity() {
                         next += 1
                         File(stagingDir, String.format(Locale.ROOT, "page_%03d.jpg", next))
                             // Real JPEG, white alpha and EXIF orientation; no perspective crop.
-                            .writeBytes(ImageTools.normalizePage(bytes))
+                            // The gallery fallback also re-encodes HEIC/HEIF containers.
+                            .writeBytes(
+                                if (galleryPhotos) ImageTools.normalizeGalleryPhoto(bytes)
+                                else ImageTools.normalizePage(bytes)
+                            )
                         appended = true
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(
-                    this@ScanReviewActivity,
-                    getString(R.string.stage_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+                // A later bad page must not claim the earlier pages were untouched.
+                val message = if (appended) {
+                    getString(R.string.ux130_l2_gallery_partial_failure)
+                } else {
+                    getString(R.string.stage_failed, getString(R.string.f8_reason_unreadable))
+                }
+                Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
             } finally {
                 // Even when a later input is invalid, earlier added pages invalidate
                 // the scanner PDF and must remain visible/recoverable in review.
@@ -1367,7 +1402,6 @@ class ScanReviewActivity : BaseActivity() {
         private const val REVIEW_STATE = "review_state"
         private const val STATE_CURRENT = "review_current_page"
         private const val STATE_ARRANGE = "review_arrange_mode"
-        private const val STATE_ORDER_OK = "review_order_checked"
         private const val STATE_FILTERS_EDITED = "review_filters_edited"
         private const val STATE_EDITED = "review_edited"
 

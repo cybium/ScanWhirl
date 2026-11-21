@@ -27,6 +27,7 @@ import com.scanwhirl.app.util.Durable
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -57,6 +58,24 @@ class ScanLauncher(
          */
         @Volatile
         private var coldStartOfferConsumed = false
+
+        /** Guards against stacking two resume sheets from quick repeated Scan taps. */
+        @Volatile
+        private var resumeOfferShowing = false
+
+        /** Test seams: block the lookup to exercise cancellation, and observe the guard. */
+        @Volatile
+        internal var beforeResumeLookupForTest: (() -> Unit)? = null
+        @Volatile
+        internal var resumeOfferJobForTest: Job? = null
+
+        internal fun resumeOfferShowingForTest(): Boolean = resumeOfferShowing
+
+        internal fun resetResumeOfferStateForTest() {
+            resumeOfferShowing = false
+            resumeOfferJobForTest = null
+            beforeResumeLookupForTest = null
+        }
 
         internal fun consumeColdStartOffer(): Boolean {
             if (coldStartOfferConsumed) return false
@@ -151,12 +170,87 @@ class ScanLauncher(
     }
 
     /**
+     * L2-04: the startup offer above is once per process so a rotation cannot
+     * stack it, but a person who dismissed it and taps Create/Scan again must
+     * see their unfinished pages. Only an explicit Resume or Discard removes
+     * the offer; merely navigating or rotating leaves the pages discoverable.
+     */
+    private fun offerResumeFromScanEntry(): Boolean {
+        if (PendingScans.all(activity).isEmpty()) return false
+        if (resumeOfferShowing) return true
+        resumeOfferShowing = true
+        val job = activity.lifecycleScope.launch {
+            var sheetShown = false
+            try {
+                val found = withContext(Dispatchers.IO) {
+                    beforeResumeLookupForTest?.invoke()
+                    findUnfinished()
+                }
+                if (found == null) return@launch
+                sheetShown = showResumeFromScanEntry(found)
+            } finally {
+                // A rotation/cancellation during the disk lookup must never leave
+                // the guard set: otherwise no later Scan could offer the pages.
+                resumeOfferJobForTest = null
+                if (!sheetShown) resumeOfferShowing = false
+            }
+        }
+        resumeOfferJobForTest = job
+        return true
+    }
+
+    /** Returns true once a sheet is actually on screen; its callbacks clear the guard. */
+    private fun showResumeFromScanEntry(found: Unfinished): Boolean {
+        val pending = found.dir
+        val committed = found.committed
+        val primary: CharSequence
+        val secondary: CharSequence
+        if (committed != null) {
+            primary = activity.getString(R.string.resume_saved_open)
+            secondary = activity.getString(R.string.resume_saved_remove)
+        } else {
+            primary = activity.getString(R.string.ux130_l2_resume_scan)
+            secondary = activity.getString(R.string.ux130_l2_discard_scan)
+        }
+        val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
+            .setTitle(if (committed != null) R.string.resume_saved_title else R.string.resume_scan_title)
+            .setMessage(
+                if (committed != null) activity.getString(R.string.resume_saved_msg, committed.name)
+                else activity.getString(R.string.resume_scan_msg, found.pageCount)
+            )
+            .setPrimary(primary) {
+                resumeOfferShowing = false
+                if (committed != null) {
+                    activity.startActivity(DocumentViewerActivity.intent(activity, committed.id))
+                    pending.deleteRecursively()
+                } else {
+                    activity.startActivity(
+                        ScanReviewActivity.intent(activity, pending.path, null, repo.nextDocumentName())
+                    )
+                }
+            }
+            .setSecondary(secondary) {
+                resumeOfferShowing = false
+                pending.deleteRecursively()
+            }
+            .build()
+        // Dismissing without a decision keeps the staging folder for the next Scan.
+        sheet.setOnDismissListener { resumeOfferShowing = false }
+        sheet.show()
+        return true
+    }
+
+    /**
      * Opens the Google scanner, mode dependent on auto-enhance setting.
      * Gallery import inside the scanner is disabled for the camera entry: it runs
      * perspective crop and tilted photos came back tilted. Gallery auto-crop is a
      * separate, opt-in entry ([launchGalleryCrop]) where the crop is the point.
      */
     fun launchScanner() {
+        // L2-04: staging is the durable source of truth. The cold-start offer keeps
+        // its rotation guard, but each explicit Scan entry re-offers unfinished
+        // pages until the owner resumes or discards them.
+        if (offerResumeFromScanEntry()) return
         val options = cameraOptions()
         try {
             GmsDocumentScanning.getClient(options)
@@ -177,23 +271,17 @@ class ScanLauncher(
      * The scanner module is absent or refused. It comes from Play services, so say that plainly
      * and offer the same manual photo import Book pages uses instead of a dead tap.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun scannerUnavailable(statusCode: Int?) {
-        val reason = activity.getString(R.string.s1_reason_scanner_unavailable)
-        val detail = if (statusCode != null) {
-            activity.getString(R.string.scanner_unavailable, statusCode)
-        } else {
-            activity.getString(R.string.scanner_failed, reason)
-        }
-        // The short toast keeps the existing "the scanner entry was reached" feedback; the
-        // sheet below is the actionable part (truthful copy + a working photo fallback).
-        Toast.makeText(activity, detail, Toast.LENGTH_LONG).show()
+        // L2-04: one truthful sheet, no duplicate Toast and no numeric status code.
+        // The Google Play services explanation is the existing reviewed copy.
         com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
-            .setTitle(detail)
+            .setTitle(R.string.ux130_l2_scanner_unavailable_title)
             .setMessage(R.string.s1_scanner_photo_fallback)
-            .setPrimary(R.string.s1_pick_photos) {
+            .setPrimary(R.string.ux130_l2_pick_photos) {
                 GalleryCrop.pickPhotosOnly(activity, photoFallbackHandler)
             }
-            .setSecondary(R.string.sheet_cancel)
+            .setSecondary(R.string.ux130_l2_cancel)
             .build()
             .show()
     }
@@ -258,6 +346,12 @@ class ScanLauncher(
      * staged pages are kept and Review opens on them, so nothing scanned is lost.
      */
     fun saveScanned(uris: List<Uri>, openAfterSave: Boolean = false) {
+        // L2-04: a successful scan that returned no pages is not an error and not
+        // a document. Offer the same photo fallback instead of saving nothing.
+        if (uris.isEmpty()) {
+            offerEmptyScanFallback()
+            return
+        }
         val progress = host.showProgress(R.string.review_saving)
         activity.lifecycleScope.launch {
             val t0 = SystemClock.elapsedRealtime()
@@ -299,6 +393,19 @@ class ScanLauncher(
                 progress.dismiss()
             }
         }
+    }
+
+    /** A scan that succeeded with zero pages: a quiet, actionable fallback. */
+    private fun offerEmptyScanFallback() {
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
+            .setTitle(R.string.ux130_l2_empty_scan_title)
+            .setMessage(R.string.ux130_l2_empty_scan_msg)
+            .setPrimary(R.string.ux130_l2_pick_photos) {
+                GalleryCrop.pickPhotosOnly(activity, photoFallbackHandler)
+            }
+            .setSecondary(R.string.ux130_l2_cancel)
+            .build()
+            .show()
     }
 
     /** Localized reasons only: a raw library/JVM message never reaches the screen. */
@@ -484,6 +591,29 @@ fun launchGalleryCrop(
     GalleryCrop.launch(
         activity, maxPages, CropRequest(activity::class.java.name), onResult, onFallback ?: onResult
     )
+}
+
+/**
+ * L2-02: "Add from gallery" now uses the same gallery-crop pipeline contract as
+ * Home and ID card. The scanner returns corrected JPEGs; they are appended to
+ * the live Review screen's staging folder, never committed as a new document
+ * and never written back over the picked originals. If the module is missing,
+ * the manual picker hands the unchanged photos to the same staging append.
+ */
+internal fun launchGalleryCropForReview(activity: AppCompatActivity, maxPages: Int = 30) {
+    launchGalleryCrop(
+        activity,
+        maxPages,
+        onResult = { live, _, uris -> appendGalleryPages(live, uris) },
+        onFallback = { live, _, uris -> appendGalleryPages(live, uris) }
+    )
+}
+
+/** Appends gallery-crop results to the current Review staging folder, once. */
+internal fun appendGalleryPages(activity: AppCompatActivity, uris: List<Uri>) {
+    // The module-failure fallback hands over raw gallery photos, which may be
+    // HEIC/HEIF: use the HEIC-aware normalizer, not the JPEG-only page path.
+    (activity as? ScanReviewActivity)?.appendGalleryFallbackPages(uris)
 }
 
 /** The result bridge behind [launchGalleryCrop] (registered by BaseActivity). */

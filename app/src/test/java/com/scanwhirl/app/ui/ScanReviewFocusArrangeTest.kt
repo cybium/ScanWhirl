@@ -73,10 +73,11 @@ class ScanReviewFocusArrangeTest {
                 assertFalse(a.arrangeMode)
                 assertTrue(a.findViewById<View>(R.id.focusPanel).isShown)
                 assertEquals(View.GONE, a.findViewById<View>(R.id.arrangePanel).visibility)
-                assertEquals("Page 1 of 1", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 1 of 1"))
                 assertEquals(View.GONE, a.findViewById<View>(R.id.btnPrevPage).visibility)
                 assertEquals(View.GONE, a.findViewById<View>(R.id.btnNextPage).visibility)
-                assertEquals("no order check for a single page", View.GONE, a.findViewById<View>(R.id.orderLink).visibility)
+                assertEquals("no order-check control exists", View.GONE, a.findViewById<View>(R.id.orderLink).visibility)
                 assertEquals("Save 1 page", a.text(R.id.btnSavePdf))
                 assertTrue(a.text(R.id.reviewStatus).endsWith("Not saved yet"))
             }
@@ -99,27 +100,28 @@ class ScanReviewFocusArrangeTest {
                 layout(film, 1080, 200)
                 film.findViewHolderForAdapterPosition(3)!!.itemView.performClick()
                 assertEquals(3, a.currentIndex)
-                assertEquals("Page 4 of 5", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 4 of 5"))
                 layout(film, 1080, 200)
                 val cell = film.findViewHolderForAdapterPosition(3)!!.itemView
                 assertTrue("current filmstrip cell is marked", cell.isSelected)
                 assertEquals("Page 4, shown", cell.contentDescription)
 
                 a.findViewById<View>(R.id.btnNextPage).performClick()
-                assertEquals("Page 5 of 5", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 5 of 5"))
                 assertFalse("no next page after the last", a.findViewById<View>(R.id.btnNextPage).isEnabled)
                 a.findViewById<View>(R.id.btnPrevPage).performClick()
                 assertEquals(3, a.currentIndex)
 
-                // Multi-page: "check the order before saving" is offered, and dismissible.
-                val link = a.findViewById<View>(R.id.orderLink)
-                assertEquals(View.VISIBLE, link.visibility)
-                link.performClick()
-                assertTrue("the order link opens Arrange", a.arrangeMode)
-                assertEquals(View.VISIBLE, a.findViewById<View>(R.id.orderCard).visibility)
-                a.findViewById<View>(R.id.btnOrderOk).performClick()
-                assertEquals(View.GONE, a.findViewById<View>(R.id.orderCard).visibility)
-                assertEquals(View.GONE, a.findViewById<View>(R.id.orderLink).visibility)
+                // L2-03: no unenforced "Order looks right" ritual. Arrange is still
+                // reachable from the labelled mode toggle; order correctness is
+                // proven by the move/save tests and their width assertions below.
+                assertEquals("no order-check link", View.GONE, a.findViewById<View>(R.id.orderLink).visibility)
+                assertEquals("no order-check card", View.GONE, a.findViewById<View>(R.id.orderCard).visibility)
+                assertFalse("no order-confirm button", a.findViewById<View>(R.id.btnOrderOk).isShown)
+                a.findViewById<View>(R.id.btnModeArrange).performClick()
+                assertTrue("the mode toggle opens Arrange", a.arrangeMode)
                 assertEquals("Save 5 pages", a.text(R.id.btnSavePdf))
             }
         }
@@ -140,7 +142,8 @@ class ScanReviewFocusArrangeTest {
                 assertTrue(save.isShown)
                 assertEquals("Save 30 pages", a.text(R.id.btnSavePdf))
                 a.showPage(29)
-                assertEquals("Page 30 of 30", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 30 of 30"))
                 assertFalse(a.findViewById<View>(R.id.btnArrLater).isEnabled)
                 assertTrue(a.findViewById<View>(R.id.btnArrEarlier).isEnabled)
                 a.findViewById<View>(R.id.btnArrMove).performClick()
@@ -182,7 +185,8 @@ class ScanReviewFocusArrangeTest {
                 // Tap selects; tapping the selected page again opens it in Focus.
                 grid.findViewHolderForAdapterPosition(4)!!.itemView.performClick()
                 assertEquals(4, a.currentIndex)
-                assertEquals("Page 5 of 5", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 5 of 5"))
                 layout(grid, 1080, 2000)
                 grid.findViewHolderForAdapterPosition(4)!!.itemView.performClick()
                 assertFalse(a.arrangeMode)
@@ -281,7 +285,8 @@ class ScanReviewFocusArrangeTest {
             scenario.moveToState(Lifecycle.State.RESUMED)
             scenario.onActivity { a ->
                 assertEquals(2, a.currentIndex)
-                assertEquals("Page 3 of 4", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 3 of 4"))
                 val tag = a.findViewById<View>(R.id.focusImage).tag as String
                 assertTrue("Focus shows the edited file, not a stale decode",
                     tag.contains("|${files[2].lastModified()}|${files[2].length()}|"))
@@ -315,12 +320,14 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.findViewById<View>(R.id.btnToolDelete).performClick()
             }
-            // The rename + re-list can settle a tick after the click; wait for the shown count.
-            await { scenario.get { it.text(R.id.pageStatus) == "Page 2 of 2" } }
+            // The rename + re-list can settle a tick after the click; wait for the
+            // combined status line to show the new count (bounded wait, no hang).
+            await { scenario.get { it.text(R.id.reviewStatus).contains("Page 2 of 2") } }
             scenario.onActivity { a ->
                 assertTrue(File(dir, "page_001.jpg.del").exists())
                 assertEquals(1, a.currentIndex)
-                assertEquals("Page 2 of 2", a.text(R.id.pageStatus))
+                assertTrue("one visible status names the page: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 2 of 2"))
                 assertEquals("Save 2 pages", a.text(R.id.btnSavePdf))
             }
             shadowOf(Looper.getMainLooper()).idle()

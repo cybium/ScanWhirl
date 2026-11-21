@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane L2: lane-prefixed IDs only; shared IDs are never edited. -->
+<resources>
+    <item name="ux130_l2_crop_handle" type="id" />
+</resources>

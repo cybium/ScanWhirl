@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
@@ -22,6 +24,9 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.PageOrder
 import com.scanwhirl.app.util.ScanFilter
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
 import android.view.View
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +87,46 @@ class PageViewerActivity : BaseActivity() {
 
     private val pagerAdapter = PagerAdapter()
     private lateinit var snapHelper: PagerSnapHelper
+
+    /**
+     * L2-03: the full-screen page is more than an unnamed image. Expose named
+     * zoom actions that drive the existing double-tap gesture in
+     * [ZoomableImageView] (no separate renderer, no engine change).
+     */
+    private val zoomAccessibility = object : AccessibilityDelegateCompat() {
+        override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+            super.onInitializeAccessibilityNodeInfo(host, info)
+            info.addAction(
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                    ACTION_ZOOM_PAGE, host.context.getString(R.string.ux130_l2_zoom_page)
+                )
+            )
+            info.addAction(
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                    ACTION_CLOSE_ZOOM, host.context.getString(R.string.ux130_l2_close_zoom)
+                )
+            )
+        }
+
+        override fun performAccessibilityAction(host: View, action: Int, arguments: Bundle?): Boolean {
+            if (action == ACTION_ZOOM_PAGE || action == ACTION_CLOSE_ZOOM) {
+                dispatchDoubleTap(host)
+                return true
+            }
+            return super.performAccessibilityAction(host, action, arguments)
+        }
+    }
+
+    /** Toggles zoom through the same double-tap the sighted path uses. */
+    private fun dispatchDoubleTap(view: View) {
+        val now = SystemClock.uptimeMillis()
+        val x = view.width / 2f
+        val y = view.height / 2f
+        view.onTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0))
+        view.onTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0))
+        view.onTouchEvent(MotionEvent.obtain(now + 20, now + 20, MotionEvent.ACTION_DOWN, x, y, 0))
+        view.onTouchEvent(MotionEvent.obtain(now + 20, now + 20, MotionEvent.ACTION_UP, x, y, 0))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -742,8 +787,9 @@ class PageViewerActivity : BaseActivity() {
          */
         fun bind(file: File, position: Int, total: Int) {
             binding.pageImage.contentDescription = binding.root.context.getString(
-                R.string.a11y_page_image, position + 1, total
+                R.string.ux130_l2_preview_page, position + 1, total
             )
+            ViewCompat.setAccessibilityDelegate(binding.pageImage, zoomAccessibility)
             val filter = pagerAdapter.filterFor(file)
             val key = "${file.path}|${file.lastModified()}|${file.length()}|${filter.id}"
             binding.pageImage.tag = key
@@ -770,6 +816,10 @@ class PageViewerActivity : BaseActivity() {
     }
 
     companion object {
+        /** Custom accessibility actions for the full-screen page preview. */
+        private const val ACTION_ZOOM_PAGE = 0x01000021
+        private const val ACTION_CLOSE_ZOOM = 0x01000022
+
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_PAGE = "page_index"
         private const val EXTRA_START_CROP = "start_crop"
