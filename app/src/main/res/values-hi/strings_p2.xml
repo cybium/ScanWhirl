@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- p2pro: ईमानदार खरीद परिणाम और व्यस्त स्थिति। -->
+<resources>
+    <string name="pro_no_purchase">Google Play को इस खाते में कोई Pro खरीद नहीं मिली।</string>
+    <string name="pro_purchase_in_progress">खरीदारी जारी है</string>
+</resources>

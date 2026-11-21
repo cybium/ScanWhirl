@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.FlowUtil
-import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_DRAW
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_HIGHLIGHT
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_PAGE_NUMBERS
@@ -16,7 +16,6 @@ import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_SIGN
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_STAMP
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_TEXT
 import com.scanwhirl.app.ui.stamp.StampEditorActivity.Companion.TOOL_WATERMARK
-import com.scanwhirl.app.util.ProGate
 
 /**
  * L5 Phase B — the Tools-hub entry point for the eight Edit & sign tools.
@@ -43,10 +42,9 @@ object StampToolLauncher {
 
     fun open(activity: Activity, toolId: String) {
         val tool = toolFor(toolId) ?: return
-        if (!ProGate.isPro(activity)) {
-            showPro(activity)
-            return
-        }
+        // p2pro #4: one Pro offer for every gate. The old "Got it" sheet was a dead end; the
+        // shell's Pro screen carries Buy and Restore, exactly like every other Pro tool.
+        if (!ProOffer.require(activity)) return
         val docs = ScanRepository(activity).listDocuments()
             .filter { !it.isLocked && !it.isVaulted }
         if (docs.isEmpty()) {
@@ -62,15 +60,5 @@ object StampToolLauncher {
     /** Kept for callers that only have a [Context] (they must be able to start an Activity). */
     fun openFrom(context: Context, toolId: String) {
         if (context is Activity) open(context, toolId)
-    }
-
-    /** Free build: name the group honestly; Billing is not switched on yet (design §3). */
-    private fun showPro(activity: Activity) {
-        SwSheet.builder(activity)
-            .setTitle(R.string.pro_suite_title)
-            .setMessage(R.string.stamp_pro_message)
-            .setPrimary(R.string.sheet_got_it)
-            .build()
-            .show()
     }
 }

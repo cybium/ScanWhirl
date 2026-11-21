@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.ProBilling*,com.scanwhirl.app.util.ProGateTest,com.scanwhirl.app.util.P2ProBillingSignalsTest,com.scanwhirl.app.ui.shell.Pro*,com.scanwhirl.app.ui.shell.P2ProHonestyTest,com.scanwhirl.app.ui.stamp.StampToolLauncherTest,com.scanwhirl.app.ui.PdfViewerProGateTest
