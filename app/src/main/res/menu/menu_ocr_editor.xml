@@ -2,19 +2,29 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- UX-L4-02: the three all-pages routes live under ONE named submenu instead
+         of three parallel top-level actions. The activity hides the whole submenu
+         on a one-page document; page-scoped Copy/Share/Save stay in the read row. -->
     <item
-        android:id="@+id/ocr_copy_all"
-        android:title="@string/ocr_copy_all"
-        app:showAsAction="never" />
+        android:id="@id/ux130_l4_all_pages"
+        android:title="@string/ux130_l4_all_pages"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/ocr_copy_all"
+                android:title="@string/ocr_copy_all"
+                app:showAsAction="never" />
 
-    <item
-        android:id="@+id/ocr_share_all"
-        android:title="@string/ocr_share_all"
-        app:showAsAction="never" />
+            <item
+                android:id="@+id/ocr_share_all"
+                android:title="@string/ocr_share_all"
+                app:showAsAction="never" />
 
-    <item
-        android:id="@+id/ocr_save_txt"
-        android:title="@string/ocr_save_txt"
-        app:showAsAction="never" />
+            <item
+                android:id="@+id/ocr_save_txt"
+                android:title="@string/ux130_l4_save_as_txt"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 
 </menu>

@@ -350,12 +350,11 @@
         android:drawableStart="@drawable/ic_sym_check_circle"
         android:drawablePadding="6dp"
         android:drawableTint="@color/ok_green"
-        android:ellipsize="end"
         android:fontFamily="@font/manrope"
         android:maxLines="1"
         android:text="@string/ocr_foot_note"
         android:textColor="@color/text_hologram_dim"
-        android:textSize="11.5sp"
+        android:textSize="12sp"
         android:textStyle="bold" />
 
 </LinearLayout>

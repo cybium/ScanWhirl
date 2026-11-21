@@ -38,6 +38,8 @@
             android:paddingBottom="92dp"
             android:scrollbars="none" />
 
+        <!-- UX-L4-03: the page indicator is a named 48dp control that opens
+             "Go to page", so any page is reachable, not just the first 40 thumbs. -->
         <TextView
             android:id="@+id/pdfPageIndicator"
             android:layout_width="wrap_content"
@@ -45,8 +47,12 @@
             android:layout_gravity="top|end"
             android:layout_margin="12dp"
             android:background="#CC000000"
+            android:clickable="true"
+            android:contentDescription="@string/ux130_l4_go_to_page"
+            android:focusable="true"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
             android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
             android:textColor="#FFFFFFFF"
             android:textSize="14sp" />
 
@@ -237,7 +243,7 @@
             android:layout_gravity="top|start"
             android:layout_margin="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/close"
+            android:contentDescription="@string/ux130_l4_close_zoom"
             android:src="@drawable/ic_close"
             app:tint="#FFFFFFFF" />
     </FrameLayout>
