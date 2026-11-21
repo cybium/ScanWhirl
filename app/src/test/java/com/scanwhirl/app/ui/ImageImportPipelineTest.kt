@@ -119,7 +119,7 @@ class ImageImportPipelineTest {
         try {
             val activity = controller.get()
             ShareUtils.share(activity, reopened)
-            val chooser = shadowOf(activity).nextStartedActivity
+            val chooser = com.scanwhirl.app.util.awaitShareChooser(activity)
             @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             assertEquals(Intent.ACTION_SEND, send.action)
             assertEquals("application/pdf", send.type)
@@ -127,7 +127,7 @@ class ImageImportPipelineTest {
             @Suppress("DEPRECATION") val uri = send.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)!!
             assertArrayEquals(reopened.pdfFile.readBytes(), app.contentResolver.openInputStream(uri)!!.use { it.readBytes() })
             ShareUtils.shareFile(activity, reopened.pageFiles.first(), "image/jpeg")
-            @Suppress("DEPRECATION") val pageSend = shadowOf(activity).nextStartedActivity.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+            @Suppress("DEPRECATION") val pageSend = com.scanwhirl.app.util.awaitShareChooser(activity).getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             assertEquals("image/jpeg", pageSend.type)
             @Suppress("DEPRECATION") val pageUri = pageSend.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)!!
             ImportFixtures.assertJpeg(app.contentResolver.openInputStream(pageUri)!!.use { it.readBytes() }).recycle()

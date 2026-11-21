@@ -67,7 +67,7 @@ class ToolResultShareFixShareTest {
             scenario.onActivity { activity ->
                 activity.findViewById<View>(R.id.toolResultShare).performClick()
                 idle()
-                chooser = shadowOf(activity).nextStartedActivity
+                chooser = com.scanwhirl.app.util.awaitShareChooser(activity)
                 @Suppress("DEPRECATION")
                 send = chooser?.getParcelableExtra(Intent.EXTRA_INTENT)
             }

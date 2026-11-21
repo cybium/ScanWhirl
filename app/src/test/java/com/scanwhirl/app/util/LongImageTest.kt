@@ -132,7 +132,7 @@ class LongImageTest {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 ShareUtils.shareFile(activity, exported, "image/jpeg")
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = awaitShareChooser(activity)
                 assertNotNull("share chooser launched", chooser)
                 assertEquals(Intent.ACTION_CHOOSER, chooser.action)
                 val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
