@@ -558,7 +558,8 @@ class ScanReviewActivity : BaseActivity() {
     private fun updateSelectionUi() {
         binding.selectBar.isVisible = selected.isNotEmpty()
         binding.arrangeTools.isVisible = selected.isEmpty()
-        binding.selCount.text = getString(R.string.selected_count, selected.size)
+        binding.selCount.text =
+            resources.getQuantityString(R.plurals.selected_count, selected.size, selected.size)
     }
 
     /**

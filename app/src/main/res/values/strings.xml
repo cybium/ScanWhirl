@@ -337,8 +337,8 @@
     <string name="ocr_copied">Copied to clipboard</string>
     <string name="ocr_editor_title">Extracted text</string>
     <string name="ocr_page_label">Page %d</string>
-    <string name="ocr_word_count">%d words</string>
-    <string name="ocr_word_count_edited">%d words · edited</string>
+    <string name="ocr_word_count">%1$d words</string>
+    <string name="ocr_word_count_edited">%1$d words · edited</string>
     <string name="ocr_share_text">Share text</string>
     <string name="ocr_saved">Saved</string>
     <string name="ocr_unsaved_title">Unsaved changes</string>
