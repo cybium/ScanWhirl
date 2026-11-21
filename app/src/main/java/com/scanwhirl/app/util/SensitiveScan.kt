@@ -44,7 +44,9 @@ object SensitiveScan {
         val end: Int,
         val maskEnd: Int,
         val text: String,
-        val digits: Int = 0
+        val digits: Int = 0,
+        /** Lower wins an overlap; bank-specific detections outrank a plain phone/account. */
+        val priority: Int = PRIORITY[kind] ?: 99
     )
 
     private val PRIORITY = mapOf(
@@ -52,8 +54,19 @@ object SensitiveScan {
         Kind.CARD to 7, Kind.AADHAAR to 8, Kind.VID to 9, Kind.ACCOUNT to 10
     )
 
+    // Generic account/card/VID runs keep the original single-separator rule. Dots, commas and
+    // repeated separators are handled only by the shape-specific detectors below, so a decimal
+    // amount ("Rs 1234567.89") or an IPv4 address ("192.168.1.100") is never an ACCOUNT.
     private val DIGIT_RUN = Regex("(?<!\\d)\\d(?:[ \\t-]?\\d){8,18}(?!\\d)")
-    private val INDIAN_PHONE = Regex("(?<!\\d)(?:\\+?91[ \\t-]?)?[6-9]\\d{4}[ \\t-]?\\d{5}(?!\\d)")
+    // Aadhaar only: 4-4-4 with space/double-space/dot/hyphen, or the comma-grouped 4-4-4 and
+    // 2-2-2-2-2-2 forms. lineHits() also rejects a match that touches another digit group, so a
+    // 16-digit VID is never reported as two Aadhaar numbers.
+    private val AADHAAR_RUN = Regex(
+        "(?<!\\d)(?:\\d{4}(?:[ .\\t-]+\\d{4}){2}|\\d{4}(?:,\\d{4}){2}|\\d{2}(?:,\\d{2}){5})(?!\\d)"
+    )
+    private val GROUP_SEPARATORS = setOf(' ', '\t', '.', '-', ',')
+    // +91 (98765) 43210, 091 98765 43210, +91-98765-43210, +91.98765.43210, plain 98765 43210.
+    private val INDIAN_PHONE = Regex("(?<!\\d)(?:\\+?0?91)?[ \\t().-]*[6-9]\\d{4}[ \\t().-]*\\d{5}(?!\\d)")
     private val INTL_PHONE = Regex("(?<!\\d)\\+\\d{1,3}(?:[ \\t.-]?\\(?\\d{1,4}\\)?){2,4}(?!\\d)")
     private val LOCAL_PHONE = Regex("(?<!\\d)\\(?\\d{3}\\)?[ \\t.-]\\d{3}[ \\t.-]\\d{4}(?!\\d)")
     private val EMAIL = Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}")
@@ -64,20 +77,33 @@ object SensitiveScan {
         Regex("(?<![A-Z0-9])[A-Z]{2}[- ]?\\d{2}[- ]?\\d{4}[- ]?\\d{7}(?![A-Z0-9])")
     private val PASSPORT = Regex("(?<![A-Z0-9])[A-Z]\\d{7}(?![A-Z0-9])")
     private val IBAN = Regex("(?<![A-Z0-9])[A-Z]{2}\\d{2}[A-Z0-9 ]{10,30}(?![A-Z0-9])")
+    // IFSC: four letters, a literal zero, six alphanumerics (SBIN0001234). Matched on the
+    // upper-cased original text: normalize() would turn the letter I into a 1.
+    private val IFSC = Regex("(?<![A-Z0-9])[A-Z]{4}[ \\t]*0[A-Z0-9]{6}(?![A-Z0-9])")
+    // UPI VPA: handle@psp with no TLD dot (ravi@oksbi, name.surname@ybl, 9876543210@paytm).
+    // The lookaheads keep a.b@example.com with its .com TLD as an ordinary EMAIL.
+    private val UPI = Regex(
+        "(?<![A-Za-z0-9._%+\\-])[A-Za-z0-9._%+\\-]+@[A-Za-z][A-Za-z0-9]*(?![A-Za-z0-9\\-])(?!\\.[A-Za-z]{2,})"
+    )
 
     // ------------------------------------------------------------------ public API
 
-    /** Sensitive items in one page of OCR lines, limited to [kinds]. */
+    /**
+     * Sensitive items in one page of OCR lines, limited to [kinds]. [fullMask] makes every box
+     * cover the whole match; the Redact "Suggest" path uses it so no digits stay visible on the
+     * hidden copy. The Find path leaves [fullMask] off and keeps its documented last-4 UX.
+     */
     fun find(
         page: OcrPage,
         kinds: Set<Kind> = Kind.values().toSet(),
-        keepLast4Ids: Boolean = false
+        keepLast4Ids: Boolean = false,
+        fullMask: Boolean = false
     ): List<Hit> {
         if (page.width <= 0 || page.height <= 0) return emptyList()
         val words = page.lines.map { line ->
             Word(line.text, line.left, line.top, line.right, line.bottom)
         }
-        return find(words, page.width, page.height, kinds, keepLast4Ids)
+        return find(words, page.width, page.height, kinds, keepLast4Ids, fullMask)
     }
 
     /** Sensitive items in ML Kit element boxes, limited to [kinds]. */
@@ -86,7 +112,8 @@ object SensitiveScan {
         pageWidth: Int,
         pageHeight: Int,
         kinds: Set<Kind> = Kind.values().toSet(),
-        keepLast4Ids: Boolean = false
+        keepLast4Ids: Boolean = false,
+        fullMask: Boolean = false
     ): List<Hit> {
         if (pageWidth <= 0 || pageHeight <= 0) return emptyList()
         val valid = words.filter {
@@ -95,7 +122,7 @@ object SensitiveScan {
         val lines = groupLines(valid)
         val out = ArrayList<Hit>()
         for (line in lines) {
-            out += lineHits(line, lines, pageWidth, pageHeight, kinds, keepLast4Ids)
+            out += lineHits(line, lines, pageWidth, pageHeight, kinds, keepLast4Ids, fullMask)
         }
         return out.sortedWith(compareBy({ it.box.top }, { it.box.left }))
     }
@@ -126,7 +153,8 @@ object SensitiveScan {
         pageWidth: Int,
         pageHeight: Int,
         kinds: Set<Kind>,
-        keepLast4Ids: Boolean
+        keepLast4Ids: Boolean,
+        fullMask: Boolean
     ): List<Hit> {
         val sorted = line.sortedBy { it.left }
         val builder = StringBuilder()
@@ -142,11 +170,11 @@ object SensitiveScan {
         val upper = text.uppercase()
         val candidates = ArrayList<Candidate>()
 
-        fun add(kind: Kind, start: Int, endExclusive: Int, maskEnd: Int) {
+        fun add(kind: Kind, start: Int, endExclusive: Int, maskEnd: Int, priority: Int = PRIORITY[kind] ?: 99) {
             if (start < 0 || endExclusive <= start || start >= text.length) return
             val end = min(endExclusive, text.length)
-            val masked = min(maskEnd, end)
-            candidates += Candidate(kind, start, end, masked, text.substring(start, end).trim())
+            val masked = if (fullMask) end else min(maskEnd, end)
+            candidates += Candidate(kind, start, end, masked, text.substring(start, end).trim(), priority = priority)
         }
 
         // Phone formats first: they must win over "long account number".
@@ -161,6 +189,16 @@ object SensitiveScan {
             if (m.value.count { it.isDigit() } == 10) {
                 add(Kind.PHONE, m.range.first, m.range.last + 1, m.range.last + 1)
             }
+        }
+
+        // Bank identifiers: IFSC and UPI VPAs belong to the existing "Card & bank numbers"
+        // category (Kind.ACCOUNT), so the Find sheet picks them up without a new choice.
+        // A dedicated priority keeps a numeric VPA from being mistaken for a plain phone.
+        for (m in IFSC.findAll(upper)) {
+            add(Kind.ACCOUNT, m.range.first, m.range.last + 1, m.range.last + 1, priority = 5)
+        }
+        for (m in UPI.findAll(text)) {
+            add(Kind.ACCOUNT, m.range.first, m.range.last + 1, m.range.last + 1, priority = 5)
         }
 
         // Emails, PAN, IBAN and SSN need the original letters, not the digit-normalised copy.
@@ -182,6 +220,23 @@ object SensitiveScan {
         }
         for (m in SSN.findAll(digits)) {
             if (ssnValid(m.value)) add(Kind.SSN, m.range.first, m.range.last + 1, m.range.last + 1)
+        }
+
+        // Aadhaar in the widened shapes (double space, dot, hyphen, comma grouping). This runs
+        // before the generic digit run; DIGIT_RUN may also match the plain 4-4-4 form, but the
+        // overlap resolution keeps just one Aadhaar candidate.
+        fun touchesDigitGroup(from: Int, step: Int): Boolean {
+            var i = from
+            while (i in digits.indices && digits[i] in GROUP_SEPARATORS) i += step
+            return i in digits.indices && digits[i].isDigit()
+        }
+        for (m in AADHAAR_RUN.findAll(digits)) {
+            val start = m.range.first
+            val end = m.range.last + 1
+            // A 4-4-4 tail inside a 16-digit VID or a longer run is not an Aadhaar.
+            if (touchesDigitGroup(start - 1, -1) || touchesDigitGroup(end, 1)) continue
+            val maskEnd = if (keepLast4Ids) digitBoundary(digits, start, end, 8) else end
+            add(Kind.AADHAAR, start, end, maskEnd)
         }
 
         // Numbered formats: Aadhaar (12), VID (16), cards (Luhn), accounts (9-18).
@@ -224,7 +279,7 @@ object SensitiveScan {
         // Specific detectors win an overlap (a card is not also an account; SSN is not an account).
         val chosen = ArrayList<Candidate>()
         candidates.sortedWith(
-            compareBy({ PRIORITY[it.kind] ?: 99 }, { it.start })
+            compareBy({ it.priority }, { it.start })
         ).forEach { candidate ->
             if (chosen.none { it.start < candidate.end && candidate.start < it.end }) {
                 chosen += candidate

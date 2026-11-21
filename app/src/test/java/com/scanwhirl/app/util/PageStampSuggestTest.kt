@@ -27,13 +27,14 @@ class PageStampSuggestTest {
         OcrLine(text, left, top, right, top + 50)
 
     @Test
-    fun `an aadhaar number line is suggested and its box covers the line`() {
-        val suggestions = PageStamp.suggestRedactions(page(line("Aadhaar 1234 5678 9012")))
+    fun `an aadhaar number is suggested with a box on the matched element`() {
+        val suggestions = PageStamp.suggestRedactions(page(line("Aadhaar 1234 5678 9012 end")))
         assertEquals(1, suggestions.size)
         val s = suggestions.single()
         assertEquals(PageStamp.SensitiveKind.AADHAAR, s.kind)
-        assertTrue("box starts at or before the line", s.box.left <= 0.1f)
-        assertTrue("box ends at or after the line", s.box.right >= 0.8f)
+        // The Find flow boxes only the characters it matched, not the whole OCR line.
+        assertTrue("box starts on the number: ${s.box.left}", s.box.left > 0.1f)
+        assertTrue("box stops before the trailing text: ${s.box.right}", s.box.right < 0.8f)
         assertTrue("box covers the line height", s.box.top <= 0.1f && s.box.bottom >= 0.15f)
         assertTrue(s.box.left >= 0f && s.box.right <= 1f && s.box.top >= 0f && s.box.bottom <= 1f)
     }
@@ -67,12 +68,17 @@ class PageStampSuggestTest {
     }
 
     @Test
-    fun `one box per sensitive line even when two patterns match`() {
+    fun `two matched items on one line yield two element boxes`() {
         val suggestions = PageStamp.suggestRedactions(
             page(line("Aadhaar 1234 5678 9012 / 9876543210"))
         )
-        assertEquals("the whole line is redacted once", 1, suggestions.size)
-        assertEquals(PageStamp.SensitiveKind.AADHAAR, suggestions.single().kind)
+        assertEquals("one box per detected item", 2, suggestions.size)
+        assertEquals(
+            listOf(PageStamp.SensitiveKind.AADHAAR, PageStamp.SensitiveKind.PHONE),
+            suggestions.map { it.kind }
+        )
+        assertTrue("each box starts on its own item, not the line", suggestions.all { it.box.left > 0.1f })
+        assertTrue("two distinct element boxes", suggestions[0].box.right < suggestions[1].box.right)
     }
 
     @Test

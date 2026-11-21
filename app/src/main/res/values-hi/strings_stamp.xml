@@ -67,7 +67,7 @@
     <string name="stamp_hint_redact">जो छिपाना है उस पर चौकोर निशान खींचें</string>
     <string name="stamp_hint_select">चिह्न हिलाने के लिए उसे दबाएँ; आकार बदलने के लिए कोना खींचें</string>
     <string name="stamp_no_ocr">इस पन्ने पर लिखे शब्द अभी पहचाने नहीं गए हैं।</string>
-    <string name="stamp_no_suggestions">कोई निजी नंबर नहीं मिला।</string>
+    <string name="stamp_no_suggestions">इस पन्ने पर अपने आप कुछ नहीं मिला। भेजने से पहले खुद जाँच लें।</string>
     <string name="stamp_locked">यह दस्तावेज़ सुरक्षित है। पहले इसका ताला खोलें।</string>
     <string name="stamp_missing">यह दस्तावेज़ नहीं खोला जा सका।</string>
     <string name="stamp_no_selection">बदलने के लिए किसी चिह्न को दबाएँ</string>

@@ -156,49 +156,43 @@ object PageStamp {
     /** Marks for one page. */
     data class PageEdits(val pageIndex: Int, val marks: List<Mark>)
 
-    /** Kinds of sensitive line the Redact sheet can suggest. */
-    enum class SensitiveKind { AADHAAR, PAN, PHONE, LONG_NUMBER }
+    /** Kinds of sensitive item the Redact sheet can suggest. */
+    enum class SensitiveKind {
+        AADHAAR, VID, PAN, DRIVING_LICENCE, PASSPORT, CARD, PHONE, EMAIL, IBAN, SSN, LONG_NUMBER
+    }
 
-    /** A proposed redaction box (normalised) over one OCR line. */
+    /** A proposed redaction box (normalised) over one matched element, not a whole OCR line. */
     data class Suggestion(val box: Box, val kind: SensitiveKind, val text: String)
 
-    private val AADHAAR = Regex("""(?<!\d)\d{4}[ -]?\d{4}[ -]?\d{4}(?!\d)""")
-    private val PAN = Regex("""\b[A-Za-z]{5}\d{4}[A-Za-z]\b""")
-    private val PHONE = Regex("""(?<!\d)[6-9](?:[ -]?\d){9}(?!\d)""")
-    private val LONG_NUMBER = Regex("""(?<!\d)\d{9,}(?!\d)""")
-
     /**
-     * "Suggest" for the Redact tool: one box per OCR line that contains an Aadhaar number, a PAN,
-     * an Indian mobile number or a long digit run (account numbers). The whole line is boxed on
-     * purpose — a box over only the characters the OCR placed would risk leaving digits outside —
-     * and every box is clamped to the page. Nothing is redacted until the user accepts them.
+     * "Suggest" for the Redact tool now runs the same [SensitiveScan] detector as the Find flow,
+     * so email addresses, cards, bank identifiers (IFSC/UPI) and every other supported kind are
+     * found too. Each hit carries the element-level box computed from the OCR character positions;
+     * two items on one line produce two boxes. [SensitiveScan.find] is asked for full masks so a
+     * card's last four digits cannot stay visible on the hidden copy — the Find flow is the only
+     * place that deliberately keeps them. Nothing is redacted until the user accepts them.
      */
     fun suggestRedactions(page: com.scanwhirl.app.model.OcrPage): List<Suggestion> {
         if (page.width <= 0 || page.height <= 0) return emptyList()
-        val w = page.width.toFloat()
-        val h = page.height.toFloat()
-        val out = ArrayList<Suggestion>()
-        for (line in page.lines) {
-            val kind = when {
-                AADHAAR.containsMatchIn(line.text) -> SensitiveKind.AADHAAR
-                PAN.containsMatchIn(line.text) -> SensitiveKind.PAN
-                PHONE.containsMatchIn(line.text) -> SensitiveKind.PHONE
-                LONG_NUMBER.containsMatchIn(line.text) -> SensitiveKind.LONG_NUMBER
-                else -> null
-            } ?: continue
-            val pad = max(1f, (line.bottom - line.top) * 0.10f)
-            out += Suggestion(
-                box = Box(
-                    ((line.left - pad) / w).coerceIn(0f, 1f),
-                    ((line.top - pad) / h).coerceIn(0f, 1f),
-                    ((line.right + pad) / w).coerceIn(0f, 1f),
-                    ((line.bottom + pad) / h).coerceIn(0f, 1f)
-                ),
-                kind = kind,
-                text = line.text
+        return SensitiveScan.find(page, fullMask = true).map { hit ->
+            Suggestion(
+                box = hit.box,
+                kind = when (hit.kind) {
+                    SensitiveScan.Kind.AADHAAR -> SensitiveKind.AADHAAR
+                    SensitiveScan.Kind.VID -> SensitiveKind.VID
+                    SensitiveScan.Kind.PAN -> SensitiveKind.PAN
+                    SensitiveScan.Kind.DRIVING_LICENCE -> SensitiveKind.DRIVING_LICENCE
+                    SensitiveScan.Kind.PASSPORT -> SensitiveKind.PASSPORT
+                    SensitiveScan.Kind.CARD -> SensitiveKind.CARD
+                    SensitiveScan.Kind.PHONE -> SensitiveKind.PHONE
+                    SensitiveScan.Kind.EMAIL -> SensitiveKind.EMAIL
+                    SensitiveScan.Kind.IBAN -> SensitiveKind.IBAN
+                    SensitiveScan.Kind.SSN -> SensitiveKind.SSN
+                    SensitiveScan.Kind.ACCOUNT -> SensitiveKind.LONG_NUMBER
+                },
+                text = hit.text
             )
         }
-        return out
     }
 
     // ------------------------------------------------------------------
