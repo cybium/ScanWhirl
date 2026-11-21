@@ -62,8 +62,13 @@ class PageViewerActivity : BaseActivity() {
     /** Last known page (kept when the snap view isn't measurable yet). */
     private var currentPos: Int = 0
 
-    /** Session memory of filters the user picked (disk keeps no filter state). */
-    private val filterChoice = mutableMapOf<String, ScanFilter>()
+    /**
+     * E1: filters the user picked for SAVED-document pages, keyed by page INDEX (not path),
+     * because applying a filter or rotating a page gives it a new `r_<n>.jpg` name. Persisted
+     * in instance state so a recreation does not forget the checked filter. On disk the filter
+     * is already baked into the replacement file, so this is display state only.
+     */
+    private val filterChoice = mutableMapOf<Int, ScanFilter>()
 
     /** Crop overlay state: the page being cropped + its display-size copy. */
     private var cropPath: String? = null
@@ -102,6 +107,7 @@ class PageViewerActivity : BaseActivity() {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         intent.getStringExtra(EXTRA_STAGING)?.let { stagingDir = File(it) }
+        savedInstanceState?.let(::restoreFilterChoices)
         if (!reload()) return
 
         val start = intent.getIntExtra(EXTRA_PAGE, 0)
@@ -164,6 +170,22 @@ class PageViewerActivity : BaseActivity() {
         super.onDestroy()
     }
 
+    /** E1: restores the saved-document filter choices across a recreation. */
+    private fun restoreFilterChoices(saved: Bundle) {
+        val indices = saved.getIntArray(KEY_FILTER_INDICES) ?: return
+        val names = saved.getStringArray(KEY_FILTER_IDS) ?: return
+        filterChoice.clear()
+        indices.zip(names).forEach { (index, name) ->
+            runCatching { ScanFilter.valueOf(name) }.getOrNull()?.let { filterChoice[index] = it }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putIntArray(KEY_FILTER_INDICES, filterChoice.keys.toIntArray())
+        outState.putStringArray(KEY_FILTER_IDS, filterChoice.values.map { it.name }.toTypedArray())
+    }
+
     /** Re-reads the current page list (minus pending deletes) into the pager. */
     private fun reload(): Boolean {
         val dir = stagingDir
@@ -203,10 +225,24 @@ class PageViewerActivity : BaseActivity() {
         pages = kotlinx.coroutines.runBlocking { repo.draftPages(id) }.filter {
             it.path != pendingDelete && it.path !in committingDeletes
         }
-        pagerAdapter.filterFor = { file -> filterChoice[file.path] ?: ScanFilter.ORIGINAL }
+        pagerAdapter.filterFor = { file -> previewFilterFor(file) }
         pagerAdapter.submit(pages)
         return true
     }
+
+    /**
+     * E1: the filter a page's preview should apply on top of the file. For a saved document the
+     * filter is already baked into the replacement jpg by ScanRepository.draftFilter, so the
+     * preview shows the file exactly as saved — applying the choice again double-processes it.
+     * Staging filters are virtual (filters.txt), so those still tint the preview here.
+     */
+    internal fun previewFilterFor(file: File): ScanFilter =
+        if (stagingDir != null) stagingFilters[file.path] ?: ScanFilter.ORIGINAL
+        else ScanFilter.ORIGINAL
+
+    /** Selected filter for a saved-document page, for the sheet's checked row. */
+    internal fun selectedFilter(index: Int): ScanFilter =
+        filterChoice[index] ?: ScanFilter.ORIGINAL
 
     private fun reloadStaging(dir: File): Boolean {
         if (!dir.exists()) {
@@ -214,6 +250,11 @@ class PageViewerActivity : BaseActivity() {
             finish()
             return false
         }
+        // E1: a page hidden as `page_XXX.jpg.del` while its Undo snackbar was up is silently
+        // lost if the process died before Undo or commit — neither onDestroy path ran and the
+        // plain *.jpg listing below would skip it. On a fresh load there is no live Undo
+        // window, so put every orphan back (except a page still pending in THIS screen).
+        restoreOrphanedStagingDeletes(dir)
         pages = dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
             ?.sortedBy { it.nameWithoutExtension }
             .orEmpty()
@@ -223,9 +264,25 @@ class PageViewerActivity : BaseActivity() {
             return false
         }
         loadStagingFilters(dir)
-        pagerAdapter.filterFor = { file -> stagingFilters[file.path] ?: ScanFilter.ORIGINAL }
+        pagerAdapter.filterFor = { file -> previewFilterFor(file) }
         pagerAdapter.submit(pages)
         return true
+    }
+
+    /**
+     * E1: brings back `.del` pages left behind by a process death. [pendingDelete] is the one
+     * page whose Undo window is still live in this screen — it must stay hidden until the
+     * snackbar acts or this screen closes. Every other orphan has no owner, so rename it back.
+     */
+    private fun restoreOrphanedStagingDeletes(dir: File) {
+        dir.listFiles { f -> f.name.endsWith(DEL_SUFFIX) && f.length() > 0 }
+            ?.forEach { hidden ->
+                val originalPath = hidden.path.removeSuffix(DEL_SUFFIX)
+                if (originalPath != pendingDelete) {
+                    val original = File(originalPath)
+                    if (!original.exists()) hidden.renameTo(original)
+                }
+            }
     }
 
     /** Reads filters.txt; pages without an entry default to Enhance (review's default). */
@@ -318,13 +375,11 @@ class PageViewerActivity : BaseActivity() {
             try {
                 // Land any pending delete first so `pos` matches disk indices.
                 withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                val checked = filters.indexOf(
-                    filterChoice[file.path] ?: ScanFilter.ORIGINAL
-                )
+                val checked = filters.indexOf(selectedFilter(pos))
                 com.scanwhirl.app.ui.kit.SwSheet.builder(this@PageViewerActivity)
                     .setTitle(R.string.filter_title)
                     .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
-                        applyFilter(id, pos, file, filters[which])
+                        applyFilter(id, pos, filters[which])
                     }
                     .setSecondary(android.R.string.cancel)
                     .build()
@@ -339,15 +394,14 @@ class PageViewerActivity : BaseActivity() {
         }
     }
 
-    private fun applyFilter(id: String, pos: Int, file: File, filter: ScanFilter) {
+    private fun applyFilter(id: String, pos: Int, filter: ScanFilter) {
         lifecycleScope.launch {
             try {
                 repo.draftFilter(id, pos, filter)
-                // The edited page is a new file: map the choice onto its new path.
-                filterChoice.remove(file.path)
+                // Keep the choice by page index: the replacement file gets a new name, so a
+                // path-keyed map would make the sheet show Original after the next rotation.
+                filterChoice[pos] = filter
                 reload()
-                pages.getOrNull(pos)?.let { filterChoice[it.path] = filter }
-                pagerAdapter.notifyDataSetChanged()
                 currentPos = pos.coerceAtMost(pages.lastIndex)
                 binding.pager.scrollToPosition(currentPos)
                 updateIndicator()
@@ -682,6 +736,8 @@ class PageViewerActivity : BaseActivity() {
         private const val EXTRA_STAGING = "staging_dir"
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
+        private const val KEY_FILTER_INDICES = "e1_filter_indices"
+        private const val KEY_FILTER_IDS = "e1_filter_ids"
 
         fun intent(context: Context, docId: String, pageIndex: Int): Intent =
             Intent(context, PageViewerActivity::class.java)

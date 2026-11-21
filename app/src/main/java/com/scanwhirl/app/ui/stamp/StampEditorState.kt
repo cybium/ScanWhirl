@@ -27,6 +27,33 @@ class StampEditorState(val pageCount: Int) {
     private val undoStack = ArrayDeque<Snapshot>()
     private val redoStack = ArrayDeque<Snapshot>()
 
+    /**
+     * E1: a drag / resize / rotate is one gesture, not one undo step per ACTION_MOVE.
+     * [beginGesture] keeps the pre-gesture snapshot; every transform in the gesture simply
+     * mutates the marks and flags the change. [endGesture] pushes that single snapshot, so a
+     * 60-event drag creates exactly one undo step and never evicts the earlier "add mark" step.
+     */
+    private var gestureActive = false
+    private var gestureChanged = false
+    private var gestureSnapshot: Snapshot? = null
+
+    /** Opens one coalesced undo step. Safe to call again while a gesture is already open. */
+    fun beginGesture() {
+        if (gestureActive) return
+        gestureActive = true
+        gestureChanged = false
+        gestureSnapshot = snapshot()
+    }
+
+    /** Commits the gesture's one undo step (only when something actually moved). */
+    fun endGesture() {
+        if (!gestureActive) return
+        gestureActive = false
+        if (gestureChanged) gestureSnapshot?.let(::commit)
+        gestureSnapshot = null
+        gestureChanged = false
+    }
+
     /** Visible page, 0-based. Changing it clears the selection. */
     var currentPage: Int = 0
         set(value) {
@@ -389,7 +416,17 @@ class StampEditorState(val pageCount: Int) {
     private fun snapshot() = Snapshot(pages.map { it.toList() }, currentPage, selected)
 
     private fun record() {
-        undoStack.addLast(snapshot())
+        if (gestureActive) {
+            // A transform already opened a gesture: do not add a step for every move. The
+            // pre-gesture snapshot kept by beginGesture is committed once by endGesture.
+            gestureChanged = true
+            return
+        }
+        commit(snapshot())
+    }
+
+    private fun commit(snap: Snapshot) {
+        undoStack.addLast(snap)
         redoStack.clear()
         if (undoStack.size > MAX_HISTORY) undoStack.removeFirst()
     }

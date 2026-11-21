@@ -50,6 +50,10 @@ class StampCanvasView @JvmOverloads constructor(
         fun onFreehand(strokes: List<PageStamp.Stroke>)
         fun onBox(tool: Tool, box: PageStamp.Box)
 
+        /** E1: brackets a drag / resize / rotate so the editor records ONE undo step per gesture. */
+        fun onGestureStart() {}
+        fun onGestureEnd() {}
+
         /** Accessibility "Delete mark"; hosts without a delete path ignore it. */
         fun onDelete(index: Int) {}
     }
@@ -444,6 +448,10 @@ class StampCanvasView @JvmOverloads constructor(
                     }
                     Tool.SELECT -> startSelect(event, page, norm)
                 }
+                // Only a transform gesture opens an undo step; a bare tap only selects.
+                if (mode == Mode.MOVE || mode == Mode.RESIZE || mode == Mode.ROTATE) {
+                    listener?.onGestureStart()
+                }
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -502,6 +510,9 @@ class StampCanvasView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL
+                // Closes the undo step opened on DOWN (a no-op when this was a draw / box or a
+                // bare tap). CANCEL ends it too, so a half-done gesture is still one step.
+                listener?.onGestureEnd()
                 when (mode) {
                     Mode.DRAWING -> {
                         if (!cancelled && previewStroke.isNotEmpty()) {
@@ -622,6 +633,8 @@ class StampCanvasView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
+        // A view torn down mid-gesture (screen close) must not leave the editor's undo step open.
+        listener?.onGestureEnd()
         composite?.let { if (!it.isRecycled) it.recycle() }
         composite = null
         if (pageBitmap?.isRecycled == false) pageBitmap?.recycle()
