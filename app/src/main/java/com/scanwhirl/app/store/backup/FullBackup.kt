@@ -88,7 +88,6 @@ class FullBackup(
 
     data class Report(
         val documents: Int,
-        val skipped: Int,
         val vaultEntries: Int,
         val vaultReencrypted: Int,
         val extras: Int,
@@ -98,8 +97,46 @@ class FullBackup(
          * something could not be included (today: the Vault during a pending setup), a restore
          * when part of the archive had to wait or was left out.
          */
-        val warnings: List<String>
-    )
+        val warnings: List<String>,
+        /** Documents whose id was already on this phone. They really were left alone. */
+        val docsAlreadyHere: Int = 0,
+        /** Vault entries that were already in this phone's Vault and were not touched. */
+        val vaultAlreadyHere: Int = 0,
+        /** Documents that could not be published (rejected id, failed rename/copy). */
+        val docsFailed: Int = 0
+    ) {
+        /**
+         * Older callers and tests read this combined number. It now means ONLY documents that
+         * were already here: Vault entries and failures have their own honest counters, so a
+         * failed document can never be reported as one that was "left alone".
+         */
+        val skipped: Int get() = docsAlreadyHere
+    }
+
+    /** Mutable tally used while publishing, so a mid-way failure can still report what landed. */
+    private class ApplyCounters {
+        var documents = 0
+        var docsAlreadyHere = 0
+        var docsFailed = 0
+        var vaultEntries = 0
+        var vaultReencrypted = 0
+        var vaultAlreadyHere = 0
+        var extras = 0
+        var vaultLocked = false
+        val warnings = mutableListOf<String>()
+
+        fun toReport() = Report(
+            documents = documents,
+            vaultEntries = vaultEntries,
+            vaultReencrypted = vaultReencrypted,
+            extras = extras,
+            vaultLocked = vaultLocked,
+            warnings = warnings.toList(),
+            docsAlreadyHere = docsAlreadyHere,
+            vaultAlreadyHere = vaultAlreadyHere,
+            docsFailed = docsFailed
+        )
+    }
 
     private val docsDir: File get() = File(context.filesDir, "documents")
     private val vaultDir: File get() = File(context.filesDir, "vault2")
@@ -181,7 +218,7 @@ class FullBackup(
                 }
                 return Report(
                     documents = countEntries(docsDir),
-                    skipped = 0,
+                    docsAlreadyHere = 0,
                     vaultEntries = if (vaultPending) 0 else countVaultEntries(),
                     vaultReencrypted = 0,
                     extras = countFiles(sigDir) + countFiles(stampDir) + countFiles(draftDir),
@@ -214,8 +251,12 @@ class FullBackup(
     /** Where the UI writes an archive before saving or sharing it (covered by the FileProvider). */
     fun newArchiveFile(): File {
         val dir = File(context.cacheDir, "fullbackup").apply { mkdirs() }
-        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmm", java.util.Locale.US).format(java.util.Date())
-        return File(dir, "ScanWhirl-$stamp.$EXTENSION")
+        // B1: minute resolution used to make a second backup in the same minute overwrite the
+        // first one's cached .part/.swbackup. Seconds plus a short random suffix keep two
+        // "Back up now" runs apart without exposing anything or needing a new permission.
+        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val unique = UUID.randomUUID().toString().take(6)
+        return File(dir, "ScanWhirl-$stamp-$unique.$EXTENSION")
     }
 
     /**
@@ -327,9 +368,26 @@ class FullBackup(
                 ByteArray(32).also { bytes -> DataInputStream(it.inputStream()).use { input -> input.readFully(bytes) } }
             }
             staging.resolve(VAULT_KEY_ENTRY).delete()
+            val counters = ApplyCounters()
             try {
                 restoreLimits.checkCancelled()
-                return applyStaging(staging, oldVaultKey)
+                return applyStaging(staging, oldVaultKey, counters)
+            } catch (cancelled: java.io.InterruptedIOException) {
+                // A cancellation before anything was published keeps its old behaviour. After
+                // publication it must not claim the file was bad: report what really landed.
+                if (counters.documents == 0 && counters.docsAlreadyHere == 0 && counters.docsFailed == 0) {
+                    throw cancelled
+                }
+                counters.warnings.add(context.getString(R.string.b1_restore_partial))
+                return counters.toReport()
+            } catch (error: Exception) {
+                // The archive was authenticated and replayed before publishing began. A failure
+                // here (for example a full disk) can leave documents already in the library, so
+                // report what really landed instead of throwing and letting the UI say
+                // "Nothing was restored". No exception text is shown to the person.
+                Log.w(TAG, "restore publish failed")
+                counters.warnings.add(context.getString(R.string.b1_restore_partial))
+                return counters.toReport()
             } finally {
                 oldVaultKey?.fill(0)
             }
@@ -566,15 +624,7 @@ class FullBackup(
         }
     }
 
-    private fun applyStaging(staging: File, oldVaultKey: ByteArray?): Report {
-        var documents = 0
-        var skipped = 0
-        var vaultEntries = 0
-        var vaultReencrypted = 0
-        var extras = 0
-        var vaultLocked = false
-        val warnings = mutableListOf<String>()
-
+    private fun applyStaging(staging: File, oldVaultKey: ByteArray?, c: ApplyCounters): Report {
         // 1. Documents.
         docsDir.mkdirs()
         val existingNames = docsDir.listFiles { f -> f.isDirectory }
@@ -583,9 +633,17 @@ class FullBackup(
             .toMutableSet()
         val restored = staging.resolve("documents")
         restored.listFiles { f -> f.isDirectory }?.sortedBy { it.name }?.forEach { dir ->
+            // B1: check between documents so a large restore stays cancellable, and so a
+            // refusal here yields a partial report (see restoreWhileActive) instead of an
+            // exception that would claim nothing changed after documents already landed.
+            restoreLimits.checkCancelled()
             val id = dir.name
-            if (!isSafeId(id)) { skipped++; return@forEach }
-            if (File(docsDir, id).exists()) { skipped++; return@forEach }
+            if (!isSafeId(id)) {
+                c.docsFailed++
+                c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
+                return@forEach
+            }
+            if (File(docsDir, id).exists()) { c.docsAlreadyHere++; return@forEach }
             val name = File(dir, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) } ?: id
             var targetId = id
             if (name in existingNames) {
@@ -597,11 +655,27 @@ class FullBackup(
                     Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
                 }
             }
-            if (dir.renameTo(File(docsDir, targetId))) {
-                documents++
+            val target = File(docsDir, targetId)
+            val renamed = try {
+                dir.renameTo(target)
+            } catch (_: SecurityException) {
+                false
+            }
+            val placed = renamed || try {
+                // B1: a rename can fail across storage volumes or on a locked source. Copy the
+                // whole document first, then drop the staging copy; never leave a half document.
+                dir.copyRecursively(target, overwrite = false)
+                dir.deleteRecursively()
+                true
+            } catch (_: Exception) {
+                target.deleteRecursively()
+                false
+            }
+            if (placed) {
+                c.documents++
                 existingNames.add(if (targetId == id) name else "$name (restored)")
             } else {
-                skipped++
+                c.docsFailed++
             }
         }
 
@@ -621,7 +695,7 @@ class FullBackup(
         if (legacyFlagged.isNotEmpty() && !vault.hasLegacyPin()) {
             when {
                 !vault.isSetUp() -> {
-                    warnings.add(quantity(R.plurals.backup_legacy_vault_visible, legacyFlagged.size))
+                    c.warnings.add(quantity(R.plurals.backup_legacy_vault_visible, legacyFlagged.size))
                     clearLegacyVaultFlags()
                 }
                 vault.isUnlocked() -> {
@@ -629,10 +703,10 @@ class FullBackup(
                     val remaining = legacyVaultFlagged()
                     if (remaining.isNotEmpty()) {
                         // A migration failure keeps them hidden; the next unlock retries it.
-                        warnings.add(quantity(R.plurals.backup_legacy_vault_pending, remaining.size))
+                        c.warnings.add(quantity(R.plurals.backup_legacy_vault_pending, remaining.size))
                     }
                 }
-                else -> warnings.add(quantity(R.plurals.backup_legacy_vault_pending, legacyFlagged.size))
+                else -> c.warnings.add(quantity(R.plurals.backup_legacy_vault_pending, legacyFlagged.size))
             }
         }
 
@@ -646,12 +720,12 @@ class FullBackup(
         }
         unknownRoots.forEach { it.deleteRecursively() }
         if (unknownRoots.isNotEmpty()) {
-            warnings.add(context.getString(R.string.backup_vault_entries_rejected, unknownRoots.size))
+            c.warnings.add(context.getString(R.string.backup_vault_entries_rejected, unknownRoots.size))
         }
         if (restoredVault.isDirectory && oldVaultKey == null) {
             // S6A: password-only backups of a locked Vault cannot authenticate its contents.
             // Skip the ENTIRE Vault part, including wraps/settings, before touching vaultDir.
-            warnings.add(context.getString(R.string.backup_vault_unverifiable_skipped))
+            c.warnings.add(context.getString(R.string.backup_vault_unverifiable_skipped))
         } else if (restoredVault.isDirectory) {
             val checkedVaultKey = checkNotNull(oldVaultKey)
             val targetSetUp = File(vaultDir, "recovery.bin").let { it.isFile && it.length() > 0 }
@@ -693,11 +767,11 @@ class FullBackup(
                         }
                     }
                     if (from.renameTo(to)) {
-                        if (wasDirectory) vaultEntries++ else extras++
+                        if (wasDirectory) c.vaultEntries++ else c.extras++
                     }
                 }
                 if (rejected > 0) {
-                    warnings.add(context.getString(R.string.backup_vault_entries_rejected, rejected))
+                    c.warnings.add(context.getString(R.string.backup_vault_entries_rejected, rejected))
                 }
                 // The restore typed the backup's recovery code, so the adopted Vault is known:
                 // a pending marker left by an interrupted setup is not owed any more.
@@ -710,21 +784,21 @@ class FullBackup(
                 // Vault that is not finished. Nothing is published; the library part is restored
                 // and the report says the Vault part waits for the same code check as everything
                 // else. The archive is not touched, so restoring it again afterwards merges.
-                warnings.add(context.getString(R.string.vault_pending_restore_deferred))
+                c.warnings.add(context.getString(R.string.vault_pending_restore_deferred))
             } else if (!vault.isUnlocked()) {
-                vaultLocked = true
+                c.vaultLocked = true
             } else {
                 restoredVault.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
                     ?.sortedBy { it.name }
                     ?.forEach { dir ->
                         runCatching { vault.restoreEntryFromBackup(dir, checkedVaultKey) }
                             .onSuccess { result ->
-                                if (result.skipped) skipped++ else vaultReencrypted++
+                                if (result.skipped) c.vaultAlreadyHere++ else c.vaultReencrypted++
                             }
                             .onFailure {
                                 // F-05: log the category only; the person reads a stable sentence.
                                 Log.w(TAG, "vault entry restore failed")
-                                warnings.add(context.getString(R.string.backup_restore_vault_entry_failed))
+                                c.warnings.add(context.getString(R.string.backup_restore_vault_entry_failed))
                             }
                     }
             }
@@ -740,7 +814,7 @@ class FullBackup(
                 val to = File(target, relative)
                 if (to.exists()) return@forEach
                 to.parentFile?.mkdirs()
-                if (file.renameTo(to)) extras++
+                if (file.renameTo(to)) c.extras++
             }
         }
 
@@ -761,11 +835,11 @@ class FullBackup(
                 edit.apply()
             }.onFailure {
                 Log.w(TAG, "settings restore failed")
-                warnings.add(context.getString(R.string.backup_restore_settings_failed))
+                c.warnings.add(context.getString(R.string.backup_restore_settings_failed))
             }
         }
 
-        return Report(documents, skipped, vaultEntries, vaultReencrypted, extras, vaultLocked, warnings)
+        return c.toReport()
     }
 
     private fun nameOf(meta: File): String = try {
