@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- C1 item 2: a find run that did not hide every found category gets an honest, neutral label. -->
+    <string name="c1_redacted_label">Redacted</string>
+    <string name="c1_redacted_saved">Saved a redacted copy: %1$s. The original document stays unchanged in your library.</string>
+
+    <!-- C1 item 4: bounded Save wait. Back is re-enabled after a minute without hiding the receipt. -->
+    <string name="c1_saving_timed_out">Saving is taking longer than expected. You can leave now; the copy will still be saved and reported when it finishes.</string>
+
+    <!-- C1 review P1: a reopened editor joins the save already running instead of starting a second one. -->
+    <string name="c1_still_saving">Still saving…</string>
+</resources>

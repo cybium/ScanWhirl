@@ -1,9 +1,11 @@
 package com.scanwhirl.app.ui
 
 import android.app.Application
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.view.View
 import android.widget.TextView
+import java.io.File
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -34,6 +36,7 @@ class ReaderDockTest {
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var defaultFactory: (ParcelFileDescriptor) -> PdfViewerActivity.PdfPages
+    private lateinit var defaultPreviewBuilder: (List<File>, File) -> Unit
 
     private class FakePages(override val pageCount: Int) : PdfViewerActivity.PdfPages {
         override fun render(index: Int, maxDim: Int) = null
@@ -46,20 +49,42 @@ class ReaderDockTest {
         repo = ScanRepository(app)
         defaultFactory = PdfViewerActivity.pagesFactory
         PdfViewerActivity.pagesFactory = { FakePages(3) }
+        defaultPreviewBuilder = PdfViewerActivity.previewBuilder
+        // A locked scan's preview is otherwise encoded from page images off the main thread;
+        // the bytes do not matter (pagesFactory is faked), only that the file is non-empty.
+        PdfViewerActivity.previewBuilder = { _, out -> out.writeText("fake preview") }
     }
 
     @After
     fun tearDown() {
         PdfViewerActivity.pagesFactory = defaultFactory
+        PdfViewerActivity.previewBuilder = defaultPreviewBuilder
+    }
+
+    private fun pollUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        shadowOf(Looper.getMainLooper()).idle()
+        check(condition()) { "the reader did not finish opening in ${timeoutMs}ms" }
     }
 
     private fun open(docId: String, name: String, block: (PdfViewerActivity) -> Unit) {
         ActivityScenario.launch<PdfViewerActivity>(PdfViewerActivity.intent(app, docId, name))
             .use { scenario ->
-                scenario.onActivity { activity ->
-                    shadowOf(android.os.Looper.getMainLooper()).idle()
-                    block(activity)
+                var ref: PdfViewerActivity? = null
+                scenario.onActivity { ref = it }
+                // A protected document builds its preview on Dispatchers.IO and only then runs
+                // afterOpen(), which sets the title, binds the dock and the lock badge. Idling the
+                // main looper once races that background work, so wait for the title to be set.
+                pollUntil {
+                    !ref?.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                        ?.title.isNullOrBlank()
                 }
+                scenario.onActivity { activity -> block(activity) }
             }
     }
 
@@ -121,11 +146,34 @@ class ReaderDockTest {
     fun `a protected document shows the lock badge in the title`() {
         val id = DocFixtures.locked(repo, app, password = "1234", pages = 1)
         open(id, "Rent agreement") { activity ->
-            assertEquals(
-                activity.getString(R.string.home_protected),
-                activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-                    .logoDescription.toString()
-            )
+            assertBadge(activity)
         }
+    }
+
+    /**
+     * C1 item 1: the badge assertion once raced the off-main preview build (NPE on
+     * `getLogoDescription()`). Ten consecutive cold opens prove the synchronisation is
+     * deterministic, not a lucky idle. Same assertion, never skipped or weakened.
+     */
+    @Test
+    fun `the protected badge is deterministic across ten cold opens`() {
+        val id = DocFixtures.locked(repo, app, password = "1234", pages = 1)
+        repeat(10) { run ->
+            // C1 review: otherwise opens 2..10 reuse the cached preview PDF and never exercise
+            // the asynchronous path that caused the original getLogoDescription() NPE.
+            PdfViewerActivity.clearPreviewCacheForTest(app, id)
+            open(id, "Rent agreement") { activity ->
+                assertBadge(activity, "open ${run + 1}/10")
+            }
+        }
+    }
+
+    private fun assertBadge(activity: PdfViewerActivity, label: String = "") {
+        assertEquals(
+            "$label protected badge",
+            activity.getString(R.string.home_protected),
+            activity.findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+                .logoDescription.toString()
+        )
     }
 }

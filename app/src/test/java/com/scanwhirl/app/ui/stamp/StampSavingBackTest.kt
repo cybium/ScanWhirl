@@ -67,20 +67,20 @@ class StampSavingBackTest {
         val source = repo.getDocument(id)!!
         // Occupy the runner with a save we control: the editor's Save joins this promise, so
         // "Saving" is deterministic instead of racing a real disk write.
+        val screen = activity(id)
+        screen.editor.add(PageStamp.Mark.Text("RECEIPT", PageStamp.Box(0.1f, 0.1f, 0.5f, 0.2f)))
+        val edits = screen.editor.edits()
         val release = CompletableDeferred<Unit>()
-        StampSaveRunner.submit(id) {
+        StampSaveRunner.submit(id, SaveMeta(edits, 0)) {
             release.await()
             source
         }
-
-        val screen = activity(id)
-        screen.editor.add(PageStamp.Mark.Text("RECEIPT", PageStamp.Box(0.1f, 0.1f, 0.5f, 0.2f)))
         screen.findViewById<View>(R.id.saveCopy).performClick()
         idle()
 
         assertEquals(
-            "the Save button shows the saving state",
-            context.getString(R.string.stamp_saving),
+            "the Save button shows it joined the running write",
+            context.getString(R.string.c1_still_saving),
             screen.findViewById<TextView>(R.id.saveCopy).text.toString()
         )
         assertFalse("not finishing before Back", screen.isFinishing)

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.store.ScanRepository
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -16,6 +17,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * The process-wide Vault session (design §4.1): one key for every screen, dropped after the
@@ -95,6 +98,45 @@ class VaultSessionTest {
         VaultSession.onForeground(121_000L)
         assertFalse(VaultSession.isUnlocked(121_000L))
         assertNull(VaultSession.keyOrNull(121_000L))
+    }
+
+    @Test
+    fun `a stale duplicate close does not wipe a second time`() {
+        VaultSession.open(ByteArray(32) { 1 })
+        var wipes = 0
+        VaultSession.registerOpenCopyWipe { wipes++ }
+        VaultSession.close()
+        VaultSession.close() // another screen's stale close, after the key is already gone
+        assertEquals("one wipe per session, even with a duplicate close", 1, wipes)
+    }
+
+    @Test
+    fun `a fresh unlock waits for an in-flight close wipe before writing new copies`() {
+        // What this proves: close() holds the shared lock across its wipe, so a concurrent open()
+        // cannot slip in and have its new plaintext deleted by the old close's wipe. The latch in
+        // the wipe hook makes the overlap deterministic: release it from another thread while
+        // open() is already blocked on the same lock.
+        VaultSession.open(ByteArray(32) { 2 })
+        val fresh = File(app.cacheDir, "vault_open/fresh.pdf")
+        val entered = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        VaultSession.registerOpenCopyWipe {
+            entered.countDown()
+            proceed.await(3, TimeUnit.SECONDS)
+            File(app.cacheDir, "vault_open").deleteRecursively()
+        }
+        val closer = Thread { VaultSession.close() }
+        closer.start()
+        assertTrue("the old close reached its wipe", entered.await(3, TimeUnit.SECONDS))
+        val released = Thread { Thread.sleep(120); proceed.countDown() }
+        released.start()
+        VaultSession.open(ByteArray(32) { 3 })
+        fresh.parentFile?.mkdirs()
+        fresh.writeText("fresh plaintext")
+        closer.join(3_000)
+        released.join(3_000)
+        assertTrue("the old wipe finished before the fresh copy was written", fresh.exists())
+        assertTrue("the fresh key survives", VaultSession.isUnlocked())
     }
 
     @Test

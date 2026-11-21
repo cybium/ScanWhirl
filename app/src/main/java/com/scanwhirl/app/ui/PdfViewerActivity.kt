@@ -867,6 +867,17 @@ class PdfViewerActivity : BaseActivity() {
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
         )
 
+        /**
+         * C1 review: let a repeat test open the SAME document from scratch ten times, so every
+         * open really takes the off-main preview path instead of hitting the cached PDF/stamp.
+         */
+        @androidx.annotation.VisibleForTesting
+        internal fun clearPreviewCacheForTest(context: Context, docId: String) {
+            previewJobs.keys.removeAll { it.startsWith("$docId:") }
+            File(context.cacheDir, "preview_$docId.pdf").delete()
+            File(context.cacheDir, "preview_$docId.fp").delete()
+        }
+
         private fun previewDeferred(
             doc: com.scanwhirl.app.model.ScanDocument,
             out: File,

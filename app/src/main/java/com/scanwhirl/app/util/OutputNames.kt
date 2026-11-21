@@ -17,13 +17,16 @@ object OutputNames {
         "compressed", "clean", "signed", "watermarked", "numbered", "stamped", "redacted",
         "highlighted", "marked", "drawn", "merged", "copy", "long image", "to word",
         "to powerpoint", "business card", "passport photo", "id card",
-        "संपीड़ित", "साफ़", "हस्ताक्षरित", "वॉटरमार्क", "प्रतिलिपि", "क्रमांकित"
+        "संपीड़ित", "साफ़", "हस्ताक्षरित", "वॉटरमार्क", "प्रतिलिपि", "क्रमांकित", "छिपाया गया"
     )
 
+    // C1: a "Pages" suffix may be a range (1-3) or a comma list (1, 10, 13-15). Both are one
+    // suffix, so neither may stack when the next tool names its output.
+    private val PAGE_RANGE = "\\d+(?:\\s*-\\s*\\d+)?"
     private val SUFFIX = Regex(
         "(?i)\\s*(?:-\\s*|\\(\\s*)(" +
             TOOL_LABELS.joinToString("|") { Regex.escape(it) } +
-            "|pages?\\s*\\d+(?:\\s*-\\s*\\d+)?)\\s*\\)?$"
+            "|pages?\\s*$PAGE_RANGE(?:\\s*,\\s*$PAGE_RANGE)*)\\s*\\)?$"
     )
 
     /** Owner F9: a split part's old name ended in "part 2" (Hindi "भाग 2"). That is stripped too. */
