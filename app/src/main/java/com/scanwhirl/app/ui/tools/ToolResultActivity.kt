@@ -1197,20 +1197,20 @@ class ToolResultActivity : BaseActivity() {
             }
             undone = true
             val outs = files.toList()
-        // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
-        // generated file is an export whose docIds are inputs, not copies. No tool legitimately
-        // creates that shape — document copies pass docIds only, exports pass files only — and
-        // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
-        // files and keeps the document: the safe direction for an unknown caller.
-        val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
-        val recordDoc = docIds.singleOrNull()
-        // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
-        // removes it too — the confirmation bar is no longer the only way, and pressing Undo
-        // after that bar has gone no longer leaves the copy behind. Only the copy this run
-        // created is a candidate, and only while it still holds exactly the bytes it wrote.
-        val copy = savedCopy
-        savedCopy = null
-        documentsExistingName = null
+            // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
+            // generated file is an export whose docIds are inputs, not copies. No tool legitimately
+            // creates that shape — document copies pass docIds only, exports pass files only — and
+            // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
+            // files and keeps the document: the safe direction for an unknown caller.
+            val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
+            val recordDoc = docIds.singleOrNull()
+            // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
+            // removes it too — the confirmation bar is no longer the only way, and pressing Undo
+            // after that bar has gone no longer leaves the copy behind. Only the copy this run
+            // created is a candidate, and only while it still holds exactly the bytes it wrote.
+            val copy = savedCopy
+            savedCopy = null
+            documentsExistingName = null
             docIds.clear()
             files.clear()
             locationLines.clear()
