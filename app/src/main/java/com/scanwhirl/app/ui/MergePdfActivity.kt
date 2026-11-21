@@ -108,7 +108,8 @@ class MergePdfActivity : BaseActivity() {
         binding.mergeHint.text = if (picked.isEmpty()) {
             getString(R.string.merge_hint)
         } else {
-            getString(R.string.merge_hint) + "\n" + getString(R.string.selected_count, picked.size)
+            getString(R.string.merge_hint) + "\n" +
+                resources.getQuantityString(R.plurals.selected_count, picked.size, picked.size)
         }
     }
 
