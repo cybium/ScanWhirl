@@ -63,6 +63,8 @@ class L4StringsTest {
         val rejected = listOf(
             "पेज", "पाठ", "टेक्स्ट", "कॉपी", "शेयर", "सेव", "स्क्रीन", "डिफ़ॉल्ट",
             "क्रॉप", "फ़िल्टर", "टूल", "डाउनलोड", "अनडू", "रीडू", "ऑफ़लाइन",
+            // HINDI_REVIEW_1.3.0 consistency glossary: पन्ना, प्रति, दृश्य, बिना सहेजे.
+            "पृष्ठ", "प्रतिलिपि", "लेआउट", "असहेजे",
         )
         val offenders = mutableListOf<String>()
         for ((key, text) in hi) {
