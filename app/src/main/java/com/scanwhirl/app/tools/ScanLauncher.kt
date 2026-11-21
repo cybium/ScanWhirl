@@ -51,6 +51,24 @@ class ScanLauncher(
         const val PERF_TAG = "ScanPerf"
 
         /**
+         * S1 defect 1: the launcher (not the legacy MainActivity) offers an unfinished scan
+         * once per process, after storage recovery. A rotation recreates ShellActivity but must
+         * not show the offer a second time, so the guard lives here, outside the activity.
+         */
+        @Volatile
+        private var coldStartOfferConsumed = false
+
+        internal fun consumeColdStartOffer(): Boolean {
+            if (coldStartOfferConsumed) return false
+            coldStartOfferConsumed = true
+            return true
+        }
+
+        internal fun resetColdStartOfferForTest() {
+            coldStartOfferConsumed = false
+        }
+
+        /**
          * T15: pages one camera scan may return. ML Kit documents no maximum (the real limit
          * is phone memory), so this is ScanWhirl's own ceiling, not Google's. Every page comes
          * back as a full JPEG that is staged, decoded and paginated, so 60 is what a 2 to 3 GB
@@ -130,16 +148,39 @@ class ScanLauncher(
                     startScanning(sender)
                 }
                 .addOnFailureListener { e ->
-                    val msg = if (e is ApiException) {
-                        activity.getString(R.string.scanner_unavailable, e.statusCode)
-                    } else {
-                        activity.getString(R.string.scanner_failed, e.message)
-                    }
-                    Toast.makeText(activity, msg, Toast.LENGTH_LONG).show()
+                    // S1 defects 5/6: a localized reason and a real way out. Never e.message.
+                    scannerUnavailable((e as? ApiException)?.statusCode)
                 }
         } catch (e: Exception) {
-            Toast.makeText(activity, activity.getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
+            scannerUnavailable(null)
         }
+    }
+
+    /**
+     * The scanner module is absent or refused. It comes from Play services, so say that plainly
+     * and offer the same manual photo import Book pages uses instead of a dead tap.
+     */
+    private fun scannerUnavailable(statusCode: Int?) {
+        val reason = activity.getString(R.string.s1_reason_scanner_unavailable)
+        val detail = if (statusCode != null) {
+            activity.getString(R.string.scanner_unavailable, statusCode)
+        } else {
+            activity.getString(R.string.scanner_failed, reason)
+        }
+        // The short toast keeps the existing "the scanner entry was reached" feedback; the
+        // sheet below is the actionable part (truthful copy + a working photo fallback).
+        Toast.makeText(activity, detail, Toast.LENGTH_LONG).show()
+        com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
+            .setTitle(detail)
+            .setMessage(R.string.s1_scanner_photo_fallback)
+            .setPrimary(R.string.s1_pick_photos) {
+                GalleryCrop.pickPhotosOnly(activity) { uris ->
+                    if (uris.isNotEmpty()) stageAndReview(uris)
+                }
+            }
+            .setSecondary(R.string.sheet_cancel)
+            .build()
+            .show()
     }
 
     /** The camera scan's options, shared with the gallery auto-crop entry. */
@@ -233,16 +274,37 @@ class ScanLauncher(
                 throw e
             } catch (e: Exception) {
                 Log.w(PERF_TAG, "direct save failed", e)
-                val kept = ((e as? PartialStaging)?.dir ?: staging)?.takeIf { PendingScans.pageCount(it) > 0 }
-                if (kept != null) {
-                    host.toast(activity.getString(R.string.scan_save_failed_review, e.message), Toast.LENGTH_LONG)
-                    activity.startActivity(ScanReviewActivity.intent(activity, kept.path, null, repo.nextDocumentName()))
-                } else {
-                    host.toast(activity.getString(R.string.stage_failed, e.message), Toast.LENGTH_LONG)
-                }
+                reportSaveFailure(e, ((e as? PartialStaging)?.dir ?: staging))
+            } catch (e: OutOfMemoryError) {
+                // S1 defect 7: an Error is not an Exception. Without this the process died
+                // with no explanation. Staged pages are offered back for review, never lost.
+                Log.w(PERF_TAG, "direct save ran out of memory", e)
+                reportSaveFailure(e, staging, tooLarge = true)
             } finally {
                 progress.dismiss()
             }
+        }
+    }
+
+    /** Localized reasons only: a raw library/JVM message never reaches the screen. */
+    private fun reportSaveFailure(e: Throwable, staging: File?, tooLarge: Boolean = false) {
+        val large = tooLarge || ImageTools.isTooLargePhoto(e)
+        val reason = activity.getString(if (large) R.string.s1_reason_too_large else R.string.s1_reason_unreadable)
+        val kept = staging?.takeIf { PendingScans.pageCount(it) > 0 }
+        if (kept != null) {
+            host.toast(
+                activity.getString(
+                    if (large) R.string.s1_scan_too_large_review else R.string.scan_save_failed_review,
+                    reason
+                ),
+                Toast.LENGTH_LONG
+            )
+            activity.startActivity(ScanReviewActivity.intent(activity, kept.path, null, repo.nextDocumentName()))
+        } else {
+            host.toast(
+                activity.getString(if (large) R.string.s1_scan_too_large else R.string.stage_failed, reason),
+                Toast.LENGTH_LONG
+            )
         }
     }
 
@@ -406,13 +468,21 @@ object GalleryCrop {
         val pickPhotos: () -> Unit
     )
 
+    /** S1 defect 2: a request is keyed by a saved token, not by a disposable Activity instance. */
     private class Pending(
+        val purpose: String,
         val onCropped: (List<Uri>) -> Unit,
         val onFallback: (List<Uri>) -> Unit
     )
 
+    private const val KEY_TOKEN = "sw_gallery_crop_token"
+    private const val KEY_PURPOSE = "sw_gallery_crop_purpose"
+
     private val hosts = java.util.WeakHashMap<AppCompatActivity, Host>()
-    private val pending = java.util.WeakHashMap<AppCompatActivity, Pending>()
+    private val pending = LinkedHashMap<String, Pending>()
+    private val tokenByActivity = java.util.WeakHashMap<AppCompatActivity, String>()
+    /** Set by onSaveInstanceState: the one case where onDestroy must keep the request. */
+    private val savedToken = java.util.WeakHashMap<AppCompatActivity, String>()
 
     /** Tests: fake the scanner (true = started, false = unavailable); null uses ML Kit. */
     @Volatile
@@ -422,30 +492,76 @@ object GalleryCrop {
     @Volatile
     internal var pickOverride: ((AppCompatActivity) -> Unit)? = null
 
+    private fun purposeOf(activity: AppCompatActivity): String = activity::class.java.name
+
+    private fun newToken(): String = java.util.UUID.randomUUID().toString()
+
     internal fun register(activity: AppCompatActivity, host: Host) {
         hosts[activity] = host
     }
 
     /**
+     * S1 defect 2: persist the pending request in the activity's saved state. On process death
+     * neither this map nor the saved state survives, and [deliver] reports the loss instead of
+     * dropping the result silently.
+     */
+    internal fun saveState(activity: AppCompatActivity, outState: android.os.Bundle) {
+        val token = tokenByActivity[activity] ?: return
+        val request = pending[token] ?: return
+        outState.putString(KEY_TOKEN, token)
+        outState.putString(KEY_PURPOSE, request.purpose)
+        savedToken[activity] = token
+    }
+
+    /** Re-attach the saved request to the recreated screen. */
+    internal fun restoreState(activity: AppCompatActivity, saved: android.os.Bundle?) {
+        val token = saved?.getString(KEY_TOKEN) ?: return
+        val request = pending[token] ?: return
+        val purpose = saved.getString(KEY_PURPOSE)
+        if (purpose != null && purpose != request.purpose) return
+        tokenByActivity[activity] = token
+    }
+
+    /**
      * C04: screens come and go; the bridge must not keep a destroyed activity (or its pending
-     * lambdas, which capture it) in a process-wide map.
+     * lambdas, which capture it) in a process-wide map. A rotation is the exception: the request
+     * was saved and the new screen re-attaches it, so it must survive this destroy.
      */
     internal fun unregister(activity: AppCompatActivity) {
         hosts.remove(activity)
-        pending.remove(activity)
+        val token = tokenByActivity.remove(activity)
+        val retained = savedToken.remove(activity)
+        if (token != null && (activity.isFinishing || token != retained)) {
+            pending.remove(token)
+        }
     }
 
     /** Tests: how many live screens the bridge still holds. */
     internal fun hostCountForTest(): Int = hosts.size
 
+    private fun showLostResult(activity: AppCompatActivity) {
+        android.widget.Toast.makeText(
+            activity,
+            activity.getString(R.string.s1_gallery_result_lost),
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
+
     /** The scanner returned cropped pages. */
     internal fun deliver(activity: AppCompatActivity, uris: List<Uri>) {
-        pending.remove(activity)?.onCropped?.invoke(uris)
+        val token = tokenByActivity.remove(activity)
+        val waiting = token?.let { pending.remove(it) }
+        if (waiting == null) {
+            showLostResult(activity)
+            return
+        }
+        waiting.onCropped(uris)
     }
 
     /** The scanner was cancelled or returned nothing: keep the caller quiet. */
     internal fun cancel(activity: AppCompatActivity) {
-        pending.remove(activity)
+        val token = tokenByActivity.remove(activity) ?: return
+        pending.remove(token)
     }
 
     /** Tests: how many screens are waiting for a gallery-crop result. */
@@ -453,7 +569,12 @@ object GalleryCrop {
 
     /** The fallback picker returned photos for the caller's manual crop. */
     internal fun deliverFallback(activity: AppCompatActivity, uris: List<Uri>) {
-        val waiting = pending.remove(activity) ?: return
+        val token = tokenByActivity.remove(activity)
+        val waiting = token?.let { pending.remove(it) }
+        if (waiting == null) {
+            showLostResult(activity)
+            return
+        }
         if (uris.isEmpty()) return
         waiting.onFallback(uris)
     }
@@ -464,9 +585,22 @@ object GalleryCrop {
         onCropped: (List<Uri>) -> Unit,
         onFallback: (List<Uri>) -> Unit
     ) {
-        pending[activity] = Pending(onCropped, onFallback)
+        val token = newToken()
+        pending[token] = Pending(purposeOf(activity), onCropped, onFallback)
+        tokenByActivity[activity] = token
         val started = startOverride?.invoke(activity) ?: startReal(activity, maxPages)
         if (!started) startFallback(activity)
+    }
+
+    /**
+     * The camera scanner itself is unavailable: open the manual picker with a waiting request so
+     * the picked photos actually reach the caller (S1 defect 5).
+     */
+    internal fun pickPhotosOnly(activity: AppCompatActivity, onPicked: (List<Uri>) -> Unit) {
+        val token = newToken()
+        pending[token] = Pending(purposeOf(activity), {}, onPicked)
+        tokenByActivity[activity] = token
+        startFallback(activity)
     }
 
     /** The scanner IntentSender could not be produced: pick photos for a manual crop. */
@@ -478,7 +612,8 @@ object GalleryCrop {
         }
         val host = hosts[activity]
         if (host == null) {
-            pending.remove(activity)
+            val token = tokenByActivity.remove(activity)
+            if (token != null) pending.remove(token)
             return
         }
         host.pickPhotos()

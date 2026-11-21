@@ -245,11 +245,17 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // reloads when it finishes so a document an interrupted Replace took away is back.
         val app = ScanWhirlApp.from(this)
         app.startStorageRecovery()
+        // S1 defect 1: the launcher owns the "unfinished scan" offer once the recovery that can
+        // restore a document has finished. The guard is per process, so rotation never repeats it.
+        val offerUnfinished = ScanLauncher.consumeColdStartOffer()
         if (!app.storageRecovered.value) {
             lifecycleScope.launch {
                 app.storageRecovered.first { it }
                 if (::library.isInitialized) library.reload()
+                if (offerUnfinished) scanLauncher.offerUnfinishedScan()
             }
+        } else if (offerUnfinished) {
+            scanLauncher.offerUnfinishedScan()
         }
         revealFromIntent(intent)
         lastProState = com.scanwhirl.app.util.ProGate.isPro(this)

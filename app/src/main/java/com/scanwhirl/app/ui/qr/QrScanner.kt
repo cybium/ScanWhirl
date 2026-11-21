@@ -81,7 +81,7 @@ class GoogleCodeScanner(private val context: Context) : QrScanner {
                         QrScanOutcome.Failed(
                             context.getString(
                                 com.scanwhirl.app.R.string.qr_scanner_error,
-                                error.message ?: error.javaClass.simpleName
+                                context.getString(com.scanwhirl.app.R.string.s1_reason_scanner_failed)
                             )
                         )
                     )
@@ -91,7 +91,7 @@ class GoogleCodeScanner(private val context: Context) : QrScanner {
                 QrScanOutcome.Failed(
                     context.getString(
                         com.scanwhirl.app.R.string.qr_scanner_error,
-                        e.message ?: e.javaClass.simpleName
+                        context.getString(com.scanwhirl.app.R.string.s1_reason_scanner_failed)
                     )
                 )
             )

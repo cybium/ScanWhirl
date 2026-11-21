@@ -1153,12 +1153,16 @@ class ScanReviewActivity : BaseActivity() {
                     val msg = if (e is ApiException) {
                         getString(R.string.scanner_unavailable, e.statusCode)
                     } else {
-                        getString(R.string.scanner_failed, e.message)
+                        getString(R.string.scanner_failed, getString(R.string.s1_reason_scanner_failed))
                     }
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 }
         } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.scanner_failed, e.message), Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                getString(R.string.scanner_failed, getString(R.string.s1_reason_scanner_failed)),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 

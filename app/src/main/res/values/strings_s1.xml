@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- S1 defect 5: truthful scanner-unavailable copy with a real way out. -->
+    <string name="s1_scanner_photo_fallback">The document scanner comes from Google Play services and may need a one-time download. You can pick photos instead and keep them as they are.</string>
+    <string name="s1_pick_photos">Pick photos</string>
+
+    <!-- S1 defect 6: localized reasons, never a raw exception message. -->
+    <string name="s1_reason_scanner_unavailable">The scanner is not available on this phone</string>
+    <string name="s1_reason_scanner_failed">The scanner could not start</string>
+    <string name="s1_reason_unreadable">the photo could not be read</string>
+    <string name="s1_reason_too_large">the photo is too large for this phone</string>
+    <string name="s1_insert_photo_failed">Could not add the photos: %1$s</string>
+
+    <!-- S1 defect 7: a heap failure is too large, not a crash. -->
+    <string name="s1_scan_too_large">The scan is too large for this phone. Try fewer pages or smaller photos.</string>
+    <string name="s1_scan_too_large_review">The scan is too large for this phone. Your pages are kept here; check them and save again.</string>
+
+    <!-- S1 defect 2: a result that cannot be re-attached is never silently dropped. -->
+    <string name="s1_gallery_result_lost">The picked photos could not be matched to this screen. Please try again.</string>
+</resources>

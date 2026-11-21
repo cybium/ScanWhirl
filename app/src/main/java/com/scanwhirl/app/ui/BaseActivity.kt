@@ -59,10 +59,19 @@ abstract class BaseActivity : AppCompatActivity() {
                 pickPhotos = { manualCropPhotos.launch("image/*") }
             )
         )
+        // S1 defect 2: a gallery-crop result may arrive on this recreated instance. Re-attach
+        // the saved request so the pages are not silently dropped after a rotation.
+        com.scanwhirl.app.tools.GalleryCrop.restoreState(this, savedInstanceState)
         // Edge-to-edge on every Android version; screens then pad themselves via
         // View.applySystemBarsPadding() so the result is identical everywhere.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawableResource(R.color.rv_bg)
+    }
+
+    /** S1 defect 2: keep the pending gallery-crop request across a configuration change. */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        com.scanwhirl.app.tools.GalleryCrop.saveState(this, outState)
     }
 
     /** v2 UI: 74_motion — every drill-in uses the kit screen transition. */
