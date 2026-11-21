@@ -57,6 +57,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.max
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
@@ -125,6 +126,30 @@ class ScanRepository(private val context: Context) {
         @Volatile internal var decryptPdf: (ByteArray, String) -> ByteArray = PdfDecryptor::decrypt
 
         /**
+         * G1: bounded decode of a kept page before re-filtering. The old full-resolution
+         * `BitmapFactory.decodeFile` could exhaust the heap on a large imported page; [decodeBoundedForRefilter]
+         * caps the long side at the capture limit. Replaceable in tests to force OutOfMemoryError.
+         */
+        @Volatile internal var refilterDecode: (File) -> Bitmap = { decodeBoundedForRefilter(it) }
+
+        /** Long-side cap for the refilter decode (the same ceiling a captured page can have). */
+        internal const val REFILTER_MAX_LONG_SIDE = 4000
+
+        private fun decodeBoundedForRefilter(file: File): Bitmap {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.path, bounds)
+            require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a decodable image" }
+            var sample = 1
+            while (max(bounds.outWidth, bounds.outHeight) / sample > REFILTER_MAX_LONG_SIDE) sample *= 2
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            return BitmapFactory.decodeFile(file.path, opts)
+                ?: throw IllegalStateException("This page's kept original can't be read, so nothing was changed.")
+        }
+
+        /**
          * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
          * prove the 1 300 000-iteration derivation never happens on the main thread.
          */
@@ -135,6 +160,7 @@ class ScanRepository(private val context: Context) {
             trashFault = {}
             importFault = {}
             decryptPdf = PdfDecryptor::decrypt
+            refilterDecode = { decodeBoundedForRefilter(it) }
             lockDerivationProbe = null
         }
 
@@ -1726,6 +1752,29 @@ class ScanRepository(private val context: Context) {
         File(page.parentFile, page.nameWithoutExtension + ".orig")
 
     /**
+     * The one re-filter path for both saved pages and draft pages. Decode is bounded to the
+     * capture cap and OutOfMemoryError (an `Error`, invisible to `catch (Exception)`) is turned
+     * into an honest localized IOException. Nothing is staged or committed on failure, so the
+     * original page stays byte-identical.
+     */
+    private fun applyRefilter(source: File, out: File, filter: ScanFilter) {
+        var bmp: Bitmap? = null
+        try {
+            bmp = refilterDecode(source)
+            val filtered = filter.applyTo(bmp)
+            try {
+                PageReplace.commit(PageReplace.stageJpeg(out, filtered, 92))
+            } finally {
+                if (filtered !== bmp) filtered.recycle()
+            }
+        } catch (e: OutOfMemoryError) {
+            throw IOException(context.getString(R.string.refilter_out_of_memory))
+        } finally {
+            bmp?.recycle()
+        }
+    }
+
+    /**
      * Applies [filter] to one saved page of a document — always re-processing
      * from the kept original so filters never stack, and so "Original"
      * restores the untouched scan. Creates the `.orig` sibling on first use.
@@ -1748,15 +1797,7 @@ class ScanRepository(private val context: Context) {
                 }
             } else {
                 if (!orig.exists()) PageReplace.commit(PageReplace.stageCopy(orig, file))
-                val src = BitmapFactory.decodeFile(orig.path)
-                    ?: throw IllegalStateException("This page's kept original can't be read, so nothing was changed.")
-                val out = filter.applyTo(src)
-                try {
-                    PageReplace.commit(PageReplace.stageJpeg(file, out, 92))
-                } finally {
-                    if (out !== src) out.recycle()
-                    src.recycle()
-                }
+                applyRefilter(orig, file, filter)
             }
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
@@ -2653,20 +2694,40 @@ class ScanRepository(private val context: Context) {
         synchronized(PDF_LOCK) {
             if (grant != null) requireLockRecord(dir, grant)
             val work = OpStaging.create(context.filesDir)
+            // Past the PDF rename the marker is the only way back to a consistent state, so it is
+            // kept for the next start on any failure; before it, cleanup is a clean rollback.
+            var swapped = false
             try {
+                val pdf = File(dir, PdfProtection.PDF_FILE)
+                val lock = File(dir, LOCK_FILE)
+                val oldRecord = readPdfLock(lock)
+                    ?: throw IllegalStateException("The lock record can't be read, so nothing was changed.")
+                val oldPdf = Sha256.of(pdf)
                 val plain = File(work, "plain.pdf")
                 val layered = writePdf(dir, plain)
+                Durable.syncFile(plain)
+                val newPdf = Sha256.of(plain)
+                Durable.atomicWriteText(
+                    File(work, Unlock.MARKER),
+                    Unlock.write(dir.name, oldRecord, oldPdf, newPdf)
+                )
+                Durable.syncDir(work)
                 OpFaults.at("unlock:built")
-                if (!plain.renameTo(File(dir, PdfProtection.PDF_FILE))) {
-                    throw IOException("Could not unlock the PDF")
-                }
+                if (!plain.renameTo(pdf)) throw IOException("Could not unlock the PDF")
+                swapped = true
                 OpFaults.at("unlock:swapped")
-                File(dir, LOCK_FILE).delete()
+                // The unlocked copy is durable before the lock label goes away.
+                Durable.syncDir(dir)
+                lock.delete()
                 updateTextLayerFlag(dir, layered)
                 Durable.syncDir(dir)
+                File(work, Unlock.MARKER).delete()
+                Durable.syncDir(work)
                 OpStaging.release(work)
             } catch (e: Exception) {
-                OpStaging.release(work)
+                // A real kill skips this too. After the swap the marker stays so recoverOperations
+                // can finish the unlock; deleting it would leave a plain PDF with a stale label.
+                if (!swapped) OpStaging.release(work)
                 throw e
             }
         }
@@ -2805,6 +2866,41 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * G1: finishes an unlock that died after the plain PDF was swapped in (the one destructive
+     * step). Before the swap nothing changed and the marker is simply swept. After it the plain
+     * copy is already durable, so the marker alone says which stale lock record must go; the
+     * encrypted PDF (still named by the marker) is kept if the swap never happened.
+     */
+    private fun recoverUnlock(work: File) {
+        val pending = Unlock.read(work) ?: return
+        val dir = File(docsDir, pending.id)
+        if (!dir.isDirectory) return
+        val pdf = File(dir, PdfProtection.PDF_FILE)
+        val lock = File(dir, LOCK_FILE)
+        synchronized(PDF_LOCK) {
+            val digest = runCatching { Sha256.of(pdf) }.getOrNull() ?: return
+            when (digest) {
+                pending.newPdfSha256 -> {
+                    // Rolled forward: the unlocked copy is on disk, so drop the stale label.
+                    if (lock.exists()) {
+                        lock.delete()
+                        Durable.syncDir(dir)
+                    }
+                    pruneLockIndex()
+                }
+                pending.oldPdfSha256 -> {
+                    // Rolled back: the encrypted PDF is still in place, so its label must stay.
+                    if (!lock.exists()) {
+                        Durable.atomicWriteText(lock, pending.oldRecord)
+                        Durable.syncDir(dir)
+                    }
+                }
+            }
+            // An unknown digest is left alone: fail closed, never guess at a half-written PDF.
+        }
+    }
+
     fun protectionState(id: String): PdfProtection.State = PdfProtection.state(File(docsDir, id))
 
     /**
@@ -2866,6 +2962,29 @@ class ScanRepository(private val context: Context) {
         }
 
     /**
+     * G1: reclaims the two data-free leftovers a new-scan save can leave in documents/ when the
+     * process dies before publication:
+     *  - a bare reserved id directory (crash between the exclusive `mkdir` and the marker write).
+     *    The ordinary reaper cannot see it because it has no owner marker, so it stayed forever;
+     *  - a directory holding only our `.incomplete` / `.incomplete.tmp` marker.
+     *
+     * A directory with ANY other entry (pages, PDF, `txn.txt` or `meta.txt`) is never touched:
+     * that is journal-linked replay material or a published document and may be the owner's only
+     * copy. A marker must be provably ours; a bare empty directory carries no data at all.
+     */
+    private fun removeOrphanReservations(): Int {
+        var removed = 0
+        for (dir in docsDir.listFiles { it -> it.isDirectory }.orEmpty()) {
+            val names = dir.list()?.toSet() ?: continue
+            val onlyMarkers = names.all { it == SaveFormat.MARKER || it == SaveFormat.MARKER_TMP }
+            if (!onlyMarkers) continue
+            if (names.isNotEmpty() && SaveFormat.ownerOf(dir) == null) continue
+            if (dir.deleteRecursively()) removed++
+        }
+        return removed
+    }
+
+    /**
      * PM-2.2b startup recovery, in order:
      *  1. roll forward a sealed Replace whose base is absent and whose Trash entry carries
      *     `previous=<token>` (and whose pages/PDF still match the seal);
@@ -2915,8 +3034,10 @@ class ScanRepository(private val context: Context) {
 
         // 1b. Finish a password change that died between its PDF swap and its verifier write: the
         // marker names the new verifier, so no second KDF run and no plaintext is needed.
+        // G1: finish an unlock that died after its PDF swap the same way (complete or roll back).
         for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
             recoverPasswordSwap(dir)
+            recoverUnlock(dir)
         }
 
         // 2. Finish published draft seals (create-only Save as new, or a completed Replace).
@@ -2929,6 +3050,10 @@ class ScanRepository(private val context: Context) {
             }
             File(dir, OpStaging.SEAL).delete()
         }
+
+        // 2b. G1: reclaim data-free orphan save reservations (bare id dir / marker-only dir).
+        // Nothing here can hold user data: any page, PDF, txn or meta makes a dir ineligible.
+        removeOrphanReservations()
 
         // 3. Drafts: interrupted discards, and drafts whose base is gone from library and Trash.
         // Only a manifest we can read is judged: an unknown/damaged folder is never deleted here.
@@ -3102,6 +3227,54 @@ class ScanRepository(private val context: Context) {
             val previous = values["pdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
             val next = values["newPdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
             return Swap(id, oldRecord, newRecord, previous, next)
+        }
+    }
+
+    /**
+     * G1: the recovery marker of an interrupted unlock, kept in private [OpStaging] (never beside
+     * a document). It records the locked and plain PDF digests and the old lock record. Written and
+     * fsynced BEFORE the destructive rename, so a process death can finish the unlock (drop the
+     * stale label) or roll back (the encrypted PDF is still there) without the password and without
+     * touching the page sources.
+     */
+    private object Unlock {
+        const val MARKER = ".unlock"
+        private const val HEADER = "scanwhirl-unlock-v1"
+        private val idPattern = Regex("[A-Za-z0-9_-]{1,64}")
+        private val sha256Pattern = Regex("[0-9a-f]{64}")
+
+        class Pending(
+            val id: String,
+            val oldRecord: String,
+            val oldPdfSha256: String,
+            val newPdfSha256: String
+        )
+
+        fun write(id: String, oldRecord: String, oldPdf: String, newPdf: String): String = buildString {
+            append(HEADER).append('\n')
+            append("id=").append(id).append('\n')
+            append("old=").append(oldRecord).append('\n')
+            append("pdf=").append(oldPdf).append('\n')
+            append("newPdf=").append(newPdf).append('\n')
+        }
+
+        /** Any missing, torn or unexpected field returns null: an unreadable marker never guesses. */
+        fun read(work: File): Pending? {
+            val file = File(work, MARKER)
+            if (file.length() !in 1L..2048L) return null
+            val lines = runCatching { file.readLines() }.getOrNull() ?: return null
+            if (lines.firstOrNull() != HEADER) return null
+            val values = HashMap<String, String>()
+            for (line in lines.drop(1)) {
+                val eq = line.indexOf('=')
+                if (eq <= 0) return null
+                values[line.substring(0, eq)] = line.substring(eq + 1)
+            }
+            val id = values["id"]?.takeIf { idPattern.matches(it) } ?: return null
+            val old = values["old"]?.takeIf { it.length in 1..256 } ?: return null
+            val oldPdf = values["pdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            val newPdf = values["newPdf"]?.takeIf { sha256Pattern.matches(it) } ?: return null
+            return Pending(id, old, oldPdf, newPdf)
         }
     }
 
@@ -4298,17 +4471,7 @@ class ScanRepository(private val context: Context) {
                     Durable.copyFile(source, outOrig)
                     "r_$n.orig"
                 }
-                val bmp = BitmapFactory.decodeFile(source.path)
-                    ?: throw IllegalStateException(
-                        "This page's kept original can't be read, so nothing was changed."
-                    )
-                val out = filter.applyTo(bmp)
-                try {
-                    PageReplace.commit(PageReplace.stageJpeg(File(dir, "r_$n.jpg"), out, 92))
-                } finally {
-                    if (out !== bmp) out.recycle()
-                    bmp.recycle()
-                }
+                applyRefilter(source, File(dir, "r_$n.jpg"), filter)
                 OpFaults.at("draft:replacement_written")
                 storeDraft(
                     draft.copy(

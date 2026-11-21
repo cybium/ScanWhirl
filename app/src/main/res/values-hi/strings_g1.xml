@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- G1: honest, localized failure when a page cannot be re-filtered on this phone. -->
+<resources>
+    <string name="refilter_out_of_memory">यह पन्ना इस फ़ोन पर रंग-रूप बदलने के लिए बहुत बड़ा है। मूल पन्ना नहीं बदला गया।</string>
+</resources>
