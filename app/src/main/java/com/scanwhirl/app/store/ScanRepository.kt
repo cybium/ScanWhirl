@@ -3045,6 +3045,16 @@ class ScanRepository(private val context: Context) {
         return ocrStore.updateTexts(id, pages)
     }
 
+    /** Save only if every expected page still matches; conflicts leave the whole batch untouched. */
+    fun updateOcrPagesIfUnchanged(
+        id: String,
+        expected: Map<String, String?>,
+        pages: Map<String, String>
+    ): OcrStore.UpdateResult? {
+        if (!File(docsDir, id).isDirectory) return null
+        return ocrStore.updatePagesIfUnchanged(id, expected, pages)
+    }
+
     private fun renumberPages(dir: File) {
         pageFilesIn(dir).forEachIndexed { i, f ->
             val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))

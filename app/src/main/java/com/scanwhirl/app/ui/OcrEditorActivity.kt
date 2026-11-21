@@ -1271,7 +1271,9 @@ class OcrEditorActivity : BaseActivity() {
             if (finishAfter) finish()
             return
         }
-        val baseline = originalTexts
+        val baseline = changedPages.keys.associateWith { key ->
+            if (key in unreadKeys) null else originalTexts[key]
+        }
         saving = true
         lifecycleScope.launch {
             try {
@@ -1310,6 +1312,10 @@ class OcrEditorActivity : BaseActivity() {
         }
     }
 
+    /** Deterministic recognition/save interleaving for regression tests; unset in production. */
+    @Volatile
+    internal var beforeAtomicOcrWriteForTests: (() -> Unit)? = null
+
     /**
      * D9-1: writes [changes] only when the store still holds [baseline] for every page in it.
      * [WriteOutcome.CHANGED_UNDERNEATH] means a re-read finished underneath: the caller asks
@@ -1318,16 +1324,22 @@ class OcrEditorActivity : BaseActivity() {
     private suspend fun writeChangedPages(
         id: String,
         changes: Map<String, String>,
-        baseline: Map<String, String>
+        baseline: Map<String, String?>
     ): WriteOutcome = withContext(NonCancellable + Dispatchers.IO) {
         if (changes.isEmpty()) return@withContext WriteOutcome.WRITTEN
         if (!File(repo.docsDir, id).isDirectory) return@withContext WriteOutcome.DOCUMENT_MISSING
-        val stored = repo.ocrDoc(id)
-        val changedUnderneath = changes.keys.any { key ->
-            (stored[key] ?: "") != (baseline[key] ?: "")
+        beforeAtomicOcrWriteForTests?.invoke()
+        val result = repo.updateOcrPagesIfUnchanged(id, baseline, changes)
+            ?: return@withContext WriteOutcome.DOCUMENT_MISSING
+        if (result.conflictingKeys.isNotEmpty()) {
+            // Preserve even absent -> recognized-empty conflicts: syncWithStore normalizes those.
+            withContext(Dispatchers.Main) {
+                result.conflictingKeys.forEach { key ->
+                    pendingNewText[key] = result.texts[key].orEmpty()
+                }
+            }
+            return@withContext WriteOutcome.CHANGED_UNDERNEATH
         }
-        if (changedUnderneath) return@withContext WriteOutcome.CHANGED_UNDERNEATH
-        checkNotNull(repo.updateOcrPages(id, changes)) { "Document no longer exists" }
         WriteOutcome.WRITTEN
     }
 
@@ -1391,7 +1403,9 @@ class OcrEditorActivity : BaseActivity() {
             return
         }
         val changedPages = pageTexts.filter { (k, v) -> v != (originalTexts[k] ?: "") }
-        val baseline = originalTexts
+        val baseline = changedPages.keys.associateWith { key ->
+            if (key in unreadKeys) null else originalTexts[key]
+        }
         val title = docTitle ?: getString(R.string.ocr_screen_title)
         val fileName = "${sanitizeTitle(title)} - text.txt"
         saving = true

@@ -205,6 +205,29 @@ class OcrStore(private val docsDir: File) {
         merged
     }
 
+    data class UpdateResult(val texts: Map<String, String>, val conflictingKeys: Set<String>)
+
+    /**
+     * Compare and merge under the recognition publisher's file lock. Null means no stored entry,
+     * not recognized empty text. A conflict performs no writes, including geometry binding.
+     */
+    fun updatePagesIfUnchanged(
+        id: String,
+        expected: Map<String, String?>,
+        updates: Map<String, String>
+    ): UpdateResult = lock.withLock {
+        require(expected.keys.containsAll(updates.keys)) { "Every update needs an expected value" }
+        if (!docDir(id).isDirectory) throw IOException("Document no longer exists")
+        val before = readTextStrict(id)
+        val conflicts = expected.keys.filterTo(linkedSetOf()) { before[it] != expected[it] }
+        if (conflicts.isNotEmpty()) return@withLock UpdateResult(before, conflicts)
+        if (updates.isEmpty()) return@withLock UpdateResult(before, emptySet())
+        bindGeometry(id, before)
+        val merged = before + updates
+        writeTexts(id, merged)
+        UpdateResult(merged, emptySet())
+    }
+
     /**
      * PM-2.2b: writes the OCR carried over from a draft's base into a staging folder in one go.
      * Geometry goes first; the text rename is the commit point (`OcrStore.kt` write order).
