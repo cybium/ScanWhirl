@@ -45,6 +45,11 @@ class T1PrivacySweepIndependenceTest {
     fun `one failing entry does not stop the other cache dirs from being swept`() {
         listOf("vault_open", "pdfa", "t1_passport", "t1_business_card", "exports")
             .forEach { file("$it/page.jpg") }
+        // Capture caches are age-gated, so make their entries old enough to be eligible.
+        val old = System.currentTimeMillis() - PrivacySweep.CAPTURE_CACHE_MAX_AGE_MS - 60_000L
+        listOf("t1_passport", "t1_business_card").forEach {
+            File(cache, "$it/page.jpg").setLastModified(old)
+        }
 
         val real = PrivacySweep.deleteDirectory
         PrivacySweep.deleteDirectory = { dir ->
@@ -55,8 +60,12 @@ class T1PrivacySweepIndependenceTest {
         PrivacySweep.run(app)
 
         assertTrue("the failing entry is left for another launch", File(cache, "pdfa").exists())
-        listOf("vault_open", "t1_passport", "t1_business_card", "exports").forEach { name ->
+        listOf("vault_open", "exports").forEach { name ->
             assertFalse("sweep stopped early: $name", File(cache, name).exists())
+        }
+        // Capture dirs stay (age-gated); only their stale entries are reclaimed.
+        listOf("t1_passport", "t1_business_card").forEach { name ->
+            assertFalse("sweep stopped early: $name", File(cache, "$name/page.jpg").exists())
         }
     }
 }
