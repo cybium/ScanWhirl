@@ -177,7 +177,7 @@
     <string name="shell_yesterday">कल</string>
     <string name="shell_move_to_trash">हटाई गई फ़ाइलों में भेजें</string>
     <string name="shell_trash_title">“%1$s” को हटाई गई फ़ाइलों में भेजें?</string>
-    <string name="shell_trash_note">इसे 30 दिन तक बहाल कर सकते हैं। इस काम से कोई फ़ाइल नहीं भेजी जाती।</string>
+    <string name="shell_trash_note">इसे 30 दिनों तक वापस ला सकते हैं।</string>
     <string name="shell_moved_to_trash">हटाई गई फ़ाइलों में डाल दिया</string>
     <string name="reader_dock_pages">पन्ने</string>
     <string name="reader_dock_text">लिखें</string>

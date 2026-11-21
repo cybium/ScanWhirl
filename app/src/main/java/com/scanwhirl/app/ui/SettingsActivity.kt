@@ -413,7 +413,7 @@ class SettingsActivity : BaseActivity() {
         val checked = languages.indexOf(com.scanwhirl.app.util.OcrLanguageSettings.get(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.settings_ocr_language)
-            .setMessage(R.string.ocr_lang_note)
+            .setMessage(R.string.u4_ocr_language_note)
             .setOptions(labels, checked) { which, _ ->
                 com.scanwhirl.app.util.OcrLanguageSettings.set(this, languages[which])
                 updateSummaries()

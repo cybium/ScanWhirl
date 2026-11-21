@@ -1414,6 +1414,14 @@ class LibraryScreen(
     }
 
     private fun renderSortLabel() {
+        ((sortAction?.parent as? ViewGroup)?.getChildAt(0) as? TextView)?.text = context.getString(
+            when (sort) {
+                com.scanwhirl.app.util.Prefs.LIB_NAME_ASC,
+                com.scanwhirl.app.util.Prefs.LIB_NAME_DESC,
+                com.scanwhirl.app.util.Prefs.LIB_SIZE -> R.string.u4_library_documents
+                else -> R.string.home_recent
+            }
+        )
         sortAction?.text = context.getString(sortLabelRes()) + " ▾"
     }
 

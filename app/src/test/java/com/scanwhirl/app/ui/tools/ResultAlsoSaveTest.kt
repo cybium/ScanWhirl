@@ -355,7 +355,7 @@ class ResultAlsoSaveTest {
                 val text = summaryText(activity)
                 assertTrue(
                     "W3: the result must say where the new copy is: $text",
-                    text.contains("In your Library: Rent receipt")
+                    text.contains("Saved in Library") && !text.contains("Rent receipt")
                 )
             }
         }
@@ -370,7 +370,7 @@ class ResultAlsoSaveTest {
             scenario.onActivity { activity ->
                 idle()
                 val text = summaryText(activity)
-                assertFalse("W3: an export is not a library document: $text", text.contains("In your Library"))
+                assertFalse("W3: an export is not a library document: $text", text.contains("Saved in Library"))
                 assertTrue(
                     "W3: an export says plainly that it lives in the app until saved: $text",
                     text.contains("Prepared in ScanWhirl")

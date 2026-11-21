@@ -2,7 +2,7 @@
 <!-- Full Backup 2.0 (Me -> Backup & restore). -->
 <resources>
     <string name="me_backup">Backup &amp; restore</string>
-    <string name="me_backup_summary">Encrypted backup of scans and settings. Vault included only when ready; check warnings.</string>
+    <string name="me_backup_summary">Encrypted backup and restore.</string>
 
     <string name="backup_title">Backup &amp; restore</string>
     <string name="backup_explain">Create an encrypted local backup of scans, signatures and settings. Vault files are included only when ready. Check warnings before relying on the backup.</string>
