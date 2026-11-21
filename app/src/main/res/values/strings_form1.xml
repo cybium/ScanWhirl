@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FORM1: form-ready photo and signature. Every entry has an EN + HI pair. -->
+    <string name="form1_title">Form-ready photo and signature</string>
+    <string name="form1_check_rules">Check your form\'s exact rules</string>
+    <string name="form1_notice">Presets are examples only. Check the current notification for exact pixels, KB and DPI. Some portals also ask for a live photo step that cannot be done offline.</string>
+    <string name="form1_preset_photo">Photo</string>
+    <string name="form1_preset_signature">Signature</string>
+    <string name="form1_preset_thumb">Thumb impression</string>
+    <string name="form1_preset_declaration">Declaration</string>
+    <string name="form1_preset_custom">Custom</string>
+    <string name="form1_example">Example: %1$d × %2$d px, %3$d to %4$d KB, JPG</string>
+    <string name="form1_photo_cm_note">Some forms ask for about 3.5 × 4.5 cm instead.</string>
+    <string name="form1_width_hint">Width</string>
+    <string name="form1_height_hint">Height</string>
+    <string name="form1_min_hint">Min KB</string>
+    <string name="form1_max_hint">Max KB</string>
+    <string name="form1_readout">Will make: %1$d × %2$d px</string>
+    <string name="form1_cleanup">Clean up signature (white paper, dark ink)</string>
+    <string name="form1_pick">Choose a photo</string>
+    <string name="form1_apply">Make file</string>
+    <string name="form1_min_miss">Could not reach the minimum size without changing the picture. Kept the largest honest file: %1$s.</string>
+    <string name="form1_max_miss">Even the smallest honest file is above your maximum. Check the limits.</string>
+    <string name="form1_pick_failed">Could not read that photo. Choose a JPG or PNG image.</string>
+    <string name="form1_encode_failed">Could not make the file. Try another photo or different limits.</string>
+    <string name="form1_note_measured">Measured: %1$s (%2$d bytes) · %3$d × %4$d px · %5$d DPI</string>
+    <string name="form1_note_in_band">Inside your %1$s to %2$s band.</string>
+    <string name="form1_note_below_min">Below your minimum. %1$s</string>
+    <string name="form1_note_above_max">Above your maximum. %1$s</string>
+    <string name="form1_source_kept">Your original photo is untouched.</string>
+    <string name="form1_size_too_large">This size is too large for a form photo. Use up to 4000 px.</string>
+    <string name="form1_out_of_memory">This photo is too large for this phone. Try a smaller picture.</string>
+    <string name="form1_selected">Selected</string>
+    <string name="form1_not_selected">Not selected</string>
+</resources>
