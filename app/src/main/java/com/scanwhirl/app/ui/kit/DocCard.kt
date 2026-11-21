@@ -176,7 +176,8 @@ class DocCard(context: Context) : LinearLayout(context) {
             lockIcon,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
-        pageBadge = SwStyle.text(context, 11f, Color.WHITE, bold = true).apply {
+        // L1-04: badges and metadata below 12sp are raised to the readable floor.
+        pageBadge = SwStyle.text(context, 12f, Color.WHITE, bold = true).apply {
             background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 5f)
             setPadding((6 * d).toInt(), 0, (6 * d).toInt(), 0)
         }
@@ -245,7 +246,7 @@ class DocCard(context: Context) : LinearLayout(context) {
             )
         }
         nameRow.addView(nameView, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        lockBadge = SwStyle.text(context, 11f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
+        lockBadge = SwStyle.text(context, 12f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
             id = R.id.swDocLockBadge
             text = context.getString(R.string.home_protected)
             isVisible = false
@@ -286,7 +287,11 @@ class DocCard(context: Context) : LinearLayout(context) {
             categoryDot,
             LayoutParams((8 * d).toInt(), (8 * d).toInt()).apply { marginEnd = (5 * d).toInt() }
         )
-        categoryView = SwStyle.text(context, 11f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+        categoryView = SwStyle.text(
+            context,
+            if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 12f,
+            SwStyle.color(context, R.color.text_hologram_mid), bold = true
+        ).apply {
             id = R.id.swDocFolder
             minimumHeight = (14 * d).toInt()
             gravity = Gravity.CENTER_VERTICAL
@@ -315,7 +320,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         // The row itself is the tap target, so this is not a nested 48 dp control.
         searchPage = SwStyle.text(
             context,
-            11.5f,
+            if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 12f,
             SwStyle.color(context, R.color.cyan_primary),
             bold = true
         ).apply {

@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.MarginLayoutParams
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -309,9 +310,9 @@ class LibraryScreen(
         docList = LinearLayout(context).apply {
             id = R.id.swDocList
             orientation = VERTICAL
-            // The last card must clear the nav bar and the scan disc (M5: measured against the
-            // real dock, never a smaller magic number).
-            setPadding(0, 0, 0, listBottomInset())
+            // L1-04: reserve the fast-scroll strip's gutter so its >=48dp target never covers
+            // a card's Share/More hit area. The last card still clears the real dock (M5).
+            setPadding(0, 0, SwStyle.dp(context, 48f), listBottomInset())
         }
 
         emptyView = LinearLayout(context).apply {
@@ -1885,6 +1886,45 @@ class LibraryScreen(
                         atLimit = atLimit
                     )
                     if (remove) {
+                        // L1-04: named reorder actions alongside drag, with real boundary no-ops.
+                        tile.accessibilityDelegate = object : View.AccessibilityDelegate() {
+                            override fun onInitializeAccessibilityNodeInfo(
+                                host: View, info: AccessibilityNodeInfo
+                            ) {
+                                super.onInitializeAccessibilityNodeInfo(host, info)
+                                val at = draft.indexOf(tool.id)
+                                if (at > 0) info.addAction(
+                                    AccessibilityNodeInfo.AccessibilityAction(
+                                        R.id.uxL1MoveEarlier,
+                                        context.getString(R.string.ux130_l1_move_earlier)
+                                    )
+                                )
+                                if (at >= 0 && at < draft.lastIndex) info.addAction(
+                                    AccessibilityNodeInfo.AccessibilityAction(
+                                        R.id.uxL1MoveLater,
+                                        context.getString(R.string.ux130_l1_move_later)
+                                    )
+                                )
+                            }
+
+                            override fun performAccessibilityAction(
+                                host: View, action: Int, args: android.os.Bundle?
+                            ): Boolean {
+                                val at = draft.indexOf(tool.id)
+                                if (at < 0) return super.performAccessibilityAction(host, action, args)
+                                return when (action) {
+                                    R.id.uxL1MoveEarlier -> {
+                                        if (at > 0) moveQuickTool(tool.id, at - 1)
+                                        true
+                                    }
+                                    R.id.uxL1MoveLater -> {
+                                        if (at < draft.lastIndex) moveQuickTool(tool.id, at + 1)
+                                        true
+                                    }
+                                    else -> super.performAccessibilityAction(host, action, args)
+                                }
+                            }
+                        }
                         tile.setOnLongClickListener { view ->
                             view.startDragAndDrop(
                                 android.content.ClipData.newPlainText("tool", tool.id),
@@ -1946,9 +1986,16 @@ class LibraryScreen(
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        draft.clear()
-                        draft.addAll(com.scanwhirl.app.util.Prefs.DEFAULT_QUICK_TOOLS)
-                        rebuildQuickEditor?.invoke()
+                        // L1-04: confirmation changes the draft only; Save/Done persists.
+                        SwSheet.builder(context)
+                            .setTitle(R.string.ux130_l1_reset_quick)
+                            .setPrimary(R.string.ux130_l1_reset) {
+                                draft.clear()
+                                draft.addAll(com.scanwhirl.app.util.Prefs.DEFAULT_QUICK_TOOLS)
+                                rebuildQuickEditor?.invoke()
+                            }
+                            .setSecondary(R.string.sheet_cancel) { /* discard */ }
+                            .build().show()
                     }
                 },
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -2533,8 +2580,9 @@ class LibraryScreen(
         // M5: keep the list's bottom inset at or above the dock's real height (it grows when
         // the scan disc rises over the page); never a smaller magic number.
         val inset = listBottomInset()
-        if (docList.paddingBottom != inset) {
-            docList.setPadding(0, docList.paddingTop, 0, inset)
+        val gutter = SwStyle.dp(context, 48f)
+        if (docList.paddingBottom != inset || docList.paddingRight != gutter) {
+            docList.setPadding(0, docList.paddingTop, gutter, inset)
         }
     }
 

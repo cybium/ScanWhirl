@@ -38,6 +38,7 @@
     <string name="ux130_l1_move_earlier">Move earlier</string>
     <string name="ux130_l1_move_later">Move later</string>
     <string name="ux130_l1_reset_quick">Reset quick tools?</string>
+    <string name="ux130_l1_reset">Reset</string>
     <string name="ux130_l1_scroll_forward">Scroll forward</string>
     <string name="ux130_l1_scroll_backward">Scroll backward</string>
 

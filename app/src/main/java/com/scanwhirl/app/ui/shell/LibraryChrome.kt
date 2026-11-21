@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import androidx.core.view.isVisible
@@ -123,16 +124,49 @@ class LibraryFastScrollBar(context: Context) : View(context) {
         canvas.drawRoundRect(thumb, radius, radius, thumbPaint)
     }
 
+    /**
+     * L1-04: the whole 48dp-wide strip is the interactive target, but only the reserved
+     * end gutter is covered, so no card Share/More hit area is stolen. The drawn thumb
+     * stays 4dp. TalkBack gets real scroll-forward/backward actions as well.
+     */
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        if (!isActive) return
+        info.isScrollable = true
+        info.addAction(
+            AccessibilityNodeInfo.AccessibilityAction(
+                R.id.uxL1ScrollForward, context.getString(R.string.ux130_l1_scroll_forward)
+            )
+        )
+        info.addAction(
+            AccessibilityNodeInfo.AccessibilityAction(
+                R.id.uxL1ScrollBackward, context.getString(R.string.ux130_l1_scroll_backward)
+            )
+        )
+    }
+
+    override fun performAccessibilityAction(action: Int, args: android.os.Bundle?): Boolean {
+        if (!isActive) return super.performAccessibilityAction(action, args)
+        return when (action) {
+            R.id.uxL1ScrollForward -> {
+                scrollToFraction(((scrollView?.scrollY ?: 0) + viewportHeight()) / maxScroll().toFloat().coerceAtLeast(1f))
+                true
+            }
+            R.id.uxL1ScrollBackward -> {
+                scrollToFraction(((scrollView?.scrollY ?: 0) - viewportHeight()) / maxScroll().toFloat().coerceAtLeast(1f))
+                true
+            }
+            else -> super.performAccessibilityAction(action, args)
+        }
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isActive) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val thumb = thumbRect()
-                // 8dp of slop around the 4dp thumb: a finger never lands exactly on it.
-                val slop = 8f * density
-                val hit = RectF(thumb)
-                hit.inset(-slop, -slop)
-                if (!hit.contains(event.x, event.y)) return false
+                // The entire strip width is interactive; only the track's vertical band counts.
+                if (event.y < trackTop() - 8f * density || event.y > trackBottom() + 8f * density) return false
                 dragging = true
                 dragOffset = event.y - thumb.top
                 parent?.requestDisallowInterceptTouchEvent(true)
@@ -200,7 +234,8 @@ class LibraryViewportChrome(context: Context) : FrameLayout(context) {
         bar = LibraryFastScrollBar(context)
         addView(
             bar,
-            LayoutParams(SwStyle.dp(context, 24f), LayoutParams.MATCH_PARENT).apply {
+            // L1-04: a >=48dp interactive strip, living only in the reserved end gutter.
+            LayoutParams(SwStyle.dp(context, 48f), LayoutParams.MATCH_PARENT).apply {
                 gravity = Gravity.TOP or Gravity.END
             }
         )

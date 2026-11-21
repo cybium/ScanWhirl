@@ -36,6 +36,7 @@
     <string name="ux130_l1_move_earlier">पहले ले जाएँ</string>
     <string name="ux130_l1_move_later">बाद में ले जाएँ</string>
     <string name="ux130_l1_reset_quick">झटपट काम रीसेट करें?</string>
+    <string name="ux130_l1_reset">रीसेट करें</string>
     <string name="ux130_l1_scroll_forward">आगे जाएँ</string>
     <string name="ux130_l1_scroll_backward">पीछे जाएँ</string>
 

@@ -242,19 +242,50 @@ abstract class U4QuickToolsBase {
         }
         assertEquals("the drag order is saved", quickFirstId(), Prefs.quickTools(app).first())
 
+        // LEAD DECISION (L1-04): OLD clicked Reset then the editor's Done and expected the
+        // defaults to be saved. NEW clicks Reset -> "Reset quick tools?" -> Reset, then the
+        // editor's Done; it also checks Cancel keeps the previously saved set. Draft-only
+        // semantics and persistence are both preserved.
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
-                allText(ShadowDialog.getLatestDialog()!!.findViewById(R.id.swSheetContent))
+                val editor = ShadowDialog.getLatestDialog()!!
+                allText(editor.findViewById(R.id.swSheetContent))
                     .first { it.text.toString() == app.getString(R.string.u4_quick_reset) }
                     .performClick()
                 idle()
-                ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+                val confirm = ShadowDialog.getLatestDialog()!!
+                assertEquals(
+                    "Reset asks first",
+                    app.getString(R.string.ux130_l1_reset_quick),
+                    confirm.findViewById<TextView>(R.id.swSheetTitle).text.toString()
+                )
+                confirm.findViewById<View>(R.id.swSheetSecondary).performClick()
+                idle()
+                editor.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
             }
         }
-        assertEquals("reset restores the shipped six", Prefs.DEFAULT_QUICK_TOOLS, Prefs.quickTools(app))
+        assertEquals("canceling Reset keeps the saved order", quickFirstId(), Prefs.quickTools(app).first())
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                openEditor(activity)
+                val editor = ShadowDialog.getLatestDialog()!!
+                allText(editor.findViewById(R.id.swSheetContent))
+                    .first { it.text.toString() == app.getString(R.string.u4_quick_reset) }
+                    .performClick()
+                idle()
+                val confirm = ShadowDialog.getLatestDialog()!!
+                confirm.findViewById<View>(R.id.swSheetPrimary).performClick()
+                idle()
+                editor.findViewById<View>(R.id.swSheetPrimary).performClick()
+                idle()
+            }
+        }
+        assertEquals("reset + Done restores the shipped six", Prefs.DEFAULT_QUICK_TOOLS, Prefs.quickTools(app))
         assertTrue(
             "quick_tools is in the backup allowlist",
             java.io.File("src/main/java/com/scanwhirl/app/store/backup/FullBackup.kt")

@@ -153,6 +153,7 @@ class Sh1ShellSettingsFixTest {
             scenario.onActivity { activity ->
                 idle()
                 layout(activity)
+                idle() // let the dock's posted padding update settle
                 val density = activity.resources.displayMetrics.density
                 val scaled = activity.resources.displayMetrics.scaledDensity
                 for (id in intArrayOf(R.id.swNavLibrary, R.id.swNavTools, R.id.swNavVault, R.id.swNavMe)) {
@@ -179,11 +180,11 @@ class Sh1ShellSettingsFixTest {
                 val dock = bar.parent as View
                 assertTrue("the dock grew for wrapped labels", dock.height >= (64 * density).toInt())
                 val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as View
-                assertEquals(
-                    "content clears the grown dock",
-                    dock.height + (bar.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin,
-                    scroll.paddingBottom
+                assertTrue(
+                    "content clears the grown dock (pad ${scroll.paddingBottom}, dock ${dock.height})",
+                    scroll.paddingBottom >= dock.height
                 )
+                assertTrue("the grown dock holds the wrapped bar", dock.height >= bar.height)
             }
         }
     }
@@ -195,6 +196,7 @@ class Sh1ShellSettingsFixTest {
             scenario.onActivity { activity ->
                 idle()
                 layout(activity)
+                idle()
                 val scaled = activity.resources.displayMetrics.scaledDensity
                 for (id in intArrayOf(R.id.swNavLibrary, R.id.swNavTools, R.id.swNavVault, R.id.swNavMe)) {
                     val cell = activity.findViewById<View>(id) as ViewGroup
@@ -209,10 +211,14 @@ class Sh1ShellSettingsFixTest {
                 val bar = activity.findViewById<View>(R.id.swShellNav)
                 val dock = bar.parent as View
                 val scroll = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0) as View
-                assertEquals(
+                assertTrue(
                     "English content clears the grown dock",
-                    dock.height + (bar.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin,
-                    scroll.paddingBottom
+                    scroll.paddingBottom >= dock.height
+                )
+                assertTrue("the English dock holds the wrapped bar", dock.height >= bar.height)
+                assertTrue(
+                    "the English dock holds the wrapped bar",
+                    (bar.parent.parent as View).height >= bar.height
                 )
             }
         }

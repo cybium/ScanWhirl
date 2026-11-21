@@ -535,11 +535,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         val meItem = item(Tab.ME, R.drawable.ic_sym_person, R.string.shell_nav_me).apply {
             id = R.id.swNavMe
         }
-        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        // G6: cells wrap their labels; the bar (and dock) grows with them at 200 %.
+        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, 86f), 1))
-        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         navItems = items
 
         container.addView(

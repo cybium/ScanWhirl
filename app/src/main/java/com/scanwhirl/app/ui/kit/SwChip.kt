@@ -52,8 +52,9 @@ class SwChip(context: Context) : LinearLayout(context) {
                 .apply { marginEnd = SwStyle.dp(context, 6f) }
         )
 
+        // L1-04: the chip label is body/meta text and never below 12sp.
         labelView = SwStyle.text(
-            context, 11.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+            context, 12f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
         ).apply {
             id = R.id.swChipLabel
             maxLines = 1

@@ -27,7 +27,6 @@ import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
 import com.scanwhirl.app.util.Prefs
-import com.scanwhirl.app.util.ProGate
 
 /**
  * UI_PLAN §0b / tools_v4 — the Tools tab answers "what do I want done?".
@@ -480,7 +479,10 @@ class ToolsHubScreen(
         }
     }
 
-    /** Sentence case (never ALL CAPS), 16sp semibold, with the job's Pro word in Free builds. */
+    /**
+     * Sentence case (never ALL CAPS), 16sp semibold. L1-04: the job header no longer repeats
+     * a Pro chip — every gated tile already carries exactly one Pro indication in its own row.
+     */
     private fun jobHeader(title: String, proJob: Boolean): View {
         val header = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -497,9 +499,8 @@ class ToolsHubScreen(
             },
             LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
-        if (proJob && !ProGate.isPro(context)) {
-            header.addView(proChip(), LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
-        }
+        @Suppress("UNUSED_VARIABLE")
+        val proJobUnused = proJob // signature kept for the callers and existing tests
         return header
     }
 
@@ -509,28 +510,6 @@ class ToolsHubScreen(
             val m = SwStyle.dp(context, 8f)
             setMargins(m, SwStyle.dp(context, 2f), m, SwStyle.dp(context, 2f))
         }
-    }
-
-    private fun proChip(): TextView = SwStyle.text(
-        context,
-        PRO_TAG_SP,
-        SwStyle.color(context, R.color.gold_pro_primary),
-        bold = true,
-        letterSpacing = 0.06f
-    ).apply {
-        text = context.getString(R.string.badge_pro)
-        maxLines = 1
-        ellipsize = null
-        setPadding(
-            SwStyle.dp(context, 6f), SwStyle.dp(context, 1f),
-            SwStyle.dp(context, 6f), SwStyle.dp(context, 1f)
-        )
-        background = SwStyle.pill(
-            context,
-            SwStyle.color(context, R.color.gold_pro_primary),
-            SwStyle.color(context, R.color.gold_pro_glow),
-            SwStyle.color(context, R.color.gold_tile_border)
-        )
     }
 
     private fun row(tool: SwTool): ToolRow = ToolRow(context).apply {
@@ -566,7 +545,6 @@ class ToolsHubScreen(
         @Volatile
         internal var catalogueSource: (() -> List<Pair<ToolJob, List<SwTool>>>)? = null
 
-        private const val PRO_TAG_SP = 12f
 
         /** Every tool row in the hub, in screen order (tests walk them). */
         fun rows(root: View): List<ToolRow> {
