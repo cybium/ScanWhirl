@@ -23,6 +23,7 @@ import android.widget.Toast
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -52,6 +53,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
 import com.scanwhirl.app.util.PageTextMatches
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.util.SearchMatcher
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -178,7 +180,13 @@ class LibraryScreen(
     internal var loaded = false
         private set
 
-    private var maxDocCards = 60
+    /**
+     * L1lib #1: no hard cap. [allVisibleDocs] is the full filtered/sorted result;
+     * [cardsShown] is how many rows are currently bound. The first page keeps the old
+     * 60-card look; scrolling appends the next page until every document is reachable.
+     */
+    private var allVisibleDocs: List<ScanDocument> = emptyList()
+    private var cardsShown = INITIAL_CARDS
     private val textCache by lazy { com.scanwhirl.app.store.OcrTextCache(repo) }
 
     init {
@@ -430,7 +438,9 @@ class LibraryScreen(
             }
         chrome = pinned
         pinned.attach(scroll)
-        pinned.setDocumentCount(renderedDocs.size)
+        // L1lib #1: the fast-scroll thumb must imply every document is reachable, so it
+        // reflects the full filtered result, not only the cards bound on the first page.
+        pinned.setDocumentCount(allVisibleDocs.size)
     }
 
     // ---- public -----------------------------------------------------------
@@ -470,17 +480,46 @@ class LibraryScreen(
     /**
      * C05: folder/tag/batch metadata writes rewrite every touched `meta.txt` with an fsync; they
      * run off the main thread, one writer at a time, then [after] (UI work) resumes on main.
+     *
+     * L1lib #3: a disk-full failure (`Durable.SyncException`) must never escape the coroutine
+     * and crash the app. On failure we skip [after] (it assumes the write succeeded), show an
+     * honest, localised message and reload so the cards match what is actually on disk.
+     * [onError] lets a multi-document action report a partial count, e.g. "N moved".
      */
-    private fun <T> ioWrite(block: () -> T, after: (T) -> Unit = {}) {
+    private fun <T> ioWrite(
+        block: () -> T,
+        onError: (() -> Unit)? = null,
+        after: (T) -> Unit = {}
+    ) {
+        val fail = {
+            if (onError != null) onError() else writeFailed()
+        }
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
-            after(block())
+            val result = try {
+                block()
+            } catch (t: Exception) {
+                fail()
+                return
+            }
+            after(result)
             return
         }
         owner.launch {
-            val result = metaWrite.withLock { withContext(ioDispatcher) { block() } }
+            val result = try {
+                metaWrite.withLock { withContext(ioDispatcher) { block() } }
+            } catch (t: Exception) {
+                withContext(Dispatchers.Main) { fail() }
+                return@launch
+            }
             after(result)
         }
+    }
+
+    /** Honest, localised fallback for a write we cannot attribute to a specific action. */
+    private fun writeFailed() {
+        Toast.makeText(context, context.getString(R.string.l1lib_write_failed), Toast.LENGTH_LONG).show()
+        reload()
     }
 
     private val metaWrite = kotlinx.coroutines.sync.Mutex()
@@ -518,7 +557,7 @@ class LibraryScreen(
     fun undoLastBatchRename() {
         val undo = lastBatchUndo ?: return
         lastBatchUndo = null
-        ioWrite({ undo.forEach { (id, name) -> repo.renameDocument(id, name) } }, { reload() })
+        ioWrite({ undo.forEach { (id, name) -> repo.renameDocument(id, name) } }, after = { reload() })
     }
 
     // ---- folders ----------------------------------------------------------
@@ -1005,9 +1044,16 @@ class LibraryScreen(
         // itself, so the bar is moved in the same frame as the content (no lag).
         // The chrome's own listener did exactly this refresh; it is re-run here so
         // taking the single slot loses nothing.
-        val listener = View.OnScrollChangeListener { _, _, _, _, _ ->
+        val listener = View.OnScrollChangeListener { view, _, scrollY, _, _ ->
             chrome?.update()
             pinSelectionBar()
+            // L1lib #1: load the next page before the reader runs out of rows. There is
+            // no hard cap, so the fast-scroll thumb always matches real content.
+            val scroll = view as? ScrollView ?: return@OnScrollChangeListener
+            val content = scroll.getChildAt(0)?.height ?: 0
+            if (content - scrollY - scroll.height <= SwStyle.dp(context, 400f)) {
+                loadMoreCards()
+            }
         }
         selectionPin = listener
         scroll.setOnScrollChangeListener(listener)
@@ -1045,43 +1091,81 @@ class LibraryScreen(
             .setTitle(R.string.folder_move_title)
             .setOptions(labels) { which, _ ->
                 val target = if (which == 0) null else folderNames[which - 1]
-                ioWrite({ repo.setFolder(ids, target) }) {
-                    folder = target
-                    exitSelection()
-                    reload()
-                }
+                ioWrite(
+                    block = { repo.setFolder(ids, target) },
+                    after = {
+                        folder = target
+                        exitSelection()
+                        reload()
+                    },
+                    onError = {
+                        // L1lib #3: say how many actually moved, then re-sync with disk.
+                        val moved = ids.count { id ->
+                            repo.getDocument(id)?.folder.equals(target, true)
+                        }
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.l1lib_move_partial, moved, ids.size),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        reload()
+                    }
+                )
             }
             .setSecondary(R.string.sheet_cancel)
             .build()
             .show()
     }
 
+    /**
+     * L1lib #2: listTags() reads every document's meta.txt, so it must not run on the main
+     * thread. Open the sheet immediately with a visible loading line, load tags on the IO
+     * dispatcher, then fill the options on main. Under Robolectric the dispatcher is
+     * immediate, so existing tag tests still see options after one `idle()`.
+     */
     private fun showTagsSheet() {
         val ids = selected.toList()
         val chosen = docs.filter { it.id in selected }
         val common = chosen.map { it.tags.map { t -> t.lowercase(Locale.getDefault()) }.toSet() }
             .reduceOrNull { a, b -> a intersect b } ?: emptySet()
-        val allTags = runCatching { repo.listTags() }.getOrDefault(emptyList())
-        val labels = if (allTags.isEmpty()) listOf(context.getString(R.string.tags_empty)) else allTags
-        val checked = BooleanArray(labels.size) { i ->
-            labels[i].lowercase(Locale.getDefault()) in common && allTags.isNotEmpty()
-        }
-        if (labels.isEmpty()) return
-        SwSheet.builder(context)
+
+        val sheet = SwSheet.builder(context)
             .setTitle(R.string.tags_title)
-            .setOptions(labels, multiChecked = checked) { which, isChecked ->
-                if (allTags.isEmpty()) return@setOptions
-                val tag = allTags[which]
-                if (isChecked) {
-                    ioWrite({ repo.addTag(ids, tag) }, { reload() })
-                } else {
-                    ioWrite({ ids.forEach { repo.removeTag(it, tag) } }, { reload() })
-                }
-            }
+            .setMessage(R.string.l1lib_tags_loading)
             .setPrimary(R.string.tags_new) { newTagSheet(ids) }
             .setSecondary(R.string.tags_done) { reload() }
             .build()
-            .show()
+        sheet.show()
+
+        fun populate(allTags: List<String>) {
+            val labels = if (allTags.isEmpty()) listOf(context.getString(R.string.tags_empty)) else allTags
+            val checked = BooleanArray(labels.size) { i ->
+                labels[i].lowercase(Locale.getDefault()) in common && allTags.isNotEmpty()
+            }
+            if (labels.isEmpty()) return
+            sheet.messageView.isVisible = false
+            sheet.setOptions(labels, multiChecked = checked) { which, isChecked ->
+                if (allTags.isEmpty()) return@setOptions
+                val tag = allTags[which]
+                if (isChecked) {
+                    ioWrite({ repo.addTag(ids, tag) }, after = { reload() })
+                } else {
+                    ioWrite({ ids.forEach { repo.removeTag(it, tag) } }, after = { reload() })
+                }
+            }
+        }
+
+        val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
+        if (owner == null) {
+            populate(runCatching { repo.listTags() }.getOrDefault(emptyList()))
+            return
+        }
+        owner.launch {
+            val allTags = withContext(ioDispatcher) {
+                runCatching { repo.listTags() }.getOrDefault(emptyList())
+            }
+            if (isActive) populate(allTags)
+        }
     }
 
     private fun newTagSheet(ids: List<String>) {
@@ -1092,7 +1176,7 @@ class LibraryScreen(
             .build()
         sheet.setPrimary(R.string.tags_add) {
             val tag = sheet.inputView?.text?.toString().orEmpty()
-            ioWrite({ repo.addTag(ids, tag) }, { reload() })
+            ioWrite({ repo.addTag(ids, tag) }, after = { reload() })
         }
         sheet.show()
     }
@@ -1883,22 +1967,30 @@ class LibraryScreen(
         categoryFilter: String?,
         sortMode: String
     ): VisibleDocs {
-        val needle = q.lowercase(Locale.getDefault())
+        // L1lib #4: use the tested SearchMatcher (word boundaries, accent folding) for
+        // names, tags and stored OCR, and do the cheap folder/category filtering BEFORE
+        // touching any OCR file. The old substring match made "2" find "2026" and made
+        // "café" miss an OCR "cafe".
+        val terms = SearchMatcher.normalize(q).split(Regex("\\s+")).filter { it.isNotBlank() }
         val textHits = HashSet<String>()
-        val filtered = docs.filter { doc ->
-            // UI-W4 privacy: a locked or Vault document is never searched by its OCR.
-            // Reading it here would also make the row an oracle for secret text, even
-            // when the snippet itself is later suppressed.
-            val textSearchable = !doc.isLocked && !doc.isVaulted
-            val textHit = needle.isNotEmpty() && textSearchable &&
-                runCatching { textCache.normalized(doc.id).contains(needle) }.getOrDefault(false)
-            // A locked/Vault document stays searchable by its visible name only: no
-            // snippet, no page link, no thumbnail evidence.
-            if (textHit) textHits += doc.id
+        val cheap = docs.filter { doc ->
             (folderFilter == null || doc.folder.equals(folderFilter, true)) &&
-                (categoryFilter == null || doc.category == categoryFilter) &&
-                (needle.isEmpty() || doc.name.lowercase(Locale.getDefault()).contains(needle) ||
-                    doc.tags.any { it.lowercase(Locale.getDefault()).contains(needle) } || textHit)
+                (categoryFilter == null || doc.category == categoryFilter)
+        }
+        val filtered = cheap.filter { doc ->
+            if (terms.isEmpty()) return@filter true
+            val normName = SearchMatcher.normalize(doc.name)
+            val normTags = SearchMatcher.normalize(doc.tags.joinToString(" "))
+            val nameHit = terms.all { SearchMatcher.containsWord(normName, it) } ||
+                terms.all { SearchMatcher.containsWord(normTags, it) }
+            if (nameHit) return@filter true
+            // UI-W4 privacy: a locked or Vault document is never searched by its OCR;
+            // it stays searchable by its visible name only (no snippet/page evidence).
+            if (doc.isLocked || doc.isVaulted) return@filter false
+            val normText = runCatching { textCache.normalized(doc.id) }.getOrDefault("")
+            val textHit = terms.all { SearchMatcher.containsWord(normText, it) }
+            if (textHit) textHits += doc.id
+            textHit
         }
         val sorted = when (sortMode) {
             com.scanwhirl.app.util.Prefs.LIB_OLDEST -> filtered.sortedBy { it.createdAt }
@@ -1922,7 +2014,7 @@ class LibraryScreen(
     private fun computeRowEvidence(q: String, visible: VisibleDocs): Map<String, DocSearchHit> {
         if (q.isBlank() || visible.textHitIds.isEmpty()) return emptyMap()
         val out = LinkedHashMap<String, DocSearchHit>()
-        for (doc in visible.docs.take(maxDocCards)) {
+        for (doc in visible.docs) {
             if (doc.id !in visible.textHitIds || doc.isLocked || doc.isVaulted) continue
             val pages = runCatching { textCache.pages(doc.id) }.getOrDefault(emptyMap())
             if (pages.isEmpty()) continue
@@ -2072,6 +2164,67 @@ class LibraryScreen(
 
     private fun newCard(doc: ScanDocument): DocCard = DocCard(context).also { bindCard(it, doc) }
 
+    private fun addCard(doc: ScanDocument) {
+        docList.addView(
+            newCard(doc),
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                val m = SwStyle.dp(context, 18f)
+                setMargins(m, 0, m, SwStyle.dp(context, 10f))
+            }
+        )
+    }
+
+    private fun rebindChanged(
+        limit: List<ScanDocument>,
+        signatures: List<String>,
+        existingRows: Int
+    ) {
+        for (i in 0 until existingRows) {
+            if (renderedSignatures.getOrNull(i) != signatures[i]) {
+                (docList.getChildAt(i) as? DocCard)?.let { bindCard(it, limit[i]) }
+            }
+        }
+    }
+
+    /**
+     * L1lib #1: bind the first [cardsShown] documents. When a page is appended the already
+     * bound prefix is kept and only the new tail creates views; unchanged rows are never
+     * rebuilt. This keeps scrolling cheap while making every document reachable.
+     */
+    private fun renderCards() {
+        val limit = allVisibleDocs.take(cardsShown)
+        val signatures = limit.map { signature(it) }
+        val renderedIds = renderedDocs.map { it.id }
+        val canAppend = limit.size > renderedDocs.size &&
+            docList.childCount == renderedDocs.size &&
+            renderedIds == allVisibleDocs.take(renderedDocs.size).map { it.id }
+        when {
+            canAppend -> {
+                rebindChanged(limit, signatures, renderedDocs.size)
+                for (i in renderedDocs.size until limit.size) addCard(limit[i])
+            }
+            renderedIds == limit.map { it.id } && docList.childCount == limit.size ->
+                rebindChanged(limit, signatures, limit.size)
+            else -> {
+                docList.removeAllViews()
+                for (doc in limit) addCard(doc)
+            }
+        }
+        renderedDocs = limit
+        renderedSignatures = signatures
+    }
+
+    /**
+     * L1lib #1: append the next page of document cards. Called by the scroll listener
+     * when the reader nears the bottom; returns true when more rows were added.
+     */
+    internal fun loadMoreCards(): Boolean {
+        if (cardsShown >= allVisibleDocs.size) return false
+        cardsShown = minOf(cardsShown + CARD_PAGE, allVisibleDocs.size)
+        renderCards()
+        return true
+    }
+
     /**
      * L1-2: only changed rows are rebuilt. Same ids in the same order (the
      * common rename/selection/sort-in-place case) rebinds just the rows whose
@@ -2080,30 +2233,12 @@ class LibraryScreen(
     private fun applyDocs(shown: List<ScanDocument>, hits: Map<String, DocSearchHit> = emptyMap()) {
         rowEvidence = hits
         renderActiveFilter()
-        val limit = shown.take(maxDocCards)
-        val signatures = limit.map { signature(it) }
-        val sameIds = limit.map { it.id } == renderedDocs.map { it.id }
-        if (sameIds && docList.childCount == limit.size) {
-            limit.forEachIndexed { index, doc ->
-                if (renderedSignatures.getOrNull(index) != signatures[index]) {
-                    val card = docList.getChildAt(index) as? DocCard ?: return@forEachIndexed
-                    bindCard(card, doc)
-                }
-            }
-        } else {
-            docList.removeAllViews()
-            for (doc in limit) {
-                docList.addView(
-                    newCard(doc),
-                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                        val m = SwStyle.dp(context, 18f)
-                        setMargins(m, 0, m, SwStyle.dp(context, 10f))
-                    }
-                )
-            }
-        }
-        renderedDocs = limit
-        renderedSignatures = signatures
+        // L1lib #1: a new result set starts at the first page; a re-render of the SAME set
+        // (selection, rename, reveal) keeps every page the reader already loaded.
+        val sameSet = shown.map { it.id } == allVisibleDocs.map { it.id }
+        allVisibleDocs = shown
+        if (!sameSet) cardsShown = minOf(INITIAL_CARDS, shown.size)
+        renderCards()
 
         renderSelectionBar()
         listHeader.isVisible = shown.isNotEmpty()
@@ -2228,6 +2363,10 @@ class LibraryScreen(
     }
 
     internal companion object {
+        /** First page of document cards; more are appended as the reader scrolls. */
+        const val INITIAL_CARDS = 60
+        const val CARD_PAGE = 60
+
         private val isRobolectric =
             android.os.Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
 

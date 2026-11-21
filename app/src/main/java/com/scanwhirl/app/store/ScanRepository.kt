@@ -81,6 +81,14 @@ class ScanRepository(private val context: Context) {
         internal var readProbe: ((thread: String) -> Unit)? = null
 
         /**
+         * L1lib #2 test seam: observes the thread that reads every meta.txt for tags.
+         * Process-wide (several ScanRepository instances exist; the library's instance is
+         * not the one a test holds). Production leaves it null.
+         */
+        @Volatile
+        internal var listTagsProbe: ((thread: String) -> Unit)? = null
+
+        /**
          * Serialises new-scan save transactions and the abandoned-save reaper, so a
          * cleanup can never race an active transaction (several ScanRepository
          * instances exist at once, hence process-wide).
@@ -495,7 +503,16 @@ class ScanRepository(private val context: Context) {
         }
     }
 
-    /** Renames a folder and every document in it. Documents are never lost. */
+    /**
+     * Renames a folder and every document in it. Documents are never lost.
+     *
+     * L1lib #6 (crash-safe order): rewrite the DOCUMENTS first and only then the folder
+     * list. The old order wrote the list first, so a disk-full failure midway left
+     * `folders.txt` naming the new folder while half the documents still carried the old
+     * name. If a document write throws, every document already changed is best-effort
+     * rolled back and the exception is rethrown; `folders.txt` keeps the old name, so the
+     * list and the documents always agree.
+     */
     fun renameFolder(oldName: String, newName: String): Boolean {
         val clean = LibraryMeta.normalizeFolder(newName) ?: return false
         synchronized(META_LOCK) {
@@ -503,15 +520,39 @@ class ScanRepository(private val context: Context) {
             val at = all.indexOfFirst { it.equals(oldName, true) }
             if (at < 0) return false
             if (all.any { it.equals(clean, true) && !it.equals(oldName, true) }) return false
-            writeFolders(all.toMutableList().also { it[at] = clean })
-            forEachDocumentDir { dir ->
-                updateMeta(dir) { lines ->
+
+            val changed = mutableListOf<File>()
+            try {
+                forEachDocumentDir { dir ->
+                    val lines = metaLines(dir) ?: return@forEachDocumentDir
                     val meta = LibraryMeta.read(lines)
                     if (meta.folder != null && meta.folder.equals(oldName, true)) {
-                        LibraryMeta.write(lines, clean, meta.tags)
+                        updateMeta(dir) { current ->
+                            val m = LibraryMeta.read(current)
+                            if (m.folder != null && m.folder.equals(oldName, true)) {
+                                LibraryMeta.write(current, clean, m.tags)
+                            }
+                        }
+                        changed += dir
                     }
                 }
+            } catch (t: Throwable) {
+                // Best effort: undo the documents that were already rewritten so no document
+                // points at a folder name that never made it into folders.txt.
+                for (dir in changed) {
+                    runCatching {
+                        updateMeta(dir) { current ->
+                            val m = LibraryMeta.read(current)
+                            if (m.folder != null && m.folder.equals(clean, true)) {
+                                LibraryMeta.write(current, oldName, m.tags)
+                            }
+                        }
+                    }
+                }
+                throw t
             }
+            // The list changes only after every document is consistent with the new name.
+            writeFolders(all.toMutableList().also { it[at] = clean })
             return true
         }
     }
@@ -568,16 +609,19 @@ class ScanRepository(private val context: Context) {
     }
 
     /** Every tag used in the library, for the tag sheet's quick picks. */
-    fun listTags(): List<String> = synchronized(META_LOCK) {
-        val seen = LinkedHashSet<String>()
-        forEachDocumentDir { dir ->
-            metaLines(dir)?.let { lines ->
-                LibraryMeta.read(lines).tags.forEach { tag ->
-                    if (seen.none { it.equals(tag, true) }) seen += tag
+    fun listTags(): List<String> {
+        listTagsProbe?.invoke(Thread.currentThread().name)
+        return synchronized(META_LOCK) {
+            val seen = LinkedHashSet<String>()
+            forEachDocumentDir { dir ->
+                metaLines(dir)?.let { lines ->
+                    LibraryMeta.read(lines).tags.forEach { tag ->
+                        if (seen.none { it.equals(tag, true) }) seen += tag
+                    }
                 }
             }
+            seen.sortedBy { it.lowercase(Locale.getDefault()) }
         }
-        seen.sortedBy { it.lowercase(Locale.getDefault()) }
     }
 
     private inline fun forEachDocumentDir(action: (File) -> Unit) {
@@ -2726,12 +2770,16 @@ class ScanRepository(private val context: Context) {
 
         // 1. Roll forward.
         val stagingRoot = OpStaging.root(filesDir)
+        // L1lib #7: listTrash() reads every Trash entry's meta.txt. Hoist it out of the
+        // staging loop: with S staging folders and T trash entries the old code did S×T
+        // loads. Trash is not changed by a roll-forward, so one snapshot is enough.
+        val trashSnapshot = listTrash()
         for (dir in stagingRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
             val seal = OpStaging.readSeal(dir) ?: continue
             val replaces = seal.replaces ?: continue
             val base = File(docsDir, replaces)
             if (base.exists()) continue
-            val trash = listTrash().firstOrNull {
+            val trash = trashSnapshot.firstOrNull {
                 it.originalId == replaces && it.previousToken == seal.token
             } ?: continue
             val pages = pageFilesIn(dir)
