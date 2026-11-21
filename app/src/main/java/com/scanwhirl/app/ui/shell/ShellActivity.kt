@@ -94,6 +94,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private var lastProState: Boolean? = null
     private var lastShown: View? = null
 
+    /** L1-06: one searchable-PDF operation per instance; a second tap is a no-op. */
+    private var searchableInFlight = false
+
+    /** L1-06: a bounded restore action; the X/Close on the sheet is always available. */
+    private var restoreInFlight = false
+
     private lateinit var library: LibraryScreen
     private lateinit var toolsHub: ToolsHubScreen
     private lateinit var vaultScreen: VaultScreen
@@ -806,8 +812,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     }
 
     private fun restoreBilling() {
-        // Outcome reaches the subscriber (R1). None from a restore is "nothing to restore".
-        com.scanwhirl.app.util.ProBilling.restore(this) { }
+        // L1-06: one restore in flight; the outcome still reaches the R1 subscriber.
+        if (restoreInFlight) return
+        restoreInFlight = true
+        com.scanwhirl.app.util.ProBilling.restore(this) { restoreInFlight = false }
     }
 
     /** One short sheet per outcome; a cancel stays silent. */
@@ -815,6 +823,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         when (state) {
             com.scanwhirl.app.util.ProBilling.State.Owned -> {
                 setBuying(false)
+                restoreInFlight = false
                 // p2pro #1: Tools/Library/Me cache Free/Pro; a successful Buy must rebind them
                 // now, not only after the next resume or app restart.
                 syncProState()
@@ -834,6 +843,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             com.scanwhirl.app.util.ProBilling.State.Busy -> setBuying(true)
             com.scanwhirl.app.util.ProBilling.State.None -> {
                 setBuying(com.scanwhirl.app.util.ProBilling.isPurchaseInFlight())
+                restoreInFlight = false
                 if (proOpen &&
                     com.scanwhirl.app.util.ProBilling.lastOperation() ==
                     com.scanwhirl.app.util.ProBilling.Op.RESTORE
@@ -847,10 +857,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             is com.scanwhirl.app.util.ProBilling.State.Failed -> {
                 setBuying(false)
+                restoreInFlight = false
+                // L1-06: no dead end. Retry and Restore call the existing bounded methods;
+                // the sheet's own Close (swSheetClose) dismisses without either action.
                 SwSheet.builder(this)
-                    .setTitle(getString(R.string.pro_purchase_title))
+                    .setTitle(getString(R.string.ux130_l1_purchase_failed))
                     .setMessage(state.message)
-                    .setPrimary(R.string.sheet_got_it)
+                    .setPrimary(R.string.ux130_l1_purchase_retry) { startBilling() }
+                    .setSecondary(R.string.ux130_l1_purchase_restore) { restoreBilling() }
                     .build().show()
             }
         }
@@ -1068,35 +1082,60 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (autoCropped) scanLauncher.saveScanned(uris) else scanLauncher.stageAndReview(uris)
     }
 
-    /** v2 UI: 03_tools_hub — Searchable PDF is a real tool, never a jump to Settings. */
+    /**
+     * L1-06: a named, durable outcome instead of a vanishing Toast. The work is bounded
+     * to one run, progress is shown immediately and always dismissed, and Open/Share appear
+     * only after the repository confirms the text layer actually exists. Nothing here routes
+     * into the result Undo, so a failed operation can never delete the source document.
+     */
     private fun searchableSheet(doc: ScanDocument) {
-        val already = doc.isSearchable
+        if (doc.isSearchable) {
+            SwSheet.builder(this)
+                .setTitle(R.string.make_searchable_title)
+                .setMessage(getString(R.string.ux130_l1_text_layer_already))
+                .setPrimary(R.string.sheet_got_it)
+                .build().show()
+            return
+        }
+        if (searchableInFlight) return
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.make_searchable_title)
-            .setMessage(
-                if (already) getString(R.string.make_searchable_already, doc.name)
-                else getString(R.string.make_searchable_note, doc.name)
-            )
+            .setMessage(getString(R.string.make_searchable_note, doc.name))
             .build()
-        if (already) {
-            sheet.setPrimary(R.string.sheet_got_it)
-        } else {
-            sheet.setPrimary(R.string.make_searchable_action) {
-                lifecycleScope.launch {
-                    val ok = withContext(Dispatchers.IO) {
-                        runCatching { repo.makeSearchable(doc.id) }.getOrDefault(false)
-                    }
-                    Toast.makeText(
-                        this@ShellActivity,
-                        if (ok) getString(R.string.make_searchable_done, doc.name)
-                        else getString(R.string.make_searchable_unavailable, doc.name),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    library.reload()
+        sheet.setPrimary(R.string.make_searchable_action) {
+            if (searchableInFlight) return@setPrimary
+            searchableInFlight = true
+            sheet.dismiss()
+            val progress = showProgress(R.string.ux130_l1_adding_text_layer)
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching { searchableProbe?.invoke(doc.id) ?: repo.makeSearchable(doc.id) }
+                        .getOrDefault(false)
+                }
+                val verified = ok && repo.getDocument(doc.id)?.isSearchable == true
+                progress.dismiss()
+                searchableInFlight = false
+                if (isFinishing || isDestroyed) return@launch
+                library.reload()
+                if (verified) {
+                    val fresh = repo.getDocument(doc.id) ?: doc
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(R.string.make_searchable_title)
+                        .setMessage(getString(R.string.ux130_l1_text_layer_added, fresh.name))
+                        .setPrimary(R.string.open) { openDocument(fresh.id) }
+                        .setSecondary(R.string.share_pdf) { shareRow(fresh) }
+                        .build().show()
+                } else {
+                    // No success text, no Open/Share, no Undo: the document is untouched.
+                    SwSheet.builder(this@ShellActivity)
+                        .setTitle(R.string.make_searchable_title)
+                        .setMessage(getString(R.string.ux130_l1_text_layer_failed))
+                        .setPrimary(R.string.ux130_l1_purchase_close)
+                        .build().show()
                 }
             }
-            sheet.setSecondary(R.string.sheet_cancel)
         }
+        sheet.setSecondary(R.string.sheet_cancel)
         sheet.show()
     }
 
@@ -1454,6 +1493,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
         /** SH1 review P1: test seam invoked on the IO thread just before a wallpaper decode. */
         @JvmField internal var wallpaperProbe: (() -> Unit)? = null
+
+        /** L1-06: test seam for a repository searchable result (success/failure injection). */
+        @JvmField internal var searchableProbe: ((String) -> Boolean)? = null
 
         /** SH1 review P2: ~65% ink over a photo keeps the shell's text readable. */
         internal const val SCRIM_ALPHA = 166
