@@ -4,6 +4,7 @@ import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -13,12 +14,15 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.ui.SwDialog
 import com.scanwhirl.app.ui.showSw
+import com.scanwhirl.app.util.BoundedCopy
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.StatusLine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
@@ -33,22 +37,45 @@ class ResizeFlow(
 ) {
 
     fun start(uri: Uri) {
-        val bytes = FlowUtil.readUriBytes(activity, uri) ?: run {
-            Toast.makeText(
-                activity, activity.getString(R.string.resize_failed, activity.getString(R.string.f8_reason_unreadable)),
-                Toast.LENGTH_LONG
-            ).show()
-            return
+        activity.lifecycleScope.launch {
+            try {
+                val name = withContext(Dispatchers.IO) { repo.displayNameOf(uri) ?: "image" }
+                // P1: bounded, off-main copy. Reading the picked image with
+                // readBytes() on the UI thread could OOM/ANR on a large photo.
+                val copy = FlowUtil.copyPickedImage(activity, uri, name)
+                val bytes = try {
+                    withContext(Dispatchers.IO) { copy.readBytes() }
+                } finally {
+                    BoundedCopy.release(copy)
+                }
+                val size = ImageTools.imageSize(bytes) ?: run {
+                    failWith(R.string.f8_reason_not_image)
+                    return@launch
+                }
+                showResizeDialog(bytes, size.first, size.second, name)
+            } catch (e: BoundedCopy.Refused) {
+                val reason = if (e.result == BoundedCopy.Result.TOO_LARGE ||
+                    e.result == BoundedCopy.Result.NO_SPACE
+                ) R.string.f8_reason_too_large else R.string.f8_reason_unreadable
+                failWith(reason)
+            } catch (e: OutOfMemoryError) {
+                // An exhausted heap is expected on a low-RAM phone; it is not a
+                // crash and never a raw JVM message in the UI.
+                failWith(R.string.f8_reason_too_large)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failWith(R.string.f8_reason_unreadable)
+            }
         }
-        val size = ImageTools.imageSize(bytes) ?: run {
-            Toast.makeText(
-                activity, activity.getString(R.string.resize_failed, activity.getString(R.string.f8_reason_not_image)),
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-        val name = repo.displayNameOf(uri) ?: "image"
-        showResizeDialog(bytes, size.first, size.second, name)
+    }
+
+    private fun failWith(@StringRes reason: Int) {
+        Toast.makeText(
+            activity,
+            activity.getString(R.string.resize_failed, activity.getString(reason)),
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
@@ -166,12 +193,27 @@ class ResizeFlow(
     private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =
         if (fromOrig > 0) (from.toDouble() * toOrig / fromOrig).roundToInt() else from
 
+    /**
+     * P1: every run writes into its own folder under the FileProvider-exposed
+     * `cacheDir/documents` tree. The cold-start sweep deletes it, and a second
+     * resize can never overwrite the first one's result.
+     */
+    fun resizeOutputDir(cacheDir: File): File {
+        val root = File(cacheDir, "documents/resize")
+        while (true) {
+            val candidate = File(
+                root, "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
+            )
+            if (!candidate.exists() && candidate.mkdirs()) return candidate
+        }
+    }
+
     private fun doResize(bytes: ByteArray, name: String, opts: ImageTools.ResizeOptions) {
         val progress = host.showProgress()
         activity.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { ImageTools.resize(bytes, opts) }
-                val dir = File(activity.filesDir, "exports").apply { mkdirs() }
+                val dir = resizeOutputDir(activity.cacheDir)
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val ext = if (result.isPng) "png" else "jpg"
                 val fileName = "${base}_${result.width}x${result.height}.$ext"
@@ -194,18 +236,16 @@ class ResizeFlow(
                         warning = null
                     )
                 )
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
+            } catch (e: OutOfMemoryError) {
+                failWith(R.string.f8_reason_too_large)
             } catch (e: Exception) {
                 // H2-5: localized prefix + localized reason; a raw JVM message is never shown.
                 val reason = if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
                 else R.string.f8_reason_unreadable
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.resize_failed, activity.getString(reason)),
-                    Toast.LENGTH_LONG
-                ).show()
+                failWith(reason)
             } finally {
                 progress.dismiss()
             }

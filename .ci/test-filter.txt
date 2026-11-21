@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.P1ShareTest,com.scanwhirl.app.util.P1ResizeOutputTest,com.scanwhirl.app.util.P1FlowSafetyTest,com.scanwhirl.app.util.P1PageRangesTest,com.scanwhirl.app.util.P1StringsParityTest
