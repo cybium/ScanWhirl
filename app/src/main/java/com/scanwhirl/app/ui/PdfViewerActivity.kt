@@ -29,8 +29,10 @@ import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.databinding.ActivityPdfViewerBinding
 import com.scanwhirl.app.databinding.ItemPdfPageBinding
 import com.scanwhirl.app.util.ShareUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -162,30 +164,50 @@ class PdfViewerActivity : BaseActivity() {
             }
             return
         }
-        val docId = intent.getStringExtra(EXTRA_DOC_ID)
-        val repository = (application as ScanWhirlApp).repository
-        val doc = docId?.let { repository.getDocument(it) }
-        val unknownPassword = docId != null &&
-            repository.protectionState(docId) == com.scanwhirl.app.util.PdfProtection.State.UNKNOWN_PASSWORD
-        val needsPreview = doc != null && (doc.isLocked || unknownPassword) && doc.pageFiles.isNotEmpty()
-        if (!needsPreview) {
+        // A private Vault copy / explicit path has no library document to resolve: no disk work
+        // below, so keep its (FLAG_SECURE) open path synchronous and unchanged.
+        if (intent.getStringExtra(EXTRA_DOC_ID) == null) {
             afterOpen(savedInstanceState)
             return
         }
-        val target = previewFile(doc!!)
-        val stamp = File(cacheDir, "preview_${doc.id}.fp")
-        val fingerprint = pageFingerprint(doc.pageFiles)
-        if (target.isFile && target.length() > 0L && stamp.isFile && stamp.readText() == fingerprint) {
-            afterOpen(savedInstanceState)
-            return
-        }
-        // Visible work: the first frame is the reader chrome, not a frozen window.
-        val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
-            this, getString(R.string.crash_preview_building)
-        )
-        loadProgress = progress
+        // S2 item 4: everything below reads the library or the cache (getDocument, protection
+        // state, page stats, fingerprint stamp). Run it off the main thread so the first frame is
+        // the reader chrome, not a frozen window. FLAG_SECURE/Vault handling lives in onCreate and
+        // afterOpen and is unchanged.
         previewJob = lifecycleScope.launch {
-            val ok = previewDeferred(doc, target, stamp, fingerprint).await()
+            val load = withContext(Dispatchers.IO) {
+                documentLoadProbe?.invoke(Thread.currentThread().name)
+                val docId = requireNotNull(intent.getStringExtra(EXTRA_DOC_ID))
+                val repository = (application as ScanWhirlApp).repository
+                val doc = repository.getDocument(docId)
+                val unknownPassword =
+                    repository.protectionState(docId) == com.scanwhirl.app.util.PdfProtection.State.UNKNOWN_PASSWORD
+                val needsPreview = doc != null &&
+                    (doc.isLocked || unknownPassword) && doc.pageFiles.isNotEmpty()
+                var target: File? = null
+                var stamp: File? = null
+                var fingerprint: String? = null
+                var cached = false
+                if (needsPreview) {
+                    target = previewFile(doc!!)
+                    stamp = File(cacheDir, "preview_${doc.id}.fp")
+                    fingerprint = pageFingerprint(doc.pageFiles)
+                    cached = target.isFile && target.length() > 0L && stamp.isFile &&
+                        stamp.readText() == fingerprint
+                }
+                LoadedDocument(doc, needsPreview, target, stamp, fingerprint, cached)
+            }
+            if (isFinishing || isDestroyed) return@launch
+            if (!load.needsPreview || load.cached) {
+                afterOpen(savedInstanceState)
+                return@launch
+            }
+            // Visible work: the first frame is the reader chrome with a progress state.
+            val progress = com.scanwhirl.app.ui.kit.SwProgress.show(
+                this@PdfViewerActivity, getString(R.string.crash_preview_building)
+            )
+            loadProgress = progress
+            val ok = previewDeferred(load.doc!!, load.target!!, load.stamp!!, load.fingerprint!!).await()
             progress.dismiss()
             loadProgress = null
             if (isFinishing || isDestroyed) return@launch
@@ -199,6 +221,16 @@ class PdfViewerActivity : BaseActivity() {
             afterOpen(savedInstanceState)
         }
     }
+
+    /** Result of the off-main document load in [startOpen]. */
+    private data class LoadedDocument(
+        val doc: com.scanwhirl.app.model.ScanDocument?,
+        val needsPreview: Boolean,
+        val target: File?,
+        val stamp: File?,
+        val fingerprint: String?,
+        val cached: Boolean
+    )
 
     private fun afterOpen(savedInstanceState: Bundle?) {
         if (!checkVaultSession()) return
@@ -680,40 +712,29 @@ class PdfViewerActivity : BaseActivity() {
      */
     private fun promptGoToPage() {
         if (!checkVaultSession() || pageCount <= 0) return
-        val input = android.widget.EditText(this).apply {
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            hint = getString(R.string.ux130_l4_go_to_page)
-            minHeight = (48 * resources.displayMetrics.density).toInt()
-            setSingleLine(true)
-        }
-        val frame = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(pad, 0, pad, 0)
-            addView(input, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ))
-        }
-        val dialog = android.app.AlertDialog.Builder(this)
+        // S2 item 10: the kit sheet is lifecycle-managed (no window leaked on rotation) and its
+        // primary can validate and stay open. A raw AlertDialog did neither.
+        lateinit var sheet: com.scanwhirl.app.ui.kit.SwSheet
+        sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ux130_l4_go_to_page)
             .setMessage(getString(R.string.reader_more_note, pageCount))
-            .setView(frame)
-            .setPositiveButton(R.string.ux130_l4_go_to_page, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val page = input.text?.toString()?.trim()?.toIntOrNull()
+            .setInput(
+                hint = getString(R.string.ux130_l4_go_to_page),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            )
+            .setPrimaryStayOpen(R.string.ux130_l4_go_to_page) {
+                val page = sheet.inputView?.text?.toString()?.trim()?.toIntOrNull()
                 if (page == null || page < 1 || page > pageCount) {
-                    input.error = getString(R.string.ux130_l4_go_to_page_invalid, pageCount)
-                    return@setOnClickListener
+                    sheet.inputView?.error = getString(R.string.ux130_l4_go_to_page_invalid, pageCount)
+                } else {
+                    sheet.dismiss()
+                    goToPage(page - 1)
                 }
-                dialog.dismiss()
-                goToPage(page - 1)
             }
-        }
-        dialog.show()
+            .setSecondary(android.R.string.cancel)
+            .build()
+        if (vaultMode) sheet.secure()
+        sheet.show()
     }
 
     private fun toggleStrip() {
@@ -932,6 +953,10 @@ class PdfViewerActivity : BaseActivity() {
         private const val STATE_FIND_OPEN = "find_open"
         private const val STATE_FIND_QUERY = "find_query"
         private const val STATE_FIND_INDEX = "find_index"
+
+        /** S2 item 4 test seam: receives the thread that performs the onCreate document load. */
+        @androidx.annotation.VisibleForTesting
+        internal var documentLoadProbe: ((String) -> Unit)? = null
 
         /** Test seam: how an opened descriptor becomes pages. */
         @androidx.annotation.VisibleForTesting

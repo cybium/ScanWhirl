@@ -12,6 +12,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.PrivacySweep
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,9 +54,18 @@ class ScanWhirlApp : Application() {
                 com.scanwhirl.app.ui.kit.SwTheme.applyLauncherIcon(this, false)
             }
         }
-        // Security audit: nothing decrypted or shared survives a cold start. Runs before any
-        // screen can read the cache, and never touches the library, the Vault or user exports.
-        runCatching { PrivacySweep.run(this) }
+        // S2 item 2: the privacy sweep is disk I/O. It used to run here, on the main thread and
+        // before the first frame. It now runs on the existing IO startup path and storage recovery
+        // waits for it, so a screen still cannot read a plaintext cache before it is swept.
+        // Robolectric tests seed cache fixtures right after onCreate; an asynchronous sweep would
+        // delete them mid-test. The sweep itself is covered directly (PrivacySweepTest,
+        // S2StampSweepTest), so skip the startup launch in that build as we do for other startup
+        // background work, and release the recovery ordering gate immediately.
+        if (Build.FINGERPRINT != "robolectric") {
+            appScope.launch { runStartupSweep() }
+        } else {
+            privacySweepDone.complete(Unit)
+        }
         indexer = OcrIndexer(
             repository,
             appScope,
@@ -70,6 +80,27 @@ class ScanWhirlApp : Application() {
         // Robolectric builds keep it off (tests call [LibraryIndexBackfill.run] directly).
         if (Build.FINGERPRINT != "robolectric") startLibraryIndexBackfill()
     }
+
+    /** Completed once the cold-start privacy sweep has finished (success or isolated failure). */
+    private val privacySweepDone = CompletableDeferred<Unit>()
+
+    /**
+     * S2 item 2: runs the cold-start privacy sweep off the main thread. [threadProbe] is a test
+     * seam receiving the thread the sweep actually ran on. The sweep never touches the library,
+     * the Vault or user exports; an isolated failure is logged by class only and still releases
+     * [privacySweepDone] so startup recovery cannot hang behind it.
+     */
+    internal suspend fun runStartupSweep(threadProbe: ((String) -> Unit)? = null) =
+        withContext(Dispatchers.IO) {
+            threadProbe?.invoke(Thread.currentThread().name)
+            try {
+                PrivacySweep.run(this@ScanWhirlApp)
+            } catch (t: Throwable) {
+                android.util.Log.w("ScanWhirl", "privacy sweep failed (${t.javaClass.simpleName})")
+            } finally {
+                privacySweepDone.complete(Unit)
+            }
+        }
 
     private val storageRecoveryStarted = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -122,6 +153,10 @@ class ScanWhirlApp : Application() {
                 storageRecoveryFinished.value = true
             }) {
             try {
+                // S2 item 2: the privacy sweep started in onCreate owns the cache. Recovery (and
+                // the launcher's Library load behind storageRecoveryFinished) must not read it
+                // first. Await the sweep before any recovery step; it never hangs (finally completes).
+                privacySweepDone.await()
                 // Restore interrupted discard staging BEFORE ordinary orphan-draft cleanup.
                 startupStep("discard") {
                     com.scanwhirl.app.store.ImportDiscardStore(this@ScanWhirlApp, repository).recover()
