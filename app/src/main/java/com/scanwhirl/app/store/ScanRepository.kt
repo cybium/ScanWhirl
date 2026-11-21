@@ -174,6 +174,15 @@ class ScanRepository(private val context: Context) {
         @Volatile internal var recoveryHash: (File) -> String = { Sha256.of(it) }
 
         /**
+         * Sol final re-review: [recoveryIncomplete] is a PASS-WIDE accumulated flag. Reset it once,
+         * at the start of the startup pass, never inside a later step: a step that failed earlier
+         * (e.g. import staging) must stay visible after recoverOperations runs cleanly.
+         */
+        fun beginStartupRecoveryPass() {
+            recoveryIncomplete = false
+        }
+
+        /**
          * Test seam (task S4B): called on the thread that runs the PDF-lock PBKDF2, so a test can
          * prove the 1 300 000-iteration derivation never happens on the main thread.
          */
@@ -3130,9 +3139,10 @@ class ScanRepository(private val context: Context) {
                 return
             }
             MarkerState.UNKNOWN -> {
-                // The PDF could not be hashed: keep the marker AND all its metadata untouched.
+                // Recovery needs ONLY the marker (and the document's own PDF, which is not here).
+                // Scratch is still removed with the same checked recursive cleanup as KEEP, so a
+                // permanently unreadable document cannot keep plaintext around forever.
                 recoveryIncomplete = true
-                return
             }
             else -> Unit
         }
@@ -3196,7 +3206,7 @@ class ScanRepository(private val context: Context) {
         val filesDir = context.filesDir
         var rolledForward = 0
         var swept = 0
-        recoveryIncomplete = false
+        // Do NOT reset recoveryIncomplete here: it accumulates across the whole startup pass.
 
         val stagingRoot = OpStaging.root(filesDir)
         val stagingDirs = { stagingRoot.listFiles { f -> f.isDirectory }.orEmpty() }
