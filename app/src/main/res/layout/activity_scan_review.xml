@@ -71,6 +71,18 @@
         android:textSize="13sp"
         tools:text="5 pages · Forms · Not saved yet" />
 
+    <!-- V2C C2: a durable, named outcome instead of a Toast-only receipt. -->
+    <TextView
+        android:id="@+id/v2cReceipt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityLiveRegion="polite"
+        android:paddingHorizontal="16dp"
+        android:textColor="@color/rv_accent"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:text="Document saved · Rent agreement" />
+
     <!-- test26 T4.1: pick the category before saving — a single-select chip
          rail (chips built in code) under the title, with a hint while the
          name has not suggested anything yet. Hidden in Arrange so the grid
@@ -333,6 +345,14 @@
                     android:layout_height="wrap_content"
                     android:text="@string/delete"
                     app:icon="@drawable/ic_sw_delete" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToolRetake"
+                    style="@style/Widget.ScanWhirl.Button.ReviewTool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/v2c_retake_page"
+                    app:icon="@drawable/ic_sw_rotate" />
             </com.scanwhirl.app.ui.FlowRowLayout>
         </LinearLayout>
         </ScrollView>
