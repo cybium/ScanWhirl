@@ -361,22 +361,40 @@ class ToolResultActivity : BaseActivity() {
             return root
         }
 
-        column.addView(
-            button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
-        )
-        // UI-B3 (#12): Open is the filled action; Share is secondary; "Also save in Documents"
-        // stays visible for every result, including a compress that missed its target.
-        // T05-RESULT-SLICE: one tap keeps a copy in Documents for the person's own files app and
-        // USB, for a document result and for an exported file alike.
-        column.addView(
-            button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-        )
+        // L3-02: Open is the one filled decision, Share is secondary. They sit side by side with
+        // an 8dp gap while both labels fit; at 200% type they stack so neither is squeezed.
+        val open = button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
+        val share = button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() }
+        if (pairPrimaryActions()) {
+            val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.addView(open, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = SwStyle.dp(this@ToolResultActivity, 8f) })
+            pair.addView(share, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ))
+            column.addView(
+                pair,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            )
+        } else {
+            column.addView(
+                open,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            )
+            column.addView(
+                share,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+            )
+        }
+        // UI-B3 (#12): "Also save in Documents" stays plainly visible for every result,
+        // including a compress that missed its target (T05-RESULT-SLICE). It is added below.
         column.addView(
             button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave, icon = R.drawable.ic_sym_download) { alsoSave() },
             LinearLayout.LayoutParams(
@@ -432,19 +450,38 @@ class ToolResultActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
-        // B3 (#9-now): Undo names what it removes; for compress that is this new copy (and the
-        // Documents copy this run saved, when there is one).
+        // L3-02: the output removal is named ("Remove this new copy") and its exact
+        // consequence is stated above the action, before the person taps it. The
+        // original is never a candidate here (B2-H1 / T10-FIX-PDFA-UNDO).
+        column.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                text = getString(R.string.ux130_l3_result_remove_copy_consequence)
+                setLineSpacing(0f, 1.2f)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+        )
         val undoLabel = getString(
-            if (isCompressResult) R.string.compress_undo else R.string.tools_result_undo
+            if (isCompressResult) R.string.compress_undo else R.string.ux130_l3_result_remove_copy
         )
         column.addView(
             button(undoLabel, R.id.toolResultUndo, icon = R.drawable.ic_sym_undo) { undo() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
         return root
     }
+
+    /** L3-02: at 200% type a paired row would clip, so the actions stack in full-width rows. */
+    private fun stacksActionsAtLargeFont(): Boolean =
+        resources.configuration.fontScale > 1.15f
+
+    /** L3-02: pair Open/Share only where both labels and icons fit side by side. */
+    private fun pairPrimaryActions(): Boolean =
+        !stacksActionsAtLargeFont() && resources.configuration.screenWidthDp >= 320
 
     /** H7: a result made of exported files only (no library document behind it). */
     private fun isExportOnlyResult(): Boolean = docIds.isEmpty() && files.isNotEmpty()
@@ -487,7 +524,8 @@ class ToolResultActivity : BaseActivity() {
                 setCompoundDrawablesRelative(glyph, null, null, null)
                 compoundDrawablePadding = SwStyle.dp(this@ToolResultActivity, 12f)
             }
-            minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
+            // L3-02: every primary/secondary action clears the 56dp decision target.
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, 56f)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
             } else {
