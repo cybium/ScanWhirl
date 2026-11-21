@@ -1,8 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- UX 1.3.0 lane V2L: library/navigation and repeated-use speed copy. EN is the decided wording. -->
-<resources>
-    <!-- L2: optional, local OCR-derived filename suggestion. Never applied automatically. -->
-    <string name="v2l_use_suggested_name">Use suggested name</string>
-    <string name="v2l_suggested_name_hint">Suggested from the text on your pages</string>
-    <string name="v2l_no_suggested_name">No suggested name found</string>
-</resources>
+<!-- UX 1.3.0 lane V2L: library/navigation repeated-use speed. No visible copy is added by this lane. -->
+<resources />
