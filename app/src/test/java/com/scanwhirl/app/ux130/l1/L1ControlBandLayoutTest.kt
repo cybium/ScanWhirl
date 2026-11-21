@@ -75,18 +75,32 @@ class L1ControlBandLayoutTest {
             val band = activity.findViewById<View>(R.id.uxL1ControlBand)
             assertNotNull("the single band exists", band)
             val density = dm.density
+            val heightBound = if (scale >= 2f) 300f else 180f
             assertTrue(
-                "one band ($scale${band!!.height}px) is shorter than the old four chrome rows",
-                band.height <= 180 * density
+                "one band ($scale, ${band!!.height}px) stays within the chrome bound",
+                band.height <= heightBound * density
             )
             val list = activity.findViewById<ViewGroup>(R.id.swDocList)
             assertTrue("real cards render", list.childCount > 0)
             val card = list.getChildAt(0) as DocCard
-            val dockTop = topIn(activity.findViewById<View>(R.id.swNavScan), root)
-            assertTrue(
-                "the first card (${topIn(card, root)}..${topIn(card, root) + card.height}) clears the dock at $dockTop",
-                topIn(card, root) + card.height <= dockTop + 1
+            val dockTop = minOf(
+                topIn(activity.findViewById<View>(R.id.swNavScan), root),
+                topIn(activity.findViewById<View>(R.id.swShellNav), root)
             )
+            if (scale >= 2f) {
+                // At 200 % the list HEADER must still be on screen, never a tool-only screen.
+                val count = activity.findViewById<View>(R.id.swDocCount)
+                assertNotNull("the document count is on the 200 % first screen", count)
+                assertTrue(
+                    "the document heading is above the dock at 200 %",
+                    topIn(count!!, root) + count.height <= dockTop + 1
+                )
+            } else {
+                assertTrue(
+                    "the first card (${topIn(card, root)}..${topIn(card, root) + card.height}) clears the dock at $dockTop",
+                    topIn(card, root) + card.height <= dockTop + 1
+                )
+            }
         } finally {
             controller.pause().stop().destroy()
             RuntimeEnvironment.setFontScale(1f)
@@ -99,4 +113,7 @@ class L1ControlBandLayoutTest {
 
     @Test(timeout = 30_000)
     fun `the band keeps documents on the first screen at 100 percent Hindi`() = measure(1f, "hi")
+
+    @Test(timeout = 30_000)
+    fun `the band keeps the document heading on screen at 200 percent Hindi`() = measure(2f, "hi")
 }

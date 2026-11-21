@@ -494,6 +494,16 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     info.isSelected = this@ShellActivity.tab == destination
                     info.addAction(AccessibilityNodeInfo.ACTION_SELECT)
                 }
+
+                override fun performAccessibilityAction(
+                    host: View, action: Int, args: android.os.Bundle?
+                ): Boolean {
+                    if (action == AccessibilityNodeInfo.ACTION_SELECT) {
+                        showTab(destination)
+                        return true
+                    }
+                    return super.performAccessibilityAction(host, action, args)
+                }
             }
             cell.addView(
                 ImageView(this@ShellActivity).apply {

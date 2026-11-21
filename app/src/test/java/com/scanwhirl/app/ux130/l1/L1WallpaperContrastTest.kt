@@ -77,6 +77,14 @@ class L1WallpaperContrastTest {
         assertTrue("dim body text is %.2f:1".format(cDim), cDim >= 4.5)
         assertTrue("mid metadata is %.2f:1".format(cMid), cMid >= 4.5)
         assertTrue("cyan UI/large text is %.2f:1".format(cCyan), cCyan >= 3.0)
+        // Review P1: the new search helper (mid, 12sp) and result status (hi, 12.5sp)
+        // must both clear the 4.5:1 body/metadata bar on their own readable surfaces.
+        val helperColor = app.getColor(R.color.text_hologram_mid)
+        val statusColor = app.getColor(R.color.text_hologram_hi)
+        val cHelper = contrast(helperColor, surface)
+        val cStatus = contrast(statusColor, surface)
+        assertTrue("search helper is %.2f:1".format(cHelper), cHelper >= 4.5)
+        assertTrue("result status is %.2f:1".format(cStatus), cStatus >= 4.5)
         // The old transparent composite really was below the bar (the test proves something).
         assertTrue("baseline dim over the bare scrim was ~2:1", contrast(dim, Color.rgb(98, 101, 103)) < 4.5)
     }
@@ -96,10 +104,21 @@ class L1WallpaperContrastTest {
                 activity.findViewById<View>(R.id.swNoMatches),
                 activity.findViewById<View>(R.id.swActiveFilter),
                 activity.findViewById<View>(R.id.swQuickAll).parent as View,
-                activity.findViewById<View>(R.id.swSort).parent as View
+                activity.findViewById<View>(R.id.swSort).parent as View,
+                activity.findViewById<View>(R.id.swHomeSearch).parent.parent as View, // search wrap
+                activity.findViewById<View>(R.id.uxL1SearchHelp),
+                activity.findViewById<View>(R.id.uxL1SearchStatus)
             )
             for ((index, row) in rows.withIndex()) {
                 assertNotNull("row $index has a surface", row.background)
+            }
+            val surface = surfaceOverWhite(app.getColor(R.color.glass_surface))
+            for ((id, color) in listOf(
+                R.id.uxL1SearchHelp to app.getColor(R.color.text_hologram_mid),
+                R.id.uxL1SearchStatus to app.getColor(R.color.text_hologram_hi)
+            )) {
+                val c = contrast(color, surface)
+                assertTrue("search line $id is %.2f:1, needs 4.5:1".format(c), c >= 4.5)
             }
             val src = java.io.File("src/main/java/com/scanwhirl/app/ui/shell/LibraryScreen.kt").readText()
             assertTrue("the band uses the near-opaque glass surface", src.contains("R.color.glass_surface"))

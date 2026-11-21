@@ -90,6 +90,15 @@ class L1ScanCaptionAndNavStateTest {
             activity.findViewById<View>(R.id.swNavTools).performClick()
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals("selection follows the tab", setOf(R.id.swNavTools), selected())
+
+            // P2: the advertised SELECT action actually changes the tab, not just a word.
+            val vault = activity.findViewById<View>(R.id.swNavVault)
+            assertTrue(
+                "SELECT was performed",
+                vault.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SELECT, null)
+            )
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(setOf(R.id.swNavVault), selected())
         } finally {
             controller.pause().stop().destroy()
         }

@@ -1670,6 +1670,8 @@ class LibraryScreen(
             setPadding(0, SwStyle.dp(context, 6f), 0, 0)
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             isFocusable = true
+            // P1: these lines sit on the bare wallpaper scrim without a surface otherwise.
+            background = readableBand()
         }
         val helper = SwStyle.text(
             context,
@@ -1685,8 +1687,12 @@ class LibraryScreen(
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             isFocusable = true
+            background = readableBand()
         }
-        val wrap = LinearLayout(context).apply { orientation = VERTICAL }
+        val wrap = LinearLayout(context).apply {
+            orientation = VERTICAL
+            background = readableBand()
+        }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
         wrap.addView(helper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
