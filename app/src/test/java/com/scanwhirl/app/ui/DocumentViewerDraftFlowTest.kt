@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.app.Dialog
@@ -44,6 +46,7 @@ import org.robolectric.shadows.ShadowDialog
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class DocumentViewerDraftFlowTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -151,7 +154,7 @@ class DocumentViewerDraftFlowTest {
     // ---------------------------------------------------------------- defect 1
 
     /** "Finish editing first" must open the draft's own save choices, not close the question. */
-    @Test
+    @Test(timeout = 60_000)
     fun `finish editing first opens the draft save choices`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Finish editing")
         draftChange(id)
@@ -186,7 +189,7 @@ class DocumentViewerDraftFlowTest {
     }
 
     /** After a successful save the original action must run on the saved result. */
-    @Test
+    @Test(timeout = 60_000)
     fun `finish editing then replace commits edits and continues Sign`() {
         ProGate.setTestOverride(app, true)
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Finish then sign")
@@ -225,7 +228,7 @@ class DocumentViewerDraftFlowTest {
     // ---------------------------------------------------------------- defect 3
 
     /** Ticked pages and selection mode survive configuration recreation. */
-    @Test
+    @Test(timeout = 60_000)
     fun `selection survives rotation`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Selection rotation")
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -264,7 +267,7 @@ class DocumentViewerDraftFlowTest {
     // ---------------------------------------------------------------- defect 2
 
     /** Two deleted pages with Undo pending must not shift a subsequent move-to-end. */
-    @Test
+    @Test(timeout = 60_000)
     fun `move to end after two pending deletes keeps the intended order`() {
         val id = DocFixtures.saved(repo, app, pages = 5, name = "Move after deletes")
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -289,7 +292,7 @@ class DocumentViewerDraftFlowTest {
     }
 
     /** The typed "Move to…" route must agree with the drag route after pending deletes. */
-    @Test
+    @Test(timeout = 60_000)
     fun `move to end by number after two pending deletes keeps the intended order`() {
         val id = DocFixtures.saved(repo, app, pages = 5, name = "Move to after deletes")
         ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
@@ -315,7 +318,7 @@ class DocumentViewerDraftFlowTest {
     // ---------------------------------------------------------------- defect 4
 
     /** Sign names the consequence: the signed copy does not carry unsaved edits. */
-    @Test
+    @Test(timeout = 60_000)
     fun `Sign says the signed copy excludes unsaved edits in English`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Signed later")
         draftChange(id)
@@ -332,7 +335,7 @@ class DocumentViewerDraftFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `Sign says the signed copy excludes unsaved edits in Hindi`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Signed later")

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.pm.ProviderInfo
@@ -45,6 +47,7 @@ import java.io.IOException
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ImportPdfFixFlowTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -107,7 +110,7 @@ class ImportPdfFixFlowTest {
         file.takeIf { it.isFile }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the first Back after an import discards only that copy and restores it`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Imported PDF")
         val other = DocFixtures.saved(repo, app, pages = 1, name = "Other doc")
@@ -157,7 +160,7 @@ class ImportPdfFixFlowTest {
         assertTrue(repo.listTrash().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a failed discard stage never falls back to permanent deletion`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         val originalPdf = requireNotNull(repo.getDocument(imported)).pdfFile.readBytes()
@@ -188,7 +191,7 @@ class ImportPdfFixFlowTest {
         assertNull(TrashActions.takePending())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the import Discard action stays above the Create FAB area in English and Hindi`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         val problems = mutableListOf<String>()
@@ -297,7 +300,7 @@ class ImportPdfFixFlowTest {
         return Rect(origin[0], origin[1], origin[0] + view.width, origin[1] + view.height)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `short landscape and keyboard viewports scroll Discard above the protected Scan zone`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Fictional short viewport")
         try {
@@ -356,7 +359,7 @@ class ImportPdfFixFlowTest {
         return null
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `closing or rotating the import question never discards the copy`() {
         val imported = DocFixtures.saved(repo, app, pages = 2)
         val before = requireNotNull(repo.getDocument(imported)).pdfFile.readBytes()
@@ -377,7 +380,7 @@ class ImportPdfFixFlowTest {
         assertTrue(repo.listTrash().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Keep leaves the imported document in the library`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Imported PDF")
         ActivityScenario.launch<DocumentViewerActivity>(
@@ -405,7 +408,7 @@ class ImportPdfFixFlowTest {
      * of the document into Documents/ScanWhirl, and Discard deleted the library document the copy
      * was recorded against. An import the user has acted on is theirs: Back just closes.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `an import the user saved to Documents is kept on Back, with no delete question`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Saved import")
         ActivityScenario.launch<DocumentViewerActivity>(
@@ -438,7 +441,7 @@ class ImportPdfFixFlowTest {
      * W1: an import the user shared from the document screen's Actions sheet is theirs. Back must
      * close the screen without a Keep/Discard question and without deleting it.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `an import shared from the Actions sheet is kept on Back, with no delete question`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Fee receipt Oct - FAKE")
         ActivityScenario.launch<DocumentViewerActivity>(
@@ -476,7 +479,7 @@ class ImportPdfFixFlowTest {
     /**
      * T44: the untouched-import question must name what the action does, not imply discarding edits.
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `the untouched import question names Discard with a bin glyph`() {
         val imported = DocFixtures.saved(repo, app, pages = 1, name = "Fresh import")
         ActivityScenario.launch<DocumentViewerActivity>(
@@ -501,7 +504,7 @@ class ImportPdfFixFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a normal viewer entry keeps its plain Back`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Library doc")
         var finishing = false

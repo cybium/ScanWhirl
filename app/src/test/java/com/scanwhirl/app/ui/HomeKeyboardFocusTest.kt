@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.view.View
@@ -39,6 +41,7 @@ import java.io.File
 @Config(sdk = [35])
 class HomeKeyboardFocusTest {
 
+
     private lateinit var app: Application
 
     @Before
@@ -62,7 +65,7 @@ class HomeKeyboardFocusTest {
 
     // --- Home ---------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home opens without an editable field focused and with the keyboard hidden`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -80,7 +83,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tapping search still focuses it and typing still filters`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -97,7 +100,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `search text and focus survive a recreate while editing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -113,7 +116,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home root is not an accessibility stop and search stays labelled`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -135,7 +138,7 @@ class HomeKeyboardFocusTest {
 
     // --- Scan Review ----------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review opens without the title focused and with the keyboard hidden`() {
         ActivityScenario.launch<ScanReviewActivity>(stagedReview()).use { scenario ->
             scenario.onActivity { activity ->
@@ -157,7 +160,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tapping the title focuses it selects the name and edits normally`() {
         ActivityScenario.launch<ScanReviewActivity>(stagedReview()).use { scenario ->
             scenario.onActivity { activity ->
@@ -172,7 +175,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review title edit survives a recreate`() {
         ActivityScenario.launch<ScanReviewActivity>(stagedReview()).use { scenario ->
             scenario.onActivity { activity ->
@@ -190,7 +193,7 @@ class HomeKeyboardFocusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review root is not an accessibility stop`() {
         ActivityScenario.launch<ScanReviewActivity>(stagedReview()).use { scenario ->
             scenario.onActivity { activity ->

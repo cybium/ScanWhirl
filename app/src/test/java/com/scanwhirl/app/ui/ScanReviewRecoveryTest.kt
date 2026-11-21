@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.os.Looper
@@ -35,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ScanReviewRecoveryTest {
+
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val dirs = mutableListOf<File>()
     private fun stage(count: Int) = PendingScans.create(app).also { dir ->
@@ -56,7 +59,7 @@ class ScanReviewRecoveryTest {
     }
     @After fun cleanup() { Durable.resetForTests(); dirs.forEach { it.deleteRecursively() } }
 
-    @Test fun `one and five page reviews restore title and manual choice after recreation and cold launch`() {
+    @Test(timeout = 60_000) fun `one and five page reviews restore title and manual choice after recreation and cold launch`() {
         for (count in listOf(1, 5)) {
             val dir = stage(count)
             val title = "Invoice छात्र 😀 $count"
@@ -87,7 +90,7 @@ class ScanReviewRecoveryTest {
         }
     }
 
-    @Test fun `automatic category keeps suggesting after restart and empty title retains original default`() {
+    @Test(timeout = 60_000) fun `automatic category keeps suggesting after restart and empty title retains original default`() {
         val dir = stage(1)
         val intent = ScanReviewActivity.intent(app, dir.path, null, "Invoice 7")
         ActivityScenario.launch<ScanReviewActivity>(intent).use { scenario ->
@@ -106,7 +109,7 @@ class ScanReviewRecoveryTest {
         assertFalse(PendingScans.readReviewState(dir)!!.categoryPickedByHand)
     }
 
-    @Test fun `open review debounces title writes off main and flushes latest state before Save`() {
+    @Test(timeout = 60_000) fun `open review debounces title writes off main and flushes latest state before Save`() {
         val dir = stage(5)
         val repo = ScanRepository(app)
         val before = repo.listDocuments().size
@@ -138,7 +141,7 @@ class ScanReviewRecoveryTest {
         }
     }
 
-    @Test fun `metadata failure blocks Save without publishing or losing staged pages`() {
+    @Test(timeout = 60_000) fun `metadata failure blocks Save without publishing or losing staged pages`() {
         val dir = stage(1)
         val page = PendingScans.pages(dir).single()
         val hash = Sha256.of(page)
@@ -165,7 +168,7 @@ class ScanReviewRecoveryTest {
         await { PendingScans.readReviewState(dir)?.title == "Keep this title" }
     }
 
-    @Test fun `staging discarded elsewhere is not resurrected and reports no false metadata failure`() {
+    @Test(timeout = 60_000) fun `staging discarded elsewhere is not resurrected and reports no false metadata failure`() {
         val dir = stage(1)
         ActivityScenario.launch<ScanReviewActivity>(ScanReviewActivity.intent(app, dir.path, null, "Doc")).use { scenario ->
             scenario.onActivity { it.findViewById<EditText>(R.id.titleInput).setText("Typed then discarded") }
@@ -184,7 +187,7 @@ class ScanReviewRecoveryTest {
         assertFalse(dir.exists())
     }
 
-    @Test fun `debounce persists while review stays open and rotation reorder filters survive cold resume`() {
+    @Test(timeout = 60_000) fun `debounce persists while review stays open and rotation reorder filters survive cold resume`() {
         val dir = stage(5)
         File(dir, "filters.txt").writeText("page_000.jpg=${ScanFilter.BLACKWHITE.id}")
         val files = PendingScans.pages(dir)

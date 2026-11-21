@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.net.Uri
@@ -27,6 +29,7 @@ import androidx.core.view.isVisible
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class UiSmokeTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -69,7 +72,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `main list shows saved documents`() {
         val id = seedDoc("Smoke doc")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -87,7 +90,7 @@ class UiSmokeTest {
         assertTrue(repo.listDocuments().any { it.id == id })
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `main list view opens the pdf viewer and edit opens the editor`() {
         val id = seedDoc("Open me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -110,7 +113,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tapping a saved scan opens the pdf viewer, not the editor`() {
         seedDoc("Tap me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -124,7 +127,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `dock carries Tools, SCAN and Import and settings lives in the toolbar`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -141,7 +144,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `ocr tile in the tools sheet opens the source picker`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -155,7 +158,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `merge builder offers add and merge`() {
         ActivityScenario.launch(MergePdfActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -167,7 +170,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `search filters the scan list by name`() {
         seedDoc("Alpha report")
         seedDoc("Beta receipt")
@@ -185,7 +188,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `sort by name puts the alphabetical first`() {
         seedDoc("Zebra")
         seedDoc("Apple")
@@ -202,7 +205,7 @@ class UiSmokeTest {
         com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `merge tool asks scans or device PDFs`() {
         seedDoc("Merge one")
         seedDoc("Merge two")
@@ -226,7 +229,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `scan rows show page badge and compact meta`() {
         seedDoc("Badge doc", pages = 3)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -250,7 +253,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `export result screen shows real sizes and actions`() {
         val img = java.io.File(app.cacheDir, "result_${System.nanoTime()}.jpg")
         img.writeBytes(jpegBytes())
@@ -281,7 +284,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings exposes theme, font, language and viewer`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -301,7 +304,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home keeps the status line retired whatever the stored setting says`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -325,7 +328,7 @@ class UiSmokeTest {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `select button enters selection mode and back exits it`() {
         seedDoc("Select me")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -374,7 +377,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tools row and pro suite card are gone, bottom bar replaces them`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -405,7 +408,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress tool opens source picker dialog`() {
         seedDoc("Compressible")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -421,7 +424,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `viewer displays document name and page count`() {
         val id = seedDoc("Viewer doc", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -451,7 +454,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `viewer page grid is a vertical two-column PageGridView`() {
         val id = seedDoc("Grid doc", pages = 4)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -469,7 +472,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `viewer tap opens the full-screen page view`() {
         val id = seedDoc("Rotate flow")
         val before = com.scanwhirl.app.util.PdfGenerator.readJpegInfo(
@@ -498,7 +501,7 @@ class UiSmokeTest {
         assertEquals(before.height, after.width)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page viewer shows pager, indicator and rotate filter delete`() {
         val id = seedDoc("Paged doc", pages = 3)
         val intent = PageViewerActivity.intent(app, id, 1)
@@ -517,7 +520,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page viewer delete is deferred until undo expires`() {
         val id = seedDoc("Paged delete", pages = 3)
         val intent = PageViewerActivity.intent(app, id, 0)
@@ -543,7 +546,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `dark mode is the app default`() {
         assertEquals(
             androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES,
@@ -551,7 +554,7 @@ class UiSmokeTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `status bar color matches the toolbar surface`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -566,7 +569,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `import button offers import sheet without crashing`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -584,7 +587,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review screen shows title, page grid, and save as pdf`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -633,7 +636,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review tap opens the full-screen page view`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -657,7 +660,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review delete is deferred until undo expires`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -687,7 +690,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review undo keeps the page on disk`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -724,7 +727,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `add pages appends with continuing numbering`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -748,7 +751,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review save opens the saved document`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -776,7 +779,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `staging page viewer shows pager, indicator and controls`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -800,7 +803,7 @@ class UiSmokeTest {
         staging.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `staging filter choice persists for the review screen`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -834,7 +837,7 @@ class UiSmokeTest {
     // Commit (e): manual corner-drag crop
     // ------------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `crop view drags a corner and reports the rect`() {
         val view = CropView(app)
         view.measure(
@@ -873,7 +876,7 @@ class UiSmokeTest {
         bmp.recycle()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page viewer crop shrinks the saved page`() {
         val id = seedDoc("Cropdoc")
         val before = com.scanwhirl.app.util.ImageTools.imageSize(
@@ -945,7 +948,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `staging crop writes the staged page`() {
         val staging = java.io.File(app.cacheDir, "pending_review_${System.nanoTime()}")
             .apply { mkdirs() }
@@ -1044,7 +1047,7 @@ class UiSmokeTest {
         return condition()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `grid moveItem reorders pages`() {
         val files = (0 until 4).map { i ->
             java.io.File(app.cacheDir, "grid_$i.jpg").apply { writeBytes(jpegBytes()) }
@@ -1059,7 +1062,7 @@ class UiSmokeTest {
         assertEquals(files[0], grid.pageAt(1))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `grid can move page three in front of page one`() {
         val files = (0 until 3).map { i ->
             java.io.File(app.cacheDir, "front_$i.jpg").apply { writeBytes(jpegBytes()) }
@@ -1073,7 +1076,7 @@ class UiSmokeTest {
         assertEquals(files[1], grid.pageAt(2))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `grid reorders across rows and columns`() {
         // v2 UI: Organize pages grid (owner revision) - long-press drag via ItemTouchHelper.
         val files = (0 until 4).map { i ->
@@ -1091,7 +1094,7 @@ class UiSmokeTest {
         assertEquals(files[0], grid.pageAt(0))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page cells keep a fixed 3 by 4 height`() {
         val cell = com.scanwhirl.app.ui.pagegrid.AspectRatioLayout(app)
         cell.measure(
@@ -1102,7 +1105,7 @@ class UiSmokeTest {
         assertEquals(400, cell.measuredHeight)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `viewer toolbar keeps no menu and page actions live in the select bar`() {
         val id = seedDoc("Menu doc", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -1134,7 +1137,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page delete is deferred until undo expires`() {
         val id = seedDoc("Deleteme", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -1164,7 +1167,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `undo keeps the page on disk`() {
         val id = seedDoc("Undome", pages = 2)
         val intent = DocumentViewerActivity.intent(app, id)
@@ -1196,7 +1199,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `drag reorder persists the new page order`() {
         val doc = runBlocking {
             repo.createDocument(
@@ -1245,7 +1248,7 @@ class UiSmokeTest {
     // Coverage gaps: parsing, honesty caps, generators, resilience
     // ------------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `size parsing handles kb mb bare and invalid input`() {
         val parse = com.scanwhirl.app.util.ImageTools::parseSizeInput
         // CP1: decimal sizes; the hint says a bare number means KB.
@@ -1259,7 +1262,7 @@ class UiSmokeTest {
         assertNull(parse(null))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `resize caps output under the requested max bytes`() {
         // A striped source so it has room to shrink.
         val bmp = android.graphics.Bitmap.createBitmap(
@@ -1285,7 +1288,7 @@ class UiSmokeTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `download saver unique names never collide`() {
         val taken = mutableSetOf("Report.pdf", "Report (2).pdf")
         val name = com.scanwhirl.app.util.DownloadSaver.uniqueName("Report.pdf") { it in taken }
@@ -1302,7 +1305,7 @@ class UiSmokeTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `readJpegInfo skips large app segments before the frame header`() {
         // A fake APP1 (Exif-style) segment ahead of the SOF marker.
         val payload = ByteArray(4096) { 'A'.code.toByte() }
@@ -1318,7 +1321,7 @@ class UiSmokeTest {
         assertEquals(444, info.height)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pdf generator stays valid from one page to many`() {
         val dir = java.io.File(app.cacheDir, "pdfgen_${System.nanoTime()}").apply { mkdirs() }
         for (pageCount in intArrayOf(1, 7)) {
@@ -1348,7 +1351,7 @@ class UiSmokeTest {
         dir.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `compress to target never leaves a page larger than its share`() {
         val doc = seedDoc("Target fit", pages = 3)
         val pages = repo.listDocuments().first { it.id == doc }.pageFiles
@@ -1359,7 +1362,7 @@ class UiSmokeTest {
         assertTrue("fitted ${fitted.size} B must fit its share", fitted.size <= 6_000)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `blank wallpaper uri is ignored without crashing`() {
         com.scanwhirl.app.util.Prefs.setShowWallpaper(app, true)
         com.scanwhirl.app.util.Prefs.setWallpaperUri(app, "")
@@ -1371,7 +1374,7 @@ class UiSmokeTest {
     // test18: Pro features + regression guards
     // ------------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro gate mirrors the build flag`() {
         assertEquals(
             com.scanwhirl.app.BuildConfig.TEST_BUILD,
@@ -1379,7 +1382,7 @@ class UiSmokeTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home toolbar shows the crown badge matching the build`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -1396,7 +1399,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `status line stays retired, and the badge is clickable`() {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -1420,7 +1423,7 @@ class UiSmokeTest {
         com.scanwhirl.app.util.Prefs.setShowGreeting(app, true)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings no longer shows Pro anywhere`() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -1433,7 +1436,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `exif orientation tag rotates the page`() {
         val dir = java.io.File(app.cacheDir, "exif_${System.nanoTime()}").apply { mkdirs() }
         val input = java.io.File(dir, "in.jpg")
@@ -1455,7 +1458,7 @@ class UiSmokeTest {
         dir.deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `deskew leaves a flat page untouched`() {
         val flat = jpegBytes()
         val result = com.scanwhirl.app.util.ImageTools.orientDeskew(flat)
@@ -1463,7 +1466,7 @@ class UiSmokeTest {
         assertTrue("flat page should stay decodable", dims.first > 0 && dims.second > 0)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document viewer exposes the pro actions in the more sheet`() {
         val doc = seedDoc("Pro buttons", pages = 1)
         val intent = DocumentViewerActivity.intent(app, doc)
@@ -1500,7 +1503,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home selection shows the zip export in the selection header`() {
         seedDoc("Select zip", pages = 1)
         com.scanwhirl.app.util.ProGate.setPro(app, true)
@@ -1524,7 +1527,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `status line text is populated for every hour`() {
         for (hour in 0..23) {
             val text = com.scanwhirl.app.util.StatusLine.format(app, hour, 1, 1_048_576)
@@ -1533,7 +1536,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `encryptor adds the standard password dictionary`() = runBlocking {
         val doc = seedDoc("Protect me", pages = 1)
         val pdf = repo.listDocuments().first { it.id == doc }.pdfFile
@@ -1557,7 +1560,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `protect pdf stores the password in the document`() = runBlocking {
         val doc = seedDoc("Vault", pages = 1)
         val protected = repo.protectPdf(doc, "hunter2")
@@ -1571,7 +1574,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `crop view honours a locked aspect ratio`() {
         val view = CropView(app)
         view.measure(
@@ -1592,7 +1595,7 @@ class UiSmokeTest {
         bmp.recycle()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `zip exporter packs one entry per scan`() = runBlocking {
         val a = seedDoc("Zip A", pages = 1)
         val b = seedDoc("Zip B", pages = 2)
@@ -1610,7 +1613,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page op after a full-rect crop keeps the page intact`() = runBlocking {
         val doc = seedDoc("Safe crop")
         // Reproduced crash: open crop, immediately hit Apply (full-page crop rect).
@@ -1627,7 +1630,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `protect and unlock pdf toggles isLocked and lock badge on scan card`() = runBlocking {
         val id = seedDoc("Secret notes", pages = 2)
         val locked = repo.protectPdf(id, "4321")
@@ -1658,7 +1661,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `hidden vault hides scans from home list and verifies 4 digit pin`() = runBlocking {
         val normalId = seedDoc("Public lecture", pages = 1)
         val secretId = seedDoc("Private ID scan", pages = 1)
@@ -1676,7 +1679,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tools sheet reveals all pro actions and editor pro tools render screenshots`() = runBlocking {
         com.scanwhirl.app.util.ProGate.setPro(app, true)
         val lockedId = seedDoc("Physics Midterm (Locked)", pages = 3)
@@ -1739,7 +1742,7 @@ class UiSmokeTest {
     // test21: sources, seekable PDFs, OCR fidelity, lock index, Free UI
     // ------------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `free preview gates the tools sheet behind the pro pitch`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, false)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -1774,7 +1777,7 @@ class UiSmokeTest {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `pro preview opens the source chooser and shows the gold badge`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -1802,7 +1805,7 @@ class UiSmokeTest {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `ocr store keeps every line, paragraph and tab of multi-page text`() = runBlocking {
         val id = seedDoc("OCR storage", pages = 2)
         val multi = "First line\nSecond line\n\nTabbed\tvalue & symbols"
@@ -1814,7 +1817,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `updateOcrPages persists every page's text`() = runBlocking {
         val id = seedDoc("Recognised", pages = 1)
         repo.updateOcrPages(id, mapOf("page_000.jpg" to "line one\nline two"))
@@ -1823,7 +1826,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `legacy ocr files from before test21 still load`() = runBlocking {
         val id = seedDoc("Legacy OCR", pages = 1)
         java.io.File(app.filesDir, "documents/$id/ocr.txt")
@@ -1832,7 +1835,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `ocr assembly keeps every line in reading order`() {
         val blocks = listOf(
             com.scanwhirl.app.util.OcrEngine.OcrBlock(200, 0, listOf("Footer")),
@@ -1852,7 +1855,7 @@ class UiSmokeTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `seekable pdf wrapper copies content uris to a real file and cleans up`() = runBlocking {
         val bytes = jpegBytes()
         val uri = contentUri(bytes)
@@ -1865,7 +1868,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `lock index finds and forgets its own locked pdfs`() = runBlocking {
         val id = seedDoc("Index me", pages = 1)
         val locked = repo.protectPdf(id, "open-sesame")
@@ -1878,7 +1881,7 @@ class UiSmokeTest {
         Unit
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `vault mode shows the vault list and turns SCAN into add`() {
         seedDoc("Public lecture", pages = 1)
         val secretId = seedDoc("Private notes", pages = 1)
@@ -1909,7 +1912,7 @@ class UiSmokeTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `review screen offers a direct gallery add next to the camera batch`() {
         val staging = java.io.File(app.cacheDir, "pending_gallery_${System.nanoTime()}")
             .apply { mkdirs() }

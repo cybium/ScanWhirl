@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -41,6 +43,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class OcrStatusTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -109,7 +112,7 @@ class OcrStatusTest {
     private fun retryVisible(a: OcrEditorActivity) =
         a.findViewById<View>(R.id.btnOcrRetry).visibility == View.VISIBLE
 
-    @Test
+    @Test(timeout = 60_000)
     fun `indexer reports unavailable, stops early and keeps the document pending`() = runBlocking {
         val id = seedDoc(3)
         useRecognizer { unavailable() }
@@ -122,7 +125,7 @@ class OcrStatusTest {
         assertTrue("nothing stored as empty text", repo.ocrDoc(id).isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `unavailable recognition is explained, never a blank 0 words page, and Retry works`() {
         val id = seedDoc(2)
         Robolectric.buildActivity(OcrEditorActivity::class.java, editor(id, OcrEditorActivity.PROBLEM_UNAVAILABLE))
@@ -144,7 +147,7 @@ class OcrStatusTest {
             }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `partial reading names the missing pages and Retry never overwrites corrected text`() {
         val id = seedDoc(3)
         repo.updateOcrPage(id, "page_000.jpg", "corrected by hand")
@@ -161,7 +164,7 @@ class OcrStatusTest {
             }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `read but empty pages say no text was found, without Retry`() {
         val id = seedDoc(2)
         repo.updateOcrPages(id, mapOf("page_000.jpg" to "", "page_001.jpg" to ""))
@@ -173,7 +176,7 @@ class OcrStatusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `manual text for an unread page is saved as that page's text`() {
         val id = seedDoc(2)
         repo.updateOcrPage(id, "page_000.jpg", "first")
@@ -190,7 +193,7 @@ class OcrStatusTest {
             }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `unread pages are never written back as empty text`() {
         val id = seedDoc(2)
         repo.updateOcrPage(id, "page_000.jpg", "first")
@@ -204,7 +207,7 @@ class OcrStatusTest {
             }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `recreation keeps every page and the temp text`() {
         val id = seedDoc(2)
         repo.updateOcrPages(id, mapOf("page_000.jpg" to "one", "page_001.jpg" to "two"))
@@ -227,7 +230,7 @@ class OcrStatusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `an image with no text says so`() {
         val f = File(app.cacheDir, "temp_${System.nanoTime()}.txt").apply { writeText("") }
         val temp = Intent(app, OcrEditorActivity::class.java)
@@ -240,7 +243,7 @@ class OcrStatusTest {
     }
 
     /** Device finding (API 24): doc-mode export was "Document.txt" with "Page 0" headings. */
-    @Test
+    @Test(timeout = 60_000)
     fun `document text export is named after the document with honest 1-based headings`() {
         val media = com.scanwhirl.app.util.FakeMediaStore().also { p ->
             p.attachInfo(app, android.content.pm.ProviderInfo().apply { authority = "media"; exported = true })
@@ -266,7 +269,7 @@ class OcrStatusTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `unavailable is recognised through wrapping exceptions`() {
         val wrapped = RuntimeException(
             "outer",

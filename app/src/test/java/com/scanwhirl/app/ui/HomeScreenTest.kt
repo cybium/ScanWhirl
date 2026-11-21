@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.net.Uri
@@ -37,6 +39,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class HomeScreenTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -108,7 +111,7 @@ class HomeScreenTest {
 
     // ---- T3.4: category chip rail ---------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `chip rail lists every category with counts and hides an empty unsorted`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -132,7 +135,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `unsorted chip appears between all and study only when it has documents`() {
         seed("Loose page", CategoryRules.UNSORTED)
         seed("Lecture notes", CategoryRules.STUDY)
@@ -149,7 +152,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `all chip starts checked and tapping a chip filters the list to it`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -172,7 +175,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tapping the active chip falls back to all`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -194,7 +197,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `category filter combines with the search box`() {
         seed("Rent receipt", CategoryRules.RECEIPTS)
         seed("Lecture notes", CategoryRules.STUDY)
@@ -222,7 +225,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `selection mode keeps the rail usable and still filters`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -250,7 +253,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `rail is rebuilt when the library changes`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -276,7 +279,7 @@ class HomeScreenTest {
 
     // ---- T3.5: search bar + list header --------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `search hint reads Search names and text`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -286,7 +289,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `clear button appears while typing and wipes the query`() {
         seed("Alpha notes", CategoryRules.OTHER)
         seed("Beta receipt", CategoryRules.OTHER)
@@ -312,7 +315,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `in text chip toggles OCR matching for pro`() {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, true)
         val id = seed("Scanned bill", CategoryRules.OTHER)
@@ -339,7 +342,7 @@ class HomeScreenTest {
         com.scanwhirl.app.util.ProGate.setTestOverride(app, null)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `list header counts documents, offers sort and select`() {
         com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
         seed("Lecture notes", CategoryRules.STUDY)
@@ -365,7 +368,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `list header counts within the selected category`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -386,7 +389,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Select enters selection mode and hides the header until back`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -416,7 +419,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `selection header shows Move disabled and gates Merge and Export`() {
         seed("Lecture notes", CategoryRules.STUDY)
         seed("Electricity bill", CategoryRules.RECEIPTS)
@@ -483,7 +486,7 @@ class HomeScreenTest {
 
     // ---- T3.8: empty states ----------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `empty library shows the illustration and first-run copy`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -517,7 +520,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `empty category offers Show all and brings the documents back`() {
         seed("Lecture notes", CategoryRules.STUDY)
 
@@ -548,7 +551,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `search with no matches offers Show all and clears the query`() {
         seed("Rent receipt", CategoryRules.RECEIPTS)
 
@@ -577,7 +580,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `sort selector opens a four-item menu and applies the choice`() {
         com.scanwhirl.app.util.Prefs.setSortMode(app, com.scanwhirl.app.util.Prefs.SORT_DATE)
         seed("Zebra plan", CategoryRules.OTHER)
@@ -634,7 +637,7 @@ class HomeScreenTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `tools sheet opens and holds six tiles in one Free section`() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->

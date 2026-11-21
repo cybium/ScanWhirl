@@ -818,7 +818,9 @@ class IdCardCropFixIdCropTest {
                     current.findViewById<View>(R.id.toolSetupProgress).isVisible
                 )
             }
-            assertTrue("no photo is cached", stateFiles().none { it == "crop.jpg" })
+            // The denied read's cleanup runs after the sheet is shown; wait for it instead of
+            // sampling the state directory immediately (a load-time race in the full suite).
+            assertTrue("no photo is cached", waitUntil { stateFiles().none { it == "crop.jpg" } })
         }
         assertTrue("no side was accepted", repo.listDocuments().isEmpty())
     }

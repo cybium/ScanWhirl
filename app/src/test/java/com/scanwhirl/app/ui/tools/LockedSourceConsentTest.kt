@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -51,6 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class LockedSourceConsentTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -179,7 +182,7 @@ class LockedSourceConsentTest {
 
     // ---- 1. the sheet itself ---------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a protected source asks before the password is removed`() {
         val bytesBefore = protectedBytes()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -218,7 +221,7 @@ class LockedSourceConsentTest {
 
     // ---- 2. Cancel --------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `cancel keeps the file encrypted and unselected`() {
         val bytesBefore = protectedBytes()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -237,7 +240,7 @@ class LockedSourceConsentTest {
 
     // ---- 3. Back ----------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `back keeps the file encrypted and unselected`() {
         val bytesBefore = protectedBytes()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -256,7 +259,7 @@ class LockedSourceConsentTest {
 
     // ---- 4. the explicit yes ---------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the primary button removes the password and selects the document`() {
         val attempts = AtomicInteger()
         val main = AtomicInteger()
@@ -288,7 +291,7 @@ class LockedSourceConsentTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `merge keeps its earlier pick and adds the document after consent`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "merge")).use { scenario ->
             scenario.onActivity { activity ->
@@ -309,7 +312,7 @@ class LockedSourceConsentTest {
 
     // ---- 5. a wrong password never gets that far -------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a wrong password never reaches the consent step`() {
         val bytesBefore = protectedBytes()
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -334,7 +337,7 @@ class LockedSourceConsentTest {
 
     // ---- 6. the explicit Unlock PDF tool is not changed ------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the Unlock PDF tool still removes the password with one password and no consent`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -368,7 +371,7 @@ class LockedSourceConsentTest {
 
     // ---- 7. copy, English and Hindi --------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `English copy states the change in plain words`() {
         assertEquals("This PDF is protected", app.getString(R.string.tools_setup_unlock_consent_title))
         assertEquals(
@@ -386,7 +389,7 @@ class LockedSourceConsentTest {
         assertEquals("Cancel", app.getString(R.string.sheet_cancel))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `Hindi copy uses the judged glossary and names the tool`() {
         assertEquals("यह PDF सुरक्षित है", app.getString(R.string.tools_setup_unlock_consent_title))
@@ -408,7 +411,7 @@ class LockedSourceConsentTest {
         assertEquals("रद्द करें", app.getString(R.string.sheet_cancel))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `the Hindi sheet shows the Hindi copy and the Hindi tool name`() {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
@@ -515,7 +518,7 @@ class LockedSourceConsentTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the consent sheet is accessible at 130 and 200 percent`() {
         for (scale in floatArrayOf(1.3f, 2.0f)) {
             // Fresh fixtures per scale so a rewrite never leaks between runs.
@@ -526,7 +529,7 @@ class LockedSourceConsentTest {
         RuntimeEnvironment.setFontScale(1.0f)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     @Config(qualifiers = "hi-w360dp-h640dp-xhdpi")
     fun `the Hindi consent sheet is accessible at 200 percent`() {
         RuntimeEnvironment.setFontScale(2.0f)

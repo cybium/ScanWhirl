@@ -24,6 +24,7 @@ import org.junit.Assert.*
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
+import org.junit.rules.Timeout
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
@@ -40,6 +41,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ImageImportPipelineTest {
+
     @get:Rule val tmp = TemporaryFolder()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -148,9 +150,9 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `direct 1 page save reopen share and PDF streams`() = direct(1)
-    @Test fun `direct 5 pages save reopen share and PDF streams`() = direct(5)
-    @Test fun `direct 30 pages save reopen share and PDF streams`() = direct(30)
+    @Test(timeout = 60_000) fun `direct 1 page save reopen share and PDF streams`() = direct(1)
+    @Test(timeout = 60_000) fun `direct 5 pages save reopen share and PDF streams`() = direct(5)
+    @Test(timeout = 60_000) fun `direct 30 pages save reopen share and PDF streams`() = direct(30)
 
     private fun staged(count: Int) {
         Prefs.setAutoCopyToDocuments(app, false)
@@ -200,11 +202,11 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `staged 1 page save reopen share and PDF streams`() = staged(1)
-    @Test fun `staged 5 pages with append save reopen share and PDF streams`() = staged(5)
-    @Test fun `staged 30 pages with append save reopen share and PDF streams`() = staged(30)
+    @Test(timeout = 60_000) fun `staged 1 page save reopen share and PDF streams`() = staged(1)
+    @Test(timeout = 60_000) fun `staged 5 pages with append save reopen share and PDF streams`() = staged(5)
+    @Test(timeout = 60_000) fun `staged 30 pages with append save reopen share and PDF streams`() = staged(30)
 
-    @Test fun `direct bad second image rejects before document creation and preserves all originals`() = runBlocking {
+    @Test(timeout = 60_000) fun `direct bad second image rejects before document creation and preserves all originals`() = runBlocking {
         val existing = repo.saveScan(listOf(Uri.fromFile(File(tmp.root, "existing.jpg").apply { writeBytes(ImportFixtures.image()) })), null, "Existing")
         val snapshot = existing.pdfFile.parentFile!!.listFiles()!!.associate { it.name to it.readBytes() }
         val dirsBefore = File(app.filesDir, "documents").list()!!.toSet()
@@ -221,7 +223,7 @@ class ImageImportPipelineTest {
         assertTrue(app.cacheDir.listFiles()!!.none { it.name.startsWith("normalized_page_") })
     }
 
-    @Test fun `partial append rejects bad input keeps valid pages and invalidates old scanner PDF`() {
+    @Test(timeout = 60_000) fun `partial append rejects bad input keeps valid pages and invalidates old scanner PDF`() {
         val staging = File(tmp.root, "staging").apply { mkdirs() }
         val first = File(staging, "page_001.jpg").apply { writeBytes(ImportFixtures.image()) }
         val before = first.readBytes()
@@ -248,7 +250,7 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `empty initial staged input shows an actionable error and preserves provider file`() {
+    @Test(timeout = 60_000) fun `empty initial staged input shows an actionable error and preserves provider file`() {
         val bytes = listOf(byteArrayOf())
         val uris = providerUris(bytes)
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -269,7 +271,7 @@ class ImageImportPipelineTest {
     private fun stagedPageCount() = listOf(File(app.filesDir, "pending_scans"), app.cacheDir)
         .sumOf { root -> root.walkTopDown().count { it.name.startsWith("page_") && it.extension == "jpg" } }
 
-    @Test fun `failed second image removes its new staging folder reports Page 2 and leaves no resume offer`() {
+    @Test(timeout = 60_000) fun `failed second image removes its new staging folder reports Page 2 and leaves no resume offer`() {
         Prefs.setAutoCopyToDocuments(app, false)
         val bytes = listOf(ImportFixtures.image(Bitmap.CompressFormat.PNG), byteArrayOf(1, 2, 3), ImportFixtures.image())
         val uris = providerUris(bytes)
@@ -293,7 +295,7 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `failed staging deletes only its own folder and keeps an earlier unfinished scan`() {
+    @Test(timeout = 60_000) fun `failed staging deletes only its own folder and keeps an earlier unfinished scan`() {
         val earlier = File(app.cacheDir, "pending_1000").apply { mkdirs() }
         val earlierPage = File(earlier, "page_001.jpg").apply { writeBytes(ImportFixtures.image()) }
         val earlierBytes = earlierPage.readBytes()
@@ -309,7 +311,7 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `supplied scanner PDF is never copied and the saved PDF is generated and verified`() = runBlocking {
+    @Test(timeout = 60_000) fun `supplied scanner PDF is never copied and the saved PDF is generated and verified`() = runBlocking {
         val source = File(tmp.root, "scanner.jpg").apply { writeBytes(ImportFixtures.image()) }
         val scannerPdf = File(tmp.root, "scanner.pdf")
         PdfGenerator.imagesToPdf(listOf(source), scannerPdf)
@@ -333,7 +335,7 @@ class ImageImportPipelineTest {
         assertArrayEquals(pdfBefore, scannerPdf.readBytes())
     }
 
-    @Test fun `direct per-page filters match staged normalized input and retain page order`() = runBlocking {
+    @Test(timeout = 60_000) fun `direct per-page filters match staged normalized input and retain page order`() = runBlocking {
         val bytes = sources(4)
         val uris = providerUris(bytes)
         val filters = ScanFilter.entries.mapIndexed { i, f -> i to f }.toMap()
@@ -356,7 +358,7 @@ class ImageImportPipelineTest {
         assertOriginals(bytes)
     }
 
-    @Test fun `1 5 and 30 large pages are sampled and processed sequentially`() = runBlocking {
+    @Test(timeout = 60_000) fun `1 5 and 30 large pages are sampled and processed sequentially`() = runBlocking {
         val bytes = ImportFixtures.image(Bitmap.CompressFormat.PNG, 4000, 2500, transparent = true)
         val source = File(tmp.root, "large-input.dat").apply { writeBytes(bytes) }
         for (count in listOf(1, 5, 30)) {

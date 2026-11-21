@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Activity
 import android.app.Application
@@ -60,6 +62,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class TextFitTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -365,7 +368,7 @@ class TextFitTest {
 
     // --- screens ------------------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `home screen text fits`() {
         atBothFontScales {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -380,7 +383,7 @@ class TextFitTest {
      * decor walk. Owner-approved to join the known-red list if it fails for a
      * genuine fit reason (never `@Ignore`).
      */
-    @Test
+    @Test(timeout = 60_000)
     fun `tools sheet text fits`() {
         atBothFontScales {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -399,7 +402,7 @@ class TextFitTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `document screen text fits`() {
         val id = seedDoc("Text fit document")
         atBothFontScales {
@@ -419,7 +422,7 @@ class TextFitTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `page editor text fits`() {
         val id = seedDoc("Text fit pages", pages = 2)
         atBothFontScales {
@@ -432,7 +435,7 @@ class TextFitTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `scan review text fits`() {
         val staging = File(app.cacheDir, "textfit_${System.nanoTime()}").apply { mkdirs() }
         File(staging, "page_001.jpg").writeBytes(jpegBytes())
@@ -446,7 +449,7 @@ class TextFitTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `settings screen text fits`() {
         atBothFontScales {
             ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
@@ -456,7 +459,7 @@ class TextFitTest {
         assertNoProblems()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `ocr editor text fits`() {
         val docId = runBlocking {
             repo.saveScan(listOf(contentUri(jpegBytes())), null, "OCR fit doc").id

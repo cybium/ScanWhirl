@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.app.Dialog
@@ -47,6 +49,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class VaultPasswordsWiringTest {
+
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
@@ -210,7 +213,7 @@ class VaultPasswordsWiringTest {
 
     // ---- Protect sheet --------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Remember row is shown and ON only when a Vault is set up`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -239,7 +242,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `protect with Remember saves the password encrypted in the Vault`() {
         setUpVault()
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
@@ -261,7 +264,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a locked Vault offers Unlock after the save completes`() {
         setUpVault()
         VaultSession.close()
@@ -309,7 +312,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `declining the Vault prompt says the password was not saved`() {
         setUpVault()
         VaultSession.close()
@@ -345,7 +348,7 @@ class VaultPasswordsWiringTest {
 
     // ---- Unlock sheet ---------------------------------------------------
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Vault button appears only when a password is saved`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")
@@ -375,7 +378,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Use password saved in Vault unlocks the document, even when the Vault relocked`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")
@@ -408,7 +411,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a stale saved password falls back to typing and leaves the document locked`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")
@@ -432,7 +435,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Remove protection unlocks the document and forgets the saved password`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")
@@ -474,7 +477,7 @@ class VaultPasswordsWiringTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `changing the password updates the Vault entry`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")

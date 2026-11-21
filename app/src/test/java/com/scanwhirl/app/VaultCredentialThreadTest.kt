@@ -1,4 +1,6 @@
 package com.scanwhirl.app
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.app.Dialog
@@ -44,6 +46,7 @@ import java.util.concurrent.TimeUnit
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class VaultCredentialThreadTest {
+
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo by lazy { ScanRepository(app) }
     private val prefs get() = app.getSharedPreferences("scanwhirl_prefs", 0)
@@ -124,7 +127,7 @@ class VaultCredentialThreadTest {
         return (scopeJob.children.toSet() - before).single()
     }
 
-    @Test fun `legacy Home verification derives once off main`() {
+    @Test(timeout = 60_000) fun `legacy Home verification derives once off main`() {
         Prefs.setVaultPin(app, "2580")
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
@@ -139,7 +142,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `legacy Home save derives once off main`() {
+    @Test(timeout = 60_000) fun `legacy Home save derives once off main`() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             var saved = false
@@ -153,7 +156,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `Vault legacy verification derives once off main`() {
+    @Test(timeout = 60_000) fun `Vault legacy verification derives once off main`() {
         Prefs.setVaultPin(app, "2580")
         VaultActivity.storeOverride = VaultStore(app, repo, FakeVaultKeys())
         Robolectric.buildActivity(VaultActivity::class.java).setup().use {
@@ -166,7 +169,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `Backup recovery verification derives once off main for a wrong valid code`() {
+    @Test(timeout = 60_000) fun `Backup recovery verification derives once off main for a wrong valid code`() {
         val gate = VaultPasscodeGate()
         val store = VaultStore(app, repo, FakeVaultKeys(), gate)
         val code = VaultCrypto.normalizeRecoveryCode(store.setup("246810").recoveryCode)
@@ -190,7 +193,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `an incorrect SHA-256 PIN is cheap and a correct one upgrades it once`() {
+    @Test(timeout = 60_000) fun `an incorrect SHA-256 PIN is cheap and a correct one upgrades it once`() {
         val old = VaultPinHash.legacySha256("2580")
         prefs.edit().putString("vault_pin_sha256", old).apply()
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
@@ -221,7 +224,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `dismiss during PIN saving leaves the prior PIN unchanged`() {
+    @Test(timeout = 60_000) fun `dismiss during PIN saving leaves the prior PIN unchanged`() {
         Prefs.setVaultPin(app, "2580")
         val old = pinRecord
         val worker = HeldWorker()
@@ -244,7 +247,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `destroy during a successful legacy upgrade leaves the old record intact`() {
+    @Test(timeout = 60_000) fun `destroy during a successful legacy upgrade leaves the old record intact`() {
         val old = VaultPinHash.legacySha256("2580")
         prefs.edit().putString("vault_pin_sha256", old).apply()
         VaultActivity.storeOverride = VaultStore(app, repo, FakeVaultKeys())
@@ -266,7 +269,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `dismiss while checking the right recovery code never unlocks or creates a backup`() {
+    @Test(timeout = 60_000) fun `dismiss while checking the right recovery code never unlocks or creates a backup`() {
         val gate = VaultPasscodeGate()
         val store = VaultStore(app, repo, FakeVaultKeys(), gate, iterations = 2_000)
         val code = store.setup("246810").recoveryCode
@@ -292,7 +295,7 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test fun `successful recovery check resets the gate and then derives the separate archive key`() {
+    @Test(timeout = 60_000) fun `successful recovery check resets the gate and then derives the separate archive key`() {
         val gate = VaultPasscodeGate()
         val store = VaultStore(app, repo, FakeVaultKeys(), gate, iterations = 2_000)
         val code = store.setup("246810").recoveryCode

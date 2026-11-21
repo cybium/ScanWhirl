@@ -1,4 +1,6 @@
 package com.scanwhirl.app.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.content.Intent
@@ -45,6 +47,7 @@ import java.util.Locale
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class CameraPageCapTest {
 
+
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
     private var n = 0
@@ -78,7 +81,7 @@ class CameraPageCapTest {
 
     // ------------------------------------------------------------------ the cap itself
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the camera session cap is 60 and the camera options ask for it`() {
         assertEquals("one camera session stops at 60 pages", 60, ScanLauncher.CAMERA_PAGE_LIMIT)
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -102,7 +105,7 @@ class CameraPageCapTest {
 
     // ------------------------------------------------------------------ the prompt
 
-    @Test
+    @Test(timeout = 60_000)
     fun `a session of exactly the cap pages shows the prompt where the pages land`() {
         Prefs.setAutoCopyToDocuments(app, false)
         val scanned = pages(ScanLauncher.CAMERA_PAGE_LIMIT)
@@ -125,7 +128,7 @@ class CameraPageCapTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `fewer pages than the cap save and open without a prompt`() {
         Prefs.setAutoCopyToDocuments(app, false)
         val scanned = pages(2)
@@ -150,7 +153,7 @@ class CameraPageCapTest {
         )
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Add more reuses the existing add pages entry on the same document`() {
         val docId = DocFixtures.saved(repo, app, pages = 2, name = "Cap add more")
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -176,7 +179,7 @@ class CameraPageCapTest {
         assertEquals("the document keeps every page", 2, repo.listDocuments().single { it.id == docId }.pageCount)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `Done closes the prompt and keeps the saved pages`() {
         val docId = DocFixtures.saved(repo, app, pages = 3, name = "Cap done")
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -201,7 +204,7 @@ class CameraPageCapTest {
         assertEquals(3, kept.pageFiles.count { it.exists() })
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the prompt's two buttons are 48 dp targets with text`() {
         val docId = DocFixtures.saved(repo, app, pages = 1, name = "Cap targets")
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -230,7 +233,7 @@ class CameraPageCapTest {
 
     // ------------------------------------------------------------------ both languages
 
-    @Test
+    @Test(timeout = 60_000)
     fun `the prompt exists in English and Hindi with the same number placeholder`() {
         val en = parseStrings(File("src/main/res/values/strings.xml"))
         val hi = parseStrings(File("src/main/res/values-hi/strings.xml"))

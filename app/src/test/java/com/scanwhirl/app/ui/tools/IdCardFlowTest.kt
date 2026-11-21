@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import org.junit.Rule
+import org.junit.rules.Timeout
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -43,6 +45,7 @@ import kotlin.math.abs
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class IdCardFlowTest {
+
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -131,7 +134,7 @@ class IdCardFlowTest {
 
     // fixflow: owner bug W6 - a front-only card now has one layout only (the front on its own
     // page), because "both sides on one page" cannot be filled without a back side.
-    @Test
+    @Test(timeout = 60_000)
     fun `front only creates one page with the front on its own page`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -153,7 +156,7 @@ class IdCardFlowTest {
         assertEquals(1, repo.listDocuments().size)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `letter paper is chosen, remembered and used for the page`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -183,7 +186,7 @@ class IdCardFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `front and back on one page contains both halves`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -204,7 +207,7 @@ class IdCardFlowTest {
         assertColor(Color.BLUE, bottom)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `each side on its own page creates two pages and is remembered`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -223,7 +226,7 @@ class IdCardFlowTest {
         assertEquals(IdCardPrefs.Layout.OWN_PAGES, IdCardPrefs.layout(app))
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `leaving the flow before the layout creates nothing`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -237,7 +240,7 @@ class IdCardFlowTest {
         assertTrue("cancelling must create no document", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `front sheet offers the camera and the gallery`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity {
@@ -262,7 +265,7 @@ class IdCardFlowTest {
 
     // fixflow: owner bug W4 - "Pick from gallery" opens Android's photo picker directly now; the
     // Google camera scanner (launchGalleryCrop) is no longer part of this button.
-    @Test
+    @Test(timeout = 60_000)
     fun `the id card gallery opens the android photo picker`() {
         var scannerStarted = false
         com.scanwhirl.app.tools.GalleryCrop.startOverride = { scannerStarted = true; true }
@@ -284,7 +287,7 @@ class IdCardFlowTest {
         }
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun `back sheet asks for the back and still offers front only`() {
         ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
