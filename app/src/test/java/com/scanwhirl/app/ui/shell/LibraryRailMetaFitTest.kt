@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.HorizontalScrollView
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -151,13 +152,48 @@ class LibraryRailMetaFitTest {
         }
     }
 
+    /**
+     * LEAD DECISION (L1-01): OLD asserted two scrolling chip rails with fading edges
+     * (`swFolderScroll`/`swFolderRow`, `swChipScroll`/`swChipRow`). NEW asserts the single
+     * wrapping Folder/Filter/Sort band: every named control is shown, at least 48dp, and no
+     * control text is clipped or ellipsized at 100 % and 200 % in EN and HI. The folder and
+     * category rails remain inside the band as the one-tap choosers their other tests need.
+     */
     @Test
-    fun `the library chip rails show that they scroll at 100 and 200 percent`() {
+    fun `the one control band shows all three named controls without clipping at 100 and 200 percent`() {
         for (scale in floatArrayOf(1.0f, 2.0f)) {
             RuntimeEnvironment.setFontScale(scale)
             launchReady { activity ->
-                checkRail(activity, R.id.swFolderScroll, R.id.swFolderRow, "folder rail @ ${scale}x")
-                checkRail(activity, R.id.swChipScroll, R.id.swChipRow, "category rail @ ${scale}x")
+                val band = activity.findViewById<View>(R.id.uxL1ControlBand)
+                assertNotNull("the single control band is shown", band)
+                assertTrue("the band is visible", band!!.isVisible)
+                val density = activity.resources.displayMetrics.density
+                for ((id, name) in listOf(
+                    R.id.uxL1FolderLabel to "Folder",
+                    R.id.uxL1FilterLabel to "Filter",
+                    R.id.uxL1SortLabel to "Sort"
+                )) {
+                    val control = activity.findViewById<View>(id)
+                    assertNotNull("$name control exists", control)
+                    assertTrue("$name control is visible", control!!.isVisible)
+                    assertTrue("$name control is at least 48dp", control.height >= (48 * density).toInt() - 1)
+                }
+                // No control label is cut; the choosers themselves keep their whole words.
+                for (id in intArrayOf(
+                    R.id.uxL1FolderLabel, R.id.uxL1FilterLabel, R.id.uxL1SortLabel,
+                    R.id.swSort, R.id.swDocCount, R.id.swAllFolders
+                )) {
+                    val tv = activity.findViewById<TextView>(id) ?: continue
+                    val lay = tv.layout ?: continue
+                    for (line in 0 until lay.lineCount) {
+                        assertEquals(
+                            "control $id is never ellipsized at ${scale}x",
+                            0, lay.getEllipsisCount(line)
+                        )
+                    }
+                }
+                checkRail(activity, R.id.swFolderScroll, R.id.swFolderRow, "folder chooser @ ${scale}x")
+                checkRail(activity, R.id.swChipScroll, R.id.swChipRow, "filter chooser @ ${scale}x")
             }
         }
     }

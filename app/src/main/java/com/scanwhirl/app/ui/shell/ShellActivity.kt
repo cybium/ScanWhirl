@@ -7,7 +7,6 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -224,7 +223,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         contentHost = FrameLayout(this).apply { id = R.id.swTabContent }
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         navHost = buildNav()
-        root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 100f)))
+        navHost.minimumHeight = SwStyle.dp(this, 100f)
+        root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
         loadWallpaper(root)
         // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must not
@@ -465,6 +465,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             id = R.id.swShellNav
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // G6: the dock grows with wrapped labels instead of clipping them.
+            minimumHeight = SwStyle.dp(this@ShellActivity, 64f)
             background = SwStyle.rounded(
                 this@ShellActivity,
                 0xF2161D21.toInt(),
@@ -504,19 +506,14 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                     text = getString(label)
                     gravity = Gravity.CENTER
                     tag = "label"
-                    maxLines = 1
-                    // SH1 #6: a long Hindi tab name (कागज़ात) must end in "…" instead of
-                    // running over the neighbouring cell at 200 % font. The cell keeps its
-                    // own contentDescription, so TalkBack still says the whole name.
-                    ellipsize = TextUtils.TruncateAt.END
-                    // The cell is a quarter of the bar minus the scan-disc gap;
-                    // cap the label so a long tab name never clips at 2.0x.
-                    val density = resources.displayMetrics.density
-                    val scaled = resources.displayMetrics.scaledDensity
-                    setTextSize(
-                        android.util.TypedValue.COMPLEX_UNIT_PX,
-                        minOf(11f * scaled, 13f * density)
-                    )
+                    // LEAD DECISION (G6): no dp cap, no ellipsis. >=12sp and up to two
+                    // wrapped lines; the dock grows and clearance is measured from it.
+                    maxLines = 2
+                    ellipsize = null
+                    hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                    //noinspection WrongConstant
+                    breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
                 },
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -548,7 +545,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         container.addView(
             bar,
             FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this, 64f)
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.BOTTOM
                 val m = SwStyle.dp(this@ShellActivity, 12f)
@@ -1439,7 +1436,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         if (docs.size > 8) {
             val search = android.widget.EditText(this).apply {
                 id = R.id.swDocPickerSearch
-                hint = getString(R.string.home_search_hint)
+                hint = getString(R.string.ux130_l1_search_hint)
                 setHintTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_dim))
                 setTextColor(SwStyle.color(this@ShellActivity, R.color.text_hologram_hi))
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)

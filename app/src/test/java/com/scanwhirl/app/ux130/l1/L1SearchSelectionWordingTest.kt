@@ -88,9 +88,11 @@ class L1SearchSelectionWordingTest {
             val activity = controller.get()
             waitFor("library loaded") { cards(activity).size == 2 }
             val field = activity.findViewById<EditText>(R.id.swHomeSearch)
-            // Short hint retained: the decided 28-character copy clips at 2.0x in this
-            // field (AccessibilityAuditTest). Reported as a conflict to the lead.
-            assertEquals(app.getString(R.string.home_search_hint), field.hint.toString())
+            assertEquals("Search", field.hint.toString())
+            val helper = activity.findViewById<TextView>(R.id.uxL1SearchHelp)
+            assertNotNull("the persistent helper exists", helper)
+            assertEquals("Names, tags and page text", helper!!.text.toString())
+            assertTrue("the helper wraps", helper.ellipsize == null)
             val status = activity.findViewById<TextView>(R.id.uxL1SearchStatus)
             assertNotNull("the live status exists", status)
 
@@ -157,8 +159,10 @@ class L1SearchSelectionWordingTest {
         }
         val en = "src/main/res/values/strings_ux130_l1.xml"
         val hi = "src/main/res/values-hi/strings_ux130_l1.xml"
-        assertEquals("Search documents and pages", text(en, "ux130_l1_search_hint"))
-        assertEquals("दस्तावेज़ और पन्ने खोजें", text(hi, "ux130_l1_search_hint"))
+        assertEquals("Search", text(en, "ux130_l1_search_hint"))
+        assertEquals("खोजें", text(hi, "ux130_l1_search_hint"))
+        assertEquals("Names, tags and page text", text(en, "ux130_l1_search_help"))
+        assertEquals("नाम, टैग और पन्नों के शब्द", text(hi, "ux130_l1_search_help"))
         assertEquals("Move to Trash", text(en, "ux130_l1_move_to_trash"))
         assertEquals("हटाई गई फ़ाइलों में भेजें", text(hi, "ux130_l1_move_to_trash"))
         assertEquals("Finish selection", text(en, "ux130_l1_finish_selection"))

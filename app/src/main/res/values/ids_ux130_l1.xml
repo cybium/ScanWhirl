@@ -4,7 +4,14 @@
     <!-- L1-03 centre Scan caption lives inside the disc's single focus stop. -->
     <item name="uxL1ScanCaption" type="id" />
 
+    <!-- L1-01 one wrapping Folder / Filter / Sort control band. -->
+    <item name="uxL1ControlBand" type="id" />
+    <item name="uxL1FolderLabel" type="id" />
+    <item name="uxL1FilterLabel" type="id" />
+    <item name="uxL1SortLabel" type="id" />
+
     <!-- L1-05 live search status and scoped count. -->
+    <item name="uxL1SearchHelp" type="id" />
     <item name="uxL1SearchStatus" type="id" />
     <item name="uxL1SearchScope" type="id" />
 

@@ -77,7 +77,10 @@ class ShellScreenTest {
             assertNotNull("the brand mark is in the header", activity.findViewById<View>(R.id.swBrandMark))
             assertEquals("A/अ", activity.findViewById<TextView>(R.id.swLanguageChip).text.toString())
             assertNotNull("the search field is there", activity.findViewById<View>(R.id.swHomeSearch))
-            assertNotNull("the folder chips are there", activity.findViewById<View>(R.id.swFolderRow))
+            // LEAD DECISION (L1-01): OLD asserted a standalone folder chip rail. NEW asserts
+            // the single Folder/Filter/Sort band and that its folder chooser is reachable.
+            assertNotNull("the one control band is there", activity.findViewById<View>(R.id.uxL1ControlBand))
+            assertNotNull("the folder chooser is reachable", activity.findViewById<View>(R.id.swAllFolders))
 
             val docs = activity.findViewById<View>(R.id.swDocList) as android.view.ViewGroup
             assertEquals("two seeded documents", 2, docs.childCount)

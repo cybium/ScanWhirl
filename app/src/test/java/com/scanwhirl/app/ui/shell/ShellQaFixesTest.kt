@@ -116,11 +116,17 @@ class ShellQaFixesTest {
         }
     }
 
+    /**
+     * LEAD DECISION (L1-01): the sort control now lives in the one Folder/Filter/Sort band.
+     * OLD read a standalone "Newest ▾" row; NEW reads the same control inside the band and
+     * still requires the same five options, persisted choice and sort-dependent heading.
+     */
     @Test
     fun `the Newest control sorts and the choice persists`() {
         DocFixtures.saved(repo, app, pages = 1, name = "Beta")
         DocFixtures.saved(repo, app, pages = 1, name = "Alpha")
         launch { activity ->
+            assertNotNull("sort lives in the single control band", activity.findViewById<View>(R.id.uxL1ControlBand))
             assertEquals(
                 "Newest ▾",
                 activity.findViewById<TextView>(R.id.swSort).text.toString()
@@ -459,22 +465,27 @@ class ShellQaFixesTest {
         }
     }
 
+    /**
+     * LEAD DECISION (L1-01): OLD asserted the folder rail's parent hides during search;
+     * NEW asserts the whole single control band hides and returns, same intent (no chrome
+     * competes with results). The folder chooser itself stays reachable from the band.
+     */
     @Test
     fun `search mode collapses folders and section chrome until cleared`() {
         DocFixtures.saved(repo, app, pages = 1, name = "Searchable doc")
         launch { activity ->
             search(activity, "searchable")
             assertFalse(
-                "folder chips are out of the way",
-                (activity.findViewById<View>(R.id.swFolderScroll).parent as View).isVisible
+                "the control band is out of the way",
+                activity.findViewById<View>(R.id.uxL1ControlBand).isVisible
             )
             assertEquals(1, cards(activity).size)
 
             activity.findViewById<View>(R.id.swHomeClear).performClick()
             idle()
             assertTrue(
-                "folder chips return",
-                (activity.findViewById<View>(R.id.swFolderScroll).parent as View).isVisible
+                "the control band returns",
+                activity.findViewById<View>(R.id.uxL1ControlBand).isVisible
             )
         }
     }

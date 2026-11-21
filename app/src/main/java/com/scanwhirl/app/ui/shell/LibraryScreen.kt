@@ -141,11 +141,11 @@ class LibraryScreen(
         "read_text" to R.string.quick_read_text
     )
 
-    private val chipRow: LinearLayout
+    private lateinit var chipRow: LinearLayout
     private var chipScroll: View? = null
     private val emptyView: LinearLayout
-    private val listHeader: LinearLayout
-    private val countLabel: TextView
+    private lateinit var listHeader: LinearLayout
+    private lateinit var countLabel: TextView
     private var sortAction: TextView? = null
     private var sort: String = com.scanwhirl.app.util.Prefs.LIB_NEWEST
 
@@ -165,6 +165,7 @@ class LibraryScreen(
     internal var lastUndoSnackbar: com.google.android.material.snackbar.Snackbar? = null
     private var recentHeader: View? = null
     private var folderScroll: View? = null
+    private lateinit var controlBand: LinearLayout
     private lateinit var activeFilter: TextView
     private lateinit var noMatchView: TextView
     private lateinit var homeClear: ImageButton
@@ -281,8 +282,9 @@ class LibraryScreen(
             background = readableBand()
         }
         addView(noMatchView)
-        folderScroll = folderSection()
-        addView(folderScroll)
+        // L1-01: one wrapping control band replaces the separate folder/sort/count chrome rows.
+        buildControlBand()
+        addView(controlBand)
         // UX-008: between the folders and the document list, never above them. Two row shells
         // (twelve tools at six columns) stay addressable for tests and drag targets.
         quickHeader = quickToolsHeader().apply { background = readableBand() }
@@ -301,51 +303,8 @@ class LibraryScreen(
             ))
         }
         addView(quickRow)
-        recentHeader = sectionHeader(context.getString(R.string.home_recent), context.getString(R.string.home_newest)) {
-            showSortSheet()
-        }.apply { background = readableBand() }
-        addView(recentHeader)
-        // The category chips scroll like the folder chips: five or more chips are wider than a
-        // 320-360dp phone, and a plain LinearLayout squeezed the trailing ones to zero width.
-        chipRow = LinearLayout(context).apply {
-            id = R.id.swChipRow
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val pad = SwStyle.dp(context, 18f)
-            setPadding(pad, 0, pad, 0)
-        }
-        chipScroll = HorizontalScrollView(context).apply {
-            id = R.id.swChipScroll
-            isHorizontalScrollBarEnabled = false
-            // ATLAS-F2 (001): a rail wider than the phone must say so. The fading edge is the
-            // affordance that more chips continue past the screen edge, instead of the last
-            // chip looking sliced off.
-            isHorizontalFadingEdgeEnabled = true
-            setFadingEdgeLength(SwStyle.dp(context, 24f))
-            addView(
-                chipRow,
-                android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-            )
-        }
-        addView(chipScroll)
-        addView(SwStyle.spacer(context, 2f))
 
         val selectBar = selectionBar()
-
-        listHeader = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val pad = SwStyle.dp(context, 18f)
-            setPadding(pad, SwStyle.dp(context, 2f), pad, SwStyle.dp(context, 2f))
-            background = readableBand()
-        }
-        countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
-        countLabel.id = R.id.swDocCount
-        listHeader.addView(countLabel, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        addView(listHeader)
 
         docList = LinearLayout(context).apply {
             id = R.id.swDocList
@@ -639,6 +598,96 @@ class LibraryScreen(
     // ---- folders ----------------------------------------------------------
 
     /**
+     * L1-01: one wrapping band with a named control for each library dimension. The old
+     * separate folder, category, sort and count rows are merged here, so the first card
+     * starts higher while every folder, category and sort choice keeps a one-tap route.
+     */
+    private fun buildControlBand() {
+        val band = LinearLayout(context).apply {
+            id = R.id.uxL1ControlBand
+            orientation = VERTICAL
+            background = readableBand()
+            layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT
+            ).apply {
+                val m = SwStyle.dp(context, 18f)
+                setMargins(m, SwStyle.dp(context, 4f), m, 0)
+            }
+        }
+        fun label(id: Int, textRes: Int): TextView = SwStyle.text(
+            context,
+            if (AppLanguage.showingHindi(context)) 14f else 13f,
+            SwStyle.color(context, R.color.cyan_primary), bold = true
+        ).apply {
+            this.id = id
+            text = context.getString(textRes)
+            contentDescription = text
+            minWidth = SwStyle.dp(context, 64f)
+            minimumHeight = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 2
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+        }
+        fun line(id: Int, textRes: Int): LinearLayout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = SwStyle.dp(context, 48f)
+            addView(
+                label(id, textRes),
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            )
+        }.also { band.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
+
+        // Folder: the existing chooser (All / New folder / All folders / named folders).
+        val folderLine = line(R.id.uxL1FolderLabel, R.string.ux130_l1_folder_label)
+        val folderSectionView = folderSection()
+        folderScroll = folderSectionView
+        folderLine.addView(folderSectionView, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+
+        // Filter: the category chips rail, reachable in one tap from the named control.
+        val filterLine = line(R.id.uxL1FilterLabel, R.string.ux130_l1_filter_label)
+        chipRow = LinearLayout(context).apply {
+            id = R.id.swChipRow
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val pad = SwStyle.dp(context, 18f)
+            setPadding(pad, 0, pad, 0)
+        }
+        val chipScroller = HorizontalScrollView(context).apply {
+            id = R.id.swChipScroll
+            isHorizontalScrollBarEnabled = false
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(SwStyle.dp(context, 24f))
+            addView(
+                chipRow,
+                android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+        chipScroll = chipScroller
+        filterLine.addView(chipScroller, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+
+        // Sort: the same five choices and sort-dependent heading, plus the live count.
+        listHeader = line(R.id.uxL1SortLabel, R.string.ux130_l1_sort_label)
+        recentHeader = sectionHeader(
+            context.getString(R.string.home_recent), context.getString(R.string.home_newest)
+        ) { showSortSheet() }
+        listHeader.addView(recentHeader, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true).apply {
+            id = R.id.swDocCount
+            maxLines = 2
+            ellipsize = null
+        }
+        listHeader.addView(countLabel, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        controlBand = band
+    }
+
+    /**
      * G3: text over a bright wallpaper photo needs a real surface under it. The shell's
      * readable wallpaper scrim deliberately stays at its tested strength, so the library
      * puts its exposed text rows on the same near-opaque glass surface its cards and
@@ -657,10 +706,8 @@ class LibraryScreen(
         // EN or HI). The sentence is hidden when no folder filter is active.
         val section = LinearLayout(context).apply {
             orientation = VERTICAL
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                val m = SwStyle.dp(context, 18f)
-                setMargins(m, 0, m, 0)
-            }
+            // L1-01: the parent control band owns the page margins.
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         val scroll = HorizontalScrollView(context).apply {
             id = R.id.swFolderScroll
@@ -832,6 +879,19 @@ class LibraryScreen(
             orientation = VERTICAL
         }
         var sheet: SwSheet? = null
+
+        // L1-01: name the management capability in the chooser. The rows below already
+        // expose rename/delete through their More action; "New folder" stays the primary.
+        list.addView(
+            SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+                text = context.getString(R.string.ux130_l1_manage_folders)
+                contentDescription = text
+                minimumHeight = SwStyle.dp(context, 48f)
+                gravity = Gravity.CENTER_VERTICAL
+                isFocusable = true
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
 
         if (names.isEmpty()) {
             list.addView(
@@ -1538,10 +1598,8 @@ class LibraryScreen(
         )
         searchInput = EditText(context).apply {
             id = R.id.swHomeSearch
-            // L1-05 conflict: the decided longer hint "Search documents and pages" measures
-            // 711px in this field at 2.0x but only 516px fit (AccessibilityAuditTest). Kept on
-            // the shared, honest-enough short hint until the lead rules on the conflict.
-            hint = context.getString(R.string.home_search_hint)
+            // LEAD DECISION: short field hint + a persistent, wrapping helper line below it.
+            hint = context.getString(R.string.ux130_l1_search_hint)
             setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -1601,8 +1659,24 @@ class LibraryScreen(
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             isFocusable = true
         }
+        val helper = SwStyle.text(
+            context,
+            if (AppLanguage.showingHindi(context)) 14f else 12f,
+            SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.uxL1SearchHelp
+            text = context.getString(R.string.ux130_l1_search_help)
+            contentDescription = text
+            maxLines = 3
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            isFocusable = true
+        }
         val wrap = LinearLayout(context).apply { orientation = VERTICAL }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
+        wrap.addView(helper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return wrap.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
@@ -2448,6 +2522,7 @@ class LibraryScreen(
         val searching = query.isNotBlank() ||
             (::searchInput.isInitialized && searchInput.hasFocus())
         val firstRun = docs.isEmpty() && !searching && folder == null && category == null
+        controlBand.isVisible = !searching && !firstRun
         folderScroll?.isVisible = !searching
         quickHeader.isVisible = !searching && !firstRun
         quickRow.isVisible = !searching && !firstRun && quickStrip.childCount > 0

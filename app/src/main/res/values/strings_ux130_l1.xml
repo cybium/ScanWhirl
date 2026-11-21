@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- UX 1.3.0 lane L1: shell, library and discovery copy. EN is the decided wording. -->
 <resources>
+    <!-- L1-01 one wrapping Folder / Filter / Sort control band -->
+    <string name="ux130_l1_folder_label">Folder:</string>
+    <string name="ux130_l1_filter_label">Filter:</string>
+    <string name="ux130_l1_sort_label">Sort:</string>
+    <string name="ux130_l1_manage_folders">Manage folders</string>
+
     <!-- L1-02 state restore (no visible copy) has no strings. -->
 
     <!-- L1-03 centre Scan caption. The nav words stay the judged shared strings. -->
     <string name="ux130_l1_scan_caption">Scan</string>
 
     <!-- L1-05 honest search and selection language -->
-    <string name="ux130_l1_search_hint">Search documents and pages</string>
+    <string name="ux130_l1_search_hint">Search</string>
+    <string name="ux130_l1_search_help">Names, tags and page text</string>
     <string name="ux130_l1_search_scope">Searching in %1$s</string>
     <string name="ux130_l1_scope_all">All documents</string>
     <string name="ux130_l1_move_to_trash">Move to Trash</string>
