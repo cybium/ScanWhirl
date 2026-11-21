@@ -34,4 +34,24 @@ class ScanRepoPageOrderTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `non numeric names keep their old lexicographic relative order`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val repo = ScanRepository(app)
+        val dir = File(app.cacheDir, "i1_order_mixed_${System.nanoTime()}").apply { mkdirs() }
+        try {
+            listOf("scan.jpg", "page_1000.jpg", "cover.jpg", "page_999.jpg", "zz.jpg")
+                .forEach { File(dir, it).writeBytes(byteArrayOf(1)) }
+            val names = repo.pageFilesIn(dir).map { it.name }
+            assertEquals("page_* names sort numerically and come first", listOf("page_999.jpg", "page_1000.jpg"), names.take(2))
+            assertEquals(
+                "other names keep their old lexicographic order relative to each other",
+                listOf("cover.jpg", "scan.jpg", "zz.jpg"),
+                names.drop(2)
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }
