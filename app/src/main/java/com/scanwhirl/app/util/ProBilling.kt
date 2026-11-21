@@ -273,6 +273,16 @@ object ProBilling {
     private var buyOpen = false
 
     private val subscribers = mutableListOf<(State) -> Unit>()
+
+    /**
+     * p2pro #1: a lightweight "entitlement changed" signal, separate from the purchase-op states
+     * above. A silent foreground reconcile (or an acknowledgement retry) changes Pro without
+     * publishing a State, so screens that cache Free/Pro need this to re-bind their tiles.
+     * It carries no purchase semantics: the grant/revoke decisions live only in [Controller].
+     */
+    @Volatile
+    private var entitlementChangedListener: (() -> Unit)? = null
+
     private var latest: State = State.None
     private var opListener: ((State) -> Unit)? = null
     private var lastOp: Op = Op.NONE
@@ -303,6 +313,18 @@ object ProBilling {
     }
 
     internal fun lastOperation(): Op = lastOp
+
+    /**
+     * Screens register on start and clear on stop. The callback is always posted back to main,
+     * so a Play callback on a worker thread never rebinds a View off main.
+     */
+    fun setEntitlementChangedListener(listener: (() -> Unit)?) {
+        entitlementChangedListener = listener
+    }
+
+    private fun notifyEntitlementChanged() {
+        onMain { runCatching { entitlementChangedListener?.invoke() } }
+    }
 
     /** The one client for the process, with the one purchase listener installed at creation. */
     private fun gateway(context: Context): Gateway {
@@ -644,7 +666,15 @@ object ProBilling {
                     controller.applyOwned(mine, startGeneration, silent = !showResult)
                     if (!showResult) {
                         reconcileDue = true
-                        endBuy(State.Failed(app.getString(R.string.pro_error_connection)))
+                        // A successful but empty answer is Play's authoritative "no Pro here";
+                        // a null answer is a failed/unverifiable query. They are not the same
+                        // failure and must not share the "can't reach Play" copy (p2pro #2).
+                        val message = if (owned == null) {
+                            R.string.pro_error_connection
+                        } else {
+                            R.string.pro_no_purchase
+                        }
+                        endBuy(State.Failed(app.getString(message)))
                     }
                 } catch (t: Throwable) {
                     endBuy(State.Failed(app.getString(R.string.pro_error_play)))
@@ -848,6 +878,7 @@ object ProBilling {
         buyInFlight = false
         buyOpen = false
         subscribers.clear()
+        entitlementChangedListener = null
         latest = State.None
         opListener = null
         lastOp = Op.NONE
@@ -1049,13 +1080,49 @@ object ProBilling {
                 ProGate.setPro(context, true)
                 // A newer grant than any ownership snapshot still in flight.
                 generation++
+                notifyEntitlementChanged()
                 if (publish) publishOwned()
             } else if (!testBuild) {
                 ProGate.setPro(context, false)
                 // Any acknowledge captured before this answer may no longer grant Pro.
                 ProBilling.ownershipLost++
+                notifyEntitlementChanged()
             }
         }
+    }
+}
+
+/**
+ * p2pro #5: one billing connection for the process. Every caller of [PlayBilling.connect] queues
+ * its `onReady` here; only the first one starts `startConnection`, and every queued answer is
+ * delivered when that single setup finishes. Without this, concurrent price/Buy/Restore/reconcile
+ * calls each installed a new BillingClientStateListener while not ready and lost earlier answers.
+ * Main-thread callers dominate; synchronized so a worker-thread Play callback is safe too.
+ */
+internal class ConnectQueue {
+    private val pending = mutableListOf<(Boolean) -> Unit>()
+    private var connecting = false
+
+    /** True only for the caller that must start the real connection. */
+    fun add(onReady: (Boolean) -> Unit): Boolean = synchronized(this) {
+        if (connecting) {
+            pending += onReady
+            false
+        } else {
+            connecting = true
+            pending.clear()
+            pending += onReady
+            true
+        }
+    }
+
+    /** Ends this attempt and returns every callback that was waiting on it. */
+    fun finish(): List<(Boolean) -> Unit> = synchronized(this) {
+        if (!connecting) return@synchronized emptyList()
+        connecting = false
+        val ready = pending.toList()
+        pending.clear()
+        ready
     }
 }
 
@@ -1081,6 +1148,7 @@ internal class PlayBilling(
     private var client: BillingClient? = null
     private var listener: ((ProBilling.Event) -> Unit)? = null
     private var details: ProductDetails? = null
+    private val connectQueue = ConnectQueue()
 
     /** Last failed setup/query code, so the UI can tell "no connection" from "not available". */
     @Volatile
@@ -1203,11 +1271,14 @@ internal class PlayBilling(
             onReady(true)
             return
         }
+        // One connection, one listener. Later callers wait in the queue instead of starting
+        // another startConnection and overwriting the first caller's listener (p2pro #5).
+        if (!connectQueue.add(onReady)) return
         c.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
                 val ok = result.responseCode == BillingClient.BillingResponseCode.OK
                 lastError = if (ok) null else result.responseCode
-                onReady(ok)
+                connectQueue.finish().forEach { runCatching { it(ok) } }
             }
 
             // With automatic service reconnection the library retries on the next API call.
@@ -1319,5 +1390,6 @@ internal class PlayBilling(
         runCatching { client?.endConnection() }
         client = null
         details = null
+        connectQueue.finish()
     }
 }
