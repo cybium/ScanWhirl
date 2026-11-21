@@ -57,6 +57,7 @@ class ProScreen(
     private lateinit var priceSuffix: TextView
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
+    private lateinit var restoreRow: TextView
     private var entrancePlayed = false
 
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
@@ -322,16 +323,17 @@ class ProScreen(
             )
         }
 
-        if (!active) content.addView(
-            SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
+        if (!active) {
+            restoreRow = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
                 text = context.getString(R.string.pro_restore)
+                contentDescription = context.getString(R.string.pro_restore)
                 gravity = Gravity.CENTER
                 isClickable = true
                 minimumHeight = SwStyle.dp(context, 48f)
                 setOnClickListener { onRestorePurchase() }
-            },
-            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
-        )
+            }
+            content.addView(restoreRow, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)))
+        }
         content.addView(SwStyle.spacer(context, 20f))
 
         // H3: the offer itself never scrolls away. An active build has no price or Unlock row,
@@ -482,6 +484,7 @@ class ProScreen(
     internal fun titleForTest(): View = titleRow
     internal fun priceWrapForTest(): FrameLayout = priceWrap
     internal fun buyWrapForTest(): FrameLayout = buyWrap
+    internal fun restoreRowForTest(): View? = if (::restoreRow.isInitialized) restoreRow else null
 
     /**
      * One purchase at a time: while Play is answering, the Buy row is disabled and greyed so a
@@ -491,6 +494,16 @@ class ProScreen(
     fun setBuying(busy: Boolean) {
         buyButton.isEnabled = !busy
         buyButton.alpha = if (busy) 0.6f else 1f
+        // p2pro #3: Restore used to be a live tap during a Buy and ProBilling.restore() returned
+        // silently (its Busy went to a no-op callback). Disable it with an honest accessible
+        // state so the user cannot make a request that will be ignored.
+        if (::restoreRow.isInitialized) {
+            restoreRow.isEnabled = !busy
+            restoreRow.alpha = if (busy) 0.6f else 1f
+            restoreRow.contentDescription = context.getString(
+                if (busy) R.string.pro_purchase_in_progress else R.string.pro_restore
+            )
+        }
     }
 
     /**

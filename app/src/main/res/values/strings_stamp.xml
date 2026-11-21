@@ -81,7 +81,7 @@
     <string name="stamp_choose_document">Choose a document</string>
     <string name="stamp_no_documents">No unlocked documents to edit. Scan or import one first.</string>
     <string name="stamp_text_required">Type the text first.</string>
-    <string name="stamp_pro_message">Sign, text and redaction are Pro. Test builds are free.</string>
+    <string name="stamp_pro_message">Sign, text and redaction are Pro tools. Open Pro to buy or restore them.</string>
     <string name="stamp_redact_warn_title">Redaction is permanent</string>
     <string name="stamp_redact_warn_message">Hidden text and pixels are removed for good in the new copy.</string>
     <string name="stamp_redact_warn_save">Save redacted copy</string>

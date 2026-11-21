@@ -78,7 +78,7 @@
     <string name="stamp_choose_document">दस्तावेज़ चुनें</string>
     <string name="stamp_no_documents">बदलने के लिए कोई खुला दस्तावेज़ नहीं है। पहले स्कैन करें या फ़ोन में लाएँ।</string>
     <string name="stamp_text_required">पहले कुछ लिखें।</string>
-    <string name="stamp_pro_message">हस्ताक्षर करना, लिखना और निजी जानकारी छिपाना Pro में मिलते हैं। जाँच के लिए बने ऐप में ये मुफ़्त हैं।</string>
+    <string name="stamp_pro_message">हस्ताक्षर, लिखना और निजी जानकारी छिपाना Pro के काम हैं। इन्हें खरीदने या फिर चालू करने के लिए Pro खोलें।</string>
     <string name="stamp_redact_warn_title">छिपाई गई जानकारी हमेशा के लिए चली जाएगी</string>
     <string name="stamp_redact_warn_message">छिपाए गए शब्द और तस्वीर के छोटे बिंदु (पिक्सेल) नई प्रति से हमेशा के लिए हट जाते हैं।</string>
     <string name="stamp_redact_warn_save">निजी जानकारी ढककर नई प्रति सहेजें</string>

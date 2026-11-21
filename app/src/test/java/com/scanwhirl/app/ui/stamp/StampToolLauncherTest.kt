@@ -2,7 +2,6 @@ package com.scanwhirl.app.ui.stamp
 
 import android.app.Application
 import android.os.Looper
-import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -102,22 +101,25 @@ class StampToolLauncherTest {
         assertTrue(ShadowToast.getTextOfLatestToast().isNotEmpty())
     }
 
+    /**
+     * p2pro expectation change: a Free build used to get a dead-end "Got it" sheet. It now goes
+     * through the one ProOffer path, so Buy and Restore are available on the real Pro screen.
+     */
     @Test
-    fun `a free build gets the Pro sheet instead of the chooser`() {
+    fun `a free build gets the real Pro screen instead of the chooser`() {
         DocFixtures.saved(repo, context, pages = 1)
         val host = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
         ProGate.setTestOverride(host, false)
         try {
             StampToolLauncher.open(host, "watermark")
 
-            val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "the Pro sheet opens" }
-            val title = sheet.findViewById<TextView>(R.id.swSheetTitle)
-            assertEquals(context.getString(R.string.pro_suite_title), title?.text?.toString())
+            val started = requireNotNull(shadowOf(host).nextStartedActivity) { "the Pro screen opens" }
+            assertEquals(com.scanwhirl.app.ui.shell.ShellActivity::class.java.name, started.component?.className)
             assertTrue(
-                "nothing in the library may be picked for a Pro tool on Free",
-                sheet.findViewById<android.view.View>(android.R.id.list) == null
+                "the offer carries Buy and Restore",
+                started.getBooleanExtra(com.scanwhirl.app.ui.shell.ShellActivity.EXTRA_OPEN_PRO, false)
             )
-            assertNull("the editor does not start", shadowOf(host).nextStartedActivity)
+            assertNull("no dead-end sheet", ShadowDialog.getLatestDialog())
         } finally {
             ProGate.setTestOverride(host, null)
         }

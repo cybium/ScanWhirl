@@ -301,6 +301,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
             showBillingState(state)
         }
+        // p2pro #1: a silent foreground reconcile changes Pro without publishing a purchase
+        // State. Rebind the cached Free/Pro tiles whenever an authoritative answer changes it.
+        com.scanwhirl.app.util.ProBilling.setEntitlementChangedListener { syncProState() }
     }
 
     override fun onResume() {
@@ -333,6 +336,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     override fun onStop() {
         billingUnsub?.invoke()
         billingUnsub = null
+        com.scanwhirl.app.util.ProBilling.setEntitlementChangedListener(null)
         // Endless motion must not follow the user onto another screen.
         findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.stop(it) }
         super.onStop()
@@ -699,6 +703,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         when (state) {
             com.scanwhirl.app.util.ProBilling.State.Owned -> {
                 setBuying(false)
+                // p2pro #1: Tools/Library/Me cache Free/Pro; a successful Buy must rebind them
+                // now, not only after the next resume or app restart.
+                syncProState()
                 Toast.makeText(this, R.string.pro_unlocked, Toast.LENGTH_SHORT).show()
                 showPro()
             }
@@ -1180,7 +1187,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     /** A small glass sheet of saved documents; picking runs [onPick]. */
     private fun showDocPicker(onPick: (ScanDocument) -> Unit) {
-        val docs = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+        // P2pro privacy: a password-protected or Vault document must never reach the OCR/reader
+        // tools through this chooser. The shared DocumentPicker callers apply the same filter;
+        // without it, read_text/to_text could display a protected document's pages and text.
+        val docs = runCatching { repo.listDocuments() }
+            .getOrDefault(emptyList())
+            .filter { !it.isLocked && !it.isVaulted }
         if (docs.isEmpty()) {
             SwSheet.builder(this)
                 .setTitle(getString(R.string.tool_pick_document))
