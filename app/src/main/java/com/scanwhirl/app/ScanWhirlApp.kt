@@ -95,7 +95,9 @@ class ScanWhirlApp : Application() {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (t: Throwable) {
-            // Lead decision: an Error must not kill startup or stop the remaining steps.
+            // Lead decision: an Error must not kill startup or stop the remaining steps. Sol
+            // re-review: an outer startup failure is just as incomplete as an inner one.
+            com.scanwhirl.app.store.ScanRepository.recoveryIncomplete = true
             android.util.Log.w("ScanWhirl", "storage recovery step $name failed (${t.javaClass.simpleName})")
         }
     }
@@ -113,6 +115,7 @@ class ScanWhirlApp : Application() {
             kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
                 // Backstop only: every step isolates its own failures. Class only, no user data.
                 android.util.Log.w("ScanWhirl", "storage recovery backstop (${t.javaClass.simpleName})")
+                com.scanwhirl.app.store.ScanRepository.recoveryIncomplete = true
                 storageRecoveryIncomplete.value = true
                 storageRecoveryFinished.value = true
             }) {
