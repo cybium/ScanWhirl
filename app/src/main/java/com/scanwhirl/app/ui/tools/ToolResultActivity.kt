@@ -77,6 +77,7 @@ class ToolResultActivity : BaseActivity() {
     private var mime = "application/pdf"
     private var undone = false
     private var undoChecking = false
+    private var chainChecking = false
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
@@ -668,15 +669,52 @@ class ToolResultActivity : BaseActivity() {
         return runCatching { repo.getDocument(id) }.getOrNull()
     }
 
-    private fun chainCompress() {
-        val doc = verifiedOutputDoc()
-            ?: return fail(getString(R.string.tools_result_nothing))
+    /**
+     * V2T review fix: the SAME recorded identity check Undo uses. Runs on IO;
+     * never adopts the current identity at tap time, so a reopened receipt whose
+     * id was reused cannot authorize an action on somebody else's document.
+     */
+    private suspend fun identityStillMatches(): Boolean = withContext(Dispatchers.IO) {
+        val expected = outputIdentity
+        when {
+            expected == null -> docIds.isEmpty() && files.isEmpty()
+            expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
+                cheapIdentity(this@ToolResultActivity, docIds, files) == expected
+            else -> captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files) == expected
+        }
+    }
+
+    /** Chaining re-checks identity first, with both actions held disabled. */
+    private fun withVerifiedOutput(action: (com.scanwhirl.app.model.ScanDocument) -> Unit) {
+        if (chainChecking) return
+        chainChecking = true
+        val buttons = listOf(
+            findViewById<View>(R.id.v2t_compress_copy),
+            findViewById<View>(R.id.v2t_protect_copy)
+        )
+        buttons.forEach { it?.isEnabled = false }
+        lifecycleScope.launch {
+            val matches = try {
+                identityStillMatches()
+            } finally {
+                chainChecking = false
+                buttons.forEach { it?.isEnabled = true }
+            }
+            if (!matches) {
+                fail(getString(R.string.ux130_l3_copy_changed))
+                return@launch
+            }
+            val doc = verifiedOutputDoc()
+                ?: return@launch fail(getString(R.string.tools_result_nothing))
+            action(doc)
+        }
+    }
+
+    private fun chainCompress() = withVerifiedOutput { doc ->
         startActivity(ToolSetupActivity.intent(this, "compress", selectedDocId = doc.id))
     }
 
-    private fun chainProtect() {
-        val doc = verifiedOutputDoc()
-            ?: return fail(getString(R.string.tools_result_nothing))
+    private fun chainProtect() = withVerifiedOutput { doc ->
         LockFlow(this, repo, v2tHost, { listOf(doc) }, { _ -> }).protectDocument(doc)
     }
 
@@ -1325,17 +1363,7 @@ class ToolResultActivity : BaseActivity() {
             // L3-02 P1: the re-check hashes on IO, never on Main, while the
             // button is disabled so a second tap cannot race the first.
             val allowed = try {
-                withContext(Dispatchers.IO) {
-                    val expected = outputIdentity
-                    when {
-                        expected == null -> docIds.isEmpty() && files.isEmpty()
-                        expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
-                            cheapIdentity(this@ToolResultActivity, docIds, files) == expected
-                        else -> captureOutputIdentityBlocking(
-                            this@ToolResultActivity, docIds, files
-                        ) == expected
-                    }
-                }
+                identityStillMatches()
             } finally {
                 // P2: a cancelled re-check must never leave Undo disabled.
                 undoChecking = false
