@@ -97,6 +97,69 @@ class IconVectorContractTest {
         )
     }
 
+    @Test
+    fun oneGlyphPerConcept() {
+        val duplicates = CANONICAL_GLYPHS.entries
+            .groupBy { it.value }
+            .filter { it.value.size > 1 }
+            .map { "${it.key}: ${it.value.map { entry -> entry.key }}" }
+        assertTrue(
+            "One glyph must not stand for two different concepts: $duplicates",
+            duplicates.isEmpty()
+        )
+    }
+
+    /** Council §2: the owned call sites must use the canonical glyph for each concept. */
+    @Test
+    fun ownedCallSitesFollowCouncilIconMap() {
+        val appRoot = findResRoot().parentFile.parentFile.parentFile
+        val actions = File(appRoot, "src/main/java/com/scanwhirl/app/ui/DocumentActionsSheet.kt").readText()
+        assertTrue(
+            "Actions 'Read text' must use ic_sym_ocr, not the legacy ic_ocr",
+            actions.contains("R.drawable.ic_sym_ocr") && !actions.contains("R.drawable.ic_ocr")
+        )
+        assertTrue(
+            "Actions Protect/Unlock must use lock/lock_open, not encrypted",
+            actions.contains("R.drawable.ic_sym_lock_open") &&
+                actions.contains("R.drawable.ic_sym_lock") &&
+                !actions.contains("R.drawable.ic_sym_encrypted")
+        )
+
+        val stamp = File(
+            appRoot, "src/main/java/com/scanwhirl/app/ui/stamp/StampEditorActivity.kt"
+        ).readText()
+        assertTrue(
+            "Stamp Draw must use ic_sym_draw",
+            stamp.lines().any { it.contains("toolDraw") && it.contains("ic_sym_draw") }
+        )
+        assertTrue(
+            "Stamp Highlight must use ic_sym_ink_highlighter",
+            stamp.lines().any { it.contains("toolHighlight") && it.contains("ic_sym_ink_highlighter") }
+        )
+        assertTrue(
+            "Stamp Page numbers must use ic_sym_format_list_numbered",
+            stamp.lines().any {
+                it.contains("toolPageNumbers") && it.contains("ic_sym_format_list_numbered")
+            }
+        )
+
+        val dock = File(appRoot, "src/main/res/layout/view_reader_dock.xml").readText()
+        assertTrue(
+            "Reader dock Text must use the OCR glyph, not Add text",
+            dock.contains("@drawable/ic_sym_ocr") && !dock.contains("@drawable/ic_sym_text_fields")
+        )
+
+        val legacyMenuIcons = File(appRoot, "src/main/res/menu")
+            .listFiles { it.isFile && it.name.endsWith(".xml") }
+            .orEmpty()
+            .flatMap { Regex("@drawable/(ic_[A-Za-z0-9_]+)").findAll(it.readText()).map { m -> m.value }.toList() }
+            .filter { !it.startsWith("@drawable/ic_sym_") }
+        assertTrue(
+            "Menus must be migrated to ic_sym_*, still legacy: $legacyMenuIcons",
+            legacyMenuIcons.isEmpty()
+        )
+    }
+
     /** Discovers the real vectors from either the Windows checkout or the WSL gate mirror. */
     private fun vectors(): List<SymbolVector> {
         val resRoot = findResRoot()
@@ -166,5 +229,27 @@ class IconVectorContractTest {
         private const val VIEWPORT = 960f
         private const val MIN_EXPECTED_ICONS = 80
         private val NUMBER = Regex("-?\\d+(?:\\.\\d+)?")
+
+        /** Council §2 canonical map: each concept owns exactly one Material Symbols glyph. */
+        private val CANONICAL_GLYPHS = mapOf(
+            "ocr" to "ic_sym_ocr",
+            "protect" to "ic_sym_lock",
+            "unlock" to "ic_sym_lock_open",
+            "vault" to "ic_sym_shield_lock",
+            "batch" to "ic_sym_apps",
+            "pages" to "ic_sym_view_module",
+            "pdfa" to "ic_sym_archive",
+            "stamp" to "ic_sym_approval",
+            "form_photo" to "ic_sym_photo_camera",
+            "import_pdf" to "ic_sym_file_open",
+            "clear_metadata" to "ic_sym_visibility_off",
+            "word" to "ic_sym_description",
+            "save_txt" to "ic_sym_notes",
+            "qr_call" to "ic_sym_call",
+            "qr_mail" to "ic_sym_mail",
+            "draw" to "ic_sym_draw",
+            "highlight" to "ic_sym_ink_highlighter",
+            "page_numbers" to "ic_sym_format_list_numbered"
+        )
     }
 }

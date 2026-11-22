@@ -5,32 +5,32 @@
     <!-- Page actions: apply to the ticked pages (tap a checkbox first). -->
     <item
         android:id="@+id/action_rotate_left"
-        android:icon="@drawable/ic_rotate_left"
+        android:icon="@drawable/ic_sym_rotate_left"
         android:title="@string/rotate_left"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_rotate_right"
-        android:icon="@drawable/ic_rotate_right"
+        android:icon="@drawable/ic_sym_rotate_right"
         android:title="@string/rotate_right"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_delete_page"
-        android:icon="@drawable/ic_delete"
+        android:icon="@drawable/ic_sym_delete"
         android:title="@string/action_delete_page"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_add_pages"
-        android:icon="@drawable/ic_camera"
+        android:icon="@drawable/ic_sym_photo_camera"
         android:title="@string/add_pages"
         app:showAsAction="never" />
 
     <!-- Photos added here are only EXIF-normalised, never perspective-cropped. -->
     <item
         android:id="@+id/action_add_gallery"
-        android:icon="@drawable/ic_gallery"
+        android:icon="@drawable/ic_sym_photo_library"
         android:title="@string/add_from_gallery"
         app:showAsAction="never" />
 </menu>

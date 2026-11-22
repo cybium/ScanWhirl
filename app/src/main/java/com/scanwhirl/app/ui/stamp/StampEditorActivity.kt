@@ -412,16 +412,16 @@ class StampEditorActivity : BaseActivity() {
         add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
             promptText()
         }
-        add(R.id.toolDraw, R.string.stamp_tool_draw, R.drawable.ic_sym_edit) {
+        add(R.id.toolDraw, R.string.stamp_tool_draw, R.drawable.ic_sym_draw) {
             arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
         }
-        add(R.id.toolHighlight, R.string.stamp_tool_highlight, R.drawable.ic_sym_format_list_numbered) {
+        add(R.id.toolHighlight, R.string.stamp_tool_highlight, R.drawable.ic_sym_ink_highlighter) {
             arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
         }
         add(R.id.toolWatermark, R.string.stamp_tool_watermark, R.drawable.ic_sym_watermark) {
             promptWatermark()
         }
-        add(R.id.toolPageNumbers, R.string.stamp_tool_page_numbers, R.drawable.ic_sym_notes_lines) {
+        add(R.id.toolPageNumbers, R.string.stamp_tool_page_numbers, R.drawable.ic_sym_format_list_numbered) {
             addMarkToAll(PageStamp.Mark.PageNumber())
         }
         add(R.id.toolStamp, R.string.stamp_tool_stamp, R.drawable.ic_sym_approval) {
