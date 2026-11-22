@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane K (Card and canvas) — Hindi parity for every new visible string.
+     Glossary-safe: प्रति (copy), कागज़ात (documents), फ़ाइल (file); no rejected
+     transliterations (कॉपी / लाइब्रेरी / वॉल्ट). -->
+<resources>
+    <string name="ck_picker_from_phone">इस फ़ोन से</string>
+    <string name="ck_picker_imported_file">आयातित फ़ाइल</string>
+    <string name="ck_picker_import_title">इस फ़ाइल की प्रति ScanWhirl में रखें?</string>
+    <string name="ck_picker_import_msg">ScanWhirl %1$s की प्रति आपके कागज़ात में रखेगा, फिर उसी प्रति पर काम करेगा। आपके फ़ोन की मूल फ़ाइल वैसी ही रहेगी।</string>
+    <string name="ck_picker_import_failed_title">यह फ़ाइल आयात नहीं हो सकी</string>
+    <string name="ck_picker_import_failed_msg">फ़ाइल पढ़ी नहीं जा सकी। फ़ाइल जाँचें और फिर कोशिश करें।</string>
+</resources>

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- UI_100 §G1.11: the full-screen pager already had a dark canvas; give the
+     white sheet the same sw_canvas ground + 8dp inset + 1dp edge as every other
+     page host so it reads as an object rather than a borderless white slab. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/sw_canvas"
+    android:foreground="@drawable/bg_canvas_page_edge"
+    android:padding="8dp">
 
     <com.scanwhirl.app.ui.ZoomableImageView
         android:id="@+id/pageImage"

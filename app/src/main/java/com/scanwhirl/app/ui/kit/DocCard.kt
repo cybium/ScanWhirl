@@ -3,7 +3,6 @@ package com.scanwhirl.app.ui.kit
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -13,12 +12,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
+import androidx.core.widget.TextViewCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.ui.home.PageHitViews
-import com.scanwhirl.app.util.CategoryLabels
-import com.scanwhirl.app.util.CategoryRules
-import com.scanwhirl.app.util.CategoryStyle
+import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.util.PageTextMatches
 
 /**
@@ -36,13 +34,15 @@ data class DocSearchHit(
 )
 
 /**
- * v2 UI: 01_home_A — a document row: paper thumbnail with the page count,
- * name (+ lock badge), meta, folder dot, Share and ⋯.
+ * Council §3 / UI_100 §C — one document row, three calm parts:
+ *  - a real first-page thumbnail on the shared dark canvas, with the lock/vault
+ *    state as a 16dp scrim circle OVER the thumb (never a badge on the name);
+ *  - the name in its own two-line, whole-word block (autosize 15.5→12sp);
+ *  - ONE meta line "N pages · size · date" (app locale, decimal size), nothing else.
  *
- * uihome (VISUAL_AUDIT_A X2): the thumbnail is a real first page at 72×102dp
- * (page aspect), not a 54dp blank square; a row is at least 88dp tall so the
- * tile is legible, and a document with no readable page shows its first letter
- * plus the page icon instead of an empty tile.
+ * One named ⋯ lives at every width; Share moved into its sheet, so a name can
+ * never be squeezed by a second action cell. Folders appear only in search
+ * results (the caller supplies that evidence), never as a second meta line.
  */
 class DocCard(context: Context) : LinearLayout(context) {
 
@@ -50,10 +50,7 @@ class DocCard(context: Context) : LinearLayout(context) {
     val pageBadge: TextView
     val lockIcon: ImageView
     val nameView: TextView
-    val lockBadge: TextView
     val metaView: TextView
-    val categoryView: TextView
-    val categoryDot: View
     val shareButton: ImageButton
     val moreButton: ImageButton
 
@@ -71,22 +68,11 @@ class DocCard(context: Context) : LinearLayout(context) {
 
     private val thumbFrame: FrameLayout
     private val thumbPlaceholderGroup: LinearLayout
-    private val categoryRow: LinearLayout
-    private val metaLine: MetaLine
     private val actions: LinearLayout
 
     /** KT1: selection mode is announced as a real checkable control, not colour alone. */
     private var selectionMode = false
     private var checkedState = false
-
-    /**
-     * UI-W4: at a compact width (or 200 % font) a row keeps one named overflow. The
-     * direct Share moves into the same Actions sheet as More, so the name, page line
-     * and snippet keep the full text column instead of being squeezed beside two icons.
-     */
-    private val compactRow: Boolean
-        get() = resources.configuration.screenWidthDp <= 360 ||
-            resources.configuration.fontScale >= 1.6f
 
     var doc: ScanDocument? = null
         private set
@@ -96,8 +82,8 @@ class DocCard(context: Context) : LinearLayout(context) {
         gravity = Gravity.CENTER_VERTICAL
         val d = resources.displayMetrics.density
         background = SwStyle.card(context, 18f)
-        // L1-04: the 14sp Hindi folder label adds a line's worth of height. 10dp vertical
-        // padding (was 12) keeps the first card above the dock at 360x640dp in EN and HI.
+        // The band redesign freed the 640dp clearance; no category line now, so
+        // 10dp vertical padding keeps at least two cards above the dock at 360x640.
         setPadding((12 * d).toInt(), (10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt())
         minimumHeight = SwStyle.dp(context, 88f)
         isClickable = true
@@ -121,7 +107,19 @@ class DocCard(context: Context) : LinearLayout(context) {
         )
 
         thumbFrame = FrameLayout(context).apply {
-            background = SwStyle.rounded(context, SwStyle.color(context, R.color.sw_paper_thumb), radiusDp = 8f)
+            // Council §4: the page sits on sw_canvas with a 3dp inset and a 1dp
+            // #FFFFFF@24% edge. The page's OWN white is kept; only its host changed.
+            background = SwStyle.rounded(
+                context, SwStyle.color(context, R.color.sw_canvas), 6f,
+                stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+            )
+            setForeground(
+                SwStyle.rounded(
+                    context, Color.TRANSPARENT, 4f,
+                    stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                )
+            )
+            setPadding((3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt())
             clipToOutline = true
         }
         thumbView = ImageView(context).apply {
@@ -166,19 +164,26 @@ class DocCard(context: Context) : LinearLayout(context) {
             thumbPlaceholderGroup,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
+        // Council §3 / OWNER 2026-11-22: lock is a 16dp gold-on-dark scrim circle at the
+        // thumb's top-end corner. There is no "Protected" badge on the name line.
         lockIcon = ImageView(context).apply {
             id = R.id.swDocLock
             setImageResource(R.drawable.ic_sym_lock)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
+            background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 999f)
             scaleType = ImageView.ScaleType.CENTER
+            setPadding((2 * d).toInt(), (2 * d).toInt(), (2 * d).toInt(), (2 * d).toInt())
             isVisible = false
         }
         thumbFrame.addView(
             lockIcon,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            FrameLayout.LayoutParams((16 * d).toInt(), (16 * d).toInt()).apply {
+                gravity = Gravity.TOP or Gravity.END
+                rightMargin = (2 * d).toInt()
+                topMargin = (2 * d).toInt()
+            }
         )
-        // L1-04: badges and metadata below 12sp are raised to the readable floor.
         pageBadge = SwStyle.text(context, 12f, Color.WHITE, bold = true).apply {
             background = SwStyle.rounded(context, 0xCC0E1316.toInt(), radiusDp = 5f)
             setPadding((6 * d).toInt(), 0, (6 * d).toInt(), 0)
@@ -220,17 +225,15 @@ class DocCard(context: Context) : LinearLayout(context) {
             orientation = VERTICAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val nameRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
+        // Council §3: the name owns the whole text column. No lock badge, no
+        // category dot, no second competitor for width — so "annot_test" and a
+        // 53-character name break at whole words, never mid-identifier.
         nameView = SwStyle.text(context, 15.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.swDocName
             typeface = SwType.bold(context)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-            // Same value as LineBreaker.BREAK_STRATEGY_HIGH_QUALITY (API 29+); Layout's constant works from API 23.
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
             val density = resources.displayMetrics.density
@@ -239,82 +242,36 @@ class DocCard(context: Context) : LinearLayout(context) {
                 android.util.TypedValue.COMPLEX_UNIT_PX,
                 minOf(15.5f * scaled, 17f * density)
             )
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                 this,
-                (11f * density).toInt(),
+                (12f * density).toInt(),
                 (15.5f * density).toInt(),
                 1,
                 android.util.TypedValue.COMPLEX_UNIT_PX
             )
         }
-        nameRow.addView(nameView, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        lockBadge = SwStyle.text(context, 12f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
-            id = R.id.swDocLockBadge
-            text = context.getString(R.string.home_protected)
-            isVisible = false
-            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_sym_lock, 0, 0, 0)
-            compoundDrawablePadding = (3 * d).toInt()
-            compoundDrawableTintList = ColorStateList.valueOf(
-                SwStyle.color(context, R.color.gold_pro_primary)
-            )
-        }
-        nameRow.addView(lockBadge)
-        info.addView(nameRow)
+        info.addView(nameView, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        metaView = com.scanwhirl.app.ui.kit.SwStyle.text(
+        // ONE meta line at 100%. The extra lines are only a large-font safety valve
+        // so the 200% no-clip tests keep passing (UI_100 explicitly leaves them alone).
+        metaView = SwStyle.text(
             context,
-            // UI_PLAN 0.8: Hindi body/meta starts at 14sp; Latin meta at 12.5sp.
             if (com.scanwhirl.app.util.AppLanguage.showingHindi(context)) 14f else 12.5f,
             SwStyle.color(context, R.color.text_hologram_dim)
         ).apply {
             id = R.id.swDocMeta
-            // M1 (device sweep): one line ellipsized the date away ("2 pages · 166 KB ·
-            // Yest…"). Two lines keep the whole meta — date last and readable — and at
-            // 200 % font a third line does the same (unclipped beats density, UI_PLAN 0.8).
-            maxLines = if (resources.configuration.fontScale >= 1.6f) 3 else 2
+            maxLines = when {
+                resources.configuration.fontScale >= 1.6f -> 3
+                resources.configuration.fontScale >= 1.15f -> 2
+                else -> 1
+            }
             ellipsize = android.text.TextUtils.TruncateAt.END
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
         }
-
-        categoryRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        categoryDot = View(context).apply {
-            background = SwStyle.rounded(context, SwStyle.color(context, R.color.cat_other), radiusDp = 3f)
-        }
-        categoryRow.addView(
-            categoryDot,
-            LayoutParams((8 * d).toInt(), (8 * d).toInt()).apply { marginEnd = (5 * d).toInt() }
-        )
-        // L1-04 metadata token: 12sp Latin / 14sp Devanagari. The shared metadata floor keeps
-        // the folder label readable without shrinking it; the band redesign freed the 640dp
-        // clearance this used to break (LibraryFirstScreen640HiTest guards it).
-        categoryView = SwStyle.text(
-            context, 12f, SwStyle.color(context, R.color.text_hologram_mid),
-            bold = true, metadata = true
-        ).apply {
-            id = R.id.swDocFolder
-            minimumHeight = (14 * d).toInt()
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        categoryRow.addView(categoryView)
-
-        // Meta + folder share one line when the folder still fits; on a narrow row or a
-        // long meta the folder drops below instead of squeezing the meta (or drawing over it).
-        metaLine = MetaLine(context)
-        metaLine.addView(
-            metaView,
-            LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        )
-        metaLine.addView(
-            categoryRow,
-            LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        )
         info.addView(
-            metaLine,
+            metaView,
             LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = (3 * d).toInt() }
         )
@@ -362,6 +319,7 @@ class DocCard(context: Context) : LinearLayout(context) {
 
         addView(info, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
+        // Council §3: a single named ⋮ at every width. Share lives in that sheet.
         actions = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -397,8 +355,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         doc = document
         nameView.text = document.name
         metaView.text = meta
-        lockBadge.isVisible = document.isLocked
-        lockIcon.isVisible = document.isLocked
+        lockIcon.isVisible = document.isLocked || document.isVaulted
         alpha = if (document.isLocked) 0.92f else 1f
         pageBadge.text = document.pageCount.toString()
         pageBadge.isVisible = document.pageCount > 0
@@ -418,34 +375,18 @@ class DocCard(context: Context) : LinearLayout(context) {
             searchSnippet.text = PageHitViews.styled(context, hit.excerpt)
         }
 
-        // The row names the folder the document lives in (sentence case, as the person
-        // typed it). An unsorted document still names its library category.
-        val folderName = document.folder?.trim().orEmpty()
-        categoryView.text = if (folderName.isNotEmpty()) {
-            folderName
-        } else {
-            CategoryLabels.display(context, document.category)
-        }
-        categoryDot.background = SwStyle.rounded(
-            context,
-            if (folderName.isNotEmpty()) SwStyle.color(context, R.color.cyan_primary)
-            else CategoryStyle.color(document.category),
-            radiusDp = 3f
-        )
-        // KT1: a search hit used to replace the whole description, so TalkBack lost the name,
-        // meta, folder and protected badge. Speak the whole row, then add the match.
+        // KT1: a search hit used to replace the whole description, so TalkBack lost the
+        // name, meta, folder and protected state. Speak the whole row, then add the match.
         contentDescription = spokenDescription(hit)
         shareButton.setOnClickListener { onShare() }
         moreButton.setOnClickListener { onMore() }
-        // UI-W4: one named overflow at compact width / large font, as the judged
-        // Library row specifies. Share is still one tap away inside More's sheet.
-        shareButton.isVisible = !compactRow
+        shareButton.isVisible = false
         moreButton.isVisible = true
         selectionBadge.isVisible = false
 
         thumbView.imageTintList = null
         thumbView.setImageDrawable(null)
-        thumbView.setBackgroundColor(SwStyle.color(context, R.color.sw_paper_thumb))
+        thumbView.setBackgroundColor(Color.TRANSPARENT)
         val firstPage = document.pageFiles.firstOrNull()
         // A locked or Vault document never gets a page image in a search/library row:
         // the neutral letter placeholder is the only tile it may show (UI-W4).
@@ -456,8 +397,6 @@ class DocCard(context: Context) : LinearLayout(context) {
         showThumbPlaceholder(if (canShowPage) null else document)
         if (firstPage != null && canShowPage) {
             runCatching {
-                // Sampled + cached by the shared page-thumb LRU; fitExactly keeps a
-                // 100-document list inside the cache budget (72dp tile, not a 1080p page).
                 com.scanwhirl.app.ui.pagegrid.PageThumbLoader.load(
                     firstPage,
                     THUMB_TARGET_PX,
@@ -471,13 +410,11 @@ class DocCard(context: Context) : LinearLayout(context) {
                     },
                     onFailed = { showThumbPlaceholder(document) },
                     skipStale = true,
-                    // PERF 3: the caller has the listing-time revision, so the loader's key
-                    // needs no lastModified()/length() stat on the main thread.
                     revision = document.revision.toString()
                 )
             }
         } else {
-            com.scanwhirl.app.ui.pagegrid.PageThumbLoader.cancel(thumbView)
+            PageThumbLoader.cancel(thumbView)
         }
     }
 
@@ -485,9 +422,15 @@ class DocCard(context: Context) : LinearLayout(context) {
     private fun spokenDescription(hit: DocSearchHit?): String {
         val parts = mutableListOf<String>()
         parts += nameView.text.toString()
-        if (lockBadge.isVisible) parts += lockBadge.text.toString()
+        // The lock is a thumb overlay now; the spoken "Protected" comes from the
+        // string resource directly, exactly once, never from a badge's text.
+        if (doc?.isLocked == true || doc?.isVaulted == true) {
+            parts += context.getString(R.string.home_protected)
+        }
         if (metaView.text.isNotBlank()) parts += metaView.text.toString()
-        if (categoryView.text.isNotBlank()) parts += categoryView.text.toString()
+        // Folder is evidence, not a visible second line; keep it for TalkBack only
+        // when the caller actually set one (never the "Unsorted" placeholder).
+        doc?.folder?.trim()?.takeIf { it.isNotBlank() }?.let { parts += it }
         if (hit != null) {
             parts += searchPage.text.toString()
             parts += hit.excerpt.text
@@ -509,10 +452,7 @@ class DocCard(context: Context) : LinearLayout(context) {
         }
     }
 
-    /**
-     * v2 UI: 03_tools_hub — compact row for the kit document chooser: 40×52
-     * thumbnail, one-line name and meta, lock badge, no category or buttons.
-     */
+    /** Compact kit chooser row: no actions, a smaller thumb, same calm text rules. */
     fun asCompact(): DocCard = apply {
         val d = resources.displayMetrics.density
         setPadding((8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
@@ -521,23 +461,22 @@ class DocCard(context: Context) : LinearLayout(context) {
             .apply { marginEnd = (12 * d).toInt() }
         thumbLetter.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
         thumbPlaceholder.layoutParams = LinearLayout.LayoutParams((12 * d).toInt(), (12 * d).toInt())
-        categoryRow.visibility = View.GONE
         actions.visibility = View.GONE
         selectionBadge.visibility = View.GONE
         searchBlock.visibility = View.GONE
         nameView.maxLines = 2
-        metaView.maxLines = 2
+        metaView.maxLines = 1
     }
 
     /**
      * v2 UI: 01_home_A — selection mode: the check badge appears only while the
-     * library is selecting, and the per-card Share/⋯ give way to the action bar.
+     * library is selecting, and the per-card ⋯ gives way to the action bar.
      */
     fun setSelection(active: Boolean, checked: Boolean) {
         selectionMode = active
         checkedState = checked
         selectionBadge.isVisible = active && checked
-        shareButton.isVisible = !active && !compactRow
+        shareButton.isVisible = false
         moreButton.isVisible = !active
         background = if (checked) {
             SwStyle.card(context, 18f).apply {
@@ -557,73 +496,5 @@ class DocCard(context: Context) : LinearLayout(context) {
          * at 3x it needs 270px; sampling to 320 keeps the shared 24 MB LRU honest.
          */
         const val THUMB_TARGET_PX = 320
-    }
-}
-
-/**
- * uihome: the row's meta line and its folder dot + name.
- *
- * The meta is at most two lines (ellipsize end beyond that; M1: the date must stay
- * readable, so the line wraps at word boundaries instead of cutting "Yest…"). The folder
- * sits after it when both fit the text column; otherwise it drops to a second line, never
- * over the meta and never squeezed to nothing (long Hindi titles, 200% font, narrow phones).
- */
-private class MetaLine(context: Context) : ViewGroup(context) {
-
-    private val gap = (6 * resources.displayMetrics.density).toInt()
-    private var stacked = false
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val avail = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(1)
-        val meta = getChildAt(0)
-        val folder = getChildAt(1)
-        val folderShown = folder.visibility != GONE
-
-        meta.measure(
-            MeasureSpec.makeMeasureSpec(avail, MeasureSpec.AT_MOST),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        )
-        var folderW = 0
-        var folderH = 0
-        if (folderShown) {
-            folder.measure(
-                MeasureSpec.makeMeasureSpec(avail, MeasureSpec.AT_MOST),
-                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-            )
-            folderW = folder.measuredWidth
-            folderH = folder.measuredHeight
-        }
-        stacked = folderShown && meta.measuredWidth + gap + folderW > avail
-
-        val contentH = if (stacked) {
-            meta.measuredHeight + gap + folderH
-        } else {
-            maxOf(meta.measuredHeight, folderH)
-        }
-        setMeasuredDimension(
-            resolveSize(avail + paddingLeft + paddingRight, widthMeasureSpec),
-            resolveSize(contentH + paddingTop + paddingBottom, heightMeasureSpec)
-        )
-    }
-
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val avail = width - paddingLeft - paddingRight
-        val meta = getChildAt(0)
-        val folder = getChildAt(1)
-        val folderShown = folder.visibility != GONE
-
-        meta.layout(
-            paddingLeft, paddingTop,
-            paddingLeft + meta.measuredWidth, paddingTop + meta.measuredHeight
-        )
-        if (!folderShown) return
-        if (stacked) {
-            val top = paddingTop + meta.measuredHeight + gap
-            folder.layout(paddingLeft, top, paddingLeft + folder.measuredWidth, top + folder.measuredHeight)
-        } else {
-            val top = paddingTop + (maxOf(meta.measuredHeight, folder.measuredHeight) - folder.measuredHeight) / 2
-            val left = (paddingLeft + meta.measuredWidth + gap).coerceAtMost(paddingLeft + avail - folder.measuredWidth)
-            folder.layout(left, top, left + folder.measuredWidth, top + folder.measuredHeight)
-        }
     }
 }

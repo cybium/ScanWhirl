@@ -1,22 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home slice 2: the honest placeholder while a first page decodes — blank
-     paper with faint text bars. Never a photo of another document. -->
+<!-- Council §4 / UI_100 §G3: the honest placeholder while a first page decodes.
+     It used to be near-white paper (sw_paper), so a real white page had no edge.
+     Now it IS the dark canvas with a small, quiet paper glyph: a real page is a
+     white sheet on this ground, never white-on-white. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/sw_paper" />
+            <solid android:color="@color/sw_canvas" />
+            <stroke android:width="1dp" android:color="@color/sw_canvas_edge" />
+            <corners android:radius="4dp" />
         </shape>
     </item>
     <item android:left="8dp" android:right="16dp" android:top="12dp" android:gravity="top|fill_horizontal" android:height="3dp">
-        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+        <shape android:shape="rectangle"><solid android:color="#668D979E" /></shape>
     </item>
     <item android:left="8dp" android:right="10dp" android:top="20dp" android:gravity="top|fill_horizontal" android:height="2dp">
-        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+        <shape android:shape="rectangle"><solid android:color="#4C8D979E" /></shape>
     </item>
     <item android:left="8dp" android:right="14dp" android:top="26dp" android:gravity="top|fill_horizontal" android:height="2dp">
-        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+        <shape android:shape="rectangle"><solid android:color="#4C8D979E" /></shape>
     </item>
     <item android:left="8dp" android:right="20dp" android:top="32dp" android:gravity="top|fill_horizontal" android:height="2dp">
-        <shape android:shape="rectangle"><solid android:color="@color/sw_paper_line" /></shape>
+        <shape android:shape="rectangle"><solid android:color="#4C8D979E" /></shape>
     </item>
 </layer-list>

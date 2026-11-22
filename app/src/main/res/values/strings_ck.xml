@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane K (Card and canvas). EN/HI pairs; Hindi follows the approved glossary:
+     कागज़ात (library), प्रति (copy), फ़ाइल (file), सहेजी (saved). -->
+<resources>
+    <string name="ck_picker_from_phone">From this phone</string>
+    <string name="ck_picker_imported_file">Imported file</string>
+    <string name="ck_picker_import_title">Copy this file into ScanWhirl?</string>
+    <string name="ck_picker_import_msg">ScanWhirl makes its own copy of %1$s in your documents, then works on that copy. The original on your phone stays unchanged.</string>
+    <string name="ck_picker_import_failed_title">Could not import this file</string>
+    <string name="ck_picker_import_failed_msg">The file could not be read. Check the file and try again.</string>
+</resources>

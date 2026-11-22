@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Council §4 / UI_100 §G1.2: the reader page sits on the sw_canvas, never on a
+     white container. The page's OWN white is kept; the 1dp foreground edge makes
+     it an object instead of a white slab merged into the background. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingHorizontal="8dp"
-    android:paddingVertical="4dp">
+    android:background="@color/sw_canvas"
+    android:foreground="@drawable/bg_canvas_page_edge"
+    android:padding="8dp">
 
     <ImageView
         android:id="@+id/pageImage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:adjustViewBounds="true"
-        android:background="#FFFFFFFF"
         android:contentDescription="@string/ux130_l4_zoom_page"
         android:scaleType="fitCenter" />
 </FrameLayout>

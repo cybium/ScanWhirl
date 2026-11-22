@@ -3,7 +3,6 @@ package com.scanwhirl.app.ui.home
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.PorterDuff
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.TransitionDrawable
 import android.provider.Settings
@@ -56,8 +55,10 @@ object DocThumbBinder {
         PageThumbLoader.cancel(image)
         image.animate().cancel()
         val context = image.context
-        // Paper is dimmed on the dark desk, never inverted.
-        image.setColorFilter(ContextCompat.getColor(context, R.color.sw_page_dim), PorterDuff.Mode.MULTIPLY)
+        // Council §4: drop the near-white sw_page_dim MULTIPLY. A real page keeps its
+        // own honest white on the sw_canvas placeholder; a locked/Private page gets a
+        // dark scrim in showGlyph instead of a fake dimmed sheet.
+        image.clearColorFilter()
         when (val kind = kindFor(doc)) {
             Kind.PAGE -> {
                 glyph.isVisible = false

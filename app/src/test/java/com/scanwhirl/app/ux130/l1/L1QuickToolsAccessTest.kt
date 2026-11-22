@@ -127,8 +127,11 @@ class L1QuickToolsAccessTest {
             walk(activity.findViewById<View>(android.R.id.content))
             val src = java.io.File("src/main/java/com/scanwhirl/app/ui/kit/DocCard.kt").readText()
             assertTrue("page badge >= 12sp", src.contains("pageBadge = SwStyle.text(context, 12f"))
-            assertTrue("lock badge >= 12sp", src.contains("lockBadge = SwStyle.text(context, 12f"))
-            assertTrue("Hindi category/meta >= 14sp", src.contains("showingHindi(context)) 14f else 12f"))
+            // Council §3: OLD = a 12sp "Protected" badge on the name row.
+            // NEW = no lockBadge at all; the lock is a 16dp scrim circle on the thumb.
+            assertTrue("no lock badge on the name row", !src.contains("lockBadge ="))
+            assertTrue("lock is a 16dp thumb overlay", src.contains("(16 * d).toInt()") && src.contains("R.id.swDocLock"))
+            assertTrue("Hindi meta >= 14sp", src.contains("showingHindi(context)) 14f else 12f"))
         } finally {
             controller.pause().stop().destroy()
         }

@@ -151,7 +151,11 @@ class DocumentActionsSheetTest {
             assertEquals("the header is this document's name", "Rent agreement", name.text.toString())
 
             val thumb = thumbOf(sheet)
-            assertNotNull("the header thumbnail is bound", thumb.colorFilter)
+            // Council §4: OLD = the binder proved itself by a near-white sw_page_dim
+            // MULTIPLY color filter. NEW = the page sits on the dark canvas with no
+            // dimming filter; the placeholder drawable proves the binder ran.
+            assertNotNull("the header thumbnail is bound to a page or the dark canvas", thumb.drawable)
+            assertNull("no near-white multiply tint behind a page", thumb.colorFilter)
             val doc = requireNotNull(repo.getDocument(id))
             // PageThumbLoader tags the image with its request key: proves the header asked for
             // THIS document's first page at the header size, and that it decoded.

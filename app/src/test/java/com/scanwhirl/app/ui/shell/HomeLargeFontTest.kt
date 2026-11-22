@@ -15,6 +15,7 @@ import com.scanwhirl.app.util.AppLanguage
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -257,7 +258,8 @@ abstract class HomeLargeFontBase {
                 val meta = card.metaView
                 val layout = meta.layout
                 assertTrue("the meta is laid out", layout != null)
-                assertTrue("the meta may use two lines (M1)", meta.maxLines >= 2)
+                // Council §3: OLD = meta may use two lines. NEW = one line at 100%.
+                assertEquals("the meta is ONE line at 100%", 1, meta.maxLines)
                 for (line in 0 until layout!!.lineCount) {
                     assertTrue(
                         "the meta is cut on line $line (\"${meta.text}\")",
