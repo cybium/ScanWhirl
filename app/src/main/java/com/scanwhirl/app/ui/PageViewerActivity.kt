@@ -530,7 +530,7 @@ class PageViewerActivity : BaseActivity() {
     }
 
     /**
-     * PVR: apply a filter to the page with [identity]. The whole read-modify-write of the draft
+     * PVR/B6: apply a filter to the page with [identity]. The whole read-modify-write of the draft
      * and its display state runs as one flight under [pageOps], so a delete cannot remap between
      * the repo write and the choice write. If the page was deleted before this runs, the result
      * is dropped: neither the choice nor a replacement file is written for the neighbour.
@@ -539,8 +539,12 @@ class PageViewerActivity : BaseActivity() {
         lifecycleScope.launch {
             pageOps.withLock {
                 try {
-                    val liveIndex = pageIds.indexOf(identity)
-                    if (liveIndex < 0) return@withLock // deleted meanwhile: drop the stale result
+                    // B6: this was the last queued edit that trusted the mutable UI pageIds list.
+                    // Resolve against a FRESH draft read inside the same gate, after every earlier
+                    // delete: a stale UI index here is exactly how a deleted page's filter used to
+                    // land on the neighbour occupying that slot. -1 drops the result entirely.
+                    val liveIndex = resolveIdentityAfterDeleteLocked(id, identity)
+                    if (liveIndex < 0) return@withLock
                     repo.draftFilter(id, liveIndex, filter)
                     // Still under the lock: no delete can have shifted the page in between.
                     filterChoice[identity] = filter
