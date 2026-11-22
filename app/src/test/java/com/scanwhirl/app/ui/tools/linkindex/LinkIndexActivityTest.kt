@@ -1,7 +1,9 @@
 package com.scanwhirl.app.ui.tools.linkindex
 
+import android.app.Activity
 import android.app.Application
 import android.view.View
+import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.ToolJob
@@ -9,9 +11,11 @@ import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.LinkIndexTrial
+import com.scanwhirl.app.util.ProBilling
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,6 +33,17 @@ import java.io.File
 @Config(sdk = [35])
 class LinkIndexActivityTest {
 
+    /** Play's billing seam: answers one price (or null when offline). */
+    private class PriceGateway(private val answer: String?) : ProBilling.Gateway {
+        override fun setListener(listener: ((ProBilling.Event) -> Unit)?) = Unit
+        override fun connect(onReady: (Boolean) -> Unit) = onReady(true)
+        override fun price(onPrice: (String?) -> Unit) = onPrice(answer)
+        override fun launch(activity: Activity?) = Unit
+        override fun queryPurchases(onResult: (List<ProBilling.Owned>?) -> Unit) = onResult(emptyList())
+        override fun acknowledge(purchase: ProBilling.Owned, onDone: (Boolean) -> Unit) = onDone(true)
+        override fun close() = Unit
+    }
+
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private var controller: ActivityController<LinkIndexActivity>? = null
 
@@ -39,6 +54,7 @@ class LinkIndexActivityTest {
         LinkIndexTrial.resetForTests(app)
         ProGate.setPro(app, false)
         ProGate.setTestOverride(app, null)
+        ProBilling.resetForTests()
         ShadowDialog.reset()
     }
 
@@ -104,5 +120,47 @@ class LinkIndexActivityTest {
         assertEquals(ToolStatus.READY, tool.status)
         assertEquals(ToolJob.TEXT, ToolRegistry.jobOf(tool))
         assertEquals("Link index", app.getString(tool.title))
+    }
+
+    private fun trialMessage(): String {
+        val dialog = ShadowDialog.getLatestDialog()
+        assertNotNull("the trial offer is shown", dialog)
+        return dialog!!.findViewById<TextView>(android.R.id.message)?.text?.toString().orEmpty()
+    }
+
+    @Test(timeout = 30_000)
+    fun `the trial offer substitutes Play localized price`() {
+        LinkIndexTrial.autoAcceptForTests = false
+        ProGate.setPro(app, false)
+        ProGate.setTestOverride(app, false)
+        LinkIndexTrial.resetForTests(app)
+        ProBilling.resetForTests()
+        ProBilling.gatewayFactory = { PriceGateway("₹299") }
+        ProBilling.prefetchPrice(app)
+        shadowOf(app.mainLooper).idle()
+
+        controller = Robolectric.buildActivity(LinkIndexActivity::class.java).setup()
+        shadowOf(app.mainLooper).idle()
+        val message = trialMessage()
+        assertTrue(message.contains("₹299"))
+        assertFalse(message.contains("{"))
+        assertTrue(message.contains("No automatic charge."))
+    }
+
+    @Test(timeout = 30_000)
+    fun `the trial offer omits the price when Play has no answer`() {
+        LinkIndexTrial.autoAcceptForTests = false
+        ProGate.setPro(app, false)
+        ProGate.setTestOverride(app, false)
+        LinkIndexTrial.resetForTests(app)
+        ProBilling.resetForTests()
+        ProBilling.gatewayFactory = { PriceGateway(null) }
+
+        controller = Robolectric.buildActivity(LinkIndexActivity::class.java).setup()
+        shadowOf(app.mainLooper).idle()
+        val message = trialMessage()
+        assertTrue(message.contains("Further uses of this tool need Pro (one payment)."))
+        assertFalse(message.contains("{"))
+        assertFalse(message.contains("%1"))
     }
 }

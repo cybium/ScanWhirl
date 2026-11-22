@@ -36,6 +36,7 @@ import com.scanwhirl.app.util.LinkIndexTrial
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguageSettings
 import com.scanwhirl.app.util.OutputNames
+import com.scanwhirl.app.util.ProBilling
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.PdfVerifier
@@ -124,6 +125,7 @@ class LinkIndexActivity : BaseActivity() {
     private var step = STEP_PICK
     private var busy = false
     private var createdCount = 0
+    private var trialDialog: androidx.appcompat.app.AlertDialog? = null
 
     private val pickPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@registerForActivityResult
@@ -196,6 +198,13 @@ class LinkIndexActivity : BaseActivity() {
         v<View>(R.id.lxCalibrate).setOnClickListener { showCalibrate() }
         v<View>(R.id.lxAddEntry).setOnClickListener { addEntry() }
         v<View>(R.id.lxCreate).setOnClickListener { createLinkedCopy() }
+        v<View>(R.id.lxMoreLimits).setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.lx_limited_short)
+                .setMessage(R.string.lx_limited)
+                .setPositiveButton(R.string.lx_done, null)
+                .show()
+        }
         v<View>(R.id.lxOpen).setOnClickListener {
             newCopy?.let { startActivity(DocumentViewerActivity.intent(this, it.id)) }
         }
@@ -203,20 +212,37 @@ class LinkIndexActivity : BaseActivity() {
         v<View>(R.id.lxDone).setOnClickListener { finish() }
     }
 
+    /** PRO_PLAN item 3: Play's localized price when known, otherwise the no-price copy. */
+    private fun trialMessage(price: String?): String =
+        if (price.isNullOrBlank()) getString(R.string.lx_trial_msg_no_price)
+        else getString(R.string.lx_trial_msg, price)
+
     private fun showTrialOffer() {
-        MaterialAlertDialogBuilder(this)
+        if (trialDialog?.isShowing == true) return
+        val cached = ProBilling.cachedPrice(this)
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.lx_trial_title)
-            .setMessage(R.string.lx_trial_msg)
-            .setPositiveButton(R.string.lx_try_free) { dialog, _ ->
-                dialog.dismiss()
+            .setMessage(trialMessage(cached))
+            .setPositiveButton(R.string.lx_try_free) { d, _ ->
+                d.dismiss()
                 applyStep(STEP_PICK)
             }
-            .setNegativeButton(R.string.lx_not_now) { dialog, _ ->
-                dialog.dismiss()
+            .setNegativeButton(R.string.lx_not_now) { d, _ ->
+                d.dismiss()
                 finish()
             }
             .setCancelable(false)
             .show()
+        trialDialog = dialog
+        if (cached.isNullOrBlank()) {
+            // Offline / Play has not answered yet: show the honest no-price copy now
+            // and fill in the real price if Play answers while the sheet is still up.
+            ProBilling.price(this) { fresh ->
+                if (!fresh.isNullOrBlank() && dialog.isShowing && !isFinishing) {
+                    dialog.findViewById<TextView>(android.R.id.message)?.text = trialMessage(fresh)
+                }
+            }
+        }
     }
 
     private fun applyStep(next: Int) {
@@ -234,6 +260,7 @@ class LinkIndexActivity : BaseActivity() {
                     v<EditText>(R.id.lxCopyName).setText(OutputNames.forNewCopy(current, taken))
                 }
                 buildPageStrip()
+                renderPageCount()
                 renderOffset()
                 renderRows()
             }
@@ -247,6 +274,10 @@ class LinkIndexActivity : BaseActivity() {
             }
         }
     }
+
+    /** Test seam: lay out the proposal screen without an OCR pass (100%-font fit checks). */
+    @androidx.annotation.VisibleForTesting
+    internal fun showSetForTests() = applyStep(STEP_SET)
 
     private fun showDocumentPicker() {
         val all = runCatching { repo.listDocuments() }.getOrDefault(emptyList())
@@ -322,6 +353,7 @@ class LinkIndexActivity : BaseActivity() {
                 val on = indexPages.add(index)
                 if (!on) indexPages.remove(index)
                 item.findViewById<CheckBox>(R.id.lxPageCheck).isChecked = on
+                renderPageCount()
                 if (indexPages.isNotEmpty()) refreshDetection() else {
                     rows.clear()
                     renderRows()
@@ -375,6 +407,12 @@ class LinkIndexActivity : BaseActivity() {
         offset = (offset + delta).coerceIn(-100, 100)
         renderOffset()
         renderRows()
+    }
+
+    private fun renderPageCount() {
+        val count = indexPages.size
+        v<TextView>(R.id.lxPagesSelected).text =
+            resources.getQuantityString(R.plurals.lx_pages_selected, count, count)
     }
 
     private fun renderOffset() {
@@ -558,8 +596,9 @@ class LinkIndexActivity : BaseActivity() {
                 createdCount = chosen.size
                 v<TextView>(R.id.lxSkipped).isVisible = chosen.size < rows.size
                 if (chosen.size < rows.size) {
+                    val skipped = rows.size - chosen.size
                     v<TextView>(R.id.lxSkipped).text =
-                        getString(R.string.lx_skipped, rows.size - chosen.size)
+                        resources.getQuantityString(R.plurals.lx_skipped, skipped, skipped)
                 }
                 progress(false)
                 busy = false
