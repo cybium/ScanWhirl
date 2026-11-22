@@ -24,6 +24,7 @@
     <string name="cc_outcome_resized">आकार बदला · %1$s</string>
     <string name="cc_outcome_compressed">छोटा किया · %1$s</string>
     <string name="cc_outcome_saved">सहेजा गया · %1$s</string>
+    <string name="cc_outcome_unknown">परिणाम</string>
     <string name="cc_compress_smaller">%1$s → %2$s · %3$d%% छोटा</string>
     <string name="cc_compress_larger">%1$s → %2$s · %3$d%% बड़ा</string>
     <string name="cc_compress_same">%1$s → %2$s · आकार जैसा ही</string>

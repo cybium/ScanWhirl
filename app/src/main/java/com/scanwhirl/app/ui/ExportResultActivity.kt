@@ -126,9 +126,14 @@ class ExportResultActivity : BaseActivity() {
             .joinToString(" · ")
             .ifBlank { getString(R.string.cc_no_numbers) }
 
+        // Never print "Resized · " with an empty value: an unmeasured file just says "Result".
+        val fallbackOutcome = when {
+            afterSize == null -> getString(R.string.cc_outcome_unknown)
+            w > 0 && h > 0 -> getString(R.string.cc_outcome_resized, afterSize)
+            else -> getString(R.string.cc_outcome_saved, afterSize)
+        }
         val outcome = intent.getStringExtra(EXTRA_OUTCOME)?.takeIf { it.isNotBlank() }
-            ?: if (w > 0 && h > 0) getString(R.string.cc_outcome_resized, afterSize.orEmpty())
-            else getString(R.string.cc_outcome_saved, afterSize.orEmpty())
+            ?: fallbackOutcome
 
         binding.ccCompare.bind(
             CompareModel(

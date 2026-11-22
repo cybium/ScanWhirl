@@ -122,6 +122,33 @@ abstract class ExportResultCompareBase {
     }
 
     @Test
+    fun `an unmeasured export never prints an empty Resized outcome`() {
+        val file = jpeg("unknown", 100, 140)
+        ActivityScenario.launch<ExportResultActivity>(
+            ExportResultActivity.intent(
+                app,
+                outputPath = file.path,
+                previewPath = file.path,
+                mime = "image/jpeg",
+                displayName = file.name,
+                beforeBytes = 0L,
+                afterBytes = 0L,
+                width = 0,
+                height = 0,
+                title = file.name,
+                warning = null
+            )
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val outcome = compareView(activity).outcomeText()
+                assertEquals(app.getString(R.string.cc_outcome_unknown), outcome)
+                assertFalse("no dangling separator: $outcome", outcome.trim().endsWith("·"))
+            }
+        }
+    }
+
+    @Test
     fun `no white page host on the export result`() {
         val after = jpeg("after", 900, 1200)
         ActivityScenario.launch<ExportResultActivity>(intent(null, after)).use { scenario ->
