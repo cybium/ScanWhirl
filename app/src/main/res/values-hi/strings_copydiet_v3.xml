@@ -7,8 +7,8 @@
     <string name="v3_save_copy">Documents में प्रति सहेजें</string>
     <string name="v3_set_category">श्रेणी चुनें</string>
     <string name="v3_organize">व्यवस्थित करें</string>
-    <string name="v3_ocr">लिखावट पढ़ें</string>
-    <string name="v3_ocr_a11y">लिखावट पढ़ें, OCR</string>
+    <string name="v3_ocr">OCR</string>
+    <string name="v3_ocr_a11y">OCR, लिखावट पढ़ें</string>
     <string name="v3_find_more">और</string>
     <string name="v3_find_more_a11y">खोज के बारे में और</string>
     <string name="v3_reader_find_note_more">मिलान पहचानी गई लिखावट से आते हैं। पन्ने की तस्वीर पर निशान नहीं लगता।</string>

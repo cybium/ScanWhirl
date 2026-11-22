@@ -267,8 +267,8 @@ class DocumentViewerReaderUiTest {
                 activity.getString(R.string.share_pdf)
             )
             assertEquals(
-                "the dock cell is the decided OCR name in Hindi",
-                "लिखावट पढ़ें",
+                "the dock cell is the decided OCR name in Hindi (OCR stays Latin per glossary)",
+                "OCR",
                 activity.getString(R.string.v3_ocr)
             )
             assertEquals(
