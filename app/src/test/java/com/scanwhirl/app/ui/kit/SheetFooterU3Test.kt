@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.kit
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.view.LayoutInflater
 import android.view.View
@@ -32,6 +34,8 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SheetFooterU3Test {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private fun withActivity(lang: String = "en", scale: Float = 2f, block: (AppCompatActivity) -> Unit) {
         RuntimeEnvironment.setQualifiers("$lang-w360dp-h800dp-xhdpi")
         RuntimeEnvironment.setFontScale(scale)
@@ -250,17 +254,20 @@ class SheetFooterU3Test {
                     val primary = root.findViewById<TextView>(R.id.swSheetPrimary)
                     assertNotNull("Compress glyph", primary.compoundDrawablesRelative[0])
                     assertNull(primary.contentDescription)
+                    // SH2: OLD = measured both swSheetPrimary and swSheetSecondary (a duplicate
+                    // Cancel). NEW = the compress sheet is non-destructive: measure only the
+                    // pinned primary and require the secondary to be hidden.
+                    assertTrue("no duplicate Cancel footer on the compress sheet",
+                        root.findViewById<View>(R.id.swSheetSecondary).visibility == View.GONE)
                     for (width in listOf(360, 411)) for (height in listOf(752, 420)) {
                         layout(root, width, height)
-                        for (buttonId in listOf(R.id.swSheetPrimary, R.id.swSheetSecondary)) {
-                            val button = root.findViewById<TextView>(buttonId)
-                            val rect = android.graphics.Rect()
-                            button.getDrawingRect(rect)
-                            root.offsetDescendantRectToMyCoords(button, rect)
-                            assertTrue("real action fully inside window", rect.bottom <= root.height - root.paddingBottom)
-                            assertTrue("real label fits", button.layout.height <=
-                                button.height - button.compoundPaddingTop - button.compoundPaddingBottom)
-                        }
+                        val button = root.findViewById<TextView>(R.id.swSheetPrimary)
+                        val rect = android.graphics.Rect()
+                        button.getDrawingRect(rect)
+                        root.offsetDescendantRectToMyCoords(button, rect)
+                        assertTrue("real action fully inside window", rect.bottom <= root.height - root.paddingBottom)
+                        assertTrue("real label fits", button.layout.height <=
+                            button.height - button.compoundPaddingTop - button.compoundPaddingBottom)
                     }
                     // Same native Canvas technique as ScreenAtlasTest, with only fictional fixtures.
                     // Store encoded PNGs in the JUnit XML artifact so cloud gates can return evidence.

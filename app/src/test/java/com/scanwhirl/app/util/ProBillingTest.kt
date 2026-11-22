@@ -290,7 +290,8 @@ class ProBillingTest {
         assertEquals("a product the store does not have never opens the sheet", 0, gateway.launches)
         assertTrue("the UI hears about the missing product", state is ProBilling.State.Failed)
         assertEquals(
-            "The Pro product is not available yet.",
+            // OLD: "The Pro product is not available yet." (COPY_DIET PRO2 product failure)
+            "Pro unavailable in Google Play",
             (state as ProBilling.State.Failed).message
         )
     }

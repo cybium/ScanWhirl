@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -41,6 +43,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class V2VaultShareTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var root: File
     private lateinit var dir: File

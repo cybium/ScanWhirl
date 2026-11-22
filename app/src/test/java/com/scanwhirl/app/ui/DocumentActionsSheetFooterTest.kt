@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -26,17 +28,17 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * W1 add-on (fresh atlas, `007_actions_sheet_2.0.png`): the Actions sheet is taller than the
- * phone at 200 % type, so it scrolls above its fixed Close row. The LAST row ("Move to Trash")
- * must be reachable: scrolled to the end, its bottom sits above the Close row's top, nothing of
- * it is clipped, and the Close row is never covered. Same at 100 %, on 360 dp and 320 dp phones,
- * in English and Hindi.
+ * V3: the Actions sheet has no Close text row — only the X in its header. It is still taller
+ * than the phone at 200 % type, so it scrolls; the LAST row ("Move to Trash") must be reachable
+ * and fully inside the scroll viewport at the end, with the X still present. Same at 100 %, on
+ * 360 dp and 320 dp phones, in English and Hindi.
  *
- * Red first: the sheet's scroll area ended flush under the footer, so the last row could never be
- * brought fully above the Close row.
+ * Red first: the sheet carried a Close footer and used it as the scroll boundary.
  */
 abstract class DocumentActionsSheetFooterBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
 
@@ -169,26 +171,24 @@ abstract class DocumentActionsSheetFooterBase {
     // ------------------------------------------------------------------ 1. the last row
 
     @Test
-    fun `scrolled to the end the last row is fully above the Close row at 100 percent`() =
-        lastRowAboveFooter(1.0f)
+    fun `scrolled to the end the last row is fully inside the viewport at 100 percent`() =
+        lastRowInsideViewport(1.0f)
 
     @Test
-    fun `scrolled to the end the last row is fully above the Close row at 200 percent`() =
-        lastRowAboveFooter(2.0f)
+    fun `scrolled to the end the last row is fully inside the viewport at 200 percent`() =
+        lastRowInsideViewport(2.0f)
 
-    private fun lastRowAboveFooter(scale: Float) {
+    private fun lastRowInsideViewport(scale: Float) {
         openSheetAt(scale) { dialog, root ->
             val list = rows(root)
             val scroll = scrollOf(root)
             assertTrue("the sheet has rows", list.childCount >= 2)
-            val footer = requireNotNull(dialog.findViewById<View>(R.id.swSheetSecondary)) {
-                "the sheet has its Close row"
-            }
             assertEquals(
-                "the footer is the sheet's own Close",
-                app.getString(R.string.sheet_close),
-                (footer as TextView).text.toString()
+                "the Close text row is removed; the X is the only dismissal",
+                View.GONE,
+                dialog.findViewById<View>(R.id.swSheetSecondary).visibility
             )
+            assertNotNull("the header still has its X", dialog.findViewById<View>(R.id.swSheetClose))
 
             // Scroll all the way down, as a person does.
             scroll.scrollTo(0, maxScroll(scroll))
@@ -203,7 +203,7 @@ abstract class DocumentActionsSheetFooterBase {
             val rowBottom = onScreenBottom(last, scroll)
             val scrollBottom = absTop(scroll) + scroll.height
             assertTrue(
-                "the last row is laid out (bottom ${rowBottom}px, footer top ${absTop(footer)}px)",
+                "the last row is laid out (bottom ${rowBottom}px)",
                 last.height > 0
             )
             assertTrue(
@@ -216,18 +216,14 @@ abstract class DocumentActionsSheetFooterBase {
                 rowBottom <= scrollBottom
             )
             assertTrue(
-                "the last row keeps the content's own bottom inset above the Close row at " +
-                    "${scale}x (row bottom ${rowBottom}px, footer top ${absTop(footer)}px)",
-                rowBottom + px(12f) <= absTop(footer)
+                "the last row keeps the content's own bottom inset at ${scale}x " +
+                    "(row bottom ${rowBottom}px, scroll bottom ${scrollBottom}px)",
+                rowBottom + px(12f) <= scrollBottom
             )
             assertTrue(
                 "the last row is fully inside the sheet (row bottom ${rowBottom}px, " +
                     "sheet ${root.height}px)",
                 rowBottom <= root.height
-            )
-            assertTrue(
-                "the Close row is not covered by the scroll",
-                absTop(footer) >= scrollBottom - px(1f)
             )
             // TalkBack: the row keeps its spoken name with the reason-free Trash row.
             val visible = last.isShown
@@ -244,7 +240,11 @@ abstract class DocumentActionsSheetFooterBase {
         openSheetAt(2.0f) { dialog, root ->
             val list = rows(root)
             val scroll = scrollOf(root)
-            val footer = requireNotNull(dialog.findViewById<View>(R.id.swSheetSecondary))
+            assertEquals(
+                "the Close text row is removed; the X is the only dismissal",
+                View.GONE,
+                dialog.findViewById<View>(R.id.swSheetSecondary).visibility
+            )
             // Walk down in viewport-sized steps, as a person swipes, and remember what was fully
             // inside the viewport at least once.
             val seen = linkedSetOf<View>()
@@ -271,9 +271,9 @@ abstract class DocumentActionsSheetFooterBase {
                 total,
                 seen.size
             )
-            assertTrue(
-                "the Close row stays inside the sheet after scrolling",
-                absBottom(footer) <= root.height
+            assertNotNull(
+                "the X stays in the header after scrolling",
+                dialog.findViewById<View>(R.id.swSheetClose)
             )
         }
     }

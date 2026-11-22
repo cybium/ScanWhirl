@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -39,6 +41,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class ShellScreenTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -233,7 +237,7 @@ class ShellScreenTest {
             // UI-B5: the row's overflow is the shared named Actions sheet, bound to this
             // row, not the old "Open / Share / Move to Trash" sheet it replaced.
             assertEquals(
-                activity.getString(R.string.doc_actions),
+                activity.getString(R.string.v3_actions_title),
                 dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
             )
             val header = dialog.window?.decorView?.findViewWithTag<TextView>("docActions:name")

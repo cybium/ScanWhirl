@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -43,6 +45,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class T2IdCardCropRaceTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
@@ -75,6 +79,8 @@ class T2IdCardCropRaceTest {
     }
 
     class DeniedProvider : android.content.ContentProvider() {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         @Volatile
         var deny = false
         var photo: File? = null

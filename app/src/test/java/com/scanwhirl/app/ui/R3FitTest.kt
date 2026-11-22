@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.Rect
@@ -31,6 +33,8 @@ import org.robolectric.shadows.ShadowDialog
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class R3FitTest(private val language: String, private val widthDp: Int, private val scale: Float) {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}, {1}dp, font {2}")
@@ -77,19 +81,30 @@ class R3FitTest(private val language: String, private val widthDp: Int, private 
                         }
                     }
                     val primary = root.findViewById<View>(R.id.swSheetPrimary)
-                    val cancel = root.findViewById<View>(R.id.swSheetSecondary)
+                    // SH2: the compress sheet is non-destructive; the X is the only dismissal.
+                    // OLD: the hidden swSheetSecondary was measured as a reachable Cancel.
+                    // NEW: require it hidden and measure the X instead.
+                    assertEquals(
+                        "no duplicate Cancel footer",
+                        View.GONE,
+                        root.findViewById<View>(R.id.swSheetSecondary).visibility
+                    )
                     val close = root.findViewById<View>(R.id.swSheetClose)
                     val quality = root.findViewById<View>(R.id.compressModeQuality)
                     val target = root.findViewById<View>(R.id.compressModeTarget)
                     layout(root, 600)
-                    listOf(primary, cancel, close, quality, target).forEach { assertReachable(root, it) }
+                    listOf(primary, close, quality, target).forEach { assertReachable(root, it) }
                     (0 until levels.childCount).forEach { assertReachable(root, levels.getChildAt(it)) }
 
                     target.performClick()
                     layout(root, 600)
                     assertReachable(root, root.findViewById(R.id.editCompressTarget))
                     assertReachable(root, primary)
-                    assertReachable(root, cancel)
+                    assertEquals(
+                        "no duplicate Cancel footer after choosing the size aim",
+                        View.GONE,
+                        root.findViewById<View>(R.id.swSheetSecondary).visibility
+                    )
                 } finally {
                     dialog.dismiss()
                 }

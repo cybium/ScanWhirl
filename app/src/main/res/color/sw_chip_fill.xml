@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SH2: the KB chips keep the same outlined shape in both states; a checked chip
+     gains a faint cyan fill and a cyan outline instead of losing its box. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/cyan_pressed_fill" android:state_checked="true" />
+    <item android:color="@android:color/transparent" />
+</selector>

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l3
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -33,6 +35,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class L3_02_ProducerThreadProbeTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var threads: MutableList<Thread>

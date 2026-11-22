@@ -1,4 +1,6 @@
 package com.scanwhirl.app.v2v
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.view.View
@@ -30,6 +32,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class V2vActionsSheetRowsTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo get() = ScanRepository(app)
 

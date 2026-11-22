@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.pm.ProviderInfo
@@ -43,11 +45,11 @@ import org.robolectric.shadows.ShadowToast
 import java.io.File
 
 /**
- * UI-B6 (GPT judgement 2026-11-19b, item 1 — "Make Document the workspace"): the saved
- * document screen is a workspace with SEVEN labelled actions — Edit / crop (the only filled
- * cyan button), Read text, Share, Compress, Sign (+ a gold "Pro" word in Free), Save PDF and
- * More — laid out 4 + 3 on a 360 dp phone, 3 + 3 + 1 on a 320 dp phone, and as growing
- * two-column cards inside the scroll flow ABOVE the pages once type reaches 160 %.
+ * V3 (screenshot critique runs 5-6): the saved document screen keeps ONE compact dock row of
+ * FOUR labelled actions — Edit &amp; crop (the only filled cyan button), OCR, Share and Actions —
+ * laid out as one row at normal type and as growing two-column cards inside the scroll flow
+ * ABOVE the pages once type reaches 160 %. Compress, Sign and "Save copy to Documents" live in
+ * the Actions sheet; their ids and guarded handlers stay in a GONE container for routing tests.
  *
  * Every action is bound to the SHOWN document (not "the latest one"): the routing is proven
  * with two near-identical documents and the existing guarded handlers — CompressFlow.startWith,
@@ -59,14 +61,21 @@ import java.io.File
  */
 abstract class DocumentWorkspaceBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore
 
-    /** The seven action buttons, in the panel's reading order. */
+    /** All seven handlers keep their ids and listeners (three are GONE in V3). */
     private val actionIds = listOf(
         R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnCompress,
         R.id.btnSign, R.id.btnSavePdf, R.id.btnMore
+    )
+
+    /** V3: only these four are in the visible one-row dock. */
+    private val visibleDockIds = listOf(
+        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore
     )
 
     @Before
@@ -280,29 +289,29 @@ abstract class DocumentWorkspaceBase {
     /** The panel's spoken/visible description of edit: what the user sees. */
     private fun expectedLabel(activity: DocumentViewerActivity, id: Int): String = when (id) {
         R.id.btnEdit -> activity.getString(R.string.doc_action_edit_crop)
-        R.id.btnText -> activity.getString(R.string.dock_read_text)
+        R.id.btnText -> activity.getString(R.string.v3_ocr)
         R.id.btnShare -> activity.getString(R.string.share_pdf)
         R.id.btnCompress -> activity.getString(R.string.tool_compress)
         R.id.btnSign -> activity.getString(R.string.tool_sign)
-        R.id.btnSavePdf -> activity.getString(R.string.doc_action_save_pdf)
-        else -> activity.getString(R.string.more)
+        R.id.btnSavePdf -> activity.getString(R.string.v3_save_copy)
+        else -> activity.getString(R.string.doc_actions)
     }
 
     /** What TalkBack reads on each action (this rig is Pro, so Sign carries no Pro suffix). */
     private fun expectedDescription(activity: DocumentViewerActivity, id: Int): String = when (id) {
         R.id.btnEdit -> activity.getString(R.string.doc_action_edit_crop)
-        R.id.btnText -> activity.getString(R.string.dock_read_text)
+        R.id.btnText -> activity.getString(R.string.v3_ocr)
         R.id.btnShare -> activity.getString(R.string.share_pdf)
         R.id.btnCompress -> activity.getString(R.string.tool_compress)
         R.id.btnSign -> activity.getString(R.string.tool_sign)
         R.id.btnSavePdf -> activity.getString(R.string.save_pdf_device)
-        else -> activity.getString(R.string.doc_action_more_desc)
+        else -> activity.getString(R.string.v3_actions_title)
     }
 
     // ------------------------------------------------------------------ 1. the panel
 
     @Test
-    fun `seven labelled actions at every font scale, none clipped`() {
+    fun `four labelled actions at every font scale, none clipped`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Rent receipt")
         for (scale in floatArrayOf(1.0f, 1.3f, 2.0f)) {
             open(id, scale) { activity, _ ->
@@ -315,7 +324,7 @@ abstract class DocumentWorkspaceBase {
                 val screenH = px(activity.resources.configuration.screenHeightDp.toFloat())
                 val navBar = px(48f)
                 val scrolls = inScrollChain(panel)
-                for (actionId in actionIds) {
+                for (actionId in visibleDockIds) {
                     val b = buttonOf(activity, actionId)
                     val label = expectedLabel(activity, actionId)
                     assertTrue(
@@ -407,7 +416,7 @@ abstract class DocumentWorkspaceBase {
         open(id) { activity, _ ->
             val cyan = activity.getColor(R.color.cyan_primary)
             val raised = activity.getColor(R.color.glass_surface_raised)
-            for (actionId in actionIds) {
+            for (actionId in visibleDockIds) {
                 val b = buttonOf(activity, actionId)
                 val tint = b.backgroundTintList?.defaultColor
                 if (actionId == R.id.btnEdit) {
@@ -422,7 +431,7 @@ abstract class DocumentWorkspaceBase {
                 }
             }
             // Contrast of the label ink against its own fill (WCAG 4.5:1 for small text).
-            for (actionId in actionIds) {
+            for (actionId in visibleDockIds) {
                 val b = buttonOf(activity, actionId)
                 val fill = b.backgroundTintList?.defaultColor ?: Color.TRANSPARENT
                 val ratio = contrast(b.currentTextColor, fill)
@@ -433,41 +442,37 @@ abstract class DocumentWorkspaceBase {
                 )
             }
             assertEquals(
-                "the panel names itself",
-                activity.getString(R.string.doc_actions_header),
-                activity.findViewById<TextView>(R.id.actionPanelTitle).text.toString()
+                "the dock no longer prints a heading",
+                View.GONE,
+                activity.findViewById<View>(R.id.actionPanelTitle).visibility
             )
             assertEquals(
-                "the panel says where Save PDF puts the copy",
-                activity.getString(R.string.doc_action_save_hint),
-                activity.findViewById<TextView>(R.id.actionPanelHint).text.toString()
+                "the dock no longer prints a save explanation",
+                View.GONE,
+                activity.findViewById<View>(R.id.actionPanelHint).visibility
             )
         }
     }
 
     @Test
-    fun `at 100 percent the actions are a full row then a shorter one`() {
+    fun `at 100 percent the actions are one compact row of four`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Rent receipt")
         open(id) { activity, _ ->
             val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
             val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
-            val expectedColumns = if (screenWidthDp >= 360) 4 else 3
-            val expectedRows = (0 until actionIds.size)
-                .chunked(expectedColumns)
-                .map { it.size }
             assertEquals(
-                "the panel reads $expectedColumns + the rest at ${screenWidthDp}dp",
-                expectedRows,
+                "the dock is one row at ${screenWidthDp}dp",
+                listOf(4),
                 rows.map { it.childCount }
             )
             assertEquals(
-                "seven actions fill the rows",
-                actionIds.size,
+                "four actions fill the row",
+                visibleDockIds.size,
                 rows.sumOf { it.childCount }
             )
             assertEquals(
-                "the reading order is unchanged by the wrap",
-                actionIds,
+                "the reading order is Edit & crop, OCR, Share, Actions",
+                visibleDockIds,
                 rows.flatMap { row -> (0 until row.childCount).map { row.getChildAt(it).id } }
             )
         }
@@ -492,12 +497,7 @@ abstract class DocumentWorkspaceBase {
 
             val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
             val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
-            assertEquals("two columns at 200 %", listOf(2, 2, 2, 1), rows.map { it.childCount })
-            assertEquals(
-                "the last action keeps the full width rather than stretching one column",
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                rows.last().getChildAt(0).layoutParams.width
-            )
+            assertEquals("two columns at 200 %", listOf(2, 2), rows.map { it.childCount })
             for (row in rows) {
                 for (i in 0 until row.childCount) {
                     val b = row.getChildAt(i) as MaterialButton
@@ -767,9 +767,9 @@ abstract class DocumentWorkspaceBase {
                 toolbar.menu.size()
             )
             assertEquals(
-                "Save PDF is the panel's labelled button",
-                activity.getString(R.string.doc_action_save_pdf),
-                buttonOf(activity, R.id.btnSavePdf).text.toString()
+                "the named export lives in the sheet, not a visible dock button",
+                View.GONE,
+                activity.findViewById<View>(R.id.hiddenDockActions).visibility
             )
             activity.findViewById<View>(R.id.btnSavePdf).performClick()
             assertTrue(

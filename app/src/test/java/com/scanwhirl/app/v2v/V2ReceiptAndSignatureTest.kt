@@ -1,4 +1,6 @@
 package com.scanwhirl.app.v2v
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -35,6 +37,8 @@ import java.io.File
 @Config(sdk = [35])
 class V2ReceiptAndSignatureTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo get() = ScanRepository(app)
 
@@ -60,7 +64,7 @@ class V2ReceiptAndSignatureTest {
             val message = sheet.findViewById<TextView>(R.id.swSheetMessage).text.toString()
             assertTrue("receipt must name the new copy: $message", message.contains(copy.name))
             assertTrue("receipt must state the original still has the information: $message",
-                message.contains("The original still contains this information"))
+                message.contains(app.getString(R.string.cdf1_redact_receipt_body, copy.name)))
             assertFalse("the screen must stay open behind the receipt", screen.isFinishing)
             val labels = (sheet.window?.decorView
                 ?: sheet.findViewById<View>(android.R.id.content)).texts()
@@ -117,9 +121,9 @@ class V2ReceiptAndSignatureTest {
 
     @Test(timeout = 30_000)
     fun `signature wording says all pages everywhere`() {
-        val en = java.io.File("src/main/res/values/strings_v2v.xml").readText(Charsets.UTF_8)
+        val en = java.io.File("src/main/res/values/strings_copydiet_fx1.xml").readText(Charsets.UTF_8)
         assertTrue("EN must say all pages",
-            en.contains("<string name=\"v2v_apply_signature\">Apply signature to all pages</string>"))
+            en.contains("<string name=\"cdf1_apply_signature\">Sign all pages</string>"))
         assertFalse("EN must not claim selected pages", en.contains("selected pages"))
         val id = DocFixtures.saved(repo, app, pages = 2)
         val controller = controller(id)
@@ -129,7 +133,7 @@ class V2ReceiptAndSignatureTest {
                 screen.resources.getIdentifier("v2vApplySignature", "id", screen.packageName))
             assertNotNull("the all-pages signature tile must exist", tile)
             assertEquals("the tile's spoken name must say all pages",
-                app.getString(R.string.v2v_apply_signature), tile!!.contentDescription?.toString())
+                app.getString(R.string.cdf1_apply_signature), tile!!.contentDescription?.toString())
         } finally {
             controller.destroy()
         }

@@ -3889,7 +3889,7 @@ class ScanRepository(private val context: Context) {
             emptyMap()
         }
         val layered = if (pages.isNotEmpty()) {
-            writePdfInto(dir, pdfFile, geo)
+            writePdfInto(dir, pdfFile, geo, forceLayers)
         } else false
         updateTextLayerFlag(dir, layered, geo)
     }
@@ -3962,15 +3962,22 @@ class ScanRepository(private val context: Context) {
 
     /**
      * Writes [out] from [dir]'s page files, with an invisible text layer built from the OCR
-     * geometry in [geo] when `Prefs.makeSearchable` is on. Returns true when at least one page
-     * received a layer. Atomic via `.tmp` + rename inside the generator.
+     * geometry in [geo] when `Prefs.makeSearchable` is on, or when [forceLayers] is set for an
+     * explicit operation (FF-O3 "OCR PDF" / "Make searchable") that must work independently of
+     * the automatic-searchable preference. Returns true when at least one page received a layer.
+     * Atomic via `.tmp` + rename inside the generator.
      */
-    private fun writePdfInto(dir: File, out: File, geo: Map<String, OcrPage>): Boolean = synchronized(PDF_LOCK) {
+    private fun writePdfInto(
+        dir: File,
+        out: File,
+        geo: Map<String, OcrPage>,
+        forceLayers: Boolean = false
+    ): Boolean = synchronized(PDF_LOCK) {
         val pages = pageFilesIn(dir)
         if (pages.isEmpty()) {
             false
         } else {
-            val textLayers = if (Prefs.makeSearchable(context)) {
+            val textLayers = if (forceLayers || Prefs.makeSearchable(context)) {
                 pages.indices.filter {
                     geo.containsKey(String.format(Locale.ROOT, "page_%03d.jpg", it))
                 }

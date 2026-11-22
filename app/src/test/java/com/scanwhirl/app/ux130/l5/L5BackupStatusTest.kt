@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l5
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -39,6 +41,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class L5BackupStatusTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private var controller: ActivityController<BackupActivity>? = null
     private val password = "correct horse battery"

@@ -22,6 +22,24 @@ object PdfGenerator {
 
     data class JpegInfo(val width: Int, val height: Int, val components: Int)
 
+    /** An OCR line box in page pixels, top-left origin. */
+    data class PdfLinkRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+    /**
+     * LX: one clickable title. [pageIndex] is the page holding the visible title,
+     * [targetPage] the 0-based page its /Dest jumps to, [rect] its OCR box in pixels.
+     * [title] becomes the bookmark /Title (encoded as UTF-16BE, so Devanagari survives).
+     */
+    data class PdfLink(
+        val pageIndex: Int,
+        val title: String,
+        val targetPage: Int,
+        val rect: PdfLinkRect
+    )
+
+    private const val MAX_LINKS = 2000
+    private const val MAX_TITLE_CHARS = 300
+
     fun readJpegInfo(bytes: ByteArray): JpegInfo {
         require(bytes.size > 4 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) {
             "Not a JPEG file"
@@ -67,6 +85,11 @@ object PdfGenerator {
      * and the trailer gains the `/Encrypt` dictionary and `/ID`. The verifier gets the same key, so
      * the page bytes are still compared before the file is published.
      *
+     * LX: when [links] is non-empty the writer also emits a flat `/Outlines` tree and one
+     * `/Subtype /Link` annotation per entry (with a `/Dest [page /Fit]`). Strings inside an
+     * encrypted PDF would have to be encoded with the object key, which this writer does not do,
+     * so links are refused for encrypted / PDF-A output. With no links the bytes are unchanged.
+     *
      * @throws java.io.IOException (incl. [Durable.SyncException], [PdfVerifier.InvalidPdfException])
      *   when the PDF cannot be written, synced or verified.
      */
@@ -75,11 +98,21 @@ object PdfGenerator {
         outFile: File,
         textLayers: Map<Int, OcrPage> = emptyMap(),
         encryption: PdfAes.Encryption? = null,
-        pdfa: PdfA.Mode? = null
+        pdfa: PdfA.Mode? = null,
+        links: List<PdfLink> = emptyList()
     ): Set<Int> {
         require(images.isNotEmpty()) { "No images to convert" }
         require(pdfa == null || encryption == null) {
             "A PDF/A copy is never password-protected"
+        }
+        require(links.isEmpty() || (encryption == null && pdfa == null)) {
+            "Links need an ordinary, unprotected PDF"
+        }
+        require(links.size <= MAX_LINKS) { "Too many links" }
+        links.forEach { link ->
+            require(link.pageIndex in images.indices) { "Link source page outside the document" }
+            require(link.targetPage in images.indices) { "Link target page outside the document" }
+            require(link.title.isNotBlank()) { "A link has no title" }
         }
 
         // A3: the only plaintext PDF writer never writes scan.pdf beside a lock (I3).
@@ -115,10 +148,24 @@ object PdfGenerator {
                 val pageBase = if (pdfa == null) 3 else 7
                 val kids = (0 until images.size).joinToString(" ") { "${pageBase + it * 3} 0 R" }
 
-                val offsets = LongArray(pageBase + images.size * 3) // 1-based object numbers (index 0 unused)
+                // LX: one outline root, one item and one link annotation per entry, appended
+                // AFTER the page objects so every existing object number stays the same.
+                val linkCount = links.size
+                val outlineRoot = if (linkCount == 0) -1 else pageBase + images.size * 3
+                val firstOutline = outlineRoot + 1
+                val firstAnnot = firstOutline + linkCount
+                val total = pageBase + images.size * 3 - 1 + if (linkCount == 0) 0 else 1 + linkCount * 2
+                val offsets = LongArray(total + 1) // 1-based object numbers (index 0 unused)
+                val linksByPage = links.groupBy { it.pageIndex }
+                val annotNumbers = java.util.IdentityHashMap<PdfLink, Int>().apply {
+                    links.forEachIndexed { i, link -> put(link, firstAnnot + i) }
+                }
+                val pagePixels = arrayOfNulls<Pair<Int, Int>>(images.size)
+                val pagePoints = arrayOfNulls<Pair<Int, Int>>(images.size)
 
                 offsets[1] = position
-                val catalogExtra = if (pdfa == null) "" else " /Metadata 5 0 R /OutputIntents [4 0 R]"
+                val catalogExtra = (if (pdfa == null) "" else " /Metadata 5 0 R /OutputIntents [4 0 R]") +
+                    (if (linkCount == 0) "" else " /Outlines $outlineRoot 0 R")
                 w("1 0 obj\n<< /Type /Catalog /Pages 2 0 R$catalogExtra >>\nendobj\n")
 
                 offsets[2] = position
@@ -156,6 +203,8 @@ object PdfGenerator {
                     }
                     val pageW = (info.width * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
                     val pageH = (info.height * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
+                    pagePixels[i] = info.width to info.height
+                    pagePoints[i] = pageW to pageH
                     val pageObj = pageBase + i * 3
                     val contentObj = pageBase + 1 + i * 3
                     val imageObj = pageBase + 2 + i * 3
@@ -185,7 +234,13 @@ object PdfGenerator {
                     } else {
                         "/Resources << /XObject << /Im$i $imageObj 0 R >> >>"
                     }
-                    w("$pageObj 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 $pageW $pageH] $resources /Contents $contentObj 0 R >>\nendobj\n")
+                    // LX: /Annots is appended last so the existing dictionary bytes (and the
+                    // verifier's /XObject and /Contents regexes) stay identical when there are none.
+                    val annots = if (linkCount == 0) "" else
+                        linksByPage[i]?.joinToString(" ", prefix = " /Annots [", postfix = "]") { link ->
+                            "${annotNumbers[link]} 0 R"
+                        } ?: ""
+                    w("$pageObj 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 $pageW $pageH] $resources /Contents $contentObj 0 R$annots >>\nendobj\n")
 
                     val content = buildString {
                         append("q\n$pageW 0 0 $pageH 0 0 cm\n/Im$i Do\nQ\n")
@@ -212,8 +267,40 @@ object PdfGenerator {
                     w("\nendstream\nendobj\n")
                 }
 
+                // LX: flat outline tree + one invisible GoTo link per entry. These objects
+                // are written after all page objects, so earlier xref offsets never move.
+                if (linkCount > 0) {
+                    offsets[outlineRoot] = position
+                    w("$outlineRoot 0 obj\n<< /Type /Outlines /First $firstOutline 0 R " +
+                        "/Last ${firstOutline + linkCount - 1} 0 R /Count $linkCount >>\nendobj\n")
+                    links.forEachIndexed { index, link ->
+                        val num = firstOutline + index
+                        offsets[num] = position
+                        val title = PdfTextLayer.actualTextHex(link.title.take(MAX_TITLE_CHARS)) ?: "<FEFF>"
+                        val prev = if (index > 0) " /Prev ${num - 1} 0 R" else ""
+                        val next = if (index < linkCount - 1) " /Next ${num + 1} 0 R" else ""
+                        val dest = "${pageBase + link.targetPage * 3} 0 R"
+                        w("$num 0 obj\n<< /Title $title /Parent $outlineRoot 0 R$prev$next " +
+                            "/Dest [ $dest /Fit ] >>\nendobj\n")
+                    }
+                    links.forEachIndexed { index, link ->
+                        val num = firstAnnot + index
+                        offsets[num] = position
+                        val pixels = pagePixels[link.pageIndex]!!
+                        val points = pagePoints[link.pageIndex]!!
+                        val box = LinkIndexDetector.toPdfRect(
+                            LinkIndexDetector.Box(link.rect.left, link.rect.top, link.rect.right, link.rect.bottom),
+                            pixels.first, pixels.second, points.first, points.second
+                        )
+                        fun pt(v: Int) = String.format(Locale.ROOT, "%.2f", v.toDouble())
+                        val dest = "${pageBase + link.targetPage * 3} 0 R"
+                        w("$num 0 obj\n<< /Type /Annot /Subtype /Link /Border [0 0 0] " +
+                            "/Rect [${pt(box[0])} ${pt(box[1])} ${pt(box[2])} ${pt(box[3])}] " +
+                            "/Dest [ $dest /Fit ] >>\nendobj\n")
+                    }
+                }
+
                 val xrefOffset = position
-                val total = pageBase + images.size * 3 - 1
                 val xref = StringBuilder()
                 xref.append("xref\n0 ${total + 1}\n")
                 xref.append("0000000000 65535 f \n")

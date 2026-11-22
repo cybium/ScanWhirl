@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -36,6 +38,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35], qualifiers = "hi-w360dp-h640dp-xhdpi")
 class LibraryRowActionsHindiTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -108,8 +112,8 @@ class LibraryRowActionsHindiTest {
             scenario.onActivity { activity ->
                 val sheet = openRowActions(activity, shown)
                 assertEquals(
-                    "the sheet speaks Hindi (council: कार्रवाई, not विकल्प)",
-                    "कार्रवाई",
+                    "the sheet speaks Hindi (copy diet: दस्तावेज़ के काम)",
+                    "दस्तावेज़ के काम",
                     sheet.findViewById<TextView>(R.id.swSheetTitle).text.toString()
                 )
                 val header = requireNotNull(

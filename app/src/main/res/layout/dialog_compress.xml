@@ -2,8 +2,8 @@
 <!--
   UI-B3 (#7) + W2: the Compress setup sheet. Two explicit aims ("Choose quality" / "Aim for a
   file size"), the existing quality estimates, and the exact-size field with a hint that stays
-  put and an inline error. Title and options scroll above SwSheet's pinned, wrapping
-  Compress/Cancel footer, including at 200% type with the keyboard open.
+  put and an inline error. Title and options scroll above SwSheet's pinned Compress action;
+  this is a non-destructive sheet, so the X is the only dismissal (no duplicate Cancel).
 
   W2 (lane 2): the sheet opens instantly and names the job before any estimate runs — the exact
   source name, its page count and size, and its real first page only for an ordinary document
@@ -74,17 +74,19 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:maxLines="2"
-                    android:textColor="@color/text_hologram_hi"
-                    android:textSize="15sp"
+                    android:textColor="@color/sw_sh2_text_primary"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
 
+                <!-- COPY_DIET §3: page count and size are P; the code spans them in P14.
+                     Only the separator/date may stay S. -->
                 <TextView
                     android:id="@+id/compressSourceMeta"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:textColor="@color/text_hologram_mid"
-                    android:textSize="13sp" />
+                    android:textColor="@color/sw_sh2_text_secondary"
+                    android:textSize="14sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -103,8 +105,8 @@
                 android:minHeight="48dp"
                 android:paddingVertical="8dp"
                 android:text="@string/compress_mode_quality"
-                android:textColor="@color/text_hologram_hi"
-                android:textSize="15sp" />
+                android:textColor="@color/sw_sh2_text_primary"
+                android:textSize="16sp" />
 
             <RadioButton
                 android:id="@+id/compressModeTarget"
@@ -114,8 +116,8 @@
                 android:minHeight="48dp"
                 android:paddingVertical="8dp"
                 android:text="@string/compress_mode_target"
-                android:textColor="@color/text_hologram_hi"
-                android:textSize="15sp" />
+                android:textColor="@color/sw_sh2_text_primary"
+                android:textSize="16sp" />
         </RadioGroup>
 
         <!-- The quality estimates, rebuilt in code from the measured samples. -->
@@ -134,41 +136,89 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- V2T T2: one free decimal-KB quick-target row, shared with Resize. -->
-            <com.google.android.material.chip.ChipGroup
+            <!-- COPY_DIET: the "Maximum file size" radio above is the one persistent
+                 label. The four free decimal-KB presets sit in a 2x2 grid and keep the
+                 same outlined shape and readable label in both states. -->
+            <LinearLayout
                 android:id="@+id/v2t_quick_group"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:singleSelection="true">
+                android:layout_marginTop="6dp"
+                android:orientation="vertical">
 
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/v2t_quick_20"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/v2t_size_20" />
+                    android:orientation="horizontal">
 
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/v2t_quick_50"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/v2t_size_50" />
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/v2t_quick_20"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:checkable="true"
+                        android:minHeight="48dp"
+                        android:textColor="@color/sw_sh2_text_primary"
+                        android:textSize="14sp"
+                        android:text="@string/v2t_size_20"
+                        app:chipBackgroundColor="@color/sw_chip_fill"
+                        app:chipStrokeColor="@color/chip_in_text_stroke"
+                        app:chipStrokeWidth="1dp" />
 
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/v2t_quick_100"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/v2t_size_100" />
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/v2t_quick_50"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:checkable="true"
+                        android:minHeight="48dp"
+                        android:textColor="@color/sw_sh2_text_primary"
+                        android:textSize="14sp"
+                        android:text="@string/v2t_size_50"
+                        app:chipBackgroundColor="@color/sw_chip_fill"
+                        app:chipStrokeColor="@color/chip_in_text_stroke"
+                        app:chipStrokeWidth="1dp" />
+                </LinearLayout>
 
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/v2t_quick_200"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/v2t_size_200" />
-            </com.google.android.material.chip.ChipGroup>
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/v2t_quick_100"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:checkable="true"
+                        android:minHeight="48dp"
+                        android:textColor="@color/sw_sh2_text_primary"
+                        android:textSize="14sp"
+                        android:text="@string/v2t_size_100"
+                        app:chipBackgroundColor="@color/sw_chip_fill"
+                        app:chipStrokeColor="@color/chip_in_text_stroke"
+                        app:chipStrokeWidth="1dp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/v2t_quick_200"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:checkable="true"
+                        android:minHeight="48dp"
+                        android:textColor="@color/sw_sh2_text_primary"
+                        android:textSize="14sp"
+                        android:text="@string/v2t_size_200"
+                        app:chipBackgroundColor="@color/sw_chip_fill"
+                        app:chipStrokeColor="@color/chip_in_text_stroke"
+                        app:chipStrokeWidth="1dp" />
+                </LinearLayout>
+            </LinearLayout>
 
             <EditText
                 android:id="@+id/editCompressTarget"
@@ -177,16 +227,16 @@
                 android:layout_marginTop="6dp"
                 android:background="@drawable/bg_search_bar"
                 android:gravity="center_vertical"
-                android:hint="@string/resize_target_hint"
+                android:hint="@string/compress_target_placeholder"
                 android:imeOptions="actionDone"
                 android:importantForAutofill="no"
                 android:inputType="text"
                 android:maxLines="1"
                 android:paddingHorizontal="12dp"
                 android:selectAllOnFocus="true"
-                android:textColor="@color/text_hologram_hi"
-                android:textColorHint="@color/text_hologram_dim"
-                android:textSize="14sp" />
+                android:textColor="@color/sw_sh2_text_primary"
+                android:textColorHint="@color/sw_sh2_text_secondary"
+                android:textSize="16sp" />
 
             <TextView
                 android:id="@+id/compressTargetHint"
@@ -194,8 +244,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text="@string/compress_target_help"
-                android:textColor="@color/text_hologram_mid"
-                android:textSize="13sp" />
+                android:textColor="@color/sw_sh2_text_secondary"
+                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/compressTargetError"
@@ -203,8 +253,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:accessibilityLiveRegion="polite"
-                android:textColor="@color/laser_danger"
-                android:textSize="13sp"
+                android:textColor="@color/sw_sh2_text_danger"
+                android:textSize="14sp"
+                android:textStyle="bold"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>

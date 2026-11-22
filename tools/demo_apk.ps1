@@ -53,8 +53,10 @@ while (-not $runId) {
     if ((Get-Date) -ge $deadline) { throw 'Timed out waiting for the demo-apk run to appear' }
     Start-Sleep -Seconds $PollSeconds
     try {
-        $runId = Gh @('run', 'list', '--repo', $Repo, '--workflow', $Workflow, '--branch', "apk/$short",
-            '--limit', '5', '--json', 'databaseId,headSha', '--jq', "[.[] | select(.headSha==`"$sha`")][0].databaseId // empty")
+        # Filter in PowerShell: PS 5.1 mangles embedded quotes in native-command arguments (jq filter).
+        $runs = (Gh @('run', 'list', '--repo', $Repo, '--workflow', $Workflow, '--branch', "apk/$short",
+            '--limit', '5', '--json', 'databaseId,headSha')) -join "`n" | ConvertFrom-Json
+        $runId = @($runs | Where-Object { $_.headSha -eq $sha } | Select-Object -First 1 -ExpandProperty databaseId)[0]
     } catch { $runId = $null }
 }
 

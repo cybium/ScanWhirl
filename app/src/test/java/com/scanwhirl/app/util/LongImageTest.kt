@@ -42,6 +42,16 @@ class LongImageTest {
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
+        // TEST3 root cause of the 30 s "completed share must start the chooser" timeout:
+        // androidx FileProvider caches path roots per authority in a static map, but Robolectric
+        // gives each test a fresh cacheDir. A stale entry from an earlier class in the same fork
+        // makes getUriForFile("...fileprovider", sharedCopy) throw "Failed to find configured
+        // root"; ShareUtils.shareCopy catches that and shows a Toast instead of starting the
+        // chooser, so awaitShareChooser times out. Every other share test in this suite already
+        // clears this map; LongImageTest was the only one that did not.
+        val cache = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache")
+        cache.isAccessible = true
+        (cache.get(null) as MutableMap<*, *>).clear()
     }
 
     private fun jpegBytes(): ByteArray {

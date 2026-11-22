@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -43,6 +45,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 abstract class HomeLargeFontBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
 
     @Before

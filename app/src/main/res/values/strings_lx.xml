@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LX: Link index. Short, professional labels; every key has a Hindi pair. -->
+    <string name="lx_tool_title">Link index</string>
+    <string name="lx_tool_sub">Make a contents page clickable</string>
+    <string name="lx_choose_doc">Choose a document</string>
+    <string name="lx_from_pdf">From a PDF file</string>
+    <string name="lx_choose_pages">Select contents</string>
+    <plurals name="lx_pages_selected">
+        <item quantity="one">%1$d contents page</item>
+        <item quantity="other">%1$d contents pages</item>
+    </plurals>
+    <string name="lx_page_number">Page %1$d</string>
+    <string name="lx_offset_label">Printed page 1 is PDF page</string>
+    <string name="lx_offset_earlier">Earlier printed page</string>
+    <string name="lx_offset_later">Later printed page</string>
+    <string name="lx_calibrate">Match title</string>
+    <string name="lx_calibrate_hint">Match a title to its PDF page</string>
+    <string name="lx_suggestions">Confirm suggested links</string>
+    <string name="lx_confidence_high">High</string>
+    <string name="lx_confidence_medium">Medium</string>
+    <string name="lx_confidence_low">Low</string>
+    <string name="lx_title_hint">Title</string>
+    <string name="lx_printed_page_hint">Printed page</string>
+    <string name="lx_add_entry">Add entry</string>
+    <string name="lx_create">Create copy</string>
+    <string name="lx_copy_name">Copy name</string>
+    <string name="lx_result">%1$d links · %2$d bookmarks</string>
+    <string name="lx_original_kept">Original kept</string>
+    <plurals name="lx_skipped">
+        <item quantity="one">%1$d skipped: page outside PDF</item>
+        <item quantity="other">%1$d skipped: pages outside PDF</item>
+    </plurals>
+    <string name="lx_no_ocr">Run text recognition on this document first.</string>
+    <string name="lx_no_geometry">Read this page\'s text first</string>
+    <string name="lx_protected">Protected documents can\'t be linked. The original is unchanged.</string>
+    <string name="lx_vault">Documents in the Vault can\'t be linked.</string>
+    <string name="lx_pdfa">PDF/A copies can\'t be linked.</string>
+    <string name="lx_pro_badge">Pro · 1 free use</string>
+    <string name="lx_trial_title">Try once free</string>
+    <!-- PRO_PLAN item 3, word for word. %1$s is Play's localized price; no literal amount in the app. -->
+    <string name="lx_trial_msg">Your first use includes a full-quality save, free and without a watermark. Further uses of this tool need Pro (%1$s, one payment). No automatic charge.</string>
+    <string name="lx_trial_msg_no_price">Your first use includes a full-quality save, free and without a watermark. Further uses of this tool need Pro (one payment). No automatic charge.</string>
+    <string name="lx_try_free">Try free</string>
+    <string name="lx_not_now">Not now</string>
+    <string name="lx_open">Open</string>
+    <string name="lx_share">Share</string>
+    <string name="lx_done">Done</string>
+    <string name="lx_link_description">Tap to open %1$s</string>
+    <string name="lx_no_entries">No index entries found. Add them by hand.</string>
+    <string name="lx_working">Creating copy…</string>
+    <string name="lx_reading">Reading the contents page…</string>
+    <string name="lx_error">Could not create the copy: %1$s</string>
+    <string name="lx_more">More</string>
+    <string name="lx_limited_short">Link limits</string>
+    <string name="lx_limited">Links open only in PDF apps that support them. Screen readers may not announce links without tags.</string>
+</resources>

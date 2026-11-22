@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -76,11 +77,16 @@ class FormReadyActivity : BaseActivity() {
     private lateinit var previewCleaned: ImageView
     private lateinit var readout: TextView
     private lateinit var example: TextView
-    private lateinit var photoCmNote: TextView
     private lateinit var pickButton: TextView
     private lateinit var applyButton: TextView
     private lateinit var errorView: TextView
     private lateinit var progress: View
+    private lateinit var noticeView: TextView
+    private lateinit var aboutToggle: TextView
+    private lateinit var aboutDetails: View
+    private lateinit var contentColumn: LinearLayout
+    private lateinit var presetStatusView: TextView
+    private lateinit var applyBar: FrameLayout
 
     private val presetChips = mutableMapOf<String, TextView>()
     private val dpiChips = mutableMapOf<Int, TextView>()
@@ -192,6 +198,7 @@ class FormReadyActivity : BaseActivity() {
                 SwStyle.dp(this@FormReadyActivity, 18f), SwStyle.dp(this@FormReadyActivity, 18f)
             )
         }
+        contentColumn = column
         scroll.addView(column, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
@@ -206,7 +213,7 @@ class FormReadyActivity : BaseActivity() {
             contentDescription = getString(R.string.tools_setup_back)
             setOnClickListener { finish() }
         })
-        bar.addView(SwStyle.text(this, 20f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+        bar.addView(SwStyle.text(this, 22f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
             id = R.id.formReadyTitle
             text = getString(R.string.form1_title)
             maxLines = Int.MAX_VALUE
@@ -215,17 +222,40 @@ class FormReadyActivity : BaseActivity() {
         })
         column.addView(bar)
 
-        column.addView(SwStyle.text(this, 14f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
-            text = getString(R.string.form1_check_rules)
-            maxLines = Int.MAX_VALUE
-            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
-        })
-        column.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+        // COPY_DIET: one S14 summary, no cyan preamble. The odd live-photo and cm caveats live
+        // behind the About control below; validation and measured results stay on screen.
+        noticeView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyNotice
             text = getString(R.string.form1_notice)
             maxLines = Int.MAX_VALUE
             setLineSpacing(0f, 1.25f)
-            setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, SwStyle.dp(this@FormReadyActivity, 10f))
-        })
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, SwStyle.dp(this@FormReadyActivity, 4f))
+        }
+        column.addView(noticeView)
+
+        // The long caveat lives behind one small control, so the always-visible warning stays two
+        // lines at 100 % font. The control is a real 48 dp touch target and speaks its state.
+        aboutToggle = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_action_accent), bold = true).apply {
+            id = R.id.formReadyAboutToggle
+            text = getString(R.string.form1_about_requirements)
+            maxLines = Int.MAX_VALUE
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { toggleAbout() }
+        }
+        column.addView(aboutToggle)
+        wireAboutA11y()
+        aboutDetails = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyAboutDetails
+            text = getString(R.string.form1_notice_details) + "\n" + getString(R.string.form1_photo_cm_note)
+            maxLines = Int.MAX_VALUE
+            setLineSpacing(0f, 1.25f)
+            isVisible = false
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, SwStyle.dp(this@FormReadyActivity, 10f))
+        }
+        column.addView(aboutDetails)
 
         // Council §1: preset names stay in full; a two-column grid (not shorter words) fixes the
         // mid-word break at 100%. Five presets -> rows of 2 / 2 / 1.
@@ -259,24 +289,30 @@ class FormReadyActivity : BaseActivity() {
                 presetChips[spec.id] = chip
                 chipA11y(chip)
                 row.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
+                    if (id != defs.last().first) marginEnd = SwStyle.dp(this@FormReadyActivity, 8f)
                 })
             }
             column.addView(row)
         }
 
-        example = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-            id = R.id.formReadyExample
+        // Critique: the primary next action sits immediately under the presets, not after a long
+        // scroll of fields. It disappears as soon as a photo has been picked.
+        pickButton = action(getString(R.string.form1_pick), R.id.formReadyPick, true) { pick.launch("image/*") }
+        column.addView(pickButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 10f) })
+
+        val exampleLabel = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            text = getString(R.string.form1_example_label)
             maxLines = Int.MAX_VALUE
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)
         }
-        column.addView(example)
-        photoCmNote = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
-            id = R.id.formReadyPhotoCmNote
+        column.addView(exampleLabel)
+        example = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
+            id = R.id.formReadyExample
             maxLines = Int.MAX_VALUE
-            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
         }
-        column.addView(photoCmNote)
+        column.addView(example)
 
         val dimLabels = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -309,7 +345,7 @@ class FormReadyActivity : BaseActivity() {
             Triple(FormUnit.MM, R.id.formReadyUnitMm, R.string.form1_unit_mm_spoken),
             Triple(FormUnit.INCH, R.id.formReadyUnitInch, R.string.form1_unit_inch_spoken)
         )) {
-            val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            val chip = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
                 this.id = id
                 text = u.name.lowercase()
                 contentDescription = getString(spoken)
@@ -348,7 +384,7 @@ class FormReadyActivity : BaseActivity() {
         bands.addView(maxField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(bands)
 
-        bandErrorView = SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.laser_danger)).apply {
+        bandErrorView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_danger), bold = true).apply {
             id = R.id.formReadyBandError
             isVisible = false
             maxLines = Int.MAX_VALUE
@@ -361,7 +397,7 @@ class FormReadyActivity : BaseActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
         }
-        dpiRow.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+        dpiRow.addView(SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
             text = "DPI"
         }, LinearLayout.LayoutParams(SwStyle.dp(this, 44f), ViewGroup.LayoutParams.WRAP_CONTENT))
         for ((d, id) in listOf(
@@ -369,7 +405,7 @@ class FormReadyActivity : BaseActivity() {
             FormPresets.DPI_200 to R.id.formReadyDpi200,
             FormPresets.DPI_300 to R.id.formReadyDpi300
         )) {
-            val chip = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            val chip = SwStyle.text(this, 16f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
                 this.id = id
                 text = d.toString()
                 gravity = Gravity.CENTER
@@ -389,8 +425,8 @@ class FormReadyActivity : BaseActivity() {
         cleanupBox = CheckBox(this).apply {
             id = R.id.formReadyCleanup
             text = getString(R.string.form1_cleanup)
-            setTextColor(SwStyle.color(this@FormReadyActivity, R.color.text_hologram_hi))
-            buttonTintList = ColorStateList.valueOf(SwStyle.color(this@FormReadyActivity, R.color.cyan_primary))
+            setTextColor(SwStyle.color(this@FormReadyActivity, R.color.f2_text_primary))
+            buttonTintList = ColorStateList.valueOf(SwStyle.color(this@FormReadyActivity, R.color.f2_action_accent))
             gravity = Gravity.CENTER_VERTICAL
             maxLines = Int.MAX_VALUE
             minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
@@ -416,6 +452,16 @@ class FormReadyActivity : BaseActivity() {
         presetActions.addView(usePresetButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(presetActions)
 
+        // Feedback stays beside the preset buttons in the neutral text colour. It used to be the
+        // red error view at the very bottom, where it was both alarming and clipped off screen.
+        presetStatusView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyPresetStatus
+            isVisible = false
+            maxLines = Int.MAX_VALUE
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
+        }
+        column.addView(presetStatusView)
+
         // Lane F2 / council §4: before/after on a dark canvas, shown before cleanup is applied.
         cleanupPreview = LinearLayout(this).apply {
             id = R.id.formReadyCleanupPreview
@@ -428,20 +474,17 @@ class FormReadyActivity : BaseActivity() {
         previewCleaned = addPreviewCell(cleanupPreview as LinearLayout, R.id.formReadyPreviewCleaned, R.string.form1_preset_cleaned)
         column.addView(cleanupPreview)
 
-        readout = SwStyle.text(this, 15f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
+        readout = SwStyle.text(this, 16f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
             id = R.id.formReadyReadout
             maxLines = Int.MAX_VALUE
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
         }
         column.addView(readout)
 
-        pickButton = action(getString(R.string.form1_pick), R.id.formReadyPick, true) { pick.launch("image/*") }
-        column.addView(pickButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 12f) })
-
         cropView = CropView(this).apply {
             id = R.id.formReadyCrop
+            // Critique: an empty canvas is not a preview. Only show it once a photo exists.
+            isVisible = false
             // Council §4: a dark canvas hosts the page; never a white page host.
             background = SwStyle.rounded(
                 this@FormReadyActivity, SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2),
@@ -452,14 +495,27 @@ class FormReadyActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@FormReadyActivity, 220f)
         ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 12f) })
 
+        // Critique: Make file is pinned to the bottom of the screen only when the form is
+        // actionable. It lives outside the ScrollView, so it can never scroll out of reach.
+        applyBar = FrameLayout(this).apply {
+            id = R.id.formReadyApplyBar
+            isVisible = false
+            setBackgroundColor(SwStyle.color(this@FormReadyActivity, R.color.void_abyss))
+            setPadding(
+                SwStyle.dp(this@FormReadyActivity, 18f), SwStyle.dp(this@FormReadyActivity, 8f),
+                SwStyle.dp(this@FormReadyActivity, 18f), SwStyle.dp(this@FormReadyActivity, 10f)
+            )
+        }
         applyButton = action(getString(R.string.form1_apply), R.id.formReadyApply, true) { apply() }
-        applyButton.isEnabled = false
-        applyButton.alpha = 0.5f
-        column.addView(applyButton, LinearLayout.LayoutParams(
+        applyBar.addView(applyButton, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 12f) })
+        ))
+        root.addView(applyBar, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM
+        ))
+        setApplyEnabled(false)
 
-        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+        errorView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_danger), bold = true).apply {
             id = R.id.formReadyError
             isVisible = false
             maxLines = Int.MAX_VALUE
@@ -483,7 +539,7 @@ class FormReadyActivity : BaseActivity() {
     }
 
     private fun fieldLabel(id: Int, labelRes: Int): TextView =
-        SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
             this.id = id
             text = getString(labelRes)
             maxLines = Int.MAX_VALUE
@@ -520,8 +576,9 @@ class FormReadyActivity : BaseActivity() {
         hint = getString(hintRes)
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         isSingleLine = true
-        setTextColor(SwStyle.color(this@FormReadyActivity, R.color.text_hologram_hi))
-        setHintTextColor(SwStyle.color(this@FormReadyActivity, R.color.text_hologram_dim))
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        setTextColor(SwStyle.color(this@FormReadyActivity, R.color.f2_text_primary))
+        setHintTextColor(SwStyle.color(this@FormReadyActivity, R.color.f2_text_secondary))
         minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
         val pad = SwStyle.dp(this@FormReadyActivity, 12f)
         setPadding(pad, SwStyle.dp(this@FormReadyActivity, 8f), pad, SwStyle.dp(this@FormReadyActivity, 8f))
@@ -572,8 +629,8 @@ class FormReadyActivity : BaseActivity() {
     }
 
     private fun action(text: String, id: Int, primary: Boolean, onClick: () -> Unit): TextView =
-        SwStyle.asButton(SwStyle.text(this, 15f, SwStyle.color(
-            this, if (primary) R.color.sw_disc_ink else R.color.text_hologram_hi
+        SwStyle.asButton(SwStyle.text(this, 14f, SwStyle.color(
+            this, if (primary) R.color.sw_disc_ink else R.color.f2_text_primary
         ), bold = true).apply {
             this.id = id
             this.text = text
@@ -587,6 +644,59 @@ class FormReadyActivity : BaseActivity() {
             )
             setOnClickListener { onClick() }
         })
+
+    private fun toggleAbout() {
+        val expanded = aboutDetails.visibility != View.VISIBLE
+        aboutDetails.isVisible = expanded
+        aboutToggle.tag = expanded
+        aboutToggle.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
+    }
+
+    private fun wireAboutA11y() {
+        aboutToggle.tag = false
+        ViewCompat.setAccessibilityDelegate(aboutToggle, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+                info.stateDescription = host.context.getString(
+                    if (host.tag as? Boolean == true) R.string.form1_expanded else R.string.form1_collapsed
+                )
+            }
+        })
+    }
+
+    /** One owner for the Make file state, its 48 dp pin, and the room reserved beneath the form. */
+    private fun setApplyEnabled(enabled: Boolean) {
+        applyButton.isEnabled = enabled
+        applyButton.alpha = if (enabled) 1f else 0.5f
+        applyBar.isVisible = enabled
+        contentColumn.setPadding(
+            contentColumn.paddingLeft, contentColumn.paddingTop, contentColumn.paddingRight,
+            SwStyle.dp(this, if (enabled) 92f else 18f)
+        )
+    }
+
+    private fun isSignatureMode(): Boolean = spec.id == "signature"
+
+    private fun showCrop(show: Boolean) {
+        cropView.isVisible = show
+    }
+
+    /** Each broken rule names itself; a decimal is not silently rounded into a zero KB limit. */
+    private fun kbError(): String? {
+        val minText = minField.text.toString().trim()
+        val maxText = maxField.text.toString().trim()
+        if (minText.isBlank() || maxText.isBlank()) return getString(R.string.form1_kb_blank)
+        val min = minText.toIntOrNull()
+        val max = maxText.toIntOrNull()
+        val decimal = listOf(minText, maxText).any { it.any { c -> c == '.' || c == ',' } }
+        if (min == null || max == null || decimal) return getString(R.string.form1_kb_decimal)
+        if (min < 1) return getString(R.string.form1_kb_min_nonpositive)
+        // A nonpositive maximum is the same broken rule as a maximum below the (at least 1) floor.
+        val lower = maxOf(min, 1)
+        if (max < lower) return getString(R.string.form1_kb_max_below_min, lower)
+        return null
+    }
 
     // ---- state and live readout -------------------------------------------
 
@@ -658,19 +768,22 @@ class FormReadyActivity : BaseActivity() {
         FormPresets.saveEditable(this, FormPresets.Editable(
             widthValue, heightValue, unit, dpi, minKb, maxKb, cleanup
         ))
-        errorView.text = getString(R.string.form1_preset_saved)
-        errorView.isVisible = true
+        presetStatusView.text = getString(R.string.form1_preset_saved)
+        presetStatusView.setTextColor(SwStyle.color(this, R.color.f2_text_secondary))
+        presetStatusView.isVisible = true
         refresh()
     }
 
     private fun useSavedPreset() {
         val saved = FormPresets.loadEditable(this)
         if (saved == null) {
-            errorView.text = getString(R.string.form1_no_preset)
-            errorView.isVisible = true
+            // Local state is P, but never the danger colour: a missing preset is not an error.
+            presetStatusView.text = getString(R.string.form1_no_preset)
+            presetStatusView.setTextColor(SwStyle.color(this, R.color.f2_text_primary))
+            presetStatusView.isVisible = true
             return
         }
-        errorView.isVisible = false
+        presetStatusView.isVisible = false
         unit = saved.unit
         dpi = saved.dpi
         minKb = saved.minKb
@@ -748,7 +861,6 @@ class FormReadyActivity : BaseActivity() {
         val tooLarge = !FormPresets.fitsFormLimit(w, h)
         readout.text = getString(R.string.form1_readout, w, h)
         example.text = getString(R.string.form1_example, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
-        photoCmNote.isVisible = spec.id == "photo"
         // An impossible target is refused before any bitmap is allocated.
         val sizeMessage = getString(R.string.form1_size_too_large)
         if (tooLarge) {
@@ -758,15 +870,9 @@ class FormReadyActivity : BaseActivity() {
             errorView.isVisible = false
             errorView.text = ""
         }
-        // F1: blank / non-numeric / nonpositive / reversed KB fields are errors right here, not
-        // silently turned into zero and sent to the encoder.
-        val minText = minField.text.toString()
-        val maxText = maxField.text.toString()
-        val bandMessage = when {
-            minText.isBlank() || maxText.isBlank() -> getString(R.string.form1_kb_blank)
-            minKb < 1 || maxKb < minKb -> getString(R.string.form1_kb_invalid)
-            else -> null
-        }
+        // F1 + critique: blank, decimal, nonpositive and reversed KB each name the rule that
+        // failed; none of them is silently turned into zero and sent to the encoder.
+        val bandMessage = kbError()
         if (bandMessage == null) {
             bandErrorView.isVisible = false
             bandErrorView.text = ""
@@ -774,9 +880,16 @@ class FormReadyActivity : BaseActivity() {
             bandErrorView.text = bandMessage
             bandErrorView.isVisible = true
         }
+        // Critique: the cleanup control and its effect belong to Signature mode only.
+        cleanupBox.isVisible = isSignatureMode()
+        if (!isSignatureMode() && cleanup) {
+            settingFields = true
+            cleanup = false
+            cleanupBox.isChecked = false
+            settingFields = false
+        }
         usePresetButton.isEnabled = FormPresets.loadEditable(this) != null
-        applyButton.isEnabled = hasImageForTest() && !tooLarge && bandMessage == null
-        applyButton.alpha = if (applyButton.isEnabled) 1f else 0.5f
+        setApplyEnabled(hasImageForTest() && !tooLarge && bandMessage == null)
         refreshCleanupPreview()
         val hi = SwStyle.color(this, R.color.text_hologram_hi)
         val ink = SwStyle.color(this, R.color.sw_disc_ink)
@@ -861,6 +974,7 @@ class FormReadyActivity : BaseActivity() {
             }
             bitmap = decoded
             cropView.setImage(decoded)
+            showCrop(true)
             if (rect != null && rect.size == 4) cropView.setCropRect(RectF(rect[0], rect[1], rect[2], rect[3]))
             refresh()
             pickButton.isVisible = false
@@ -870,8 +984,8 @@ class FormReadyActivity : BaseActivity() {
     // ---- picked photo -----------------------------------------------------
 
     private fun showPickPrompt() {
-        applyButton.isEnabled = false
-        applyButton.alpha = 0.5f
+        setApplyEnabled(false)
+        showCrop(false)
         pickButton.isVisible = true
     }
 
@@ -904,6 +1018,7 @@ class FormReadyActivity : BaseActivity() {
             if (!bitmapInUse) bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
             cropView.setImage(decoded)
+            showCrop(true)
             updateCropAspect()
             errorView.isVisible = false
             pickButton.isVisible = false
@@ -939,14 +1054,13 @@ class FormReadyActivity : BaseActivity() {
         if (!FormPresets.fitsFormLimit(targetW, targetH)) {
             errorView.text = getString(R.string.form1_size_too_large)
             errorView.isVisible = true
-            applyButton.isEnabled = false
-            applyButton.alpha = 0.5f
+            setApplyEnabled(false)
             return
         }
         val dpiNow = dpi
         val minBytes = minKb * SizeUnits.BYTES_PER_KB
         val maxBytes = maxKb * SizeUnits.BYTES_PER_KB
-        val doCleanup = cleanup
+        val doCleanup = cleanup && isSignatureMode()
 
         busy = true
         bitmapInUse = true
@@ -991,6 +1105,7 @@ class FormReadyActivity : BaseActivity() {
                 // The phone cannot hold this rendition. Free the preview on every path and say
                 // so in the app's own words instead of letting the process die.
                 cropView.clearImage()
+                showCrop(false)
                 bitmap?.takeIf { !it.isRecycled }?.recycle()
                 bitmap = null
                 errorView.text = getString(R.string.form1_out_of_memory)
@@ -1024,19 +1139,21 @@ class FormReadyActivity : BaseActivity() {
         requestedHeight: Int,
         requestedDpi: Int
     ): String {
+        // COPY_DIET: one measured numeric row, exact bytes on its own detail line, no duplicate
+        // "as requested" sentences. The three checks still gate readiness independently.
         val measured = getString(
-            R.string.form1_note_measured,
-            SizeUnits.format(result.sizeBytes), result.bytes.size,
-            result.width, result.height, result.dpi
+            R.string.form1_note_measured_short,
+            SizeUnits.format(result.sizeBytes), result.width, result.height, result.dpi
         )
+        val bytes = getString(R.string.form1_note_bytes, result.bytes.size)
         val pixelCheck = if (result.width == requestedWidth && result.height == requestedHeight) {
-            getString(R.string.form1_result_pixels_ok, requestedWidth, requestedHeight)
+            null
         } else {
             getString(R.string.form1_result_pixels_changed, result.width, result.height)
         }
         val writtenDpi = ExactKbEncoder.readJfifDpi(result.bytes)
         val dpiCheck = if (writtenDpi == requestedDpi) {
-            getString(R.string.form1_result_dpi_ok, requestedDpi)
+            null
         } else {
             getString(R.string.form1_result_dpi_changed, writtenDpi ?: 0, requestedDpi)
         }
@@ -1047,25 +1164,30 @@ class FormReadyActivity : BaseActivity() {
                 SizeUnits.format(maxKb * SizeUnits.BYTES_PER_KB)
             )
             ExactKbEncoder.Outcome.BELOW_MIN -> getString(
-                R.string.form1_note_below_min,
-                getString(R.string.form1_min_miss, SizeUnits.format(minKb * SizeUnits.BYTES_PER_KB))
+                R.string.form1_min_miss, SizeUnits.format(minKb * SizeUnits.BYTES_PER_KB)
             )
-            ExactKbEncoder.Outcome.ABOVE_MAX -> getString(
-                R.string.form1_note_above_max, getString(R.string.form1_max_miss)
-            )
+            ExactKbEncoder.Outcome.ABOVE_MAX -> getString(R.string.form1_max_miss)
         }
         val bandLabel = getString(R.string.form1_band_label)
         val problems = mutableListOf<String>()
-        if (result.width != requestedWidth || result.height != requestedHeight) problems += pixelCheck
-        if (writtenDpi != requestedDpi) problems += dpiCheck
+        pixelCheck?.let { problems += it }
+        dpiCheck?.let { problems += it }
         if (result.outcome != ExactKbEncoder.Outcome.IN_BAND) problems += bandCheck
         val overall = if (problems.isEmpty()) {
             getString(R.string.form1_result_ready)
         } else {
             getString(R.string.form1_result_not_ready, problems.joinToString(" "))
         }
-        return listOf(measured, pixelCheck, dpiCheck, "$bandLabel $bandCheck", overall,
-            getString(R.string.form1_source_kept)).joinToString("\n")
+        val lines = mutableListOf(measured, bytes)
+        pixelCheck?.let { lines += it }
+        dpiCheck?.let { lines += it }
+        lines += "$bandLabel $bandCheck"
+        if (result.outcome == ExactKbEncoder.Outcome.BELOW_MIN) {
+            lines += getString(R.string.form1_min_miss_constraint)
+        }
+        lines += overall
+        lines += getString(R.string.form1_source_kept)
+        return lines.joinToString("\n")
     }
 
     override fun onDestroy() {
@@ -1105,6 +1227,11 @@ class FormReadyActivity : BaseActivity() {
     internal fun currentCleanupForTest(): Boolean = cleanup
     internal fun currentUnitForTest(): FormUnit = unit
     internal fun previewVisibleForTest(): Boolean = cleanupPreview.isVisible
+    internal fun cropVisibleForTest(): Boolean = cropView.isVisible
+    internal fun cleanupVisibleForTest(): Boolean = cleanupBox.isVisible
+    internal fun pinnedApplyVisibleForTest(): Boolean = applyBar.isVisible
+    internal fun presetStatusTextForTest(): String = presetStatusView.text.toString()
+    internal fun noticeTextForTest(): String = noticeView.text.toString()
     internal fun opIdForTest(): String = opId
     internal fun lastOutputForTest(): File? = lastOutput
     internal fun lastOutputNameForTest(): String? = lastOutput?.name

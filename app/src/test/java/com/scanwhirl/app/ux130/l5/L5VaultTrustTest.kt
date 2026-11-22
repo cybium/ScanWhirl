@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l5
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -38,6 +40,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class L5VaultTrustTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var store: VaultStore
     private var controller: ActivityController<VaultActivity>? = null

@@ -156,6 +156,13 @@
             android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity" />
 
+        <!-- LX: Link index. Internal only; the shell exposes the tool tile. -->
+        <activity
+            android:name=".ui.tools.linkindex.LinkIndexActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.shell.ShellActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".ui.tools.BusinessCardActivity"
             android:exported="false"

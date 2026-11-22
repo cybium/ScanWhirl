@@ -475,8 +475,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // "Moved to Trash" Undo is shown here, on the next resume.
         TrashActions.takePending()?.let { showMovedNotice(it) }
         showDiscardNotice()
-        // The scan disc breathes only while this screen is in front.
-        findViewById<View>(R.id.swNavScan)?.let { com.scanwhirl.app.ui.kit.SwMotion.breathe(it) }
+        // Lane SB: the Scan disc stays calm on resume — no ambient breathing is restarted.
     }
 
     /** Re-binds tool tiles when Free/Pro changes (purchase or the test switch). */
@@ -614,7 +613,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             }
         )
         container.addView(buildDisc(), FrameLayout.LayoutParams(
-            SwStyle.dp(this, 74f), SwStyle.dp(this, 74f)
+            SwStyle.dp(this, 84f), SwStyle.dp(this, 84f)
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             topMargin = SwStyle.dp(this@ShellActivity, 2f)
@@ -622,67 +621,90 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         return container
     }
 
+    /**
+     * Lane SB — winner 01 "Calm capture": a true 76dp cyan disc inside an 84dp host,
+     * one centred document-in-corners icon/label stack with a 2dp layout gap, flat
+     * state-list face and no perpetual motion. The real ScanWhirl brand mark elsewhere
+     * is untouched; this is an action glyph, not a second logo.
+     */
     private fun buildDisc(): View {
-        val disc = FrameLayout(this).apply {
+        val ctx = this@ShellActivity
+        val hindi = com.scanwhirl.app.util.AppLanguage.showingHindi(ctx)
+        val foreground = requireNotNull(
+            androidx.core.content.ContextCompat.getColorStateList(
+                ctx, R.color.scan_disc_foreground
+            )
+        )
+        val disc = FrameLayout(ctx).apply {
             id = R.id.swNavScan
             isClickable = true
             isFocusable = true
             // The disc is the primary action: after a sheet closes, focus must be able to
             // return to it even on a touch-mode phone (the focus ring never shows on touch).
             isFocusableInTouchMode = true
-            contentDescription = getString(R.string.create_disc_desc)
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(
-                    SwStyle.color(this@ShellActivity, R.color.sw_disc_light),
-                    SwStyle.color(this@ShellActivity, R.color.cyan_primary),
-                    SwStyle.color(this@ShellActivity, R.color.sw_disc_dark)
-                )
-            ).apply {
-                shape = GradientDrawable.OVAL
-                setStroke(
-                    SwStyle.dp(this@ShellActivity, 6f),
-                    SwStyle.color(this@ShellActivity, R.color.rv_bg)
-                )
-            }
+            contentDescription = getString(R.string.scan_capture_desc)
+            setBackgroundResource(R.drawable.bg_scan_disc)
+            // Background layer-list provides a fixed 2dp contact shadow.
+            elevation = 0f
+            com.scanwhirl.app.ui.kit.SwStyle.asButton(this)
             // UI-B1 (#2): the centre action opens the Create sheet; the camera is one choice
             // inside it, next to ID card, Passport, QR code, photos and PDF.
             setOnClickListener {
                 com.scanwhirl.app.ui.kit.SwMotion.expandFrom(this) { showCreateSheet() }
             }
-            com.scanwhirl.app.ui.kit.SwMotion.press(this)
-            com.scanwhirl.app.ui.kit.SwMotion.breathe(this)
         }
-        disc.addView(
-            ImageView(this).apply {
-                setImageResource(R.drawable.ic_sym_document_scanner)
-                imageTintList = ColorStateList.valueOf(
-                    SwStyle.color(this@ShellActivity, R.color.sw_disc_ink)
-                )
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            isDuplicateParentStateEnabled = true
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            isClickable = false
+            isFocusable = false
+        }
+        val iconSize = if (resources.configuration.fontScale >= 1.6f) 24f else 32f
+        column.addView(
+            ImageView(ctx).apply {
+                setImageResource(R.drawable.ic_scan_capture)
+                imageTintList = foreground
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                isDuplicateParentStateEnabled = true
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
-            FrameLayout.LayoutParams(SwStyle.dp(this, 34f), SwStyle.dp(this, 34f)).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = SwStyle.dp(this@ShellActivity, 8f)
-            }
+            LinearLayout.LayoutParams(
+                SwStyle.dp(ctx, iconSize), SwStyle.dp(ctx, iconSize)
+            )
         )
-        // L1-03: a visible, base-12sp caption. It lives INSIDE the disc's single focus
-        // stop, so TalkBack still hears one named Scan action rather than a second node.
-        disc.addView(
-            SwStyle.text(this, 12f, SwStyle.color(this, R.color.sw_disc_ink), bold = true).apply {
+        // L1-03: the visible caption stays inside the disc's single focus stop, so
+        // TalkBack still hears one named Scan action rather than a second node.
+        column.addView(
+            SwStyle.text(
+                ctx, if (hindi) 14f else 12f,
+                SwStyle.color(ctx, R.color.sw_on_scan), bold = true
+            ).apply {
                 id = R.id.uxL1ScanCaption
                 text = getString(R.string.ux130_l1_scan_caption)
+                setTextColor(foreground)
                 gravity = Gravity.CENTER
+                includeFontPadding = hindi
+                letterSpacing = 0f
+                setSingleLine(true)
+                isDuplicateParentStateEnabled = true
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 isFocusable = false
-                includeFontPadding = false
+                isClickable = false
             },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(ctx, 2f) }
+        )
+        disc.addView(
+            column,
             FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = SwStyle.dp(this@ShellActivity, 7f)
-            }
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
         )
         return disc
     }
@@ -1421,6 +1443,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     /** v2 UI: 06_pro — a Pro tool in a Free build opens the Pro screen. */
     override fun proGate(tool: SwTool): Boolean {
+        // LX: Link index is Pro with one free successful use. The tile keeps its Pro
+        // badge and count; only a spent free use is gated here. The Activity itself
+        // shows the disclosure before the first run and gates later launches too.
+        if (tool.id == com.scanwhirl.app.ui.tools.linkindex.LinkIndexActivity.TOOL_ID &&
+            !com.scanwhirl.app.util.LinkIndexTrial.needsPro(this)
+        ) return false
         if (com.scanwhirl.app.util.ProGate.isPro(this)) return false
         showPro()
         return true

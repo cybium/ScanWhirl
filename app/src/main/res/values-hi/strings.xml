@@ -188,20 +188,22 @@
     <string name="compress_level_high">छोटा</string>
     <string name="compress_level_low">सबसे साफ़</string>
     <string name="compress_level_medium">बीच का</string>
-    <string name="compress_level_title">कितना छोटा करें</string>
+    <string name="compress_level_title">फ़ाइल छोटी करें</string>
     <string name="compress_level_ultra">सबसे छोटा</string>
     <string name="compress_pick_scan">छोटा करने के लिए स्कैन चुनें</string>
     <string name="compress_source_file">PDF फ़ाइल</string>
     <string name="compress_source_scan">सहेजा गया स्कैन</string>
-    <string name="compress_target_label">अपनी ज़रूरत का आकार (चाहें तो)</string>
+    <string name="compress_target_label">फ़ाइल का अधिकतम आकार</string>
+    <!-- SH2: short example above the KB chips of the Compress sheet. -->
+    <string name="compress_target_placeholder">100 KB</string>
     <string name="compress_target_missed">%1$s तक नहीं पहुँच सके। यही सबसे छोटा नतीजा है।</string>
     <string name="compress_title">PDF का आकार घटाएँ</string>
 
     <!-- UI-B3 (#7, #8, #9-now): दो साफ़ तरीके, फिर मापा हुआ नतीजा। -->
-    <string name="compress_mode_quality">गुणवत्ता चुनें</string>
-    <string name="compress_mode_target">फ़ाइल का आकार तय करें</string>
-    <!-- review --> <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB। अकेले अंकों का मतलब KB होता है।</string>
-    <string name="compress_target_required">ज़रूरी आकार लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_mode_quality">गुणवत्ता</string>
+    <string name="compress_mode_target">फ़ाइल का अधिकतम आकार</string>
+    <string name="compress_target_help">KB या MB में लिखें। अकेले अंकों का मतलब KB है।</string>
+    <string name="compress_target_required">अधिकतम आकार लिखें</string>
     <string name="compress_action">छोटा करें</string>
     <string name="compress_result_header">छोटा किया गया</string>
     <string name="compress_result_size">%1$s</string>
@@ -346,6 +348,13 @@
     <string name="resize_times">×</string>
     <string name="resize_title">तस्वीर का आकार बदलें</string>
     <string name="resize_width">चौड़ाई</string>
+    <!-- FF-R: सटीक पिक्सेल; काटें या सफ़ेद किनारे — तस्वीर नहीं खींची जाती। -->
+    <string name="resize_mode_crop">फिट करने के लिए काटें</string>
+    <string name="resize_mode_borders">पूरी तस्वीर किनारों के साथ</string>
+    <string name="resize_crop_helper">रखने का हिस्सा चुनें। पिक्सेल %1$d × %2$d रहेंगे। अगर यह आकार नहीं बन सका, तो हम बता देंगे।</string>
+    <string name="resize_borders_helper">सफ़ेद पट्टियाँ जुड़ेंगी; तस्वीर नहीं खींची जाएगी। पिक्सेल %1$d × %2$d रहेंगे।</string>
+    <string name="resize_minmax">न्यूनतम और अधिकतम KB</string>
+    <string name="resize_target_missed">पिक्सेल %1$d × %2$d वैसे ही रखे गए, पर यह आकार %3$s तक नहीं पहुँच सका।</string>
     <string name="result_before_after">%1$s → %2$s</string>
     <string name="result_dimensions">%1$d × %2$d px</string>
     <string name="result_save_documents">Documents में सहेजें</string>

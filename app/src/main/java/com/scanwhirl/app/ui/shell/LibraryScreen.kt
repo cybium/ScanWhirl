@@ -1649,6 +1649,11 @@ class LibraryScreen(
             )
             isClickable = true
             isFocusable = true
+            // FX1: git log -S shows the handler was added in 017f771c and never removed by a
+            // merge; a real-tap hit-test (Fx1Run5DefectsTest) confirms it still opens the sheet.
+            // Kit button semantics make the tap target speak as a Button to TalkBack, so a
+            // reader knows the visible chip is actionable instead of a decorative label.
+            SwStyle.asButton(this)
             setOnClickListener { pickLanguage() }
         }
 
@@ -1924,13 +1929,15 @@ class LibraryScreen(
 
     /**
      * UX-008: the pencil opens ONE sheet for add, remove, reorder and reset. The Home rows are
-     * untouched until Done; the X, Cancel and Back all discard the draft.
+     * untouched until Save; the X and Back discard the draft.
      */
     /**
-     * Council §7: newcomer-safe editor. A single list of checkbox rows with the FULL tool
-     * name, ▲▼ buttons (no drag needed), a "Tap to add or remove" hint and Reset. Cap 6:
-     * a saved list longer than six is kept but cannot grow until one is unchecked.
-     * The Home strip is untouched until Done; Cancel/Back discard the draft.
+     * Council §7 + SH2: newcomer-safe editor. A single list of checkbox rows with the FULL tool
+     * name, ▲▼ buttons (no drag needed), ONE instruction line ("Choose up to 6 tools. Use the
+     * arrows to reorder.") and Reset. Cap 6: a saved list longer than six is kept but cannot
+     * grow until one is unchecked. The Home strip is untouched until "Save quick tools"; the
+     * X discards the draft. This is non-destructive, so no duplicate Cancel footer: only a
+     * destructive confirmation (Reset) keeps an explicit Cancel.
      */
     private fun showQuickEditor() {
         val draft = quickIds.toMutableList()
@@ -1984,22 +1991,9 @@ class LibraryScreen(
                 },
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
             )
+            // SH2: the cap is already in the single instruction line; a second cyan
+            // "up to 6" statement repeated it and pushed the first row off a short sheet.
             val atLimit = draft.size >= QUICK_CAP
-            if (atLimit) {
-                // The cap is a real, focusable statement, not a silent dead control.
-                content.addView(
-                    SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary)).apply {
-                        id = R.id.cbQuickLimit
-                        text = context.getString(R.string.cb_quick_max_reached)
-                        contentDescription = text
-                        minimumHeight = SwStyle.dp(context, 48f)
-                        gravity = Gravity.CENTER_VERTICAL
-                        isFocusable = true
-                        isClickable = true
-                    },
-                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                )
-            }
             for (tool in ToolRegistry.all.filter { it.status == ToolStatus.READY }) {
                 val checked = tool.id in draft
                 val row = LinearLayout(context).apply {
@@ -2069,13 +2063,14 @@ class LibraryScreen(
         val sheet = SwSheet.builder(context)
             .setTitle(R.string.cb_quick_editor_title)
             .setContent(scroll)
-            .setPrimary(R.string.sel_done) {
+            .setPrimary(R.string.cb_quick_save) {
                 com.scanwhirl.app.util.Prefs.setQuickTools(context, draft)
                 quickIds = com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
                 saved = true
                 buildQuickRows()
             }
-            .setSecondary(R.string.sheet_cancel) { /* discard */ }
+            // SH2: no Cancel here. The X (and Back) discard the draft; only the
+            // destructive Reset confirmation below keeps an explicit Cancel.
             .build()
         sheet.setOnDismissListener {
             rebuildQuickEditor = null

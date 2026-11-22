@@ -528,8 +528,10 @@ class CompressResultHindiWordingTest {
             "यह छोटी की गई प्रति और उसकी Documents प्रति हटा दी गई।",
             app.getString(R.string.compress_undo_removed_with_copy)
         )
-        assertEquals("गुणवत्ता चुनें", app.getString(R.string.compress_mode_quality))
-        assertEquals("फ़ाइल का आकार तय करें", app.getString(R.string.compress_mode_target))
+        // SH2 COPY_DIET: OLD "गुणवत्ता चुनें" / "फ़ाइल का आकार तय करें".
+        // NEW "गुणवत्ता" / "फ़ाइल का अधिकतम आकार" (plain P option labels).
+        assertEquals("गुणवत्ता", app.getString(R.string.compress_mode_quality))
+        assertEquals("फ़ाइल का अधिकतम आकार", app.getString(R.string.compress_mode_target))
         assertEquals("छोटा करें", app.getString(R.string.compress_action))
     }
 }

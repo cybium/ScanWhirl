@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -35,6 +37,8 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 class ProStateTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before

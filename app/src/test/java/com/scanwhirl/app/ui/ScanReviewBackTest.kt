@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.view.View
@@ -29,6 +31,8 @@ import java.util.UUID
 @Config(sdk = [35])
 class ScanReviewBackTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
