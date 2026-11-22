@@ -1054,7 +1054,103 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildMergeOptions() {
         optionsHost.addView(note(getString(R.string.tools_setup_merge_note)))
+        buildMergeOrderPreview()
         buildNameOption()
+    }
+
+    /**
+     * FF-M: an ordered preview of the chosen sources. What is shown here is the exact order handed to
+     * `mergeDocuments`; a named 48dp up/down action swaps neighbours and re-renders the screen. The
+     * summary states the resulting page count and byte estimate before Continue is pressed.
+     */
+    private fun buildMergeOrderPreview() {
+        if (tool.id != "merge" || selected.size < 2) return
+        val chosen = selected.toList().mapNotNull { id -> docs.firstOrNull { it.id == id } }
+        if (chosen.size < 2) return
+        optionsHost.addView(sectionLabel(getString(R.string.ffm_merge_order_title)))
+        val tint = SwStyle.color(this, R.color.cyan_primary)
+        chosen.forEachIndexed { index, doc ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                tag = FFM_ORDER_TAG
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 52f)
+                setPadding(
+                    SwStyle.dp(this@ToolSetupActivity, 10f), SwStyle.dp(this@ToolSetupActivity, 4f),
+                    SwStyle.dp(this@ToolSetupActivity, 4f), SwStyle.dp(this@ToolSetupActivity, 4f)
+                )
+                background = SwStyle.card(this@ToolSetupActivity, 12f)
+            }
+            row.addView(
+                SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                    tag = FFM_ORDER_NUMBER_TAG
+                    text = getString(R.string.ffm_merge_order_item, index + 1, doc.name)
+                    contentDescription = text
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            )
+            val up = SwStyle.iconButton(this, R.drawable.ic_chevron_up, tint).apply {
+                tag = FFM_MOVE_UP_TAG
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+                contentDescription = getString(R.string.ffm_merge_move_up, doc.name)
+                isEnabled = index > 0
+                alpha = if (isEnabled) 1f else DISABLED_ALPHA
+                setOnClickListener { moveMergeSource(index, -1) }
+            }
+            val down = SwStyle.iconButton(this, R.drawable.ic_chevron_down, tint).apply {
+                tag = FFM_MOVE_DOWN_TAG
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+                contentDescription = getString(R.string.ffm_merge_move_down, doc.name)
+                isEnabled = index < chosen.lastIndex
+                alpha = if (isEnabled) 1f else DISABLED_ALPHA
+                setOnClickListener { moveMergeSource(index, 1) }
+            }
+            row.addView(up)
+            row.addView(down)
+            optionsHost.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
+        }
+        val pages = chosen.sumOf { it.pageCount }
+        val bytes = chosen.sumOf { it.pdfFile.length() }
+        optionsHost.addView(
+            SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_dim), metadata = true).apply {
+                tag = FFM_SUMMARY_TAG
+                text = getString(R.string.ffm_merge_summary, pages, StatusLine.formatBytes(bytes))
+                contentDescription = text
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
+        )
+        // The only helper line on this work screen: a size limit is a Compress job, not a merge job.
+        optionsHost.addView(
+            SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.rv_accent), metadata = true).apply {
+                tag = FFM_COMPRESS_TAG
+                text = getString(R.string.ffm_merge_compress_hint)
+                contentDescription = text
+                minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    startActivity(ToolSetupActivity.intent(this@ToolSetupActivity, "compress"))
+                }
+            }
+        )
+    }
+
+    /** FF-M: swaps a chosen source with its neighbour, keeping selection order for the merge. */
+    private fun moveMergeSource(index: Int, delta: Int) {
+        val ids = selected.toList()
+        val other = index + delta
+        if (index !in ids.indices || other !in ids.indices) return
+        java.util.Collections.swap(ids, index, other)
+        selected.clear()
+        selected.addAll(ids)
+        render()
     }
 
     private fun buildZipOptions() {
@@ -1780,6 +1876,13 @@ class ToolSetupActivity : BaseActivity() {
         const val BOTTOM_SPACER_TAG = "co_bottom_spacer"
         /** Inline required-name error under the editable field. */
         const val NAME_ERROR_TAG = "co_name_required"
+        // FF-M: tags on the merge order preview (code-built views, no new layout or resource ids).
+        const val FFM_ORDER_TAG = "ffm_order_row"
+        const val FFM_ORDER_NUMBER_TAG = "ffm_order_number"
+        const val FFM_MOVE_UP_TAG = "ffm_move_up"
+        const val FFM_MOVE_DOWN_TAG = "ffm_move_down"
+        const val FFM_SUMMARY_TAG = "ffm_summary"
+        const val FFM_COMPRESS_TAG = "ffm_compress_hint"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
 
