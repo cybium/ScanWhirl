@@ -60,9 +60,15 @@ class V2t_T2_ChainIdentityTest {
     }
 
     private fun recordResult(source: String?, output: String) {
+        // The real producer captures D2 on IO at publish time. Store that strong identity in
+        // the durable receipt so a matching output still authorises chaining; a reused id or
+        // changed bytes still fail the same re-check and refuse.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(output), emptyList())
+        )
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "compress", docIds = listOf(output),
-                receiptSourceId = source)
+                receiptSourceId = source, outputIdentity = identity)
         ).use { scenario -> scenario.onActivity { it.finish() } }
         idle()
     }
