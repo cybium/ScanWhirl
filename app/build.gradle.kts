@@ -136,6 +136,33 @@ android {
         }
     }
 
+    // ---- CI demo APK lane (CIAPK), 2026-11-22: applies ONLY when BOTH -PdemoBuild
+    // and -PdemoKeystore=<path> are supplied. This signs the DEBUG variant with a
+    // throwaway demo key for com.scanwhirl.app.demo built on GitHub Actions; it is
+    // NOT the Play/release key and release signing above is never touched.
+    // Inert otherwise: without both properties nothing here runs - no keystore file
+    // is read, no password property is resolved, and debug keeps the default debug
+    // key exactly as it does today. (-PdemoBuild on its own still only changes the
+    // applicationId above, as before.)
+    if (project.hasProperty("demoBuild") && project.hasProperty("demoKeystore")) {
+        val demoStoreFile = file(project.property("demoKeystore").toString())
+        val demoStorePass = project.findProperty("demoStorePass")?.toString().orEmpty()
+        val demoKeyAlias = project.findProperty("demoKeyAlias")?.toString().orEmpty()
+        val demoKeyPass = project.findProperty("demoKeyPass")?.toString().orEmpty()
+        val demoSigning = signingConfigs.create("demo") {
+            storeFile = demoStoreFile
+            storePassword = demoStorePass
+            keyAlias = demoKeyAlias
+            keyPassword = demoKeyPass
+        }
+        buildTypes {
+            getByName("debug") {
+                signingConfig = demoSigning
+            }
+        }
+    }
+    // ---- end CI demo APK block ----
+
     lint {
         // WP-04: all 13 known errors fixed; now enforce lint gate.
         // checkReleaseBuilds=false keeps lint out of assembleRelease path
