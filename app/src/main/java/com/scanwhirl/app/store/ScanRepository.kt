@@ -2403,6 +2403,27 @@ class ScanRepository(private val context: Context) {
         return validated.mapValues { it.value.points }
     }
 
+    /**
+     * B4: a second-stage re-encode (target fitting) changes a staged page's pixels and SHA. Re-bind
+     * the ALREADY-CHOSEN points to those FINAL bytes and prove the sidecar is trusted before PDF
+     * generation. A hash/pixel mismatch must never silently substitute a pixel-derived paper size:
+     * when geometry cannot be verified we fail closed instead of claiming a wrong page box.
+     */
+    private fun rebindPageSizesVerified(
+        dir: File,
+        pages: List<File>,
+        chosen: List<Pair<Int, Int>>
+    ) {
+        require(pages.isNotEmpty()) { "No pages to compress" }
+        require(pages.size == chosen.size) { "Page geometry count mismatch" }
+        writePageSizeMap(dir, pages.mapIndexed { i, page -> page.name to chosen[i] }.toMap())
+        val final = pageFilesIn(dir)
+        if (final != pages) throw IOException("Page set changed during geometry bind")
+        val trusted = readPageSizes(dir, final) ?: throw IOException("Page geometry missing")
+        val verified = final.map { trusted[it.name] ?: throw IOException("Page geometry unverified") }
+        if (verified != chosen) throw IOException("Page geometry unverified")
+    }
+
     /** Source page box in points, captured before a tool re-encodes/downsamples the page image. */
     private fun sourcePageSizes(files: List<File>): List<Pair<Int, Int>> {
         val saved = files.groupBy { requireNotNull(it.parentFile) }.mapValues { (dir, pages) ->
@@ -2929,11 +2950,17 @@ class ScanRepository(private val context: Context) {
                     done += pdf.indices.size
                 }
                 if (done == 0) throw IllegalStateException("No pages to compress")
-                // FF-G-lite: the rendered page box is the source geometry; capture it BEFORE the
-                // KB fitter resamples these pages (an external PDF's MediaBox is not stored here).
-                writePageSizes(staging, sourcePageSizes(pageFilesIn(staging)))
+                // B4: capture the chosen page-size contract BEFORE the KB fitter re-encodes the
+                // rendered pages. These are the rendered 150-DPI derived points (an external PDF's
+                // own MediaBox is not preserved on this base); they must not change during fitting.
+                val stagedPages = pageFilesIn(staging)
+                val chosenPoints = sourcePageSizes(stagedPages)
                 // CP1: the re-fit pass gets the same determinate progress as the render pass.
                 fitStagedPagesToTarget(staging, targetBytes, onPage = onPage)
+                // B4: re-bind those SAME chosen points to the FINAL encoded bounds + SHA after the
+                // re-encode and verify they are trusted before PDF generation, so a mismatch fails
+                // closed instead of silently exporting a smaller pixel-derived paper size.
+                rebindPageSizesVerified(staging, stagedPages, chosenPoints)
             }
         }
     }
