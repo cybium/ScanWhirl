@@ -12,43 +12,52 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.ExportResultActivity
-import com.scanwhirl.app.ui.SwDialog
-import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.BoundedCopy
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
-import kotlin.math.roundToInt
 
 /**
- * test26 T2.1 — Resize tool, moved verbatim out of `MainActivity`.
- * Launchers stay in the Activity (they must register before STARTED); this
- * class only owns the dialogs and the work.
+ * Resize tool. The launchers stay in the Activity (they must register before
+ * STARTED); this class owns the dialog and the work.
+ *
+ * FF-R: width x height is now an exact canvas. Crop is the default and uses a
+ * movable aspect-locked frame; the alternative aspect-fits the whole picture on
+ * white bars. Both preserve the subject's shape. A byte target only changes JPEG
+ * quality and an unmet target is reported, never hidden by shrinking pixels.
  */
 class ResizeFlow(
     private val activity: AppCompatActivity,
     private val repo: ScanRepository,
-    private val host: HomeHost
+    private val host: HomeHost,
+    /** Injectable so a cancellation test can block an in-flight compute. */
+    private val compute: (ByteArray, ExactResize.Options) -> ExactResize.Result =
+        { bytes, opts -> ExactResize.process(bytes, opts) }
 ) {
 
     fun start(uri: Uri) {
         activity.lifecycleScope.launch {
             try {
                 val name = withContext(Dispatchers.IO) { repo.displayNameOf(uri) ?: "image" }
-                // P1: bounded, off-main copy. Reading the picked image with
-                // readBytes() on the UI thread could OOM/ANR on a large photo.
                 val copy = FlowUtil.copyPickedImage(activity, uri, name)
                 val bytes = try {
                     withContext(Dispatchers.IO) { copy.readBytes() }
                 } finally {
                     BoundedCopy.release(copy)
                 }
-                val size = ImageTools.imageSize(bytes) ?: run {
+                // EXIF rotation belongs to the source space the crop frame works in.
+                val size = try {
+                    ExactResize.normalizedSize(bytes)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+                if (size == null) {
                     failWith(R.string.f8_reason_not_image)
                     return@launch
                 }
@@ -58,9 +67,9 @@ class ResizeFlow(
                     e.result == BoundedCopy.Result.NO_SPACE
                 ) R.string.f8_reason_too_large else R.string.f8_reason_unreadable
                 failWith(reason)
+            } catch (e: ExactResize.TooLargeException) {
+                failWith(R.string.f8_reason_too_large)
             } catch (e: OutOfMemoryError) {
-                // An exhausted heap is expected on a low-RAM phone; it is not a
-                // crash and never a raw JVM message in the UI.
                 failWith(R.string.f8_reason_too_large)
             } catch (e: CancellationException) {
                 throw e
@@ -78,11 +87,41 @@ class ResizeFlow(
         ).show()
     }
 
-    private fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
-        val dialogBinding = DialogResizeBinding.inflate(activity.layoutInflater)
-        dialogBinding.fileInfo.text = activity.getString(
+    private suspend fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
+        val b = DialogResizeBinding.inflate(activity.layoutInflater)
+        b.fileInfo.text = activity.getString(
             R.string.resize_file_info, name, SizeUnits.format(bytes.size.toLong()), origW, origH
         )
+        b.editWidth.setText(FlowUtil.intText(origW))
+        b.editHeight.setText(FlowUtil.intText(origH))
+
+        // A bounded, EXIF-normalised display copy: CropView works in these pixels
+        // and its rect is scaled back to the full source when the work starts.
+        val preview = withContext(Dispatchers.IO) {
+            ExactResize.decodeNormalized(bytes, 900)
+        }
+        b.cropPreview.setImage(preview)
+
+        fun currentSize(): Pair<Int, Int> {
+            val w = b.editWidth.text.toString().toIntOrNull() ?: origW
+            val h = b.editHeight.text.toString().toIntOrNull() ?: origH
+            return w to h
+        }
+        fun refreshFrame() {
+            val (w, h) = currentSize()
+            if (w in 1..12000 && h in 1..12000) {
+                b.cropPreview.aspectRatio = w.toFloat() / h
+            }
+            val helper = if (b.resizeModeCrop.isChecked) R.string.resize_crop_helper
+            else R.string.resize_borders_helper
+            b.helperText.text = activity.getString(helper, w, h)
+        }
+        refreshFrame()
+
+        b.resizeModeGroup.setOnCheckedChangeListener { _, _ ->
+            b.cropPreview.isVisible = b.resizeModeCrop.isChecked
+            refreshFrame()
+        }
 
         // V2T T2: one free decimal-KB table across Resize and Compress.
         val presetValues = CompressionPresentation.quickTargetKb.associateWith { kb ->
@@ -97,110 +136,112 @@ class ResizeFlow(
             id to label
         }.toMap()
 
-        // Preset chip fills the size field; typing a custom size deselects the chip.
         var suppressPreset = false
-        dialogBinding.presetGroup.setOnCheckedChangeListener { _, checkedId ->
+        b.presetGroup.setOnCheckedChangeListener { _, checkedId ->
             val value = presetValues[checkedId] ?: return@setOnCheckedChangeListener
             suppressPreset = true
-            dialogBinding.editMaxSize.setText(value)
+            b.editMaxSize.setText(value)
             suppressPreset = false
         }
-        dialogBinding.editMaxSize.addTextChangedListener(object : TextWatcher {
+        b.editMaxSize.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 if (suppressPreset) return
-                val checkedId = dialogBinding.presetGroup.checkedChipId
+                val checkedId = b.presetGroup.checkedChipId
                 val text = s?.toString()?.trim().orEmpty()
                 if (checkedId != -1 && presetValues[checkedId]?.equals(text, true) != true) {
-                    dialogBinding.presetGroup.clearCheck()
+                    b.presetGroup.clearCheck()
                 }
             }
         })
-
-        dialogBinding.checkAdvanced.setOnCheckedChangeListener { _, checked ->
-            dialogBinding.advancedBox.isVisible = checked
-        }
 
         var suppress = false
         val watcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                if (suppress || !dialogBinding.checkRatio.isChecked) return
-                val editingHeight = s === dialogBinding.editHeight.text
-                val value = s?.toString()?.toIntOrNull()?.takeIf { it > 0 } ?: return
+                if (suppress) return
                 suppress = true
-                if (editingHeight) {
-                    val w = (value.toFloat() * origW / origH).roundToInt().coerceIn(1, 12000)
-                    dialogBinding.editWidth.setText(FlowUtil.intText(w))
-                } else {
-                    val h = (value.toFloat() * origH / origW).roundToInt().coerceIn(1, 12000)
-                    dialogBinding.editHeight.setText(FlowUtil.intText(h))
-                }
+                refreshFrame()
                 suppress = false
             }
         }
-        dialogBinding.editWidth.addTextChangedListener(watcher)
-        dialogBinding.editHeight.addTextChangedListener(watcher)
+        b.editWidth.addTextChangedListener(watcher)
+        b.editHeight.addTextChangedListener(watcher)
 
-        dialogBinding.btnKeepOriginal.setOnClickListener {
+        b.btnMinMaxKb.setOnClickListener {
+            val (w, h) = currentSize()
+            val kb = b.editMaxSize.text?.toString()?.trim()?.let { SizeUnits.parse(it) }
+            activity.startActivity(
+                ExactResize.formPhotoIntent(
+                    activity,
+                    w.coerceIn(1, 12000),
+                    h.coerceIn(1, 12000),
+                    kb?.let { (it / 1000L).toInt().coerceAtLeast(1) }
+                )
+            )
+        }
+
+        b.btnKeepOriginal.setOnClickListener {
             suppress = true
-            dialogBinding.editWidth.text?.clear()
-            dialogBinding.editHeight.text?.clear()
+            b.editWidth.setText(FlowUtil.intText(origW))
+            b.editHeight.setText(FlowUtil.intText(origH))
             suppress = false
-            dialogBinding.editMaxSize.text?.clear()
-            dialogBinding.presetGroup.clearCheck()
-            dialogBinding.checkAdvanced.isChecked = false
+            b.editMaxSize.text?.clear()
+            b.presetGroup.clearCheck()
+            b.cropPreview.clearImage()
+            b.cropPreview.setImage(preview)
+            b.resizeModeCrop.isChecked = true
+            refreshFrame()
         }
 
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.resize_title)
-            .setContent(dialogBinding.root)
+            .setContent(b.root)
             .setSecondary(android.R.string.cancel)
             .build()
         sheet.setPrimaryStayOpen(R.string.resize_action) {
-                val ratio = dialogBinding.checkRatio.isChecked
-                val ew = dialogBinding.editWidth.text.toString().toIntOrNull()
-                val eh = dialogBinding.editHeight.text.toString().toIntOrNull()
-                val targetText = dialogBinding.editMaxSize.text?.toString()
+            val (w, h) = currentSize()
+            if (w !in 1..12000 || h !in 1..12000) {
+                Toast.makeText(activity, R.string.resize_invalid_size, Toast.LENGTH_SHORT).show()
+                return@setPrimaryStayOpen
+            }
+            val targetText = b.editMaxSize.text?.toString()
+            val target = if (targetText.isNullOrBlank()) null else SizeUnits.parse(targetText)
+            if (!targetText.isNullOrBlank() && target == null) {
+                Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
+                return@setPrimaryStayOpen
+            }
 
-                val target = if (targetText.isNullOrBlank()) null else SizeUnits.parse(targetText)
-                if (!targetText.isNullOrBlank() && target == null) {
-                    Toast.makeText(activity, R.string.resize_invalid_target, Toast.LENGTH_LONG).show()
-                    return@setPrimaryStayOpen
-                }
-
-                val (w, h) = when {
-                    ew == null && eh == null -> origW to origH
-                    ratio && ew == null -> (derive(eh!!, origH, origW)) to eh
-                    ratio -> ew to derive(ew!!, origW, origH)
-                    else -> (ew ?: origW) to (eh ?: origH)
-                }
-                if (w !in 1..12000 || h !in 1..12000) {
-                    Toast.makeText(activity, R.string.resize_invalid_size, Toast.LENGTH_SHORT).show()
-                    return@setPrimaryStayOpen
-                }
-                sheet.dismiss()
-                // DPI is intentionally not exposed: a DPI tag alone does not change
-                // pixels, so only real pixel dimensions + target size are offered,
-                // and no DPI metadata is stamped the user didn't ask for.
-                doResize(
-                    bytes, name,
-                    ImageTools.ResizeOptions(
-                        width = w, height = h, keepRatio = ratio,
-                        maxBytes = target, keepPng = false, dpi = 0
-                    )
+            // CropView's rect is in the preview's pixels; scale it into the
+            // EXIF-normalised full source. Borders mode ignores the frame.
+            val cropRect = if (b.resizeModeCrop.isChecked && preview.width > 0 && preview.height > 0) {
+                val r = b.cropPreview.getCropRect()
+                if (r.width() > 0f && r.height() > 0f) {
+                    val sx = origW.toFloat() / preview.width
+                    val sy = origH.toFloat() / preview.height
+                    android.graphics.RectF(r.left * sx, r.top * sy, r.right * sx, r.bottom * sy)
+                } else null
+            } else null
+            sheet.dismiss()
+            doResize(
+                bytes, name,
+                ExactResize.Options(
+                    width = w,
+                    height = h,
+                    mode = if (b.resizeModeCrop.isChecked) ExactResize.Mode.CROP
+                    else ExactResize.Mode.BORDERS,
+                    maxBytes = target,
+                    cropRect = cropRect
                 )
+            )
         }
         sheet.show()
     }
 
-    private fun derive(from: Int, fromOrig: Int, toOrig: Int): Int =
-        if (fromOrig > 0) (from.toDouble() * toOrig / fromOrig).roundToInt() else from
-
     /**
-     * P1: every run writes into its own folder under the FileProvider-exposed
+     * Every run writes into its own folder under the FileProvider-exposed
      * `cacheDir/documents` tree. The cold-start sweep deletes it, and a second
      * resize can never overwrite the first one's result.
      */
@@ -214,41 +255,54 @@ class ResizeFlow(
         }
     }
 
-    private fun doResize(bytes: ByteArray, name: String, opts: ImageTools.ResizeOptions) {
+    internal fun doResize(bytes: ByteArray, name: String, opts: ExactResize.Options): Job {
         val progress = host.showProgress()
-        activity.lifecycleScope.launch {
+        return activity.lifecycleScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { ImageTools.resize(bytes, opts) }
+                val result = withContext(Dispatchers.IO) { compute(bytes, opts) }
                 val dir = resizeOutputDir(activity.cacheDir)
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
-                val ext = if (result.isPng) "png" else "jpg"
-                val fileName = "${base}_${result.width}x${result.height}.$ext"
+                val fileName = "${base}_${result.width}x${result.height}.jpg"
                 val file = File(dir, fileName)
                 withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
 
-                // Show the real result (preview + before/after) instead of a toast.
+                // Report from the saved file, decoded again, not from the request.
+                val saved = withContext(Dispatchers.IO) {
+                    val raw = file.readBytes()
+                    val dims = ImageTools.imageSize(raw)
+                    Triple(raw.size.toLong(), dims?.first, dims?.second)
+                }
+                val warning = if (!result.bytesMet && opts.maxBytes != null) {
+                    activity.getString(
+                        R.string.resize_target_missed,
+                        saved.second ?: result.width, saved.third ?: result.height,
+                        SizeUnits.format(opts.maxBytes)
+                    )
+                } else null
                 activity.startActivity(
                     ExportResultActivity.intent(
                         activity,
                         outputPath = file.path,
                         previewPath = file.path,
-                        mime = if (result.isPng) "image/png" else "image/jpeg",
+                        mime = result.mime,
                         displayName = fileName,
                         beforeBytes = bytes.size.toLong(),
-                        afterBytes = result.bytes.size.toLong(),
-                        width = result.width,
-                        height = result.height,
+                        afterBytes = saved.first,
+                        width = saved.second ?: result.width,
+                        height = saved.third ?: result.height,
                         title = name,
-                        warning = null
+                        warning = warning
                     )
                 )
             } catch (e: CancellationException) {
-                // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
+            } catch (e: ExactResize.TooLargeException) {
+                failWith(R.string.f8_reason_too_large)
+            } catch (e: ExactResize.InsufficientSourceException) {
+                failWith(R.string.f8_reason_unreadable)
             } catch (e: OutOfMemoryError) {
                 failWith(R.string.f8_reason_too_large)
             } catch (e: Exception) {
-                // H2-5: localized prefix + localized reason; a raw JVM message is never shown.
                 val reason = if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
                 else R.string.f8_reason_unreadable
                 failWith(reason)
