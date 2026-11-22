@@ -1711,14 +1711,18 @@ class ScanRepository(private val context: Context) {
         maxDim: Int,
         quality: Int
     ): Int {
-        val count = PdfPageRenderer.pageCount(fd)
-        require(count > 0) { "PDF has no pages" }
-        for (i in 0 until count) {
-            val jpeg = PdfPageRenderer.renderPageJpeg(fd, i, dpi, maxDim, quality)
-            Durable.writeFile(File(dir, String.format(Locale.ROOT, PAGE_FORMAT, start + i)), jpeg)
-            OpFaults.at("op:page:${start + i}")
+        // PERF item 4: one native renderer (and one dup'd fd) for the whole import,
+        // not pageCount + one renderer per page. withRenderer closes it on every path.
+        return PdfPageRenderer.withRenderer(fd) { renderer ->
+            val count = renderer.pageCount
+            require(count > 0) { "PDF has no pages" }
+            for (i in 0 until count) {
+                val jpeg = PdfPageRenderer.renderPageJpeg(renderer, i, dpi, maxDim, quality)
+                Durable.writeFile(File(dir, String.format(Locale.ROOT, PAGE_FORMAT, start + i)), jpeg)
+                OpFaults.at("op:page:${start + i}")
+            }
+            count
         }
-        return count
     }
 
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =

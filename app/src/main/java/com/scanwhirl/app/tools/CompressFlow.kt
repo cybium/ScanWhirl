@@ -409,26 +409,29 @@ class CompressFlow(
                 withContext(Dispatchers.IO) {
                     // One seekable copy: SAF pipes cannot be rendered directly.
                     PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
-                        for (index in levels.indices) {
-                            if (session != sheetSeq) return@withSeekablePdf
-                            currentCoroutineContext().ensureActive()
-                            val level = levels[index]
-                            val rendered = runCatching {
-                                PdfPageRenderer.renderPageJpeg(
-                                    fd, pageIndex, level.dpi,
-                                    level.maxDim ?: 3000, level.quality
-                                )
-                            }.getOrNull()
-                            val bytes = rendered?.let {
-                                SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
-                            }
-                            withContext(Dispatchers.Main) { onLevel(index, bytes) }
-                            if (bytes == null) {
-                                // The same render failed: the remaining levels cannot be sized.
-                                for (rest in index + 1 until levels.size) {
-                                    withContext(Dispatchers.Main) { onLevel(rest, null) }
+                        // PERF item 4: one native renderer for all quality levels.
+                        PdfPageRenderer.withRendererSuspend(fd) { renderer ->
+                            for (index in levels.indices) {
+                                if (session != sheetSeq) return@withRendererSuspend
+                                currentCoroutineContext().ensureActive()
+                                val level = levels[index]
+                                val rendered = runCatching {
+                                    PdfPageRenderer.renderPageJpeg(
+                                        renderer, pageIndex, level.dpi,
+                                        level.maxDim ?: 3000, level.quality
+                                    )
+                                }.getOrNull()
+                                val bytes = rendered?.let {
+                                    SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
                                 }
-                                return@withSeekablePdf
+                                withContext(Dispatchers.Main) { onLevel(index, bytes) }
+                                if (bytes == null) {
+                                    // The same render failed: the remaining levels cannot be sized.
+                                    for (rest in index + 1 until levels.size) {
+                                        withContext(Dispatchers.Main) { onLevel(rest, null) }
+                                    }
+                                    return@withRendererSuspend
+                                }
                             }
                         }
                     }

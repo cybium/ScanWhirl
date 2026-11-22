@@ -1,6 +1,7 @@
 package com.scanwhirl.app
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
@@ -9,6 +10,7 @@ import androidx.core.os.LocaleListCompat
 import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.store.SaveFormat
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.PrivacySweep
@@ -79,6 +81,17 @@ class ScanWhirlApp : Application() {
         // refreshList; the application must do it once per cold start instead of a screen.
         // Robolectric builds keep it off (tests call [LibraryIndexBackfill.run] directly).
         if (Build.FINGERPRINT != "robolectric") startLibraryIndexBackfill()
+    }
+
+    /**
+     * PERF item 5 safety net: on memory pressure, drop the recognizers a multi-page
+     * job may still be caching. Off the main thread; the next job creates fresh ones.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            appScope.launch { OcrEngine.closeRecognizers() }
+        }
     }
 
     /** Completed once the cold-start privacy sweep has finished (success or isolated failure). */
