@@ -7,9 +7,11 @@ import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.tools.linkindex.LinkIndexActivity
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.util.LinkIndexTrial
 import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -83,8 +85,14 @@ class ShellProGateTest {
     fun `Free - every Pro tile in the Tools hub opens the Pro screen`() {
         ProGate.setTestOverride(app, false)
         // v2 UI: 03_tools_hub - a Coming-soon Pro tool is not a hub tile any more (no Soon tiles).
+        // LX: Link index is Pro with ONE free successful use. Its first tap opens
+        // its own screen (which shows the disclosure and gates later runs), so it is
+        // checked separately below instead of being gated at the shell.
         val proIds = ToolRegistry.all
-            .filter { it.pro && it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON }
+            .filter {
+                it.pro && it.status != com.scanwhirl.app.ui.kit.ToolStatus.SOON &&
+                    it.id != LinkIndexActivity.TOOL_ID
+            }
             .map { it.id }
         assertEquals("every Pro tool on sale has a tile", proIds.size, proIds.toSet().size)
 
@@ -102,6 +110,28 @@ class ShellProGateTest {
                 idle()
                 assertProScreen(activity, id)
             }
+        }
+    }
+
+    @Test
+    fun `Free - Link index first tap opens the tool screen, not the Pro screen`() {
+        ProGate.setTestOverride(app, false)
+        LinkIndexTrial.autoAcceptForTests = false
+        LinkIndexTrial.resetForTests(app)
+        launch { activity ->
+            activity.findViewById<View>(R.id.swNavTools).performClick()
+            idle()
+            openAllToolsDoors(activity)
+            val tile = ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
+                .firstOrNull { it.tool?.id == LinkIndexActivity.TOOL_ID }
+            assertNotNull("the Link index tile is on the hub", tile)
+            tile!!.performClick()
+            idle()
+            assertEquals(
+                LinkIndexActivity::class.java.name,
+                shadowOf(activity).nextStartedActivity?.component?.className
+            )
+            assertFalse(proVisible(activity))
         }
     }
 
