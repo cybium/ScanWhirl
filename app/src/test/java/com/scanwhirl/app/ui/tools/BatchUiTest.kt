@@ -162,7 +162,7 @@ class BatchUiTest {
                 options.findViewById<View>(R.id.swSheetPrimary).performClick()
             }
             assertTrue("two copies are published", waitUntil {
-                repo.listDocuments().count { it.name.endsWith(" - Compressed") } == 2
+                repo.listDocuments().count { it.name.endsWith(" (2)") } == 2
             })
             assertTrue("the summary opens", waitUntil {
                 ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.batchSummary) != null

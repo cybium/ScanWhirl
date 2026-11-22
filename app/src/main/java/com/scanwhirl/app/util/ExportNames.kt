@@ -27,6 +27,13 @@ object ExportNames {
 
     private val ILLEGAL = Regex("[\\\\/:*?\"<>|\\u0000-\\u001F\\u007F]")
 
+    /**
+     * Windows device names cannot be used as a file base even on Android: a file called `CON.pdf`
+     * cannot be copied to a PC. Trailing dots and spaces are trimmed before the check, and the
+     * match is case-insensitive, so `con. `, `LPT9` and `Aux` are all caught.
+     */
+    private val WINDOWS_RESERVED = Regex("(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$")
+
     private const val ZWNJ = 0x200C
     private const val ZWJ = 0x200D
 
@@ -67,7 +74,11 @@ object ExportNames {
     fun sanitizeBase(name: String, fallback: String = "Scan", max: Int = MAX_BASE_CODE_POINTS): String {
         val cleaned = trimJunk(name.replace(ILLEGAL, "_"))
         if (cleaned.isEmpty()) return fallback
-        return trimJunk(truncate(cleaned, max)).ifEmpty { fallback }
+        val limited = trimJunk(truncate(cleaned, max)).ifEmpty { fallback }
+        if (!WINDOWS_RESERVED.matches(limited)) return limited
+        if (max < 2) return limited
+        // Keep the code-point cap even after adding the escaping underscore.
+        return trimJunk(truncate(limited, max - 1)) + "_"
     }
 
     /**

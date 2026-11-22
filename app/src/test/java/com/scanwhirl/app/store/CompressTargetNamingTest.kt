@@ -13,9 +13,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * H3-6 (naming): Compress-to-target names its copy "<name> (compressed)" without asking for a
- * unique name, so two runs produced two indistinguishable documents. The repository now applies
- * the same " (2)" rule every other tool output uses, whatever name the flow passes.
+ * H3-6 (naming), updated for council §5: a compress copy keeps the source stem and gets the same
+ * " (2)" collision rule as every other new copy, so two runs never produce indistinguishable names.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -53,7 +52,8 @@ class CompressTargetNamingTest {
         val second = repo.createDocument(repo.outputName("Rent receipt", "Compressed"), page)
 
         assertNotEquals(first.name, second.name)
-        assertEquals("Rent receipt - Compressed", first.name)
-        assertEquals("Rent receipt - Compressed (2)", second.name)
+        // Council §5: the copy keeps the source stem; only the collision number differs.
+        assertEquals("Rent receipt", first.name)
+        assertEquals("Rent receipt (2)", second.name)
     }
 }
