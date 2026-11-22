@@ -23,6 +23,20 @@
             app:titleTextColor="@color/text_hologram_hi" />
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- V2V: a protected library copy is readable here on purpose; protection
+         applies to the PDF when it is shared or exported. Say so calmly. -->
+    <TextView
+        android:id="@id/v2v_protected_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_category_chip_tonal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="@string/v2v_protected_banner"
+        android:textColor="@color/rv_ink_2"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

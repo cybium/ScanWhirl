@@ -208,6 +208,21 @@
                 android:textColor="@color/cyan_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
+
+            <!-- V2V: protection is on the exported/shared PDF. Say that plainly;
+                 the pages in this private library copy stay readable by design. -->
+            <TextView
+                android:id="@id/v2v_protected_banner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_category_chip_tonal"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="8dp"
+                android:text="@string/v2v_protected_banner"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="12sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Organize pages (owner revision): a CamScanner-style top bar. It exists only
