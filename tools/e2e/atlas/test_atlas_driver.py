@@ -1,7 +1,9 @@
 """No-device sanity tests for the Tool Atlas harness (run in the build job)."""
+import inspect
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -66,9 +68,38 @@ class AtlasHarnessTests(unittest.TestCase):
     # ---- fail-closed regressions (no device, no new dependencies) -------------
 
     def _pass_verifier(self):
-        return {"status": "PASS", "reason": "exit 0",
+        return {"status": "PASS", "reason": "exit 0", "parsed": True, "exit": 0,
                 "checks": [{"check": "input.exists", "pass": True,
                             "measured": "file", "expected": "file"}]}
+
+    def _staging_map(self):
+        return {name: {"import_ok": True, "ids": ["doc-" + name]}
+                for name in a.STAGING_PDFS}
+
+    def _run_verify(self, report=None, exit_code=0, stale=None, raw_text=None):
+        """Run verify() against a NON-EMPTY fake output with a controlled child."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out.pdf"
+            out.write_bytes(b"%PDF-1.4 fictional output bytes")
+            jp = out.with_suffix(".json")
+            if stale is not None:
+                jp.write_text(json.dumps(stale), encoding="utf-8")
+            def fake_run(cmd, **kwargs):
+                if raw_text is not None:
+                    jp.write_text(raw_text, encoding="utf-8")
+                elif report is not None:
+                    jp.write_text(json.dumps(report), encoding="utf-8")
+                return subprocess.CompletedProcess(cmd, exit_code, "", "")
+            old_out, old_tool = a.OUT, a.CTX["tool"]
+            try:
+                a.OUT = Path(tmp)
+                a.CTX["tool"] = ""
+                with patch.object(a.subprocess, "run", side_effect=fake_run):
+                    ver = a.verify("J2", str(out))
+                status = a.classify(ver, str(out))
+                return ver, status, jp
+            finally:
+                a.OUT, a.CTX["tool"] = old_out, old_tool
 
     def test_staging_error_blocks_all_rows_writes_report_and_is_red(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,8 +129,7 @@ class AtlasHarnessTests(unittest.TestCase):
                 a.CTX["rows"] = []
                 with patch.dict(os.environ, {"ATLAS_TOOLS": "resize"}), \
                      patch.object(a, "guard"), patch.object(a, "adb", return_value=""), \
-                     patch.object(a, "doc_ids", return_value=set()), \
-                     patch.object(a, "prepare_library"), \
+                     patch.object(a, "prepare_library", return_value={}), \
                      patch.object(a, "scan_crashes", return_value=[]):
                     code = a.main()
                 self.assertNotEqual(code, 0)
@@ -113,6 +143,8 @@ class AtlasHarnessTests(unittest.TestCase):
         self.assertEqual(a.classify(None, None), a.NOT_TESTED)
         self.assertEqual(a.classify(self._pass_verifier(), None), a.NOT_TESTED)
         with tempfile.NamedTemporaryFile() as f:
+            f.write(b"%PDF-1.4 fictional output bytes")
+            f.flush()
             self.assertEqual(a.classify(None, f.name), a.NOT_TESTED)
 
     def test_missing_required_tap_blocks_pass(self):
@@ -123,6 +155,8 @@ class AtlasHarnessTests(unittest.TestCase):
                 self.assertFalse(a.require_tap(rid="toolSetupRun"))
             self.assertTrue(a.CTX["required_failed"])
             with tempfile.NamedTemporaryFile() as f:
+                f.write(b"%PDF-1.4 fictional output bytes")
+                f.flush()
                 self.assertEqual(
                     a.classify(self._pass_verifier(), f.name, required_ok=False), a.BLOCKED)
         finally:
@@ -130,14 +164,23 @@ class AtlasHarnessTests(unittest.TestCase):
 
     def test_real_verified_success_is_pass(self):
         with tempfile.NamedTemporaryFile() as f:
+            f.write(b"%PDF-1.4 fictional output bytes")
+            f.flush()
             self.assertEqual(a.classify(self._pass_verifier(), f.name), a.PASS)
 
     def test_failing_verifier_is_fail(self):
-        ver = {"status": "FAIL", "reason": "exit 1",
+        ver = {"status": "FAIL", "reason": "exit 1", "parsed": True, "exit": 1,
                "checks": [{"check": "input.exists", "pass": False,
                            "measured": "none", "expected": "file"}]}
         with tempfile.NamedTemporaryFile() as f:
+            f.write(b"%PDF-1.4 fictional output bytes")
+            f.flush()
             self.assertEqual(a.classify(ver, f.name), a.FAIL)
+
+    def test_empty_output_file_is_never_pass(self):
+        with tempfile.NamedTemporaryFile() as f:
+            self.assertFalse(a.has_output(f.name))
+            self.assertEqual(a.classify(self._pass_verifier(), f.name), a.NOT_TESTED)
 
     def test_crash_reddens_job_even_when_tool_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,6 +207,135 @@ class AtlasHarnessTests(unittest.TestCase):
                 self.assertIn("native crash", report)
             finally:
                 a.OUT, a.CTX["rows"] = old_out, old_rows
+
+    # ---- B1: verifier trust / staleness ---------------------------------------
+
+    def test_verify_exit0_invalid_json_is_not_pass(self):
+        ver, status, _ = self._run_verify(raw_text="{not json")
+        self.assertNotEqual(ver["status"], a.PASS)
+        self.assertFalse(ver["parsed"])
+        self.assertEqual(status, a.NOT_TESTED)
+
+    def test_verify_exit0_all_false_checks_is_not_pass(self):
+        report = {"checks": [
+            {"check": "a", "pass": False, "measured": "x", "expected": "y"},
+            {"check": "b", "pass": False, "measured": "x", "expected": "y"},
+        ]}
+        ver, status, _ = self._run_verify(report=report, exit_code=0)
+        self.assertEqual(ver["status"], a.FAIL)
+        self.assertEqual(status, a.FAIL)
+
+    def test_verify_exit0_mixed_checks_is_not_pass(self):
+        report = {"checks": [
+            {"check": "a", "pass": True, "measured": "x", "expected": "y"},
+            {"check": "b", "pass": False, "measured": "x", "expected": "y"},
+        ]}
+        ver, status, _ = self._run_verify(report=report, exit_code=0)
+        self.assertEqual(ver["status"], a.FAIL)
+        self.assertEqual(status, a.FAIL)
+
+    def test_verify_exit0_nonbool_pass_is_not_pass(self):
+        report = {"checks": [
+            {"check": "a", "pass": 1, "measured": "x", "expected": "y"},
+        ]}
+        ver, status, _ = self._run_verify(report=report, exit_code=0)
+        self.assertNotEqual(ver["status"], a.PASS)
+        self.assertEqual(status, a.NOT_TESTED)
+
+    def test_verify_exit0_empty_checks_is_not_pass(self):
+        ver, status, _ = self._run_verify(report={"checks": []}, exit_code=0)
+        self.assertNotEqual(ver["status"], a.PASS)
+        self.assertEqual(status, a.NOT_TESTED)
+
+    def test_verify_ignores_stale_pass_json(self):
+        stale = {"checks": [{"check": "input.exists", "pass": True,
+                             "measured": "old", "expected": "file"}]}
+        for code in (0, 1):
+            ver, status, jp = self._run_verify(stale=stale, exit_code=code)
+            self.assertNotEqual(ver["status"], a.PASS)
+            self.assertFalse(jp.exists(), "stale per-output JSON must be removed")
+            self.assertNotEqual(status, a.PASS)
+
+    def test_verify_fresh_valid_report_is_pass(self):
+        report = {"checks": [{"check": "input.exists", "pass": True,
+                              "measured": "fresh", "expected": "file"}]}
+        ver, status, _ = self._run_verify(report=report, exit_code=0)
+        self.assertEqual(ver["status"], a.PASS)
+        self.assertEqual(status, a.PASS)
+
+    def test_classify_rejects_lying_pass_status(self):
+        ver = {"status": "PASS", "reason": "exit 0", "parsed": True, "exit": 0,
+               "checks": [{"check": "a", "pass": False, "measured": "x", "expected": "y"}]}
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"%PDF-1.4 fictional output bytes")
+            f.flush()
+            self.assertEqual(a.classify(ver, f.name), a.NOT_TESTED)
+        self.assertFalse(a.verifier_is_valid({
+            "status": "PASS", "parsed": True, "exit": 0,
+            "checks": [{"check": "a", "pass": 1, "measured": "x", "expected": "y"}]}))
+
+    # ---- B2: staged fixture identity ------------------------------------------
+
+    def test_staging_true_map_accepts(self):
+        ids, problems = a.validate_staging_map(
+            self._staging_map(),
+            meta=lambda d: d[len("doc-"):],
+            pdf=lambda d: b"%PDF-1.4 fictional",
+        )
+        self.assertEqual(problems, [])
+        self.assertEqual(len(ids), len(a.STAGING_PDFS))
+
+    def test_staging_wrong_ids_reject(self):
+        mapping = {name: {"import_ok": True, "ids": ["bogus-" + str(i)]}
+                   for i, name in enumerate(a.STAGING_PDFS)}
+        _, problems = a.validate_staging_map(
+            mapping, meta=lambda d: "", pdf=lambda d: b"%PDF-1.4 fictional")
+        self.assertTrue(problems)
+
+    def test_staging_wrong_names_reject(self):
+        _, problems = a.validate_staging_map(
+            self._staging_map(), meta=lambda d: "unrelated.pdf",
+            pdf=lambda d: b"%PDF-1.4 fictional")
+        self.assertTrue(problems)
+
+    def test_staging_partial_set_reject(self):
+        mapping = self._staging_map()
+        mapping.pop(a.STAGING_PDFS[0])
+        _, problems = a.validate_staging_map(
+            mapping, meta=lambda d: d[len("doc-"):], pdf=lambda d: b"%PDF-1.4 fictional")
+        self.assertTrue(problems)
+        with patch.object(a, "adb", return_value=""):
+            with self.assertRaises(RuntimeError):
+                a.assert_library_staged(self._staging_map())
+
+    # ---- B3: empty tool selection ---------------------------------------------
+
+    def test_empty_tool_selection_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_out, old_rows = a.OUT, a.CTX["rows"]
+            try:
+                a.OUT = Path(tmp)
+                a.CTX["rows"] = []
+                with patch.dict(os.environ, {"ATLAS_TOOLS": ", , ,"}), \
+                     patch.object(a, "guard"), patch.object(a, "adb", return_value=""), \
+                     patch.object(a, "scan_crashes", return_value=[]):
+                    code = a.main()
+                self.assertNotEqual(code, 0)
+                self.assertEqual([r["status"] for r in a.CTX["rows"]], [a.BLOCKED])
+                self.assertIn("BLOCKED", (a.OUT / "ATLAS_REPORT.md").read_text(encoding="utf-8"))
+            finally:
+                a.OUT, a.CTX["rows"] = old_out, old_rows
+
+    # ---- B4: bounded Form-photo before-snapshot timing ------------------------
+
+    def test_form_photo_snapshots_download_before_running(self):
+        src = inspect.getsource(a.f_form_photo)
+        before_at = src.index("before = ")
+        run_at = src.index('require_tap(rid="toolSetupRun")')
+        pull_at = src.index("pull_new_files(before")
+        self.assertLess(before_at, run_at)
+        self.assertLess(before_at, pull_at)
+        self.assertLess(run_at, pull_at)
 
 
 if __name__ == "__main__":

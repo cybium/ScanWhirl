@@ -281,12 +281,47 @@ def pull_new_files(before, suffix=None, label="output"):
 
 
 # ------------------------------------------------------------------- verification
+CHECK_KEYS = ("check", "pass", "measured", "expected")
+
+
+def checks_from_report(report):
+    """Schema-validate a verifier report. Return (checks, error); a valid report has a
+    non-empty list of objects with all four keys and an EXACT boolean `pass`."""
+    if not isinstance(report, dict):
+        return [], "verifier report is not a JSON object"
+    raw = report.get("checks")
+    if not isinstance(raw, list) or not raw:
+        return [], "verifier report has no checks"
+    out = []
+    for c in raw:
+        if not isinstance(c, dict) or any(k not in c for k in CHECK_KEYS):
+            return [], "check is not an object with check/pass/measured/expected"
+        if not isinstance(c["check"], str) or not c["check"]:
+            return [], "check name is not a non-empty string"
+        if not isinstance(c["pass"], bool):
+            return [], "check pass is not a bool"
+        out.append({"check": c["check"], "pass": c["pass"],
+                    "measured": c["measured"], "expected": c["expected"]})
+    return out, None
+
+
 def verify(journey, path, extra=None, spec=None, label="verifier"):
-    """Run the real verifier and record every check with measured values."""
-    if not path or not Path(path).is_file():
-        return {"status": "FAIL", "reason": "no output file to verify", "checks": []}
+    """Run the real verifier. PASS needs exit 0 AND a freshly parsed, schema-valid,
+    non-empty check report from THIS invocation whose every `pass` is exactly True.
+    A stale JSON file for this output is removed before the child runs."""
+    if not path or not has_output(path):
+        return {"status": FAIL, "reason": "no output file to verify",
+                "checks": [], "parsed": False, "exit": None}
+    json_path = Path(path).with_suffix(".json")
+    try:
+        json_path.unlink()  # only the exact per-output report; never a broad delete
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        return {"status": FAIL, "reason": f"cannot clear stale verifier JSON: {exc}",
+                "checks": [], "parsed": False, "exit": None}
     cmd = [sys.executable, str(VERIFY), "--journey", journey,
-           "--file", str(path), "--json", str(Path(path).with_suffix(".json"))]
+           "--file", str(path), "--json", str(json_path)]
     if extra:
         cmd += [str(a) for a in extra]
     if spec:
@@ -298,16 +333,25 @@ def verify(journey, path, extra=None, spec=None, label="verifier"):
         "CMD: " + " ".join(cmd) + "\n\n" + proc.stdout + "\n" + proc.stderr,
         encoding="utf-8",
     )
+    parsed, checks = False, []
+    reason = f"exit {proc.returncode}"
     try:
-        report = json.loads(Path(path).with_suffix(".json").read_text(encoding="utf-8"))
-        checks = [{"check": c["check"], "pass": c["pass"],
-                   "measured": c["measured"], "expected": c["expected"]}
-                  for c in report.get("checks", [])]
+        report = json.loads(json_path.read_text(encoding="utf-8"))
+        checks, err = checks_from_report(report)
+        if err:
+            reason = f"exit {proc.returncode}; invalid verifier report: {err}"
+            checks = [{"check": "verifier_report", "pass": False,
+                       "measured": err, "expected": "schema-valid checks"}]
+        else:
+            parsed = True
     except Exception as exc:  # noqa: BLE001
+        reason = f"exit {proc.returncode}; unreadable verifier report: {type(exc).__name__}"
         checks = [{"check": "verifier_report", "pass": False,
-                   "measured": type(exc).__name__, "expected": "readable JSON report"}]
-    status = "PASS" if proc.returncode == 0 else "FAIL"
-    return {"status": status, "reason": f"exit {proc.returncode}", "checks": checks}
+                   "measured": type(exc).__name__, "expected": "fresh readable JSON report"}]
+    status = PASS if (proc.returncode == 0 and parsed
+                      and all(c["pass"] is True for c in checks)) else FAIL
+    return {"status": status, "reason": reason, "checks": checks,
+            "parsed": parsed, "exit": proc.returncode}
 
 
 def result(detail="", verify_result=None, output=None):
@@ -321,21 +365,43 @@ NON_PASS = {FAIL, BLOCKED, NOT_TESTED}
 
 
 def verifier_is_valid(ver):
-    """True only when an independent verifier actually ran and recorded measurements."""
-    return (isinstance(ver, dict)
-            and ver.get("status") in (PASS, FAIL)
-            and bool(ver.get("checks")))
+    """Independently re-validate the verifier record; never trust a bare `status`.
+    A PASS status is credible only with a freshly parsed report, exit 0 and every
+    recorded check passing exactly True. A genuine FAIL (some false checks) stays
+    valid evidence -- it reddens the job, it is never promoted to PASS."""
+    if not isinstance(ver, dict) or ver.get("status") not in (PASS, FAIL):
+        return False
+    if ver.get("parsed") is not True:
+        return False
+    checks = ver.get("checks")
+    if not isinstance(checks, list) or not checks:
+        return False
+    normalised, err = checks_from_report({"checks": checks})
+    if err or len(normalised) != len(checks):
+        return False
+    all_pass = all(c["pass"] is True for c in checks)
+    if ver["status"] == PASS and (not all_pass or ver.get("exit") != 0):
+        return False
+    if ver["status"] == FAIL and all_pass:
+        return False
+    return True
 
 
 def has_output(output):
-    """An output claim counts only when the pulled artifact is really on disk."""
-    return bool(output) and Path(str(output)).is_file()
+    """An output claim counts only when the pulled artifact is a NON-EMPTY real file."""
+    if not output:
+        return False
+    try:
+        p = Path(str(output))
+        return p.is_file() and p.stat().st_size > 0
+    except OSError:
+        return False
 
 
 def classify(ver, output, required_ok=True):
-    """Device-free status decision. PASS requires an output file AND a valid, passing
-    numeric verifier AND every required interaction to have succeeded. Anything else
-    is BLOCKED/NOT_TESTED/FAIL -- never a PASS."""
+    """Device-free status decision. PASS requires a non-empty output file AND an
+    independently valid verifier whose status is consistent with its checks AND all
+    required interactions succeeding. Anything else is NOT_TESTED/FAIL/BLOCKED."""
     if not required_ok:
         return BLOCKED
     if not has_output(output) or not verifier_is_valid(ver):
@@ -360,20 +426,67 @@ def require_tap(**want):
     return ok
 
 
-def assert_library_staged(before_ids):
-    """Hard precondition: the staged PDFs must be in the Library before the tool loop."""
-    added = doc_ids() - set(before_ids)
-    needed = len(STAGING_PDFS)
-    if len(added) < needed:
-        raise RuntimeError(
-            f"fixture staging incomplete: expected >= {needed} new library documents, "
-            f"found {len(added)} ({sorted(added)}); all requested tools are BLOCKED")
-    return added
+def normalize_fixture_name(value):
+    """Compare a Library display name with a fixture filename, ignoring case and
+    word separators (the importer may drop the extension or change spacing)."""
+    stem = Path(str(value or "")).stem
+    return re.sub(r"[\s_\-]+", "", stem.casefold())
+
+
+def doc_display_name(doc_id):
+    try:
+        meta = adb("shell", "run-as", PKG, "cat", f"files/documents/{doc_id}/meta.txt")
+        return meta.splitlines()[0].strip() if meta.splitlines() else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def doc_pdf_bytes(doc_id):
+    return adb("exec-out", "run-as", PKG, "cat",
+               f"files/documents/{doc_id}/scan.pdf", binary=True)
+
+
+def validate_staging_map(mapping, meta=None, pdf=None):
+    """Check EXPECTED fixture identity, not a bare count. `meta`/`pdf` are injectable
+    lookup callables so this is testable without a device. Returns (ids, problems)."""
+    meta = meta or doc_display_name
+    pdf = pdf or doc_pdf_bytes
+    problems, ids = [], []
+    if not isinstance(mapping, dict):
+        return [], ["staging did not produce a fixture mapping"]
+    for name in STAGING_PDFS:
+        info = mapping.get(name) or {}
+        new_ids = info.get("ids") or []
+        if not info.get("import_ok"):
+            problems.append(f"{name}: import did not complete")
+        if len(new_ids) != 1:
+            problems.append(f"{name}: expected exactly 1 new document, got {len(new_ids)}")
+            continue
+        doc_id = new_ids[0]
+        if doc_id in ids:
+            problems.append(f"{name}: document id {doc_id} reused by another fixture")
+        ids.append(doc_id)
+        display = meta(doc_id)
+        if normalize_fixture_name(display) != normalize_fixture_name(name):
+            problems.append(f"{name}: library name {display!r} does not match fixture")
+        data = pdf(doc_id)
+        if not isinstance(data, (bytes, bytearray)) or not data.startswith(b"%PDF"):
+            problems.append(f"{name}: document {doc_id} has no PDF content marker")
+    return ids, problems
+
+
+def assert_library_staged(mapping):
+    """Hard precondition: every required fixture is present with the right identity."""
+    ids, problems = validate_staging_map(mapping)
+    if problems:
+        raise RuntimeError("fixture staging incomplete: " + "; ".join(problems) +
+                           "; all requested tools are BLOCKED")
+    return set(ids)
 
 
 # --------------------------------------------------------------- tool recipes
 def prepare_library():
-    """Push fixtures and import the four PDF documents the tools operate on."""
+    """Push fixtures and import each PDF, recording the new document id per fixture."""
     push_fixtures([
         *STAGING_PDFS,
         "exam_photo.jpg", "signature_on_paper.jpg",
@@ -382,8 +495,14 @@ def prepare_library():
     locale("en", "1.0")
     launch()
     shot("library_before_import")
+    mapping = {}
     for name in STAGING_PDFS:
-        import_pdf(name)
+        before = doc_ids()
+        ok = import_pdf(name)
+        added = sorted(doc_ids() - before)
+        mapping[name] = {"import_ok": bool(ok), "ids": added}
+        note(f"staged {name}: import_ok={ok}; new ids={added}")
+    return mapping
 
 
 def import_pdf(name):
@@ -439,6 +558,9 @@ def import_pdf(name):
 
 # --- file-output tools -------------------------------------------------------
 def f_form_photo():
+    # Snapshot DOWNLOAD BEFORE driving the tool; a snapshot taken at pull time would
+    # be empty and could never observe an output (harness false negative).
+    before = {str(p) for p in adb("shell", "find", DOWNLOAD, "-type", "f").splitlines()}
     push_fixtures(["exam_photo.jpg", "signature_on_paper.jpg"])
     open_tool(TOOL_TITLES["form_photo"])
     shot("form_setup")
@@ -458,8 +580,7 @@ def f_form_photo():
         shot("form_run")
     time.sleep(3)
     shot("form_result")
-    files = pull_new_files({str(p) for p in adb("shell", "find", DOWNLOAD, "-type", "f").splitlines()},
-                           label="form_output")
+    files = pull_new_files(before, label="form_output")
     # Verifier J1 expects a 200x230 photo and a 140x60 signature.
     photo = next((p for p in files if "photo" in p.name.lower()), None)
     sig = next((p for p in files if "sign" in p.name.lower()), None)
@@ -875,20 +996,23 @@ def main():
     crashes = []
     verdict = "incomplete"
     try:
+        if not tools:
+            # An empty/comma-only selection must never be a green 0-row run.
+            CTX["rows"].append(blocked_row("ATLAS_TOOLS", "no valid tool id in ATLAS_TOOLS"))
+            raise RuntimeError("no tools selected: ATLAS_TOOLS must name at least one tool")
         guard()
         adb("logcat", "-c")
         unknown = [t for t in tools if t not in FLOWS]
         if unknown:
             raise RuntimeError("unknown tool id(s): " + ", ".join(unknown))
         note(f"running tools: {', '.join(tools)}")
-        before_ids = doc_ids()
         try:
-            prepare_library()
+            staging_map = prepare_library()
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             raise RuntimeError(
                 f"fixture staging failed: {type(exc).__name__}: {exc}") from exc
-        assert_library_staged(before_ids)
+        assert_library_staged(staging_map)
         for tool in tools:
             CTX.update({"tool": tool, "step": 0, "shots": [], "notes": [],
                         "required_failed": False})
