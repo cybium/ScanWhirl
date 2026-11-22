@@ -293,16 +293,21 @@ class ResizeFlow(
                 val result = withContext(Dispatchers.IO) { compute(bytes, opts) }
                 val rejected = result.bytes.size >= bytes.size
                 if (rejected) withContext(Dispatchers.IO) {
-                    com.scanwhirl.app.store.V2tResultReceiptStore(activity).save(
-                        com.scanwhirl.app.store.V2tResultReceiptStore.Receipt(
-                            toolId = "resize", docIds = emptyList(), files = emptyList(),
-                            mime = "image/jpeg", note = null, targetBytes = null,
-                            beforeBytes = bytes.size.toLong(), outputIdentity = null,
-                            receiptSourceId = null, sourceKept = true, chosenLocationName = null,
-                            documentsExistingName = null, undone = false,
-                            savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
+                    try {
+                        com.scanwhirl.app.store.V2tResultReceiptStore(activity).save(
+                            com.scanwhirl.app.store.V2tResultReceiptStore.Receipt(
+                                toolId = "resize", docIds = emptyList(), files = emptyList(),
+                                mime = "image/jpeg", note = null, targetBytes = null,
+                                beforeBytes = bytes.size.toLong(), outputIdentity = null,
+                                receiptSourceId = null, sourceKept = true, chosenLocationName = null,
+                                documentsExistingName = null, undone = false,
+                                savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
+                            )
                         )
-                    )
+                    } catch (_: IOException) {
+                        // The rejection has no output to persist. Failure to save its
+                        // optional last-result receipt must not hide "Nothing saved".
+                    }
                 }
                 // Rejected (not-smaller) results have no output file. Don't reserve
                 // a folder for them: a full cache must not turn an honest rejection
