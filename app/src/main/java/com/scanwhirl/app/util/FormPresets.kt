@@ -1,5 +1,8 @@
 package com.scanwhirl.app.util
 
+import android.content.Context
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import kotlin.math.roundToInt
 
 /** The four editable size units shown on the form-ready screen. */
@@ -30,6 +33,78 @@ object FormPresets {
      */
     const val MAX_FORM_LONG_SIDE = 4000
     const val MAX_FORM_PIXELS = 12_000_000L
+
+    /**
+     * Lane F1: a picked source is always read on a worker with a hard cap. A single huge gallery
+     * image must be refused before its bytes are held in memory, never partly decoded.
+     */
+    const val MAX_SOURCE_BYTES = 32L * 1024 * 1024
+
+    fun readBounded(input: InputStream, limit: Long = MAX_SOURCE_BYTES): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (total + read > limit) return null
+            out.write(buffer, 0, read)
+            total += read
+        }
+        return out.toByteArray()
+    }
+
+    /** Lane F2: a local saved preset. This file lives in app-private storage; nothing is uploaded. */
+    const val PREFS_SAVED_PRESET = "form1_saved_preset"
+    private const val K_W = "width"
+    private const val K_H = "height"
+    private const val K_UNIT = "unit"
+    private const val K_DPI = "dpi"
+    private const val K_MIN = "min_kb"
+    private const val K_MAX = "max_kb"
+    private const val K_CLEANUP = "cleanup"
+
+    data class Editable(
+        val width: Float,
+        val height: Float,
+        val unit: FormUnit,
+        val dpi: Int,
+        val minKb: Int,
+        val maxKb: Int,
+        val cleanup: Boolean
+    )
+
+    fun saveEditable(context: Context, value: Editable) {
+        context.getSharedPreferences(PREFS_SAVED_PRESET, Context.MODE_PRIVATE).edit()
+            .putFloat(K_W, value.width)
+            .putFloat(K_H, value.height)
+            .putString(K_UNIT, value.unit.name)
+            .putInt(K_DPI, value.dpi)
+            .putInt(K_MIN, value.minKb)
+            .putInt(K_MAX, value.maxKb)
+            .putBoolean(K_CLEANUP, value.cleanup)
+            .commit()
+    }
+
+    fun loadEditable(context: Context): Editable? {
+        val p = context.getSharedPreferences(PREFS_SAVED_PRESET, Context.MODE_PRIVATE)
+        if (!p.contains(K_W) || !p.contains(K_H)) return null
+        return runCatching {
+            val unit = FormUnit.valueOf(p.getString(K_UNIT, FormUnit.PX.name).orEmpty())
+            val dpi = p.getInt(K_DPI, 0)
+            val minKb = p.getInt(K_MIN, 0)
+            val maxKb = p.getInt(K_MAX, 0)
+            val w = p.getFloat(K_W, 0f)
+            val h = p.getFloat(K_H, 0f)
+            if (w <= 0f || h <= 0f || !w.isFinite() || !h.isFinite()) return null
+            if (dpi !in SUPPORTED_DPI) return null
+            if (minKb < 1 || maxKb < minKb) return null
+            val pxW = toPixels(w, unit, dpi)
+            val pxH = toPixels(h, unit, dpi)
+            if (!fitsFormLimit(pxW, pxH)) return null
+            Editable(w, h, unit, dpi, minKb, maxKb, p.getBoolean(K_CLEANUP, false))
+        }.getOrNull()
+    }
 
     data class Spec(
         val id: String,

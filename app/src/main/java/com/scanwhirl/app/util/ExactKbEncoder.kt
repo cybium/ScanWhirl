@@ -68,7 +68,13 @@ object ExactKbEncoder {
         dpi: Int,
         minBytes: Long,
         maxBytes: Long,
-        isCancelled: () -> Boolean = { false }
+        isCancelled: () -> Boolean = { false },
+        /**
+         * Lane F1: OFF by default. The pixels a person asked for are the ground truth; if the
+         * smallest honest JPEG still overflows the maximum, report ABOVE_MAX at those dimensions
+         * instead of quietly rasterizing a smaller picture and calling it a success.
+         */
+        shrinkToFit: Boolean = false
     ): Result {
         require(
             FormPresets.fitsFormLimit(width, height)
@@ -85,7 +91,7 @@ object ExactKbEncoder {
             var best: ByteArray? = null
             var bestQ = MIN_QUALITY
             var attempts = 0
-            while (best == null && attempts++ < MAX_SCALE_STEPS) {
+            while (shrinkToFit && best == null && attempts++ < MAX_SCALE_STEPS) {
                 checkCancelled(isCancelled)
                 val fit = bestQualityAtMost(raster, maxBytes, isCancelled)
                 if (fit != null) {
