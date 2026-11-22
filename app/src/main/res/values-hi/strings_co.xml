@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Council §5 / lane O. Hindi values; native review before release. -->
+    <string name="co_save_as_new_copy">नई प्रति सहेजें</string>
+    <string name="co_name_hint">दस्तावेज़ का नाम</string>
+    <string name="co_name_extension">.pdf</string>
+    <string name="co_new_copy_receipt">नई प्रति सहेजी गई। मूल जैसा है।</string>
+    <string name="co_name_required">पहले नाम लिखें।</string>
+</resources>

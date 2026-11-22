@@ -174,7 +174,9 @@ class PageStampTest {
         assertEquals("the source directory must not change at all", before, PdfInvariants.dirDigest(File(repo.docsDir, id)))
         assertEquals(beforeName, requireNotNull(repo.getDocument(id)).name)
         assertTrue("a separate document was created", out.id != id)
-        assertTrue("the copy is named after its edit", out.name.endsWith("- Watermarked"))
+        // Council §5: the saved copy is a uniquely named new copy, never "<name> - Watermarked".
+        assertTrue("a distinct new copy", out.name != beforeName)
+        assertFalse("no forced verb suffix: ${out.name}", out.name.contains("Watermarked"))
         PdfInvariants.assertI1(repo, out.id)
     }
 

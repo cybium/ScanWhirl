@@ -2,6 +2,8 @@ package com.scanwhirl.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.text.Editable
+import android.text.TextWatcher
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -10,10 +12,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -23,6 +27,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.L3FailureCopy
+import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.databinding.ActivityMergePdfBinding
 import com.scanwhirl.app.databinding.ItemMergePdfBinding
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +48,9 @@ class MergePdfActivity : BaseActivity() {
 
     private val picked = mutableListOf<Picked>()
     private val adapter = PickAdapter()
+    /** Typed merge name and whether the name sheet was open, so rotation keeps both. */
+    private var nameDraft: String? = null
+    private var sheetWasOpen = false
 
     private val touchHelper = ItemTouchHelper(object :
         ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
@@ -100,10 +108,33 @@ class MergePdfActivity : BaseActivity() {
         }
         binding.btnMerge.setOnClickListener { promptName() }
 
+        if (savedInstanceState != null) restoreState(savedInstanceState)
         updateUi()
         if (savedInstanceState == null) {
             picker.launch(arrayOf("application/pdf"))
+        } else if (sheetWasOpen && picked.size >= 2) {
+            // Rotation keeps the picked PDFs and the typed (possibly blank) name and its error.
+            promptName(nameDraft)
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putStringArrayList(KEY_PICKED_URI, ArrayList(picked.map { it.uri.toString() }))
+        outState.putStringArrayList(KEY_PICKED_NAME, ArrayList(picked.map { it.name }))
+        outState.putString(KEY_NAME_DRAFT, nameDraft)
+        outState.putBoolean(KEY_SHEET_OPEN, sheetWasOpen)
+    }
+
+    private fun restoreState(saved: Bundle) {
+        val uris = saved.getStringArrayList(KEY_PICKED_URI).orEmpty()
+        val names = saved.getStringArrayList(KEY_PICKED_NAME).orEmpty()
+        picked.clear()
+        uris.indices.forEach { i ->
+            if (i < names.size) picked += Picked(Uri.parse(uris[i]), names[i])
+        }
+        nameDraft = saved.getString(KEY_NAME_DRAFT)
+        sheetWasOpen = saved.getBoolean(KEY_SHEET_OPEN, false)
     }
 
     private fun updateUi() {
@@ -129,19 +160,68 @@ class MergePdfActivity : BaseActivity() {
         "PDF"
     }
 
-    private fun promptName() {
+    private fun promptName(restored: String? = null) {
         if (picked.size < 2) {
             Toast.makeText(this, R.string.merge_needs_two_pdfs, Toast.LENGTH_SHORT).show()
             return
         }
+        // Council §5: prefill the editable field with the first source's stem, never a verb
+        // suffix. Uniqueness against the library is applied when the merge runs on IO.
+        val prefill = restored ?: OutputNames.forNewCopy(picked.first().name, emptyList())
+        nameDraft = prefill
+        sheetWasOpen = true
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.merge_builder_title)
-            .setInput(hint = getString(R.string.merge_name_hint))
+            .setInput(initial = prefill, hint = getString(R.string.co_name_hint))
             .setSecondary(android.R.string.cancel)
             .build()
-        sheet.setPrimary(R.string.merge_action) {
-            confirmMerge(sheet.inputView?.text?.toString())
+        sheet.setOnDismissListener { sheetWasOpen = false }
+        val field = requireNotNull(sheet.inputView)
+        val error = TextView(this).apply {
+            tag = NAME_ERROR_TAG
+            text = getString(R.string.co_name_required)
+            contentDescription = text
+            textSize = 13f
+            setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@MergePdfActivity, R.color.laser_danger))
+            setLineSpacing(0f, 1.2f)
+            setPadding(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this@MergePdfActivity, 6f), 0, 0)
         }
+        sheet.contentContainer.addView(
+            error,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        sheet.contentContainer.addView(
+            TextView(this).apply {
+                text = getString(R.string.co_new_copy_receipt)
+                contentDescription = text
+                textSize = 13f
+                setLineSpacing(0f, 1.25f)
+                setPadding(0, com.scanwhirl.app.ui.kit.SwStyle.dp(this@MergePdfActivity, 6f), 0, 0)
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        fun validate() {
+            val blank = field.text.toString().isBlank()
+            error.isVisible = blank
+            sheet.primaryButton.isEnabled = !blank
+            sheet.primaryButton.alpha = if (blank) 0.38f else 1f
+        }
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                nameDraft = s?.toString().orEmpty()
+                validate()
+            }
+        })
+        sheet.setPrimary(R.string.merge_action) {
+            if (field.text.toString().isNotBlank()) confirmMerge(field.text.toString())
+        }
+        validate()
         sheet.show()
     }
 
@@ -162,9 +242,17 @@ class MergePdfActivity : BaseActivity() {
         job = lifecycleScope.launch {
             try {
                 val uris = picked.map { it.uri }
+                val uniqueName = withContext(Dispatchers.IO) {
+                    if (name.isNullOrBlank()) null
+                    else OutputNames.newCopyFromField(
+                        name,
+                        runCatching { repo.listDocuments(includeVaulted = true).map { it.name } }
+                            .getOrDefault(emptyList())
+                    )
+                }
                 val doc = repo.mergePdfUrisPlanned(
                     uris = uris,
-                    suggestedName = name,
+                    suggestedName = uniqueName,
                     onPlan = { plan ->
                         val decision = com.scanwhirl.app.ui.tools.DevicePdfGate
                             .decide(this@MergePdfActivity, plan)
@@ -287,6 +375,12 @@ class MergePdfActivity : BaseActivity() {
     }
 
     companion object {
+        private const val KEY_PICKED_URI = "co_merge_picked_uri"
+        private const val KEY_PICKED_NAME = "co_merge_picked_name"
+        private const val KEY_NAME_DRAFT = "co_merge_name_draft"
+        private const val KEY_SHEET_OPEN = "co_merge_sheet_open"
+        const val NAME_ERROR_TAG = "co_name_required"
+
         fun intent(context: Context): Intent =
             Intent(context, MergePdfActivity::class.java)
     }

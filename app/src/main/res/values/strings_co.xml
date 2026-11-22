@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Council §5 / lane O. One language per screen; English values below. -->
+    <string name="co_save_as_new_copy">Save as new copy</string>
+    <string name="co_name_hint">Document name</string>
+    <string name="co_name_extension">.pdf</string>
+    <string name="co_new_copy_receipt">New copy saved. Original kept.</string>
+    <string name="co_name_required">Enter a name</string>
+</resources>
