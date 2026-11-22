@@ -13,6 +13,11 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.util.ImportFixtures
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import org.robolectric.Robolectric
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -44,7 +49,18 @@ class S1StartupResumeTest {
     @Before
     fun resetColdStartGuard() {
         ScanLauncher.resetColdStartOfferForTest()
+        // These are process-wide seams; a test that failed mid-flight must not leak a queued
+        // offer job or the "sheet showing" guard into the next test in the same fork.
+        ScanLauncher.resetResumeOfferStateForTest()
         ShadowDialog.reset()
+    }
+
+    @org.junit.After
+    fun resetResumeState() {
+        ScanLauncher.resetColdStartOfferForTest()
+        ScanLauncher.resetResumeOfferStateForTest()
+        ShadowDialog.reset()
+        kotlinx.coroutines.Dispatchers.resetMain()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -76,7 +92,7 @@ class S1StartupResumeTest {
         return primary.text.toString() == app.getString(R.string.resume_scan_resume)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the launcher offers a pending scan after recovery and never repeats it on rotation`() {
         val staged = stagePending()
         ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
@@ -97,25 +113,40 @@ class S1StartupResumeTest {
         }
     }
 
-    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test(timeout = 30_000)
     fun `rotation while recovery is still pending still shows the resume offer`() {
         val staged = stagePending()
-        // Create only (no setup/resume): the first instance's offer coroutine has not been
-        // dispatched yet, so rotation cancels it before the sheet is shown — the P1 case.
-        val first = Robolectric.buildActivity(ShellActivity::class.java).create()
-        val state = android.os.Bundle()
-        first.saveInstanceState(state)
-        first.destroy()
-        ShadowDialog.reset()
-        val guardAfterA = ScanLauncher.coldStartOfferConsumedForTest()
-        Robolectric.buildActivity(ShellActivity::class.java).setup(state)
-        idle()
-        assertTrue("no offer was shown by the first instance before rotation", !guardAfterA)
-        await { resumeOfferShown() }
-        assertTrue("the unfinished pages are kept until the owner chooses", staged.isDirectory)
+        // onCreate schedules the offer on lifecycleScope (Main). The old test only did create()
+        // and *assumed* that coroutine had not run yet; on a loaded runner it could reach
+        // show() and consume the once-per-process guard before rotation. Queue Main for this
+        // window so the first instance is deterministically cancelled before it can show.
+        val scheduler = TestCoroutineScheduler()
+        Dispatchers.setMain(StandardTestDispatcher(scheduler))
+        try {
+            val first = Robolectric.buildActivity(ShellActivity::class.java).create()
+            val state = android.os.Bundle()
+            first.saveInstanceState(state)
+            first.destroy()
+            ShadowDialog.reset()
+            val guardAfterA = ScanLauncher.coldStartOfferConsumedForTest()
+            assertTrue("no offer was shown by the first instance before rotation", !guardAfterA)
+            // Drain the cancelled first-instance work, then clear the process-wide seams before
+            // the recreated launcher runs its own offer on the real main dispatcher.
+            scheduler.advanceUntilIdle()
+            ScanLauncher.resetResumeOfferStateForTest()
+            Dispatchers.resetMain()
+            Robolectric.buildActivity(ShellActivity::class.java).setup(state)
+            idle()
+            await { resumeOfferShown() }
+            assertTrue("the unfinished pages are kept until the owner chooses", staged.isDirectory)
+        } finally {
+            Dispatchers.resetMain()
+            staged.deleteRecursively()
+        }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a fresh start with no pending scan shows no resume offer`() {
         val root = File(app.filesDir, PendingScans.ROOT)
         root.deleteRecursively()
