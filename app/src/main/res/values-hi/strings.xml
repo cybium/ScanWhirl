@@ -339,23 +339,26 @@
     <string name="resize_file_info">%1$s · %2$s · %3$d × %4$d px</string>
     <string name="resize_invalid_size">सही आकार डालें (1 से 12000 px)</string>
     <string name="resize_invalid_target">आकार डालें, जैसे 500 KB या 3 MB</string>
-    <string name="resize_keep_original">सब पहले जैसा करें</string>
+    <string name="resize_keep_original">रीसेट करें</string>
     <string name="resize_keep_ratio">अनुपात वही रखें</string>
     <string name="resize_px">px</string>
     <string name="resize_share">बदली हुई तस्वीर भेजें</string>
-    <!-- review --> <string name="resize_target_hint">500 KB या 3 MB तक। अकेले अंकों का मतलब KB है।</string>
-    <string name="resize_target_label">फ़ाइल का आकार इससे ज़्यादा न हो</string>
+    <!-- review --> <string name="resize_target_hint">अकेले अंक = KB</string>
+    <string name="resize_target_label">आकार सीमा</string>
     <string name="resize_times">×</string>
     <string name="resize_title">तस्वीर का आकार बदलें</string>
     <string name="resize_width">चौड़ाई</string>
     <!-- FF-R: सटीक पिक्सेल; काटें या सफ़ेद किनारे — तस्वीर नहीं खींची जाती। -->
-    <string name="resize_mode_crop">फिट करने के लिए काटें</string>
-    <string name="resize_mode_borders">पूरी तस्वीर किनारों के साथ</string>
-    <string name="resize_crop_helper">रखने का हिस्सा चुनें। पिक्सेल %1$d × %2$d रहेंगे। अगर यह आकार नहीं बन सका, तो हम बता देंगे।</string>
-    <string name="resize_borders_helper">सफ़ेद पट्टियाँ जुड़ेंगी; तस्वीर नहीं खींची जाएगी। पिक्सेल %1$d × %2$d रहेंगे।</string>
-    <string name="resize_minmax">न्यूनतम और अधिकतम KB</string>
-    <string name="resize_target_missed">पिक्सेल %1$d × %2$d वैसे ही रखे गए, पर यह आकार %3$s तक नहीं पहुँच सका।</string>
-    <string name="result_before_after">%1$s → %2$s</string>
+    <string name="resize_mode_crop">काटें</string>
+    <string name="resize_mode_borders">पूरी तस्वीर, किनारे</string>
+    <string name="resize_crop_helper">काटने का हिस्सा चुनें</string>
+    <string name="resize_borders_helper">खींचा नहीं जाएगा</string>
+    <string name="resize_minmax">KB सीमा</string>
+    <string name="resize_target_missed">पिक्सेल %1$d × %2$d वैसे। %3$s नहीं मिला।</string>
+    <string name="resize_info_label">आकार सीमा के बारे में</string>
+    <string name="resize_info_detail">आकार सीमा सिर्फ़ JPEG गुणवत्ता बदलती है, पिक्सेल नहीं। अगर यह पूरी न हो, तो असली फ़ाइल आकार दिखाया जाएगा।</string>
+    <string name="resize_save_failed">सहेजा नहीं जा सका। फ़ोन की स्टोरेज भरी हो सकती है।</string>
+    <string name="result_before_after">पहले %1$s  →  अब %2$s</string>
     <string name="result_dimensions">%1$d × %2$d px</string>
     <string name="result_save_documents">Documents में सहेजें</string>
     <string name="result_save_downloads">Downloads में सहेजें</string>
