@@ -59,11 +59,21 @@ class BackupActivity : BaseActivity() {
         @androidx.annotation.VisibleForTesting
         var failWorkForTest: Throwable? = null
 
+        /** Test seam: holds the work in flight so rotation/process death can be simulated exactly. */
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        var workGateForTest: java.util.concurrent.CountDownLatch? = null
+
         // UXG G2: the encrypted archive is expensive to rebuild. Saved across a configuration
         // change so the Save/Share offer can be restored after recreation; the bytes stay in the
         // private cache dir that PrivacySweep clears eventually.
         private const val STATE_PENDING = "ux_uxg_backup_pending"
         private const val STATE_PENDING_WARNINGS = "ux_uxg_backup_pending_warnings"
+
+        // V2R R1: only the operation name and a path are persisted. Never a password or code.
+        private const val PREF_INTERRUPTED = "ux_v2r_interrupted_operation"
+        private const val PREF_INTERRUPTED_FILE = "ux_v2r_interrupted_file"
+        private const val STATE_RECEIPT_SHOWN = "ux_v2r_receipt_shown"
 
         fun intent(context: Context): Intent = Intent(context, BackupActivity::class.java)
     }
@@ -105,6 +115,34 @@ class BackupActivity : BaseActivity() {
     private var work: SwProgress? = null
     private var busy = false
 
+    private enum class WorkOp { BACKUP, RESTORE }
+
+    private var activeOp: WorkOp? = null
+    private var activeArchive: File? = null
+    private var destroyed = false
+    private var receiptShown = false
+
+    private fun clearInterruptionMarker() {
+        prefs().edit().remove(PREF_INTERRUPTED).remove(PREF_INTERRUPTED_FILE).commit()
+    }
+
+    /** Non-secret state only: what was running and, for a backup, where its scratch file is. */
+    private fun beginOperation(op: WorkOp, file: File? = null) {
+        activeOp = op
+        activeArchive = file
+        prefs().edit().putString(PREF_INTERRUPTED, op.name).apply {
+            if (file != null) putString(PREF_INTERRUPTED_FILE, file.absolutePath)
+            else remove(PREF_INTERRUPTED_FILE)
+        }.commit()
+    }
+
+    private fun endOperation() {
+        activeOp = null
+        activeArchive = null
+        // A configuration/process teardown leaves the marker for the new instance to report.
+        if (!destroyed) clearInterruptionMarker()
+    }
+
     fun workInFlightForTest(): Boolean = busy
 
     private fun setBusy(on: Boolean) {
@@ -123,6 +161,7 @@ class BackupActivity : BaseActivity() {
         work?.dismiss()
         work = null
         setBusy(false)
+        endOperation()
     }
 
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
@@ -202,11 +241,50 @@ class BackupActivity : BaseActivity() {
             }
             offerSaving(restored)
         }
+        // V2R R1: a marker left by an interrupted operation must produce an honest receipt
+        // and a safe retry. Nothing secret is restored: the user re-enters the password/code.
+        if (savedInstanceState?.getBoolean(STATE_RECEIPT_SHOWN) != true) {
+            val marker = prefs().getString(PREF_INTERRUPTED, null)
+            if (marker != null) {
+                showInterruptionReceipt(marker)
+                clearInterruptionMarker()
+                receiptShown = true
+            }
+        }
+    }
+
+    private fun showInterruptionReceipt(marker: String) {
+        val isBackup = marker == WorkOp.BACKUP.name
+        val file = prefs().getString(PREF_INTERRUPTED_FILE, null)?.let { File(it) }
+        // Process death can land after the write finished but before the marker was cleared.
+        if (isBackup && file?.isFile == true && runCatching { backup.header(file) }.getOrNull() != null) {
+            pending = file
+            pendingWarnings = emptyList()
+            offerSaving(file)
+            return
+        }
+        // A partial archive is never a receipt. Drop it rather than offering a broken file.
+        if (isBackup) file?.delete()
+        SwSheet.builder(this)
+            .setTitle(
+                if (isBackup) R.string.v2r_backup_interrupted_title
+                else R.string.v2r_restore_interrupted_title
+            )
+            .setMessage(
+                if (isBackup) R.string.v2r_backup_interrupted_body
+                else R.string.v2r_restore_interrupted_body
+            )
+            .setPrimary(R.string.v2r_try_again) {
+                if (isBackup) startBackup() else pickBackup.launch(arrayOf("*/*"))
+            }
+            .setSecondary(R.string.sheet_cancel) { }
+            .build().show()
     }
 
     /** UXG G2: keep the pending archive's path (and honesty warnings) across rotation. */
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_RECEIPT_SHOWN, receiptShown)
         pending?.let { file ->
             if (file.isFile) {
                 outState.putString(STATE_PENDING, file.absolutePath)
@@ -226,7 +304,13 @@ class BackupActivity : BaseActivity() {
             pending?.delete()
             pending = null
             pendingWarnings = emptyList()
+            // Deliberate exit, not an interruption: do not promise a receipt on next launch.
+            if (activeOp != null) clearInterruptionMarker()
+            activeArchive?.delete()
         }
+        // The coroutine's finally may run after this callback; it must keep the marker so the
+        // new instance can report the interruption.
+        destroyed = true
         restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
         super.onDestroy()
     }
@@ -496,13 +580,16 @@ class BackupActivity : BaseActivity() {
     private fun create(secret: String, wrap: FullBackup.Wrap) {
         if (busy) return
         val file = backup.newArchiveFile()
+        beginOperation(WorkOp.BACKUP, file)
         startWork(getString(R.string.ux130_l5_backup_creating))
+        val gate = workGateForTest
         lifecycleScope.launch {
             try {
                 failWorkForTest?.let { throw it }
                 // Keep the whole report: it says when part of the phone is not in the archive
                 // (a Vault whose setup is unfinished), and the person must hear that here.
                 val report = withContext(Dispatchers.IO) {
+                    gate?.await()
                     runCatching { backup.write(file, secret, wrap) }
                 }
                 val written = report.getOrNull()
@@ -659,7 +746,8 @@ class BackupActivity : BaseActivity() {
 
     private fun runRestore(file: File, secret: String, allowPrompt: Boolean = true) {
         // The backup carries Vault entries and this phone's Vault is set up: unlock it first, so
-        // the entries can be re-encrypted under its key instead of being skipped.
+        // the entries can be re-encrypted under its key instead of being skipped. The interruption
+        // marker starts only AFTER this gate: cancelling the prompt is not an interrupted restore.
         if (allowPrompt && runCatching { backup.needsVaultUnlock(file) }.getOrDefault(false)) {
             pendingRestore = file to secret
             unlockVault.launch(
@@ -667,6 +755,7 @@ class BackupActivity : BaseActivity() {
             )
             return
         }
+        beginOperation(WorkOp.RESTORE)
         if (busy) return
         startWork(getString(R.string.ux130_l5_backup_restoring))
         lifecycleScope.launch {

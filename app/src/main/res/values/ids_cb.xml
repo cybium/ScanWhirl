@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Council lane B: new view ids only (shared ids are untouched). -->
+<resources>
+    <!-- One-row library control band pieces. -->
+    <item name="cbFilterRow" type="id" />
+    <item name="cbDocHeading" type="id" />
+    <item name="cbRemoveFilter" type="id" />
+
+    <!-- Selection bar: 5th chip behind More + its own Finish selection row. -->
+    <item name="cbSelMore" type="id" />
+    <item name="cbSelOverflow" type="id" />
+
+    <!-- Newcomer-safe Quick tools checkbox editor. -->
+    <item name="cbQuickEditorList" type="id" />
+    <item name="cbQuickHint" type="id" />
+    <item name="cbQuickLimit" type="id" />
+    <item name="cbQuickCheck" type="id" />
+    <item name="cbQuickUp" type="id" />
+    <item name="cbQuickDown" type="id" />
+    <item name="cbQuickReset" type="id" />
+</resources>

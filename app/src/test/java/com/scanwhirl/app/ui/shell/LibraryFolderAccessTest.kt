@@ -104,13 +104,13 @@ class LibraryFolderAccessTest {
         }
     }
 
-    private fun allTexts(root: View?): List<String> {
+    private fun allTexts(root: View?): List<String> = allTextViews(root).mapNotNull { it.text?.toString() }
+
+    private fun allTextViews(root: View?): List<TextView> {
         if (root == null) return emptyList()
-        val out = mutableListOf<String>()
+        val out = mutableListOf<TextView>()
         fun walk(view: View) {
-            if (view is TextView && view.visibility == View.VISIBLE) {
-                view.text?.toString()?.let { out += it }
-            }
+            if (view is TextView && view.visibility == View.VISIBLE) out += view
             if (view is ViewGroup) {
                 for (i in 0 until view.childCount) walk(view.getChildAt(i))
             }
@@ -162,7 +162,7 @@ class LibraryFolderAccessTest {
             val chip = activity.findViewById<TextView>(R.id.swAllFolders)
             assertNotNull("All folders is an explicit chip, not a gesture", chip)
             assertTrue("All folders is on screen", chip.isVisible)
-            assertEquals("All folders", chip.text.toString())
+            assertEquals("All folders ▾", chip.text.toString())
 
             layoutRoot(activity)
             val density = activity.resources.displayMetrics.density
@@ -287,28 +287,26 @@ class LibraryFolderAccessTest {
         DocFixtures.saved(repo, app, pages = 1, name = "Land map")
 
         launch { activity ->
-            waitFor("the long folder chip renders") {
-                activity.findViewById<ViewGroup>(R.id.swFolderRow)?.let { row ->
-                    (0 until row.childCount).any {
-                        (row.getChildAt(it) as? TextView)?.text?.toString()?.startsWith(longName) == true
-                    }
-                } == true
-            }
-            val row = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-            val chip = (0 until row.childCount)
-                .map { row.getChildAt(it) as TextView }
-                .first { it.text.toString().startsWith(longName) }
-            assertEquals("$longName (0)", chip.text.toString())
-            layoutRoot(activity)
-            val layout = chip.layout
-            assertNotNull("the long chip was laid out", layout)
-            for (line in 0 until layout!!.lineCount) {
-                assertEquals("the name is never cut with an ellipsis", 0, layout.getEllipsisCount(line))
-            }
-
+            // Council §7: OLD read the long chip from the face rail. NEW reads it from
+            // the shared folder/category chooser behind "All folders ▾".
             activity.findViewById<View>(R.id.swAllFolders).performClick()
             idle()
-            val texts = allTexts(sheetContent())
+            val content = sheetContent()
+            waitFor("the long folder row renders") {
+                content.findViewById<ViewGroup>(R.id.swFolderRow)?.let { row ->
+                    allTexts(row).any { it.startsWith(longName) }
+                } == true
+            }
+            val row = content.findViewById<ViewGroup>(R.id.swFolderRow)
+            val chip = allTextViews(row).first { it.text.toString().startsWith(longName) }
+            assertEquals("$longName (0)", chip.text.toString())
+            val layout = chip.layout
+            if (layout != null) {
+                for (line in 0 until layout.lineCount) {
+                    assertEquals("the name is never cut with an ellipsis", 0, layout.getEllipsisCount(line))
+                }
+            }
+            val texts = allTexts(content)
             assertTrue("the whole name is listed: $texts", texts.any { it.startsWith(longName) })
         }
     }
@@ -317,10 +315,13 @@ class LibraryFolderAccessTest {
     fun `Free creates a folder and moves a document into it while Tags stay Pro`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Move me")
         launch { activity ->
-            waitFor("the New folder chip exists") {
-                activity.findViewById<View>(R.id.swNewFolder) != null
+            // Council §7: New folder is now a row in the shared chooser, not a face chip.
+            activity.findViewById<View>(R.id.swAllFolders).performClick()
+            idle()
+            waitFor("the New folder row exists") {
+                sheetContent().findViewById<View>(R.id.swNewFolder) != null
             }
-            activity.findViewById<View>(R.id.swNewFolder).performClick()
+            sheetContent().findViewById<View>(R.id.swNewFolder).performClick()
             idle()
             assertTrue(
                 "folder creation must not open the Pro screen in Free",
@@ -368,17 +369,18 @@ class LibraryFolderAccessTest {
         repo.setFolder(listOf(id), "Tax 2026")
 
         launch { activity ->
-            waitFor("the folder chip renders") {
-                activity.findViewById<ViewGroup>(R.id.swFolderRow)?.let { row ->
-                    (0 until row.childCount).any {
-                        (row.getChildAt(it) as? TextView)?.text?.toString()?.startsWith("Tax 2026") == true
-                    }
+            // Council §7: pick the folder from the shared chooser; the visible state
+            // afterwards is the removable Filter chip, not a second chip rail.
+            activity.findViewById<View>(R.id.swAllFolders).performClick()
+            idle()
+            val content = sheetContent()
+            waitFor("the folder row renders") {
+                content.findViewById<ViewGroup>(R.id.swFolderRow)?.let { row ->
+                    allTexts(row).any { it.startsWith("Tax 2026") }
                 } == true
             }
-            val row = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-            val chip = (0 until row.childCount)
-                .map { row.getChildAt(it) as TextView }
-                .first { it.text.toString().startsWith("Tax 2026") }
+            val row = content.findViewById<ViewGroup>(R.id.swFolderRow)
+            val chip = allTextViews(row).first { it.text.toString().startsWith("Tax 2026") }
             chip.performClick()
             idle()
             layoutRoot(activity)

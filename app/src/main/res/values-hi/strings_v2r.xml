@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2R lane Hindi parity. Glossary: प्रति, वापस लाना, दस्तावेज़, प्रयास; no loanwords. -->
+<resources>
+    <string name="v2r_backup_interrupted_title">प्रति सहेजना रुक गई</string>
+    <string name="v2r_backup_interrupted_body">कुछ भी सहेजा नहीं गया। मूल फ़ाइलें नहीं बदलीं। फिर प्रयास करें।</string>
+    <string name="v2r_restore_interrupted_title">वापस लाना रुक गया</string>
+    <string name="v2r_restore_interrupted_body">कुछ दस्तावेज़ पहले ही वापस लाए गए हो सकते हैं। फिर प्रयास करने से पहले दस्तावेज़ देखें।</string>
+    <string name="v2r_try_again">फिर प्रयास करें</string>
+
+    <!-- Vault removal: safe move-back first, permanent delete behind its own confirm. -->
+    <string name="v2r_vault_remove_choices_note">जोड़ने पर कागज़ात वाली प्रति हटा दी गई थी। इस सुरक्षित प्रति के साथ क्या करें, चुनें।</string>
+    <string name="v2r_vault_move_back">कागज़ात में वापस रखें</string>
+    <string name="v2r_vault_delete_forever">हमेशा के लिए हटाएँ</string>
+    <string name="v2r_vault_delete_confirm_title">%1$s को हमेशा के लिए हटाएँ?</string>
+    <string name="v2r_vault_delete_confirm_body">तिजोरी से \"%1$s\" हटाएँ? यह कागज़ात में नहीं होगा। इसे वापस नहीं लाया जा सकता।</string>
+    <string name="v2r_vault_move_back_done">%1$s को कागज़ात में वापस रख दिया गया। तिजोरी में याद रखा गया PDF पासवर्ड साथ नहीं आता।</string>
+    <string name="v2r_vault_move_back_failed">%1$s को वापस नहीं रख सके। तिजोरी वाली प्रति नहीं बदली गई।</string>
+    <string name="v2r_vault_move_back_partial">कागज़ात वाली प्रति तैयार है, पर तिजोरी वाली प्रति अभी भी है। इसे इसी मेन्यू से हटाएँ।</string>
+    <string name="v2r_vault_move_back_verify_failed">कागज़ात वाली प्रति जाँची नहीं जा सकी। उसे हटाई गई फ़ाइलों में रख दिया गया; तिजोरी वाली प्रति नहीं बदली गई।</string>
+    <string name="v2r_vault_move_back_cleanup_failed">कागज़ात वाली प्रति हटाई नहीं जा सकी। कागज़ात और तिजोरी दोनों देखें।</string>
+    <string name="v2r_vault_move_back_remove_failed">कागज़ात में वापस रख दिया गया, पर तिजोरी वाली प्रति हटाई नहीं जा सकी। उसे तिजोरी से हटाएँ।</string>
+
+    <!-- Pro paywall: expanding the full catalogue with honest tier labels. -->
+    <string name="v2r_see_all_pro_tools">सभी Pro औज़ार देखें</string>
+    <string name="v2r_pro_tools_heading">Pro औज़ार</string>
+    <string name="v2r_free_tools_heading">हमेशा मुफ़्त</string>
+    <string name="v2r_pro_label">Pro</string>
+    <string name="v2r_free_label">मुफ़्त</string>
+    <string name="v2r_show_less">कम दिखाएँ</string>
+    <string name="v2r_soon_label">जल्द</string>
+</resources>

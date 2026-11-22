@@ -121,7 +121,7 @@ class ToolNamesCouncilParityTest {
         "settings_block_screenshots" to ("Block screenshots" to "दस्तावेज़ों की तस्वीर रोकें"),
         "settings_pro_summary" to ("All Pro tools" to "सभी Pro काम"),
         // counts and empty states
-        "pro_see_all" to ("See all 15 Pro tools ›" to "Pro के सभी 15 काम ›"),
+        "pro_see_all" to ("See all %1\$d Pro tools ›" to "Pro के सभी %1\$d काम ›"),
         "create_disc_desc" to ("Scan or import a document" to "स्कैन करें या दस्तावेज़ आयात करें"),
         "home_empty_title" to ("No documents yet" to "अभी कोई दस्तावेज़ नहीं"),
         "home_empty_body" to ("Your scans stay on this phone. No account, no upload." to "आपके स्कैन इसी फ़ोन पर रहते हैं। कोई खाता नहीं, फ़ाइलें बाहर नहीं जातीं।"),
@@ -209,10 +209,24 @@ class ToolNamesCouncilRegistryTest {
         assertEquals(1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         assertEquals(16, ToolRegistry.all.count { it.pro })
         assertEquals(15, ToolRegistry.proCount())
-        assertTrue(
-            "the See all label uses the derived Pro count",
-            app.getString(R.string.pro_see_all).contains(ToolRegistry.proCount().toString())
-        )
+    }
+
+    @Test
+    fun `See all count is a format filled from proCount not a hard-coded number`() {
+        val n = ToolRegistry.proCount()
+        for (res in listOf(R.string.pro_see_all, R.string.pro_more_tools)) {
+            val shown = app.getString(res, n)
+            assertTrue(
+                "the shown number (${shown}) must equal proCount()=$n",
+                shown.contains(n.toString())
+            )
+            // A sentinel proves the number comes from the argument, not from the string.
+            val sentinel = app.getString(res, 4242)
+            assertTrue(
+                "the count slot must be a %1\$d argument, not hard-coded: $sentinel",
+                sentinel.contains("4242")
+            )
+        }
     }
 }
 

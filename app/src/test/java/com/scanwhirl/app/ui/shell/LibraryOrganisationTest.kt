@@ -233,8 +233,13 @@ class LibraryOrganisationTest {
         ProGate.setTestOverride(app, false)
         DocFixtures.saved(repo, app, pages = 1, name = "Gated")
         launch { activity ->
-            val folderRow = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-            val newFolder = activity.findViewById<View>(R.id.swNewFolder)
+            // Council §7: the folder rows moved into the shared chooser behind
+            // "All folders ▾"; New folder stays second, right after "All documents".
+            activity.findViewById<View>(R.id.swAllFolders).performClick()
+            idle()
+            val sheet = ShadowDialog.getLatestDialog()
+            val folderRow = sheet!!.findViewById<ViewGroup>(R.id.swFolderRow)
+            val newFolder = sheet.findViewById<View>(R.id.swNewFolder)
             assertEquals("New folder sits right after All, never scrolled away", 1, folderRow.indexOfChild(newFolder))
             newFolder.performClick()
             idle()

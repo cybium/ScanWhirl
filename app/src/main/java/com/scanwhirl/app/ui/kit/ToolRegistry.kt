@@ -168,7 +168,7 @@ object ToolRegistry {
         ready("resize", ToolGroup.OPTIMIZE, R.string.tool_resize, R.drawable.ic_sym_aspect_ratio, "resize dimensions pixels"),
         // The tile value lives in lane N's strings; strings_form1.xml (lane F) keeps the
         // longer setup-screen header. Both are "Form photo" / "फ़ॉर्म फ़ोटो".
-        ready("form_ready", ToolGroup.OPTIMIZE, R.string.tool_form_ready_tile, R.drawable.ic_sym_photo_library,
+        ready("form_ready", ToolGroup.OPTIMIZE, R.string.tool_form_ready_tile, R.drawable.ic_sym_photo_camera,
             "form form ready form-ready photo signature thumb declaration exam government फ़ॉर्म हस्ताक्षर",
             launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
@@ -280,9 +280,10 @@ object ToolRegistry {
 
         // Council §1: OCR is the single text tile; `to_text` and `hindi_text` are not tools.
         // Hindi is a language chip inside OCR, and .txt export is the Save .txt button there.
-        // Council §2: the OCR glyph is the existing `ic_ocr`, not `notes_lines`.
+        // Council §2 / lane I: the OCR glyph is `ic_sym_ocr` (the re-exported ic_ocr),
+        // never `notes_lines`.
         ready(
-            "read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_ocr,
+            "read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_ocr,
             "ocr extract text recognize recognise read text to text txt हिंदी लिखा हुआ copy"
         )
     )

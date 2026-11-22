@@ -2,7 +2,6 @@ package com.scanwhirl.app.ui.kit
 
 import android.content.Context
 import android.content.res.ColorStateList
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -39,6 +38,8 @@ class SwChip(context: Context) : LinearLayout(context) {
         val padH = SwStyle.dp(context, 10f)
         setPadding(padH, 0, padH, 0)
         minimumHeight = SwStyle.dp(context, 48f)
+        // V2R R1 state/focus audit: the chip is a named action, so it speaks as a Button.
+        SwStyle.asButton(this)
         SwMotion.press(this)
 
         iconView = ImageView(context).apply {
@@ -98,10 +99,12 @@ class SwChip(context: Context) : LinearLayout(context) {
     }
 
     /** Adds the small gold PRO pill after the label. */
-    fun withProTag(): SwChip = apply {        val pill = SwStyle.text(context, 9f, SwStyle.color(context, R.color.gold_pro_primary), bold = true)
+    fun withProTag(): SwChip = apply {
+        // V2R R1: the pill was 8sp — below every readable floor. The chip keeps its 48dp
+        // target; the pill grows with the system font instead of a fixed small size.
+        val pill = SwStyle.text(context, 12f, SwStyle.color(context, R.color.gold_pro_primary), bold = true)
             .apply {
                 text = context.getString(R.string.badge_pro)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
                 isSingleLine = true
                 maxLines = 1
                 gravity = Gravity.CENTER

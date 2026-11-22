@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Council lane B: Library one-row band + newcomer-safe Quick tools editor (Hindi). -->
+<resources>
+    <!-- The single library control row. -->
+    <string name="cb_all_folders_control">सभी फ़ोल्डर ▾</string>
+    <string name="cb_folder_talkback">फ़ोल्डर: सभी फ़ोल्डर</string>
+    <string name="cb_sort_talkback">क्रम: %1$s</string>
+    <string name="cb_count_talkback">दस्तावेज़</string>
+    <string name="cb_categories">श्रेणियाँ</string>
+
+    <!-- Council §7's helper becomes the field placeholder. At 2.0x the full guidance
+         cannot fit the field, so large text uses this short, honest form. -->
+    <string name="cb_search_hint_short">नाम, टैग, पन्ने</string>
+
+    <!-- Removable filter chip (Filter row only while a filter is active). -->
+    <string name="cb_remove_filter">छाँट हटाएँ</string>
+    <string name="cb_filter_showing">सिर्फ़ यह दिखा रहे हैं: %1$s</string>
+    <string name="cb_filter_active">छाँट: %1$s</string>
+
+    <!-- Quick tools: Customize button and the checkbox editor. -->
+    <string name="cb_customize">बदलें</string>
+    <string name="cb_customize_desc">झटपट काम बदलें</string>
+    <string name="cb_quick_editor_title">झटपट काम बदलें</string>
+    <string name="cb_quick_editor_hint">जोड़ने या हटाने के लिए दबाएँ।</string>
+    <string name="cb_quick_max_reached">ज़्यादा से ज़्यादा 6 झटपट काम रख सकते हैं।</string>
+    <string name="cb_move_up">%1$s को ऊपर ले जाएँ</string>
+    <string name="cb_move_down">%1$s को नीचे ले जाएँ</string>
+    <string name="cb_more_actions">और कार्रवाई</string>
+
+    <!-- Short quick-tile labels (OCR replaces the old Read text tile). -->
+    <string name="cb_quick_merge">मिलाएँ</string>
+    <string name="cb_quick_compress">छोटा करें</string>
+    <string name="cb_quick_sign">हस्ताक्षर करें</string>
+    <string name="cb_quick_protect">सुरक्षित करें</string>
+    <string name="cb_quick_ocr">OCR</string>
+</resources>

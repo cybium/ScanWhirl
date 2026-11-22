@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.MarginLayoutParams
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -128,18 +129,24 @@ class LibraryScreen(
         com.scanwhirl.app.util.Prefs.quickTools(context).toMutableList()
     private var quickDraft: MutableList<String>? = null
     private var quickSheet: SwSheet? = null
+    /** Council §7: the one folder+category chooser sheet. */
+    private var chooserSheet: SwSheet? = null
     private lateinit var quickHeader: View
     private lateinit var quickRow: HorizontalScrollView
     private lateinit var quickStrip: LinearLayout
-    private lateinit var quickEdit: ImageButton
+    /** Council §7: a plain "Customize" text button replaces the bare pencil. */
+    private lateinit var quickCustomize: TextView
     private lateinit var quickAll: TextView
     private val quickLabels = mapOf(
-        "merge" to R.string.quick_merge,
-        "compress" to R.string.quick_compress,
-        "sign" to R.string.quick_sign,
-        "protect" to R.string.quick_protect,
+        "merge" to R.string.cb_quick_merge,
+        "compress" to R.string.cb_quick_compress,
+        "sign" to R.string.cb_quick_sign,
+        "protect" to R.string.cb_quick_protect,
         "to_word" to R.string.quick_to_word,
-        "read_text" to R.string.quick_read_text
+        // Council §1: "OCR" is the single label for text extraction. Lane N renames the
+        // registry id; accept both the old and the new id so this lane is order-independent.
+        "read_text" to R.string.cb_quick_ocr,
+        "ocr" to R.string.cb_quick_ocr
     )
 
     private lateinit var chipRow: LinearLayout
@@ -151,7 +158,10 @@ class LibraryScreen(
     private var sort: String = com.scanwhirl.app.util.Prefs.LIB_NEWEST
 
     // v2 UI: 03_tools_hub — folders, tags and selection mode.
+    /** Council §7: folder rows live in the shared folder/category chooser sheet. */
     private lateinit var folderRow: LinearLayout
+    /** Council §7: category rows live in the same shared chooser sheet. */
+    private lateinit var categoryRow: LinearLayout
     private lateinit var selectionBar: LinearLayout
     private lateinit var selectionCount: TextView
     /** T32: the scroll hook that keeps the selection bar pinned in the viewport. */
@@ -167,6 +177,10 @@ class LibraryScreen(
     private var recentHeader: View? = null
     private var folderScroll: View? = null
     private lateinit var controlBand: LinearLayout
+    /** Council §7: the active filter is a removable chip that appears only while filtering. */
+    private lateinit var filterRow: LinearLayout
+    /** The list heading; its text follows the chosen sort ("Recent" or "Documents"). */
+    private lateinit var docHeading: TextView
     private lateinit var activeFilter: TextView
     private lateinit var noMatchView: TextView
     private lateinit var homeClear: ImageButton
@@ -283,14 +297,79 @@ class LibraryScreen(
             background = readableBand()
         }
         addView(noMatchView)
-        // L1-01: one wrapping control band replaces the separate folder/sort/count chrome rows.
+        // Council §7: ONE row holds All folders ▾, Newest ▾ and the live count.
         buildControlBand()
         addView(controlBand)
-        // UX-008: between the folders and the document list, never above them. Two row shells
-        // (twelve tools at six columns) stay addressable for tests and drag targets.
+        // Council §7: the Filter row exists only while a filter is active (a removable chip).
+        filterRow = LinearLayout(context).apply {
+            id = R.id.cbFilterRow
+            orientation = HORIZONTAL
+            isVisible = false
+            background = readableBand()
+            layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT
+            ).apply {
+                val m = SwStyle.dp(context, 18f)
+                setMargins(m, SwStyle.dp(context, 4f), m, 0)
+            }
+        }
+        addView(filterRow)
+        activeFilter = SwStyle.text(
+            context,
+            if (AppLanguage.showingHindi(context)) 14f else 12.5f,
+            SwStyle.color(context, R.color.cyan_primary)
+        ).apply {
+            id = R.id.swActiveFilter
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            minimumHeight = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(SwStyle.dp(context, 4f), 0, SwStyle.dp(context, 4f), 0)
+            background = readableBand()
+        }
+        filterRow.addView(activeFilter, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        SwStyle.iconButton(
+            context, R.drawable.ic_sym_close, SwStyle.color(context, R.color.text_hologram_mid)
+        ).apply {
+            id = R.id.cbRemoveFilter
+            contentDescription = context.getString(R.string.cb_remove_filter)
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            setOnClickListener {
+                folder = null
+                category = null
+                renderFolders()
+                renderChips()
+                renderDocs()
+            }
+            filterRow.addView(this, LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f)))
+        }
+        // The list heading follows the sort. Keeping it as plain text (not a floating chip)
+        // means it never covers the first row and keeps the "heading follows sort" intent.
+        docHeading = SwStyle.text(
+            context, 15f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+        ).apply {
+            id = R.id.cbDocHeading
+            text = context.getString(R.string.home_recent)
+            contentDescription = text
+            setPadding(
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 8f),
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 2f)
+            )
+            maxLines = 2
+            ellipsize = null
+            background = readableBand()
+        }
+        addView(docHeading)
+        // A sort persisted from before this screen was created must already have the
+        // right heading; renderSortLabel() ran while docHeading was not yet initialised.
+        renderSortLabel()
         quickHeader = quickToolsHeader().apply { background = readableBand() }
         addView(quickHeader)
-        // UX-008: ONE horizontally scrolling row on Home. The editor still holds up to 12,
+        // Council §7: ONE horizontally scrolling row on Home. The editor is capped at 6,
         // but the document list must own the first screen (proved at 360x640dp).
         quickStrip = LinearLayout(context).apply { orientation = HORIZONTAL }
         quickRow = HorizontalScrollView(context).apply {
@@ -611,112 +690,77 @@ class LibraryScreen(
 
     // ---- folders ----------------------------------------------------------
 
-    /**
-     * L1-01: one wrapping band with a named control for each library dimension. The old
-     * separate folder, category, sort and count rows are merged here, so the first card
-     * starts higher while every folder, category and sort choice keeps a one-tap route.
-     */
     /** True at the device's 200 % setting, where whole-unit stacking beats density. */
     private fun largeFont(): Boolean = resources.configuration.fontScale >= 1.6f
 
+    /**
+     * Council §7: ONE row — [All folders ▾] [Newest ▾]   9 documents.
+     * Folder and category share one chooser sheet; sort keeps its own sheet. The old
+     * "Folder:" / "Filter:" / "Sort:" captions leave the face; their meaning survives as
+     * TalkBack names on the three controls. At large text the row stacks into whole-unit
+     * lines so a single word never clips (the V2L device-reflow contract).
+     */
     private fun buildControlBand() {
         val band = LinearLayout(context).apply {
             id = R.id.uxL1ControlBand
-            orientation = VERTICAL
+            orientation = if (largeFont()) VERTICAL else HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             background = readableBand()
+            minimumHeight = SwStyle.dp(context, 48f)
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT
             ).apply {
                 val m = SwStyle.dp(context, 18f)
-                val top = if (resources.configuration.fontScale >= 1.6f) 1f else 4f
-                setMargins(m, SwStyle.dp(context, top), m, 0)
+                setMargins(m, SwStyle.dp(context, 4f), m, 0)
             }
         }
-        fun label(id: Int, textRes: Int): TextView = SwStyle.text(
+        fun controlParams(): LayoutParams = if (largeFont()) {
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 4f) }
+        } else {
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        }
+        fun control(id: Int, talkbackRes: Int, onClick: () -> Unit): TextView = SwStyle.text(
             context,
             if (AppLanguage.showingHindi(context)) 14f else 13f,
             SwStyle.color(context, R.color.cyan_primary), bold = true
         ).apply {
             this.id = id
-            text = context.getString(textRes)
-            contentDescription = text
-            minWidth = SwStyle.dp(context, 64f)
             minimumHeight = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER_VERTICAL
-            maxLines = 2
+            maxLines = 1
             ellipsize = null
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+            contentDescription = context.getString(talkbackRes)
         }
-        // Device reflow (Infinix 411dp/393dp @2.0): a label and its chooser must stay a whole
-        // unit. At large font the caption stacks over a full-width value instead of squeezing
-        // "Newest" into three lines beside a 64dp label.
-        fun valueParams(): LayoutParams = if (largeFont()) {
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        } else {
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-        }
-        fun line(id: Int, textRes: Int): LinearLayout = LinearLayout(context).apply {
-            orientation = if (largeFont()) VERTICAL else HORIZONTAL
-            gravity = if (largeFont()) Gravity.START else Gravity.CENTER_VERTICAL
-            minimumHeight = SwStyle.dp(context, 48f)
-            // G3: the control text sits on the same near-opaque surface as the cards.
-            background = readableBand()
-            addView(
-                label(id, textRes),
-                if (largeFont()) {
-                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                } else {
-                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                }
-            )
-        }.also { band.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
 
-        // Folder: the existing chooser (All / New folder / All folders / named folders).
-        val folderLine = line(R.id.uxL1FolderLabel, R.string.ux130_l1_folder_label)
-        val folderSectionView = folderSection()
-        folderScroll = folderSectionView
-        folderLine.addView(folderSectionView, valueParams())
+        val folderControl = control(R.id.swAllFolders, R.string.cb_folder_talkback) { showAllFolders() }
+        folderControl.text = context.getString(R.string.cb_all_folders_control)
+        band.addView(folderControl, controlParams())
 
-        // Filter: the category chips rail, reachable in one tap from the named control.
-        val filterLine = line(R.id.uxL1FilterLabel, R.string.ux130_l1_filter_label)
-        chipRow = LinearLayout(context).apply {
-            id = R.id.swChipRow
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val pad = SwStyle.dp(context, 18f)
-            setPadding(pad, 0, pad, 0)
-        }
-        val chipScroller = HorizontalScrollView(context).apply {
-            id = R.id.swChipScroll
-            isHorizontalScrollBarEnabled = false
-            isHorizontalFadingEdgeEnabled = true
-            setFadingEdgeLength(SwStyle.dp(context, 24f))
-            addView(
-                chipRow,
-                android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-            )
-        }
-        chipScroll = chipScroller
-        filterLine.addView(chipScroller, valueParams())
+        sortAction = control(R.id.swSort, R.string.cb_sort_talkback) { showSortSheet() }
+        band.addView(sortAction, controlParams())
 
-        // Sort: the same five choices and sort-dependent heading, plus the live count.
-        listHeader = line(R.id.uxL1SortLabel, R.string.ux130_l1_sort_label)
-        recentHeader = sectionHeader(
-            context.getString(R.string.home_recent), context.getString(R.string.home_newest)
-        ) { showSortSheet() }.apply { background = readableBand() }
-        listHeader.addView(recentHeader, valueParams())
-        countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true).apply {
+        countLabel = SwStyle.text(
+            context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true
+        ).apply {
             id = R.id.swDocCount
-            maxLines = 2
+            minimumHeight = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 1
             ellipsize = null
+            contentDescription = context.getString(R.string.cb_count_talkback)
         }
-        listHeader.addView(countLabel, valueParams())
+        band.addView(countLabel, controlParams())
+
         controlBand = band
+        listHeader = band
+        renderSortLabel()
     }
 
     /**
@@ -785,48 +829,79 @@ class LibraryScreen(
 
     private fun renderFolders() {
         folderNames = runCatching { repo.listFolders() }.getOrDefault(emptyList())
+        // Council §7: the folder rail lives inside the shared chooser sheet, so a reload
+        // before the sheet is ever opened has nothing to populate.
+        if (!::folderRow.isInitialized) return
         folderRow.removeAllViews()
-        folderChip(
-            label = context.getString(R.string.folder_all),
-            active = folder == null
-        ) {
+        folderRow.addView(sheetChoice(context.getString(R.string.folder_all), folder == null) {
+            chooserSheet?.dismiss()
             folder = null
             renderFolders()
             renderDocs()
-        }
-        // "+ New folder" sits right after "All" so it never scrolls off-screen as folders grow.
-        // PRO_PLAN line 10-11 (accepted 11-18): creating a folder is FREE; tags stay Pro.
-        folderChip(
-            label = context.getString(R.string.folder_new),
-            active = false,
-            accent = true
-        ) {
-            newFolderSheet()
-        }.id = R.id.swNewFolder
-        // UI-W4 Part B: an explicit, always-visible route to every folder (including the
-        // empty ones) so rename/delete never depends on discovering a long-press.
-        folderChip(
-            label = context.getString(R.string.folder_all_folders),
-            active = false
-        ) {
-            showAllFolders()
-        }.apply {
-            id = R.id.swAllFolders
-            contentDescription = context.getString(R.string.folder_all_folders_desc)
-        }
+        })
+        // PRO_PLAN line 10-11: creating a folder is FREE; tags stay Pro.
+        folderRow.addView(
+            sheetChoice(context.getString(R.string.folder_new), false) { newFolderSheet() }
+                .apply { id = R.id.swNewFolder }
+        )
         for (name in folderNames) {
             val count = docs.count { it.folder.equals(name, true) }
-            folderChip(label = "$name ($count)", active = folder.equals(name, true)) {
-                folder = if (folder.equals(name, true)) null else name
-                renderFolders()
-                renderDocs()
-            }.setOnLongClickListener {
-                // Kept as a shortcut for the existing gesture, never the only route.
-                showFolderOptions(name)
-                true
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = SwStyle.dp(context, 48f)
             }
+            row.addView(
+                sheetChoice("$name ($count)", folder.equals(name, true)) {
+                    chooserSheet?.dismiss()
+                    folder = if (folder.equals(name, true)) null else name
+                    renderFolders()
+                    renderDocs()
+                }.apply {
+                    // Kept as a shortcut for the existing long-press gesture, never the only route.
+                    setOnLongClickListener {
+                        showFolderOptions(name)
+                        true
+                    }
+                },
+                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            )
+            row.addView(
+                SwStyle.iconButton(
+                    context, R.drawable.ic_sym_more_vert, SwStyle.color(context, R.color.text_hologram_mid)
+                ).apply {
+                    contentDescription = context.getString(R.string.folder_more_desc, name)
+                    layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
+                    setPadding(
+                        SwStyle.dp(context, 12f), SwStyle.dp(context, 12f),
+                        SwStyle.dp(context, 12f), SwStyle.dp(context, 12f)
+                    )
+                    setOnClickListener { showFolderOptions(name) }
+                }
+            )
+            folderRow.addView(row)
         }
     }
+
+    /** One full-width chooser row (folder or category) with a real 48dp touch target. */
+    private fun sheetChoice(label: String, active: Boolean, onClick: () -> Unit): TextView =
+        SwStyle.text(
+            context, 15f,
+            if (active) SwStyle.color(context, R.color.cyan_primary)
+            else SwStyle.color(context, R.color.text_hologram_hi)
+        ).apply {
+            text = label
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
 
     private fun folderChip(
         label: String,
@@ -899,10 +974,10 @@ class LibraryScreen(
     }
 
     /**
-     * UI-W4 Part B: the explicit folder list behind "All folders". Every folder (even an
-     * empty one) has a named row and its own More; the row filters the library, More opens
-     * the same rename/delete menu as the shortcut. Deleting only removes the folder, never
-     * a document ([ScanRepository.deleteFolder]).
+     * Council §7: folder and category share ONE chooser sheet behind "All folders ▾".
+     * Every folder (even an empty one) gets a named row and its own More; New folder stays
+     * the primary action. Category rows below filter by category. Deleting a folder only
+     * removes the folder, never a document ([ScanRepository.deleteFolder]).
      */
     private fun showAllFolders() {
         val names = runCatching { repo.listFolders() }.getOrDefault(emptyList())
@@ -910,20 +985,14 @@ class LibraryScreen(
             id = R.id.swFolderSheet
             orientation = VERTICAL
         }
-        var sheet: SwSheet? = null
 
-        // L1-01: name the management capability in the chooser. The rows below already
-        // expose rename/delete through their More action; "New folder" stays the primary.
-        list.addView(
-            SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
-                text = context.getString(R.string.ux130_l1_manage_folders)
-                contentDescription = text
-                minimumHeight = SwStyle.dp(context, 48f)
-                gravity = Gravity.CENTER_VERTICAL
-                isFocusable = true
-            },
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        )
+        list.addView(sheetHeading(context.getString(R.string.ux130_l1_manage_folders)))
+        folderRow = LinearLayout(context).apply {
+            id = R.id.swFolderRow
+            orientation = VERTICAL
+        }
+        renderFolders()
+        list.addView(folderRow)
 
         if (names.isEmpty()) {
             list.addView(
@@ -936,54 +1005,13 @@ class LibraryScreen(
             )
         }
 
-        val counts = docs.groupingBy { (it.folder ?: "").lowercase(Locale.getDefault()) }.eachCount()
-        for (name in names) {
-            val count = counts[name.lowercase(Locale.getDefault())] ?: 0
-            val row = LinearLayout(context).apply {
-                orientation = HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = SwStyle.dp(context, 48f)
-            }
-            val label = SwStyle.text(
-                context, 15f, SwStyle.color(context, R.color.text_hologram_hi)
-            ).apply {
-                text = "$name ($count)"
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-                //noinspection WrongConstant
-                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    sheet?.dismiss()
-                    folder = name
-                    renderFolders()
-                    renderDocs()
-                }
-            }
-            row.addView(label, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            val more = SwStyle.iconButton(
-                context, R.drawable.ic_sym_more_vert, SwStyle.color(context, R.color.text_hologram_mid)
-            ).apply {
-                contentDescription = context.getString(R.string.folder_more_desc, name)
-                layoutParams = LayoutParams(SwStyle.dp(context, 48f), SwStyle.dp(context, 48f))
-                setPadding(
-                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f),
-                    SwStyle.dp(context, 12f), SwStyle.dp(context, 12f)
-                )
-                setOnClickListener {
-                    sheet?.dismiss()
-                    showFolderOptions(name)
-                }
-            }
-            row.addView(more)
-            list.addView(
-                row,
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                    .apply { topMargin = SwStyle.dp(context, 2f) }
-            )
+        list.addView(sheetHeading(context.getString(R.string.cb_categories)))
+        categoryRow = LinearLayout(context).apply {
+            id = R.id.swChipRow
+            orientation = VERTICAL
         }
+        renderChips()
+        list.addView(categoryRow)
 
         val scroll = androidx.core.widget.NestedScrollView(context).apply {
             isFillViewport = false
@@ -1000,11 +1028,20 @@ class LibraryScreen(
             .setContent(scroll)
             .setSecondary(R.string.sheet_cancel)
             .build()
-        // Folder creation stays reachable from the explicit list, in every tier.
         built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
-        sheet = built
+        chooserSheet = built
         built.show()
     }
+
+    /** A section caption inside the shared folder/category chooser. */
+    private fun sheetHeading(label: String): TextView =
+        SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            text = label
+            contentDescription = label
+            minimumHeight = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+        }
 
     private fun renameFolderSheet(name: String) {
         val sheet = SwSheet.builder(context)
@@ -1080,21 +1117,17 @@ class LibraryScreen(
             id = R.id.swSelCount
         }
         top.addView(selectionCount, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        val done = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-            id = R.id.swSelDone
-            text = context.getString(R.string.ux130_l1_finish_selection)
-            setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
-            minimumHeight = SwStyle.dp(context, 48f)
-            gravity = Gravity.CENTER
-            isClickable = true
-            setOnClickListener { exitSelection() }
-        }
-        top.addView(done)
         bar.addView(top)
 
+        // Council §7: four named chips + a 5th "More" chip; the rest sit behind it.
+        val overflow = LinearLayout(context).apply {
+            id = R.id.cbSelOverflow
+            orientation = HORIZONTAL
+            isVisible = false
+        }
         val scroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
         val actions = LinearLayout(context).apply { orientation = HORIZONTAL }
-        fun action(id: Int, icon: Int, label: Int, onClick: () -> Unit) {
+        fun action(container: LinearLayout, id: Int, icon: Int, label: Int, onClick: () -> Unit) {
             val chip = SwChip(context).apply {
                 this.id = id
                 bind(icon, context.getString(label))
@@ -1102,22 +1135,22 @@ class LibraryScreen(
                 minimumHeight = SwStyle.dp(context, 48f)
                 minimumWidth = SwStyle.dp(context, 48f)
             }
-            actions.addView(
+            container.addView(
                 chip,
                 LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
-        action(R.id.swSelMove, R.drawable.ic_sym_folder_open, R.string.sel_move) { showMoveSheet() }
-        action(R.id.swSelTags, R.drawable.ic_sym_badge, R.string.sel_tags) {
+        action(actions, R.id.swSelMove, R.drawable.ic_sym_folder_open, R.string.sel_move) { showMoveSheet() }
+        action(actions, R.id.swSelTags, R.drawable.ic_sym_badge, R.string.sel_tags) {
             requirePro { showTagsSheet() }
         }
-        action(R.id.swSelShare, R.drawable.ic_sym_share, R.string.sel_share) {
+        action(actions, R.id.swSelShare, R.drawable.ic_sym_share, R.string.sel_share) {
             val chosen = docs.filter { it.id in selected }
             if (chosen.isNotEmpty()) callbacks.onShareDocs(chosen)
         }
         // v2 UI: 03_tools_hub — L4's Batch screen opens with these ids preselected.
-        action(R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
+        action(actions, R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
             val ids = docs.filter { it.id in selected }.map { it.id }
             if (ids.isEmpty()) return@action
             requirePro {
@@ -1126,15 +1159,48 @@ class LibraryScreen(
                 }
             }
         }
-        action(R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
+        val more = SwChip(context).apply {
+            id = R.id.cbSelMore
+            bind(R.drawable.ic_sym_more_horiz, context.getString(R.string.cb_more_actions))
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            setOnClickListener { overflow.isVisible = !overflow.isVisible }
+        }
+        actions.addView(
+            more,
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
+                .apply { marginEnd = SwStyle.dp(context, 8f) }
+        )
+        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
             if (selected.size >= 2) requirePro { showBatchRename() }
             else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
         }
-        action(R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash) { confirmDeleteSelection() }
+        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash) { confirmDeleteSelection() }
         scroll.addView(actions)
         bar.addView(
             scroll,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
+        bar.addView(
+            overflow,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 4f) }
+        )
+        // Council §7: "Finish selection" owns its own full-width row.
+        val done = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+            id = R.id.swSelDone
+            text = context.getString(R.string.ux130_l1_finish_selection)
+            setPadding(SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 10f), 0)
+            minimumHeight = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { exitSelection() }
+        }
+        bar.addView(
+            done,
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f))
                 .apply { topMargin = SwStyle.dp(context, 8f) }
         )
         selectionBar = bar
@@ -1631,7 +1697,11 @@ class LibraryScreen(
         searchInput = EditText(context).apply {
             id = R.id.swHomeSearch
             // LEAD DECISION: short field hint + a persistent, wrapping helper line below it.
-            hint = context.getString(R.string.ux130_l1_search_hint)
+            // Council §7: the helper line becomes the field's placeholder. At 2.0x the
+            // full sentence cannot fit the field, so large text keeps the short form.
+            hint = context.getString(
+                if (largeFont()) R.string.cb_search_hint_short else R.string.ux130_l1_search_help
+            )
             setHintTextColor(SwStyle.color(context, R.color.text_hologram_dim))
             setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -1693,28 +1763,11 @@ class LibraryScreen(
             // P1: these lines sit on the bare wallpaper scrim without a surface otherwise.
             background = readableBand()
         }
-        val helper = SwStyle.text(
-            context,
-            if (AppLanguage.showingHindi(context)) 14f else 12f,
-            SwStyle.color(context, R.color.text_hologram_mid)
-        ).apply {
-            id = R.id.uxL1SearchHelp
-            text = context.getString(R.string.ux130_l1_search_help)
-            contentDescription = text
-            maxLines = 3
-            ellipsize = null
-            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-            //noinspection WrongConstant
-            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
-            isFocusable = true
-            background = readableBand()
-        }
         val wrap = LinearLayout(context).apply {
             orientation = VERTICAL
             background = readableBand()
         }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
-        wrap.addView(helper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         return wrap.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
@@ -1727,13 +1780,16 @@ class LibraryScreen(
 
     // ---- Home quick tools (owner decision UX-008) ------------------------
 
-    /** "Quick tools", the "All tools" door and the pencil that opens the one editor sheet. */
+    /** Council §7: "Quick tools" / "Customize" / "All tools ›" — no bare pencil. */
     private fun quickToolsHeader(): View {
+        // Large text needs a little more room for the wrapped "Quick tools" word;
+        // tighten the outer and action paddings instead of clipping the title.
+        val pad = SwStyle.dp(context, if (largeFont()) 12f else 18f)
+        val actionPad = SwStyle.dp(context, if (largeFont()) 4f else 8f)
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val pad = SwStyle.dp(context, 18f)
-            // UX-008: no vertical padding at normal size; the 48dp pencil sets the row height.
+            // The 48dp Customize control sets the row height.
             val top = if (resources.configuration.fontScale >= 1.6f) SwStyle.dp(context, 4f) else 0
             setPadding(pad, top, pad, 0)
         }
@@ -1753,24 +1809,29 @@ class LibraryScreen(
             minimumWidth = SwStyle.dp(context, 48f)
             isClickable = true
             isFocusable = true
-            setPadding(SwStyle.dp(context, 8f), 0, SwStyle.dp(context, 8f), 0)
+            setPadding(actionPad, 0, actionPad, 0)
             setOnClickListener { callbacks.onAllTools() }
         }
         row.addView(quickAll)
-        quickEdit = SwStyle.iconButton(
-            context, R.drawable.ic_sym_edit, SwStyle.color(context, R.color.text_hologram_mid)
+        quickCustomize = SwStyle.text(
+            context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true
         ).apply {
             id = R.id.swQuickEdit
-            contentDescription = context.getString(R.string.quick_edit)
-            val size = SwStyle.dp(context, 48f)
-            layoutParams = LayoutParams(size, size)
-            setPadding(
-                SwStyle.dp(context, 14f), SwStyle.dp(context, 14f),
-                SwStyle.dp(context, 14f), SwStyle.dp(context, 14f)
-            )
+            text = context.getString(R.string.cb_customize)
+            contentDescription = context.getString(R.string.cb_customize_desc)
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER
+            setPadding(actionPad, 0, actionPad, 0)
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            isClickable = true
+            isFocusable = true
             setOnClickListener { showQuickEditor() }
         }
-        row.addView(quickEdit)
+        row.addView(quickCustomize)
         return row
     }
 
@@ -1834,11 +1895,10 @@ class LibraryScreen(
         return tile
     }
 
-    /** One horizontal strip of all saved tools; the editor still holds up to twelve. */
+    /** One horizontal strip of all saved tools (legacy lists longer than six are kept). */
     internal fun buildQuickRows() {
         quickStrip.removeAllViews()
         val tools = quickIds.mapNotNull { ToolRegistry.byId(it) }
-            .take(com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS)
         val width = quickTileWidth()
         for (tool in tools) {
             quickStrip.addView(
@@ -1866,10 +1926,19 @@ class LibraryScreen(
      * UX-008: the pencil opens ONE sheet for add, remove, reorder and reset. The Home rows are
      * untouched until Done; the X, Cancel and Back all discard the draft.
      */
+    /**
+     * Council §7: newcomer-safe editor. A single list of checkbox rows with the FULL tool
+     * name, ▲▼ buttons (no drag needed), a "Tap to add or remove" hint and Reset. Cap 6:
+     * a saved list longer than six is kept but cannot grow until one is unchecked.
+     * The Home strip is untouched until Done; Cancel/Back discard the draft.
+     */
     private fun showQuickEditor() {
         val draft = quickIds.toMutableList()
         quickDraft = draft
-        val content = LinearLayout(context).apply { orientation = VERTICAL }
+        val content = LinearLayout(context).apply {
+            id = R.id.cbQuickEditorList
+            orientation = VERTICAL
+        }
         val scroll = ScrollView(context).apply {
             layoutParams = LayoutParams(
                 LayoutParams.MATCH_PARENT,
@@ -1877,18 +1946,51 @@ class LibraryScreen(
             )
             addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
-        val heading: (String) -> TextView = { text ->
-            SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true)
-                .apply { this.text = text }
+        fun moveButton(tool: SwTool, up: Boolean): View = SwStyle.text(
+            context, 18f, SwStyle.color(context, R.color.cyan_primary), bold = true
+        ).apply {
+            id = if (up) R.id.cbQuickUp else R.id.cbQuickDown
+            // Council §7: literal ▲ / ▼ controls, no drag and no new icon asset.
+            text = if (up) "▲" else "▼"
+            contentDescription = context.getString(
+                if (up) R.string.cb_move_up else R.string.cb_move_down,
+                context.getString(tool.title)
+            )
+            minimumHeight = SwStyle.dp(context, 48f)
+            minimumWidth = SwStyle.dp(context, 48f)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setPadding(
+                SwStyle.dp(context, 10f), SwStyle.dp(context, 10f),
+                SwStyle.dp(context, 10f), SwStyle.dp(context, 10f)
+            )
+            tag = tool.id
+            setOnClickListener {
+                val at = draft.indexOf(tool.id)
+                if (at >= 0) moveQuickTool(tool.id, if (up) at - 1 else at + 1)
+            }
         }
-        fun addRow(tools: List<SwTool>, remove: Boolean) {
-            val columns = quickColumns()
-            val atLimit = !remove && draft.size >= com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS
+        fun rebuildEditor() {
+            content.removeAllViews()
+            content.addView(
+                SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_dim)).apply {
+                    id = R.id.cbQuickHint
+                    text = context.getString(R.string.cb_quick_editor_hint)
+                    contentDescription = text
+                    setLineSpacing(0f, 1.25f)
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    gravity = Gravity.CENTER_VERTICAL
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+            val atLimit = draft.size >= QUICK_CAP
             if (atLimit) {
-                // The limit is a real, focusable statement, not a silent dead tile.
+                // The cap is a real, focusable statement, not a silent dead control.
                 content.addView(
-                    SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
-                        text = context.getString(R.string.quick_max_reached)
+                    SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary)).apply {
+                        id = R.id.cbQuickLimit
+                        text = context.getString(R.string.cb_quick_max_reached)
                         contentDescription = text
                         minimumHeight = SwStyle.dp(context, 48f)
                         gravity = Gravity.CENTER_VERTICAL
@@ -1896,134 +1998,56 @@ class LibraryScreen(
                         isClickable = true
                     },
                     LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                        .apply { topMargin = SwStyle.dp(context, 4f) }
                 )
             }
-            for (chunk in tools.chunked(columns)) {
+            for (tool in ToolRegistry.all.filter { it.status == ToolStatus.READY }) {
+                val checked = tool.id in draft
                 val row = LinearLayout(context).apply {
                     orientation = HORIZONTAL
-                    gravity = Gravity.TOP
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    tag = tool.id
                 }
-                for (tool in chunk) {
-                    val action = context.getString(
-                        if (remove) R.string.quick_remove else R.string.quick_add,
-                        context.getString(tool.title)
-                    )
-                    val tile = quickTile(
-                        tool,
-                        onClick = {
-                            if (remove) draft.remove(tool.id)
-                            else if (!atLimit && draft.size < com.scanwhirl.app.util.Prefs.MAX_QUICK_TOOLS) {
-                                draft.add(tool.id)
-                            }
-                            rebuildQuickEditor?.invoke()
-                        },
-                        badgeRes = if (remove) R.drawable.ic_sym_close else R.drawable.ic_sym_add,
-                        spoken = if (atLimit) context.getString(R.string.quick_max_reached) else action,
-                        atLimit = atLimit
-                    )
-                    if (remove) {
-                        // L1-04: named reorder actions alongside drag, with real boundary no-ops.
-                        tile.accessibilityDelegate = object : View.AccessibilityDelegate() {
-                            override fun onInitializeAccessibilityNodeInfo(
-                                host: View, info: AccessibilityNodeInfo
-                            ) {
-                                super.onInitializeAccessibilityNodeInfo(host, info)
-                                val at = draft.indexOf(tool.id)
-                                if (at > 0) info.addAction(
-                                    AccessibilityNodeInfo.AccessibilityAction(
-                                        R.id.uxL1MoveEarlier,
-                                        context.getString(R.string.ux130_l1_move_earlier)
-                                    )
-                                )
-                                if (at >= 0 && at < draft.lastIndex) info.addAction(
-                                    AccessibilityNodeInfo.AccessibilityAction(
-                                        R.id.uxL1MoveLater,
-                                        context.getString(R.string.ux130_l1_move_later)
-                                    )
-                                )
-                            }
-
-                            override fun performAccessibilityAction(
-                                host: View, action: Int, args: android.os.Bundle?
-                            ): Boolean {
-                                val at = draft.indexOf(tool.id)
-                                if (at < 0) return super.performAccessibilityAction(host, action, args)
-                                return when (action) {
-                                    R.id.uxL1MoveEarlier -> {
-                                        if (at > 0) moveQuickTool(tool.id, at - 1)
-                                        true
-                                    }
-                                    R.id.uxL1MoveLater -> {
-                                        if (at < draft.lastIndex) moveQuickTool(tool.id, at + 1)
-                                        true
-                                    }
-                                    else -> super.performAccessibilityAction(host, action, args)
-                                }
-                            }
+                val box = CheckBox(context).apply {
+                    id = R.id.cbQuickCheck
+                    text = context.getString(tool.title)
+                    contentDescription = context.getString(tool.title)
+                    isChecked = checked
+                    // A saved list over six is kept: its boxes stay on, extra adds are blocked.
+                    isEnabled = checked || !atLimit
+                    buttonTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+                    setTextColor(SwStyle.color(context, R.color.text_hologram_hi))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    setOnCheckedChangeListener { _, on ->
+                        if (on && draft.size < QUICK_CAP) {
+                            if (tool.id !in draft) draft.add(tool.id)
+                        } else if (!on) {
+                            draft.remove(tool.id)
                         }
-                        tile.setOnLongClickListener { view ->
-                            view.startDragAndDrop(
-                                android.content.ClipData.newPlainText("tool", tool.id),
-                                View.DragShadowBuilder(view), null, 0
-                            )
-                            true
-                        }
-                        tile.setOnDragListener { _, event ->
-                            if (event.action == android.view.DragEvent.ACTION_DROP) {
-                                val dragged = event.clipData?.getItemAt(0)?.text?.toString()
-                                if (dragged != null && dragged != tool.id) {
-                                    moveQuickTool(dragged, draft.indexOf(tool.id))
-                                }
-                            }
-                            true
-                        }
+                        rebuildQuickEditor?.invoke()
                     }
-                    row.addView(tile, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                    tag = tool.id
                 }
-                repeat(columns - chunk.size) {
-                    row.addView(View(context), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                row.addView(box, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                if (checked) {
+                    row.addView(moveButton(tool, up = true))
+                    row.addView(moveButton(tool, up = false))
                 }
                 content.addView(
                     row,
                     LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                        .apply { topMargin = SwStyle.dp(context, 4f) }
                 )
             }
-        }
-        fun rebuildEditor() {
-            content.removeAllViews()
-            content.addView(
-                SwStyle.text(context, 12f, SwStyle.color(context, R.color.cyan_dim)).apply {
-                    text = context.getString(R.string.u4_quick_editor_hint)
-                    setLineSpacing(0f, 1.25f)
-                },
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-            )
-            content.addView(
-                heading(context.getString(R.string.home_quick_tools)),
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                    .apply { topMargin = SwStyle.dp(context, 12f) }
-            )
-            addRow(draft.mapNotNull { ToolRegistry.byId(it) }, remove = true)
-            content.addView(
-                heading(context.getString(R.string.quick_add_tools)),
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                    .apply { topMargin = SwStyle.dp(context, 16f) }
-            )
-            addRow(
-                ToolRegistry.all.filter { it.status == ToolStatus.READY && it.id !in draft },
-                remove = false
-            )
             content.addView(
                 SwStyle.text(context, 14f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+                    id = R.id.cbQuickReset
                     text = context.getString(R.string.u4_quick_reset)
                     minimumHeight = SwStyle.dp(context, 48f)
                     gravity = Gravity.CENTER_VERTICAL
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        // L1-04: confirmation changes the draft only; Save/Done persists.
                         SwSheet.builder(context)
                             .setTitle(R.string.ux130_l1_reset_quick)
                             .setPrimary(R.string.ux130_l1_reset) {
@@ -2043,7 +2067,7 @@ class LibraryScreen(
         rebuildEditor()
         var saved = false
         val sheet = SwSheet.builder(context)
-            .setTitle(R.string.quick_edit)
+            .setTitle(R.string.cb_quick_editor_title)
             .setContent(scroll)
             .setPrimary(R.string.sel_done) {
                 com.scanwhirl.app.util.Prefs.setQuickTools(context, draft)
@@ -2110,15 +2134,22 @@ class LibraryScreen(
     }
 
     private fun renderSortLabel() {
-        ((sortAction?.parent as? ViewGroup)?.getChildAt(0) as? TextView)?.text = context.getString(
-            when (sort) {
-                com.scanwhirl.app.util.Prefs.LIB_NAME_ASC,
-                com.scanwhirl.app.util.Prefs.LIB_NAME_DESC,
-                com.scanwhirl.app.util.Prefs.LIB_SIZE -> R.string.u4_library_documents
-                else -> R.string.home_recent
-            }
-        )
-        sortAction?.text = context.getString(sortLabelRes()) + " ▾"
+        // The heading follows the sort (U4CopyIconsTest intent), but now lives in its own
+        // plain-text row instead of competing with the two band controls.
+        if (::docHeading.isInitialized) {
+            docHeading.text = context.getString(
+                when (sort) {
+                    com.scanwhirl.app.util.Prefs.LIB_NAME_ASC,
+                    com.scanwhirl.app.util.Prefs.LIB_NAME_DESC,
+                    com.scanwhirl.app.util.Prefs.LIB_SIZE -> R.string.u4_library_documents
+                    else -> R.string.home_recent
+                }
+            )
+            docHeading.contentDescription = docHeading.text
+        }
+        val label = context.getString(sortLabelRes())
+        sortAction?.text = "$label ▾"
+        sortAction?.contentDescription = context.getString(R.string.cb_sort_talkback, label)
     }
 
     /** v2 UI: 01_home_A — "Newest ▾": the one honest sort control, persisted. */
@@ -2151,57 +2182,35 @@ class LibraryScreen(
             .show()
     }
 
+    /**
+     * Council §7: categories live in the same chooser sheet as folders (the face has no
+     * filter rail). Rows are only shown for categories that actually have documents, plus
+     * "All categories" to clear the filter.
+     */
     private fun renderChips() {
-        chipRow.removeAllViews()
+        if (!::categoryRow.isInitialized) return
+        categoryRow.removeAllViews()
         val counts = docs.groupingBy { it.category }.eachCount()
-        val entries = mutableListOf<Pair<String?, String>>()
-        entries += null to context.getString(R.string.home_chip_all, docs.size)
+        categoryRow.addView(
+            sheetChoice(context.getString(R.string.home_filter_all_documents), category == null) {
+                chooserSheet?.dismiss()
+                category = null
+                renderChips()
+                renderDocs()
+            }
+        )
         for (cat in CategoryRules.ALL) {
             val count = counts[cat] ?: 0
-            if (count > 0) entries += cat to context.getString(R.string.home_chip_category, CategoryLabels.display(context, cat), count)
-        }
-        for ((key, label) in entries) {
-            val active = key == category
-            val chip = SwStyle.text(
-                context,
-                13f,
-                if (active) SwStyle.color(context, R.color.cyan_primary) else SwStyle.color(context, R.color.text_hologram_mid),
-                bold = true
-            ).apply {
-                text = label
-                setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
-                minimumHeight = SwStyle.dp(context, 48f)
-                minimumWidth = SwStyle.dp(context, 48f)
-                gravity = Gravity.CENTER
-                // ATLAS-F2: like the folder chips, whole words only, and grow instead of clipping.
-                ellipsize = null
-                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-                //noinspection WrongConstant
-                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
-                background = SwStyle.pill(
-                    context,
-                    if (active) SwStyle.color(context, R.color.cyan_primary) else SwStyle.color(context, R.color.text_hologram_mid),
-                    if (active) SwStyle.color(context, R.color.sw_cyan_soft) else SwStyle.color(context, R.color.glass_surface),
-                    if (active) SwStyle.color(context, R.color.sw_cyan_hair_strong) else SwStyle.color(context, R.color.sw_chip_border)
-                )
-                isClickable = true
-                setOnClickListener {
-                    if (key == null && category == null) {
-                        // H8 (found on device): with everything already shown, the "All"
-                        // chip was a dead tap. It opens the category choice instead.
-                        showCategoryFilterSheet()
-                        return@setOnClickListener
-                    }
-                    category = if (key == category) null else key
-                    renderChips()
-                    renderDocs()
-                }
-            }
-            chipRow.addView(
-                chip,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    .apply { marginEnd = SwStyle.dp(context, 8f) }
+            if (count == 0) continue
+            val label = context.getString(
+                R.string.home_chip_category, CategoryLabels.display(context, cat), count
             )
+            categoryRow.addView(sheetChoice(label, cat == category) {
+                chooserSheet?.dismiss()
+                category = if (cat == category) null else cat
+                renderChips()
+                renderDocs()
+            })
         }
     }
 
@@ -2597,15 +2606,27 @@ class LibraryScreen(
      */
     private fun renderActiveFilter() {
         if (!::activeFilter.isInitialized) return
-        val name = folder
-        activeFilter.isVisible = name != null
-        if (name == null) {
+        // Council §7: the Filter row only exists while a filter is active, and the chip is
+        // removable via cbRemoveFilter. Folder wording is kept for the existing tests.
+        val text: String? = when {
+            folder != null -> context.getString(R.string.folder_showing, folder!!)
+            category != null -> context.getString(
+                R.string.cb_filter_showing, CategoryLabels.display(context, category!!)
+            )
+            else -> null
+        }
+        filterRow.isVisible = text != null
+        activeFilter.isVisible = text != null
+        if (text == null) {
             activeFilter.text = null
             activeFilter.contentDescription = null
         } else {
-            activeFilter.text = context.getString(R.string.folder_showing, name)
-            activeFilter.contentDescription =
-                context.getString(R.string.folder_filter_active, name)
+            activeFilter.text = text
+            activeFilter.contentDescription = if (folder != null) {
+                context.getString(R.string.folder_filter_active, folder!!)
+            } else {
+                context.getString(R.string.cb_filter_active, text)
+            }
         }
     }
 
@@ -2614,11 +2635,10 @@ class LibraryScreen(
             (::searchInput.isInitialized && searchInput.hasFocus())
         val firstRun = docs.isEmpty() && !searching && folder == null && category == null
         controlBand.isVisible = !searching && !firstRun
-        folderScroll?.isVisible = !searching
+        filterRow.isVisible = !searching && (folder != null || category != null)
         quickHeader.isVisible = !searching && !firstRun
         quickRow.isVisible = !searching && !firstRun && quickStrip.childCount > 0
-        recentHeader?.isVisible = !searching && !firstRun
-        chipScroll?.isVisible = !searching && !firstRun && docs.isNotEmpty()
+        docHeading.isVisible = !searching && !firstRun
         listHeader.isVisible = !searching && !firstRun
         searchStatus.isVisible = query.isNotBlank() || folder != null || category != null
         // M5: keep the list's bottom inset at or above the dock's real height (it grows when
@@ -2698,6 +2718,13 @@ class LibraryScreen(
     }
 
     internal companion object {
+        /**
+         * Council §7: the quick-tools editor is capped at six. Prefs owns the saved list
+         * and its own (older) cap constant; this lane enforces the decided cap at the UI
+         * so a legacy list longer than six is kept but cannot grow.
+         */
+        const val QUICK_CAP = 6
+
         /** First page of document cards; more are appended as the reader scrolls. */
         const val INITIAL_CARDS = 60
         const val CARD_PAGE = 60

@@ -17,6 +17,7 @@ import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.ProGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -88,11 +89,11 @@ class L1SearchSelectionWordingTest {
             val activity = controller.get()
             waitFor("library loaded") { cards(activity).size == 2 }
             val field = activity.findViewById<EditText>(R.id.swHomeSearch)
-            assertEquals("Search", field.hint.toString())
-            val helper = activity.findViewById<TextView>(R.id.uxL1SearchHelp)
-            assertNotNull("the persistent helper exists", helper)
-            assertEquals("Names, tags and page text", helper!!.text.toString())
-            assertTrue("the helper wraps", helper.ellipsize == null)
+            // Council §7: the old "Search" hint + persistent helper line become one
+            // placeholder on the field itself. The guidance text and its intent stay.
+            assertEquals("Names, tags and page text", field.hint.toString())
+            assertNull("the helper line no longer duplicates the placeholder",
+                activity.findViewById<View>(R.id.uxL1SearchHelp))
             val status = activity.findViewById<TextView>(R.id.uxL1SearchStatus)
             assertNotNull("the live status exists", status)
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane C: the four canvas colours of the compare surface (council §4).
+     The page keeps its own render white; the canvas is never a white host. -->
+<resources>
+    <!-- The dark page canvas behind every compare pane. -->
+    <color name="sw_cc_canvas">#FF1E252A</color>
+    <!-- The page/paper itself (the render's own white). -->
+    <color name="sw_cc_page">#FFFFFFFF</color>
+    <!-- 1dp edge: white at 24% alpha (24% of 255 = 61 = 0x3D). -->
+    <color name="sw_cc_page_edge">#3DFFFFFF</color>
+    <!-- Functional boundary / handle: ~5:1 against the canvas. -->
+    <color name="sw_cc_boundary">#FF8D979E</color>
+</resources>

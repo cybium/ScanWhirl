@@ -76,6 +76,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
     private lateinit var repo: ScanRepository
     private lateinit var contentHost: FrameLayout
     private lateinit var navHost: View
+    /** The shell root carries the shipped gradient until an optional wallpaper is ready. */
+    private lateinit var shellRoot: LinearLayout
+    /** One decode per instance; returning from the background never re-runs it. */
+    private var wallpaperLoadStarted = false
     private var discardActions: com.scanwhirl.app.ui.DiscardActions? = null
     private lateinit var navItems: Map<Tab, LinearLayout>
 
@@ -241,6 +245,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         appliedLanguage = com.scanwhirl.app.util.AppLanguage.currentTag(this)
 
         val root = LinearLayout(this).apply {
+            shellRoot = this
             orientation = LinearLayout.VERTICAL
             // The shipped look is painted first and stays until an optional wallpaper has
             // been decoded off the main thread (loadWallpaper below): no flash or jank.
@@ -257,7 +262,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         navHost.minimumHeight = SwStyle.dp(this, 100f)
         root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
-        loadWallpaper(root)
+        // The gradient above is the first background. The optional photo decode starts only
+        // once the screen is resumed, never during create(), so no fast IO can replace it
+        // before onCreate returns (the "no flash of a wrong background" contract).
         // v2 UI: 01_home_A — with the keyboard up the nav bar and scan disc must not
         // float over the chips. One listener only: the shared helper already keeps the
         // base padding, the cutout/top inset and max(nav bar, IME) at the bottom, and
@@ -437,6 +444,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     override fun onResume() {
         super.onResume()
+        // The shipped gradient is still the background through create(); start the optional
+        // photo decode only now, once, after the first resume.
+        if (!wallpaperLoadStarted && ::shellRoot.isInitialized) {
+            wallpaperLoadStarted = true
+            loadWallpaper(shellRoot)
+        }
         // SH1 #3: Settings changes the font and the app language on its own screen. The shell
         // underneath is stopped, not rebuilt, so it would keep the old look until a cold
         // start. recreate() carries the selected tab through onSaveInstanceState.
