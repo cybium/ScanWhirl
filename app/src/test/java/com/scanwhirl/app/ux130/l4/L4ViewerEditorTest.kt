@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ux130.l4
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -46,6 +47,8 @@ import org.robolectric.shadows.ShadowDialog
 class L4ViewerEditorTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo get() = ScanRepository(app)
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()

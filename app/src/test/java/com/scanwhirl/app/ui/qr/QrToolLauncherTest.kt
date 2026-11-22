@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.qr
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -25,6 +27,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class QrToolLauncherTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before

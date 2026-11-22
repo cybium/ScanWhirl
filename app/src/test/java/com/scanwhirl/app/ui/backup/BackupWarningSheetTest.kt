@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.backup
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -48,6 +50,8 @@ import java.io.File
 @Config(sdk = [35])
 class BackupWarningSheetTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private var controller: ActivityController<BackupActivity>? = null
 

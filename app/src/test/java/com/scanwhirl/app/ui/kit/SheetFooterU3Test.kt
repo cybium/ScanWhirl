@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.kit
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.view.LayoutInflater
 import android.view.View
@@ -32,6 +34,8 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SheetFooterU3Test {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private fun withActivity(lang: String = "en", scale: Float = 2f, block: (AppCompatActivity) -> Unit) {
         RuntimeEnvironment.setQualifiers("$lang-w360dp-h800dp-xhdpi")
         RuntimeEnvironment.setFontScale(scale)

@@ -1,4 +1,6 @@
 package com.scanwhirl.app
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Context
@@ -60,6 +62,8 @@ import java.io.IOException
 @Config(sdk = [35])
 class FixVault2FinalTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var store: VaultStore

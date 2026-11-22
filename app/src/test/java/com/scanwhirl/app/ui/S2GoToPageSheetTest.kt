@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.app.Dialog
@@ -37,6 +39,8 @@ import java.io.File
 @Config(sdk = [35])
 class S2GoToPageSheetTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private class FakePages(override val pageCount: Int) : PdfViewerActivity.PdfPages {
         override fun render(index: Int, maxDim: Int) = null
         override fun close() = Unit

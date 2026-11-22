@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.pm.ProviderInfo
@@ -59,6 +61,8 @@ import java.io.File
  */
 abstract class DocumentWorkspaceBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore

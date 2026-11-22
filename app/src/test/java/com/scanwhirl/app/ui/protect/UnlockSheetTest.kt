@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Dialog
 import android.view.View
@@ -32,6 +34,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class UnlockSheetTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private var controller: ActivityController<ProtectHostActivity>? = null
 
     /** The check is a suspending PBKDF2: pump the main looper until the result is applied. */

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.Manifest
 import android.app.Application
@@ -53,6 +55,8 @@ import java.nio.charset.StandardCharsets
 @Config(sdk = [28])
 class OcrReadFirstTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val repo = ScanRepository(app)
 

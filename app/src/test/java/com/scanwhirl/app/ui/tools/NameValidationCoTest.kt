@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.net.Uri
@@ -40,6 +42,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class NameValidationCoTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 

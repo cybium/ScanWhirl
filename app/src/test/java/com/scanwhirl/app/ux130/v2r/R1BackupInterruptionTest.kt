@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.v2r
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.app.Dialog
@@ -42,6 +44,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class R1BackupInterruptionTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private var controller: ActivityController<BackupActivity>? = null
     private val password = "correct horse battery"

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.os.Looper
 import android.view.View
@@ -29,6 +31,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class PdfImportSheetsTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     private fun plan(pages: Int = 800) = PdfImportBudget.plan(

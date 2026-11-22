@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.view.View
@@ -44,6 +46,8 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class V3DockAndActionsTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 

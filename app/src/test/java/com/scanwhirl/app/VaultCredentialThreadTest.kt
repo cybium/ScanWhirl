@@ -1,4 +1,5 @@
 package com.scanwhirl.app
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -47,6 +48,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class VaultCredentialThreadTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo by lazy { ScanRepository(app) }
     private val prefs get() = app.getSharedPreferences("scanwhirl_prefs", 0)

@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -8,7 +9,6 @@ import android.widget.LinearLayout
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
@@ -16,6 +16,7 @@ import com.scanwhirl.app.store.PdfInvariants
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolHost
+import com.scanwhirl.app.util.SwActivitySession
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,13 +44,29 @@ import java.io.File
 class OrganizeDraftUiTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
     /** A ToolHost for the registry launch, like the shell. */
     class Host : AppCompatActivity(), ToolHost {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         override fun open(tool: SwTool) = Unit
         override fun comingSoon(tool: SwTool) = Unit
+    }
+
+    @org.junit.Before
+    fun setUp() {
+        // ShadowDialog is process-wide. A sheet left by a previous test in the same fork made
+        // sheet() return a stale dialog on loaded runners.
+        ShadowDialog.reset()
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        ShadowDialog.reset()
     }
 
     private fun digest(id: String) =
@@ -57,12 +74,12 @@ class OrganizeDraftUiTest {
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
 
-    private fun pollUntil(timeoutMs: Long = 10_000, condition: () -> Boolean): Boolean {
-        val end = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < end) {
+    private fun pollUntil(timeoutMs: Long = 20_000, condition: () -> Boolean): Boolean {
+        val end = System.nanoTime() + timeoutMs * 1_000_000L
+        while (System.nanoTime() < end) {
             idle()
             if (condition()) return true
-            Thread.sleep(25)
+            Thread.sleep(5)
         }
         idle()
         return condition()
@@ -81,7 +98,7 @@ class OrganizeDraftUiTest {
     fun `rotating in the editor leaves the saved document byte identical until Save`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.rotateSelected(true)
@@ -97,7 +114,7 @@ class OrganizeDraftUiTest {
     @Test(timeout = 60_000)
     fun `back with changes offers Save as new copy Discard and Keep editing`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.rotateSelected(true)
@@ -134,7 +151,7 @@ class OrganizeDraftUiTest {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
         val basePaths = repo.getDocument(id)!!.pageFiles.map { it.path }
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.rotateSelected(true)
@@ -143,7 +160,7 @@ class OrganizeDraftUiTest {
         }
 
         // Reopen: the draft survives, so the second edit starts from a known empty selection.
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var barShown = false
             assertTrue(pollUntil {
                 scenario.onActivity { barShown = it.findViewById<android.view.View>(R.id.draftBar)?.visibility == android.view.View.VISIBLE }
@@ -175,7 +192,7 @@ class OrganizeDraftUiTest {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Draft save")
         val doc = repo.getDocument(id)!!
         val d0 = digest(id)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.deleteSelectedPages()
@@ -205,7 +222,7 @@ class OrganizeDraftUiTest {
     fun `Replace original asks to confirm and puts the previous version in Trash`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Draft replace")
         val doc = repo.getDocument(id)!!
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.deleteSelectedPages()
@@ -233,7 +250,7 @@ class OrganizeDraftUiTest {
         }
 
         // The Trash row names the previous version.
-        ActivityScenario.launch<TrashActivity>(android.content.Intent(app, TrashActivity::class.java)).use { trash ->
+        SwActivitySession.launch<TrashActivity>(android.content.Intent(app, TrashActivity::class.java)).use { trash ->
             var label: String? = null
             assertTrue("the Trash list loads", pollUntil {
                 trash.onActivity { activity ->
@@ -260,7 +277,7 @@ class OrganizeDraftUiTest {
     fun `selection bar rotate and delete act on the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var cells = 0
             assertTrue("the grid loads", pollUntil {
                 scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -306,7 +323,7 @@ class OrganizeDraftUiTest {
         val target = DocFixtures.saved(repo, app, pages = 2)
         val source = DocFixtures.saved(repo, app, pages = 1, name = "Source")
         val d0 = digest(target)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
             var cells = 0
             assertTrue("the grid loads", pollUntil {
                 scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -359,7 +376,7 @@ class OrganizeDraftUiTest {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val baseFirst = repo.getDocument(id)!!.pageFiles.first().path
         val d0 = digest(id)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var cells = 0
             assertTrue(pollUntil {
                 scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -390,7 +407,7 @@ class OrganizeDraftUiTest {
     fun `selection more has rotate duplicate insert and extract and duplicate works`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var cells = 0
             assertTrue(pollUntil {
                 scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -439,7 +456,7 @@ class OrganizeDraftUiTest {
                 )
             }
             val src = repo.getDocument(source.id)!!.pageFiles
-            ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
+            SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
                 var cells = 0
                 assertTrue(pollUntil {
                     scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -475,7 +492,7 @@ class OrganizeDraftUiTest {
                 writeBytes(com.scanwhirl.app.util.ImportFixtures.image(width = 120, height = 160))
             }
         }
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target)).use { scenario ->
             var cells = 0
             assertTrue(pollUntil {
                 scenario.onActivity { cells = it.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.pageList).adapter?.itemCount ?: 0 }
@@ -491,7 +508,7 @@ class OrganizeDraftUiTest {
     @Test(timeout = 60_000)
     fun `reopening after process death shows the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.toggleSelected(0)
                 activity.rotateSelected(true)
@@ -504,7 +521,7 @@ class OrganizeDraftUiTest {
         assertEquals(1, runBlocking { fresh.draftOf(id) }!!.changes)
         assertEquals(true, runBlocking { fresh.draftPages(id) }[0].path.contains("drafts"))
 
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var visible = false
             assertTrue("the draft bar must be visible", pollUntil {
                 scenario.onActivity { activity ->
