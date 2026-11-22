@@ -1,5 +1,6 @@
 package com.scanwhirl.app.tools
 
+import android.graphics.RectF
 import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
@@ -11,8 +12,10 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.DialogResizeBinding
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.ExportResultActivity
 import com.scanwhirl.app.util.BoundedCopy
+import com.scanwhirl.app.util.FormCrop
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
@@ -113,7 +116,7 @@ class ResizeFlow(
         fun refreshFrame() {
             val (w, h) = currentSize()
             if (w in 1..12000 && h in 1..12000) {
-                b.cropPreview.aspectRatio = w.toFloat() / h
+                applyAspectFrame(b.cropPreview, preview.width, preview.height, w.toFloat() / h)
             }
             // Text budget: one short helper. The byte-limit explanation sits
             // behind the ⓘ button; the numbers already live in the fields.
@@ -253,6 +256,25 @@ class ResizeFlow(
     companion object {
         /** A handful of tries is enough for a genuine same-millisecond name collision. */
         private const val MAX_OUTPUT_DIR_ATTEMPTS = 8
+
+        /**
+         * Re-fit the movable frame to a new target aspect. CropView's aspect setter only
+         * ever shrinks the current rectangle, so feeding it the intermediate ratios seen
+         * while typing a width/height (e.g. 2/4000, then 200/230) collapses the frame to a
+         * few pixels; ExactResize then rejects that sub-16px crop as unreadable. Setting
+         * the aspect for drag behaviour and then re-seeding the largest centred frame at
+         * that aspect keeps the frame usable and the saved crop exact.
+         */
+        internal fun applyAspectFrame(view: CropView, previewW: Int, previewH: Int, aspect: Float) {
+            if (previewW <= 0 || previewH <= 0 || aspect <= 0f || !aspect.isFinite()) return
+            view.aspectRatio = aspect
+            val frame = view.getCropRect()
+            val focus = if (frame.isEmpty) null else RectF(
+                frame.centerX() - 0.5f, frame.centerY() - 0.5f,
+                frame.centerX() + 0.5f, frame.centerY() + 0.5f
+            )
+            view.setCropRect(FormCrop.largestCentered(previewW, previewH, aspect, focus))
+        }
     }
 
     /**
