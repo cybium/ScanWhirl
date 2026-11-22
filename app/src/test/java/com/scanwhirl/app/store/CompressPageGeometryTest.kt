@@ -10,6 +10,10 @@ import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PdfGenerator
+import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.ScanFilter
+import org.junit.After
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,6 +35,11 @@ import kotlin.math.abs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class CompressPageGeometryTest {
+    @After
+    fun resetFaults() {
+        Durable.resetForTests()
+        OpFaults.reset()
+    }
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
@@ -56,6 +65,132 @@ class CompressPageGeometryTest {
             abs(actual.first - expected.first.toDouble()) <= tolerance &&
                 abs(actual.second - expected.second.toDouble()) <= tolerance
         )
+    }
+
+    private fun pixelBox(page: File): Pair<Int, Int> {
+        val (w, h) = requireNotNull(PageReplace.bounds(page))
+        return PdfGenerator.sizeInPoints(w, h)
+    }
+
+    @Test(timeout = 120_000)
+    fun `death after renumbering cannot attach stale paper sizes to different pages`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        // A killed old writer left the renamed pixels and the previous sidecar.
+        val first = source.pageFiles[0].readBytes()
+        source.pageFiles[0].writeBytes(source.pageFiles[1].readBytes())
+        source.pageFiles[1].writeBytes(first)
+        val expected = source.pageFiles.map(::pixelBox)
+        val reopened = ScanRepository(app)
+        val rebuilt = reopened.compressScan(source.id, 50, 400)
+        assertEquals(expected, boxes(rebuilt.pdfFile))
+        // Repair must be durable: a second reopen/recompress still uses the safe boxes.
+        val again = ScanRepository(app).compressScan(source.id, 40, 300)
+        assertEquals(expected, boxes(again.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `stale rotation is rejected even when repair sidecar rename fails`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        PageReplace.commit(ImageTools.stageRotate90(source.pageFiles[0], true))
+        val expected = listOf(pixelBox(source.pageFiles[0]), 612 to 792)
+        source.pageFiles.forEach { page ->
+            val (w, h) = requireNotNull(PageReplace.bounds(page))
+            repo.ocrStore.putPage(source.id, page.name, "Token",
+                OcrPage(w, h, listOf(OcrLine("Token", 5, 5, 50, 30))))
+        }
+        Durable.renameSeam = { from, to ->
+            if (to.name == "page_sizes.txt") false else from.renameTo(to)
+        }
+        assertTrue(ScanRepository(app).makeSearchable(source.id))
+        assertEquals(expected, boxes(source.pdfFile))
+        Durable.resetForTests()
+        val rebuilt = ScanRepository(app).compressScan(source.id, 50, 400)
+        assertEquals(expected, boxes(rebuilt.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `failed metadata publish never mutates the published page files`() = runBlocking {
+        for (operation in listOf("delete", "move", "rotate")) {
+            val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+            val before = source.pageFiles.map { it.readBytes() }
+            Durable.renameSeam = { from, to ->
+                if (to.name == "page_sizes.txt") false else from.renameTo(to)
+            }
+            try {
+                when (operation) {
+                    "delete" -> repo.deletePage(source.id, 0)
+                    "move" -> repo.movePage(source.id, 0, 1)
+                    else -> repo.rotatePage(source.id, 0)
+                }
+                org.junit.Assert.fail("metadata rename failure must abort $operation")
+            } catch (_: java.io.IOException) {
+                source.pageFiles.forEachIndexed { i, page ->
+                    org.junit.Assert.assertArrayEquals(before[i], page.readBytes())
+                }
+            } finally {
+                Durable.resetForTests()
+            }
+        }
+    }
+
+    @Test(timeout = 120_000)
+    fun `death after metadata prepare or page mutation never trusts mismatched orientation`() = runBlocking {
+        class Death : Error()
+        for (step in listOf("geometry:prepared", "geometry:mutated")) {
+            val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+            val oldPixelBox = pixelBox(source.pageFiles[0])
+            OpFaults.hook = { if (it == step) throw Death() }
+            try {
+                repo.rotatePage(source.id, 0)
+                org.junit.Assert.fail("Expected simulated death")
+            } catch (_: Death) {
+                // A real process kill would not unwind; reopen uses only the durable disk pair.
+            } finally {
+                OpFaults.reset()
+            }
+            val expected = if (step == "geometry:mutated") 842 to 595 else oldPixelBox
+            val rebuilt = ScanRepository(app).compressScan(source.id, 50, 400)
+            assertEquals(listOf(expected, 612 to 792), boxes(rebuilt.pdfFile))
+        }
+    }
+
+    @Test(timeout = 120_000)
+    fun `death after renumbering uses the prepublished content bound sizes`() = runBlocking {
+        class Death : Error()
+        for (delete in listOf(false, true)) {
+            val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+            OpFaults.hook = { if (it == "geometry:mutated") throw Death() }
+            try {
+                if (delete) repo.deletePage(source.id, 0) else repo.movePage(source.id, 0, 1)
+                org.junit.Assert.fail("Expected simulated death")
+            } catch (_: Death) {
+            } finally {
+                OpFaults.reset()
+            }
+            val rebuilt = ScanRepository(app).compressScan(source.id, 50, 400)
+            val expected = if (delete) listOf(612 to 792) else listOf(612 to 792, 595 to 842)
+            assertEquals(expected, boxes(rebuilt.pdfFile))
+        }
+    }
+
+    @Test(timeout = 120_000)
+    fun `intentional refilter updates the fingerprint without shrinking the paper`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        val filtered = repo.setPageFilter(source.id, 0, ScanFilter.GREY)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(filtered.pdfFile))
+        val original = repo.setPageFilter(source.id, 0, ScanFilter.ORIGINAL)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(original.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `unchanged bounds alone cannot validate stale pixels or a half turn`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754), 60, 600)
+        val page = source.pageFiles.single()
+        val originalBounds = PageReplace.bounds(page)
+        repeat(2) { PageReplace.commit(ImageTools.stageRotate90(page, true)) }
+        assertEquals(originalBounds, PageReplace.bounds(page))
+        val rebuilt = ScanRepository(app).compressScan(source.id, 50, 400)
+        assertEquals(listOf(pixelBox(page)), boxes(rebuilt.pdfFile))
     }
 
     @Test(timeout = 120_000)
@@ -141,11 +276,12 @@ class CompressPageGeometryTest {
     }
 
     @Test(timeout = 120_000)
-    fun `legacy index sidecar migrates when pages move`() = runBlocking {
+    fun `unbound legacy geometry falls back rather than trusting an unverifiable identity`() = runBlocking {
         val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        val expected = source.pageFiles.reversed().map(::pixelBox)
         File(source.pageFiles.first().parentFile, "page_sizes.txt").writeText("595x842\n612x792")
         val moved = repo.movePage(source.id, 0, 1)
-        assertEquals(listOf(612 to 792, 595 to 842), boxes(moved.pdfFile))
+        assertEquals(expected, boxes(moved.pdfFile))
     }
 
     @Test(timeout = 120_000)
