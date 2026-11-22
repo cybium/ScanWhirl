@@ -768,6 +768,28 @@ class OcrEditorActivity : BaseActivity() {
             button.maxLines = 3
             button.ellipsize = null
         }
+        // The Edit action was the only bare blue text button on this screen. Paint it like
+        // the SwChip actions below it: glass face, cyan hairline, bright label. Style only;
+        // its label, mode toggle and TalkBack name are unchanged.
+        binding.btnEditText.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.glass_surface_raised
+                )
+            )
+            strokeColor = android.content.res.ColorStateList.valueOf(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.sw_cyan_hair
+                )
+            )
+            strokeWidth = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 1f)
+            cornerRadius = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 12f)
+            setTextColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.text_hologram_hi
+                )
+            )
+        }
         reflowReadRowForLargeText()
         reflowActionsForLargeText()
         compactLargeTextSpacing()
