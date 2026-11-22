@@ -233,6 +233,10 @@ dependencies {
     implementation("com.android.billingclient:billing-ktx:8.3.0")
     // QR code reader tool (lead-approved): Google code scanner UI, same delivery model as the document scanner; no camera permission.
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Lane Z: Play In-App Review for "Rate ScanWhirl". The 2.0.2 AARs and their
+    // transitive deps declare no permission; INTERNET is still stripped in the
+    // manifest and checked by tools/release/check_release_manifest.py in the gate.
+    implementation("com.google.android.play:review-ktx:2.0.2")
     // Hindi OCR (lead-approved, PM-6.3): bundled Devanagari model, works fully offline.
     implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 
