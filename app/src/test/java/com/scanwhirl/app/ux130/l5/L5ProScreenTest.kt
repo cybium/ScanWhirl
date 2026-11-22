@@ -138,8 +138,8 @@ class L5ProScreenTest {
         val status = byId(activity, pro, "swProPriceStatus")
         assertNotNull("a named missing-price status (RED on base)", status)
         assertEquals(
-            // OLD: "Price unavailable. Check Google Play and try again."
-            "Price unavailable.",
+            // OLD: "Price unavailable. Check Google Play and try again." / "Price unavailable."
+            "Price unavailable",
             (status as TextView).text.toString()
         )
         val retry = byId(activity, pro, "swProPriceRetry")

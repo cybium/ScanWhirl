@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PRO2 copy diet: decision-line copy only. Approved first-use Pro disclosures stay elsewhere. -->
+<resources>
+    <string name="copydiet_pro2_active_sub">All Pro tools unlocked</string>
+    <string name="copydiet_pro2_once">One payment. No subscription.</string>
+    <string name="copydiet_pro2_price_unavailable">Price unavailable</string>
+    <string name="copydiet_pro2_all_tools">All %1$d Pro tools</string>
+    <string name="copydiet_pro2_panel_note">Free: scan, OCR, share, merge, compress</string>
+</resources>
