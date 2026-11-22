@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+import xml.etree.ElementTree as ET
 
 import atlas_driver as a
 
@@ -336,6 +337,251 @@ class AtlasHarnessTests(unittest.TestCase):
         self.assertLess(before_at, run_at)
         self.assertLess(before_at, pull_at)
         self.assertLess(run_at, pull_at)
+
+
+class AtlasImportEntryTests(unittest.TestCase):
+    """Pure XML / mock coverage of the PDF-import route. No device, ADB or network.
+
+    The hierarchies below use only selectors confirmed in the shipped Kotlin/XML
+    and in the real 2deddb29 emulator artifact; no guessed locator fallback.
+    """
+
+    @staticmethod
+    def _hierarchy(ids=(), descs=(), texts=()):
+        parts = ['<?xml version="1.0"?><hierarchy rotation="0">']
+        i = 0
+        for rid in ids:
+            parts.append(
+                f'<node index="{i}" text="" '
+                f'resource-id="com.scanwhirl.app.test:id/{rid}" '
+                f'class="android.widget.FrameLayout" content-desc="" '
+                f'clickable="true" bounds="[0,0][100,100]"/>')
+            i += 1
+        for text in texts:
+            parts.append(
+                f'<node index="{i}" text="{text}" resource-id="" '
+                f'class="android.widget.TextView" content-desc="" '
+                f'clickable="true" bounds="[0,0][100,100]"/>')
+            i += 1
+        for desc in descs:
+            parts.append(
+                f'<node index="{i}" text="" resource-id="" '
+                f'class="android.widget.TextView" content-desc="{desc}" '
+                f'clickable="true" bounds="[0,0][100,100]"/>')
+            i += 1
+        parts.append("</hierarchy>")
+        return ET.fromstring("".join(parts))
+
+    # ---- entry variants -------------------------------------------------------
+
+    def test_real_artifact_shape_empty_library_uses_empty_import(self):
+        # swEmptyImport AND swNavScan are both present in the real 2deddb29 dump.
+        # The dedicated empty-Library import tile must win over the nav disc.
+        root = self._hierarchy(
+            ids=("swEmptyImport", "swEmptyScan", "swNavScan", "swNavLibrary"),
+            descs=("Scan. Open scan and import options.", "Library"))
+        self.assertEqual(a.import_entry_plan(root),
+                         {"kind": "empty_import", "by": "rid", "value": "swEmptyImport"})
+
+    def test_populated_library_uses_nav_scan(self):
+        root = self._hierarchy(ids=("swNavScan", "swNavLibrary", "swDocList"))
+        self.assertEqual(a.import_entry_plan(root),
+                         {"kind": "nav_scan", "by": "rid", "value": "swNavScan"})
+
+    def test_create_menu_uses_import_pdf_row(self):
+        root = self._hierarchy(ids=("swCreateImport", "swCreatePhotos", "swCreateScan"))
+        self.assertEqual(a.import_entry_plan(root),
+                         {"kind": "create_menu", "by": "rid", "value": "swCreateImport"})
+
+    def test_import_sheet_uses_pdf_row_not_photos(self):
+        root = self._hierarchy(ids=("importPdf", "importPhotos"))
+        self.assertEqual(a.import_entry_plan(root),
+                         {"kind": "import_sheet_pdf", "by": "rid", "value": "importPdf"})
+
+    def test_direct_saf_detected_by_show_roots(self):
+        self.assertEqual(a.import_entry_plan(self._hierarchy(descs=("Show roots",))),
+                         {"kind": "saf", "by": None, "value": None})
+
+    def test_missing_entry_is_none_without_guessing(self):
+        # Loose "Import PDF" copy (the legacy create_disc_desc-style guess) is not
+        # a confirmed control: fail closed instead of inventing a selector.
+        root = self._hierarchy(ids=("swHomeSearch",), texts=("Import PDF",))
+        self.assertEqual(a.import_entry_plan(root), {"kind": "none", "by": None, "value": None})
+
+    def test_photo_routes_are_never_a_pdf_entry(self):
+        root = self._hierarchy(ids=("swEmptyScan", "swCreatePhotos", "importPhotos"))
+        self.assertEqual(a.import_entry_plan(root)["kind"], "none")
+
+    # ---- bounded, single-tap routing -----------------------------------------
+
+    def test_reach_pdf_picker_taps_each_entry_once(self):
+        empty = self._hierarchy(ids=("swEmptyImport", "swNavScan"))
+        sheet = self._hierarchy(ids=("importPdf", "importPhotos"))
+        saf = self._hierarchy(descs=("Show roots",))
+        tapped = []
+        with patch.object(a, "hierarchy", side_effect=[empty, sheet, saf]), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: tapped.append(w) or True), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a.time, "sleep"):
+            self.assertTrue(a.reach_pdf_picker())
+        self.assertEqual(tapped, [{"rid": "swEmptyImport"}, {"rid": "importPdf"}])
+
+    def test_reach_pdf_picker_refuses_second_tap_on_stale_screen(self):
+        stuck = self._hierarchy(ids=("swEmptyImport",))
+        tapped = []
+        with patch.object(a, "hierarchy", side_effect=[stuck, stuck, stuck]), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: tapped.append(w) or True), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a.time, "sleep"):
+            self.assertFalse(a.reach_pdf_picker())
+        self.assertEqual(len(tapped), 1, "a stale screen must not be tapped twice")
+
+    def test_choose_fixture_in_saf_taps_fixture_once(self):
+        tapped = []
+
+        def fake_soft_tap(**want):
+            tapped.append(want)
+            return want.get("text") in ("ScanWhirl test fixtures", "receipt_sep.pdf")
+
+        with patch.object(a, "wait"), \
+             patch.object(a, "soft_tap", side_effect=fake_soft_tap), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a, "adb", return_value="Pixel"), \
+             patch.object(a, "back") as do_back:
+            self.assertTrue(a.choose_fixture_in_saf("receipt_sep.pdf"))
+        self.assertEqual([w for w in tapped if w.get("text") == "receipt_sep.pdf"],
+                         [{"text": "receipt_sep.pdf"}])
+        do_back.assert_not_called()
+
+    # ---- explicit settled result ---------------------------------------------
+
+    def test_settle_import_waits_for_valid_document(self):
+        library = self._hierarchy(ids=("swNavScan",))
+        seq = [set(), {"doc-1"}]
+
+        def fake_doc_ids():
+            return seq.pop(0) if len(seq) > 1 else {"doc-1"}
+
+        with patch.object(a, "hierarchy", return_value=library), \
+             patch.object(a, "doc_ids", side_effect=fake_doc_ids), \
+             patch.object(a, "doc_display_name", return_value="marksheet_scan_300dpi"), \
+             patch.object(a, "doc_pdf_bytes", return_value=b"%PDF-1.4 fictional"), \
+             patch.object(a, "soft_tap"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 1, 2, 3]):
+            self.assertTrue(a.settle_import("marksheet_scan_300dpi.pdf", set(), timeout=10))
+
+    def test_settle_import_refuses_double_import(self):
+        library = self._hierarchy(ids=("swNavScan",))
+        with patch.object(a, "hierarchy", return_value=library), \
+             patch.object(a, "doc_ids", return_value={"a", "b"}), \
+             patch.object(a, "soft_tap"), patch.object(a, "shot"), \
+             patch.object(a, "note"):
+            self.assertFalse(a.settle_import("x.pdf", set()))
+
+    def test_settle_import_taps_consent_explicitly(self):
+        consent = self._hierarchy(texts=("Import all",))
+        library = self._hierarchy(ids=("swNavScan",))
+        seq = [consent, library]
+        tapped = []
+        with patch.object(a, "hierarchy",
+                          side_effect=lambda: seq.pop(0) if len(seq) > 1 else seq[0]), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: tapped.append(w) or True), \
+             patch.object(a, "doc_ids", return_value={"doc-1"}), \
+             patch.object(a, "doc_display_name", return_value="x"), \
+             patch.object(a, "doc_pdf_bytes", return_value=b"%PDF"), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 1, 2, 3]):
+            self.assertTrue(a.settle_import("x.pdf", set(), timeout=10))
+        self.assertIn({"text": "Import all"}, tapped)
+
+    # ---- one-import-per-fixture orchestration --------------------------------
+
+    def test_import_pdf_missing_entry_is_false_no_taps(self):
+        stuck = self._hierarchy(ids=("swHomeSearch",))
+        tapped = []
+        with patch.object(a, "hierarchy", return_value=stuck), \
+             patch.object(a, "doc_ids", return_value=set()), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: tapped.append(w) or True), \
+             patch.object(a, "note"), patch.object(a, "shot"), \
+             patch.object(a.time, "sleep"):
+            self.assertFalse(a.import_pdf("marksheet_scan_300dpi.pdf"))
+        self.assertEqual(tapped, [])
+
+    def test_import_pdf_saf_failure_is_false_without_settle(self):
+        with patch.object(a, "reach_pdf_picker", return_value=True), \
+             patch.object(a, "choose_fixture_in_saf", return_value=False), \
+             patch.object(a, "settle_import") as settle, \
+             patch.object(a, "return_to_library"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a, "doc_ids", return_value=set()):
+            self.assertFalse(a.import_pdf("marksheet_scan_300dpi.pdf"))
+        settle.assert_not_called()
+
+    def test_import_pdf_unsettled_is_false(self):
+        before = {"existing"}
+        with patch.object(a, "reach_pdf_picker", return_value=True), \
+             patch.object(a, "choose_fixture_in_saf", return_value=True), \
+             patch.object(a, "settle_import", return_value=False), \
+             patch.object(a, "return_to_library"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a, "doc_ids", return_value=before):
+            self.assertFalse(a.import_pdf("rent_agreement_5p.pdf", before))
+
+    def test_import_pdf_settled_is_true_and_reports_library(self):
+        before = {"existing"}
+        with patch.object(a, "reach_pdf_picker", return_value=True), \
+             patch.object(a, "choose_fixture_in_saf", return_value=True), \
+             patch.object(a, "settle_import", return_value=True) as settle, \
+             patch.object(a, "return_to_library") as rtl, \
+             patch.object(a, "shot"), patch.object(a, "doc_ids", return_value=before):
+            self.assertTrue(a.import_pdf("receipt_aug.pdf", before))
+        settle.assert_called_once_with("receipt_aug.pdf", before)
+        rtl.assert_called_once_with()
+
+    # ---- preserved strict guards / per-import validation ---------------------
+
+    def test_validate_one_import_accepts_exact_fixture(self):
+        ids, problems = a.validate_one_import(
+            "marksheet_scan_300dpi.pdf", {"import_ok": True, "ids": ["doc-1"]},
+            meta=lambda d: "marksheet_scan_300dpi",
+            pdf=lambda d: b"%PDF-1.4 fictional")
+        self.assertEqual((ids, problems), (["doc-1"], []))
+
+    def test_validate_one_import_rejects_wrong_name_and_missing_marker(self):
+        _, problems = a.validate_one_import(
+            "marksheet_scan_300dpi.pdf", {"import_ok": True, "ids": ["doc-1"]},
+            meta=lambda d: "unrelated-scan", pdf=lambda d: b"not a pdf")
+        self.assertTrue(any("name" in p for p in problems))
+        self.assertTrue(any("PDF" in p for p in problems))
+
+    def test_validate_one_import_rejects_zero_and_multiple_ids(self):
+        for new_ids in ([], ["a", "b"]):
+            _, problems = a.validate_one_import(
+                "x.pdf", {"import_ok": True, "ids": new_ids},
+                meta=lambda d: "x", pdf=lambda d: b"%PDF")
+            self.assertTrue(problems)
+
+    def test_validate_one_import_rejects_import_not_ok(self):
+        _, problems = a.validate_one_import(
+            "x.pdf", {"import_ok": False, "ids": ["a"]},
+            meta=lambda d: "x", pdf=lambda d: b"%PDF")
+        self.assertTrue(any("did not complete" in p for p in problems))
+
+    def test_strict_status_helpers_still_present(self):
+        for name in ("classify", "verifier_is_valid", "has_output",
+                     "assert_library_staged", "validate_staging_map"):
+            self.assertTrue(callable(getattr(a, name, None)), name)
+        self.assertNotIn("ok", inspect.signature(a.result).parameters)
+        self.assertEqual(a.classify(None, None), a.NOT_TESTED)
+
+    def test_binary_self_test_not_weakened(self):
+        src = inspect.getsource(
+            AtlasHarnessTests.test_generator_and_ground_truth_are_committed)
+        self.assertIn("no fixtures should be committed as binaries", src)
 
 
 if __name__ == "__main__":

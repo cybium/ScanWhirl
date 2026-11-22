@@ -98,6 +98,22 @@ REQUIRED_FIXTURES = [
 STAGING_PDFS = ("marksheet_scan_300dpi.pdf", "rent_agreement_5p.pdf",
                 "receipt_aug.pdf", "receipt_sep.pdf", "receipt_oct.pdf")
 
+# --------------------------------------------------- confirmed import selectors
+# Every selector below comes from the SHIPPED source / the real emulator hierarchy,
+# never from a guess. Evidence:
+#   swEmptyImport  - LibraryScreen.kt:459, empty Library "Import photos or a PDF".
+#   swNavScan      - ShellActivity.kt:639 and the real 2deddb29 hierarchy; its
+#                    content-desc is "Scan. Open scan and import options.".
+#   swCreateImport - CreateSheet.kt:69, the Import PDF row (home_create_import).
+#   importPdf      - ImportSheet.kt:42 / sheet_import.xml, the PDF row ("PDF file").
+#   Show roots     - Android DocumentsUI (SAF) navigation control.
+# The legacy `create_disc_desc` ("Scan or import a document") is NOT in the real
+# hierarchy, so it is deliberately never used as a fallback.
+SAF_ROOT_DESC = "Show roots"
+IMPORT_CONSENT_TEXT = "Import all"   # DevicePdfGate decision sheet (explicit consent)
+IMPORT_KEEP_TEXT = "Keep"            # import retention sheet
+PDF_MARKER = b"%PDF"
+
 
 # ------------------------------------------------------------------- evidence
 def shot(what):
@@ -446,32 +462,130 @@ def doc_pdf_bytes(doc_id):
                f"files/documents/{doc_id}/scan.pdf", binary=True)
 
 
-def validate_staging_map(mapping, meta=None, pdf=None):
-    """Check EXPECTED fixture identity, not a bare count. `meta`/`pdf` are injectable
-    lookup callables so this is testable without a device. Returns (ids, problems)."""
+# --------------------------------------------------------------- import routing
+# Pure hierarchy readers: resource ids are locale-independent and matched by their
+# bare name, exactly like flow_driver.match(). No coordinate or copy guessing.
+def node_rid(node):
+    return (node.get("resource-id") or "").rsplit("/", 1)[-1].rsplit(":id/", 1)[-1]
+
+
+def node_text(node):
+    return node.get("text") or ""
+
+
+def node_desc(node):
+    return node.get("content-desc") or ""
+
+
+def import_entry_plan(root):
+    """Pure: pick the ONE confirmed PDF-import route visible in a UI hierarchy.
+
+    `root` is an xml.etree hierarchy (the same object flow_driver.hierarchy() returns
+    and the exact shape captured in the emulator artifact). Returns a plan dict:
+      kind = 'saf'             -> the document picker is already in front
+      kind = 'import_sheet_pdf'-> tap rid importPdf   (ImportSheet, from swEmptyImport)
+      kind = 'create_menu'     -> tap rid swCreateImport (CreateSheet, from swNavScan)
+      kind = 'empty_import'    -> tap rid swEmptyImport (empty Library)
+      kind = 'nav_scan'        -> tap rid swNavScan      (populated Library)
+      kind = 'none'            -> NO confirmed entry: fail closed, never guess
+    The Photos routes (swEmptyScan / swCreatePhotos / importPhotos) are deliberately
+    absent: a PDF import must never be routed through the picture picker.
+    """
+    if root is None:
+        return {"kind": "none", "by": None, "value": None}
+    nodes = list(root.iter("node"))
+    rids = {node_rid(n) for n in nodes}
+    descs = {node_desc(n) for n in nodes}
+    if SAF_ROOT_DESC in descs:
+        return {"kind": "saf", "by": None, "value": None}
+    if "importPdf" in rids:
+        return {"kind": "import_sheet_pdf", "by": "rid", "value": "importPdf"}
+    if "swCreateImport" in rids:
+        return {"kind": "create_menu", "by": "rid", "value": "swCreateImport"}
+    if "swEmptyImport" in rids:
+        return {"kind": "empty_import", "by": "rid", "value": "swEmptyImport"}
+    if "swNavScan" in rids:
+        return {"kind": "nav_scan", "by": "rid", "value": "swNavScan"}
+    return {"kind": "none", "by": None, "value": None}
+
+
+def tap_plan_entry(plan):
+    """Tap only the confirmed control a plan names; 'saf' needs no tap."""
+    if plan.get("kind") == "saf":
+        return True
+    by, value = plan.get("by"), plan.get("value")
+    if by == "rid":
+        return soft_tap(rid=value)
+    if by == "desc":
+        return soft_tap(desc=value)
+    if by == "text":
+        return soft_tap(text=value)
+    return False
+
+
+def reach_pdf_picker():
+    """Walk the confirmed entry chain to SAF, tapping each control at most once."""
+    tapped = set()
+    for _ in range(4):
+        plan = import_entry_plan(hierarchy())
+        kind = plan["kind"]
+        if kind == "saf":
+            return True
+        if kind == "none":
+            note("no confirmed PDF import entry on this screen (no guessed fallback)")
+            return False
+        key = (kind, plan.get("by"), plan.get("value"))
+        if key in tapped:
+            note(f"import entry {key} did not advance; refusing a second tap")
+            return False
+        tapped.add(key)
+        if not tap_plan_entry(plan):
+            note(f"could not tap confirmed import entry {key}")
+            return False
+        shot(f"import_entry_{kind}")
+        time.sleep(0.8)
+    note("import entry chain did not reach SAF in bounded steps")
+    return False
+
+
+def validate_one_import(name, info, meta=None, pdf=None):
+    """Check EXACTLY one imported fixture: one new id, matching name, PDF marker.
+    `meta`/`pdf` are injectable so this is pure in tests. Returns (ids, problems)."""
     meta = meta or doc_display_name
     pdf = pdf or doc_pdf_bytes
     problems, ids = [], []
+    if not isinstance(info, dict):
+        return [], ["staging did not produce a fixture mapping"]
+    new_ids = info.get("ids") or []
+    if not info.get("import_ok"):
+        problems.append(f"{name}: import did not complete")
+    if len(new_ids) != 1:
+        problems.append(f"{name}: expected exactly 1 new document, got {len(new_ids)}")
+        return ids, problems
+    doc_id = new_ids[0]
+    ids.append(doc_id)
+    display = meta(doc_id)
+    if normalize_fixture_name(display) != normalize_fixture_name(name):
+        problems.append(f"{name}: library name {display!r} does not match fixture")
+    data = pdf(doc_id)
+    if not isinstance(data, (bytes, bytearray)) or not data.startswith(PDF_MARKER):
+        problems.append(f"{name}: document {doc_id} has no PDF content marker")
+    return ids, problems
+
+
+def validate_staging_map(mapping, meta=None, pdf=None):
+    """Check EXPECTED fixture identity, not a bare count. `meta`/`pdf` are injectable
+    lookup callables so this is testable without a device. Returns (ids, problems)."""
     if not isinstance(mapping, dict):
         return [], ["staging did not produce a fixture mapping"]
+    problems, ids = [], []
     for name in STAGING_PDFS:
-        info = mapping.get(name) or {}
-        new_ids = info.get("ids") or []
-        if not info.get("import_ok"):
-            problems.append(f"{name}: import did not complete")
-        if len(new_ids) != 1:
-            problems.append(f"{name}: expected exactly 1 new document, got {len(new_ids)}")
-            continue
-        doc_id = new_ids[0]
-        if doc_id in ids:
-            problems.append(f"{name}: document id {doc_id} reused by another fixture")
-        ids.append(doc_id)
-        display = meta(doc_id)
-        if normalize_fixture_name(display) != normalize_fixture_name(name):
-            problems.append(f"{name}: library name {display!r} does not match fixture")
-        data = pdf(doc_id)
-        if not isinstance(data, (bytes, bytearray)) or not data.startswith(b"%PDF"):
-            problems.append(f"{name}: document {doc_id} has no PDF content marker")
+        one_ids, one_problems = validate_one_import(name, mapping.get(name), meta, pdf)
+        for doc_id in one_ids:
+            if doc_id in ids:
+                problems.append(f"{name}: document id {doc_id} reused by another fixture")
+            ids.append(doc_id)
+        problems.extend(one_problems)
     return ids, problems
 
 
@@ -498,31 +612,20 @@ def prepare_library():
     mapping = {}
     for name in STAGING_PDFS:
         before = doc_ids()
-        ok = import_pdf(name)
+        ok = import_pdf(name, before)
         added = sorted(doc_ids() - before)
         mapping[name] = {"import_ok": bool(ok), "ids": added}
         note(f"staged {name}: import_ok={ok}; new ids={added}")
     return mapping
 
 
-def import_pdf(name):
-    """Create sheet -> Import PDF -> SAF: test-fixture root, fallback to Download."""
-    for attempt in range(2):
-        if not soft_tap(desc=strings("en")["create_disc_desc"]):
-            break
-        try:
-            wait(timeout=8, text="Import PDF")
-            break
-        except AssertionError:
-            if attempt == 1:
-                note("Import PDF entry did not appear")
-    if not soft_tap(text="Import PDF"):
-        return False
+def choose_fixture_in_saf(name):
+    """Find the fixture in the real DocumentsUI picker: provider root, then Download."""
     try:
-        wait(desc="Show roots")
-        soft_tap(desc="Show roots")
+        wait(timeout=8, desc=SAF_ROOT_DESC)
+        soft_tap(desc=SAF_ROOT_DESC)
     except AssertionError:
-        pass
+        note("SAF 'Show roots' not found (picker may already list files)")
     # The test APK ships a DocumentsProvider named exactly this; SAF lists it as a root.
     if soft_tap(text="ScanWhirl test fixtures"):
         note("SAF: using ScanWhirl test fixtures provider")
@@ -543,15 +646,72 @@ def import_pdf(name):
         note(f"SAF: fixture {name} not listed")
         back()
         return False
-    try:
-        wait(timeout=120, desc="Compress")
-        shot("imported")
-    except AssertionError:
-        note(f"no document viewer after importing {name}")
-    back()
-    if soft_tap(text="Keep"):
-        note("kept imported document")
-    time.sleep(1)
+    return True
+
+
+def settle_import(name, before, timeout=120):
+    """Resolve the import's settled outcome, not the tap: exactly one new library
+    document with the fixture's name and a real PDF marker. The DevicePdfGate
+    consent ('Import all') and the retention ('Keep') sheet are explicit taps —
+    never bypassed. Returns True only on a validated settled import."""
+    before_ids = set(before)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        texts = {node_text(n) for n in hierarchy().iter("node")}
+        if IMPORT_CONSENT_TEXT in texts:            # explicit source consent
+            soft_tap(text=IMPORT_CONSENT_TEXT)
+            time.sleep(1)
+            continue
+        if IMPORT_KEEP_TEXT in texts:               # explicit retention choice
+            soft_tap(text=IMPORT_KEEP_TEXT)
+            time.sleep(0.5)
+            continue
+        added = sorted(set(doc_ids()) - before_ids)
+        if len(added) > 1:
+            note(f"{name}: {len(added)} documents created; refusing a double import")
+            return False
+        _, problems = validate_one_import(
+            name, {"import_ok": True, "ids": added}, doc_display_name, doc_pdf_bytes)
+        if not problems:
+            shot("import_settled")
+            note(f"settled {name}: new ids={added}; name+PDF marker verified")
+            return True
+        time.sleep(1)
+    note(f"{name}: import did not settle within {timeout}s")
+    return False
+
+
+def return_to_library():
+    """Leave a viewer/retention sheet so the next fixture starts from a Library entry."""
+    for _ in range(4):
+        kind = import_entry_plan(hierarchy())["kind"]
+        if kind in ("empty_import", "nav_scan"):
+            return True
+        if soft_tap(text=IMPORT_KEEP_TEXT):
+            time.sleep(0.5)
+            continue
+        back()
+        time.sleep(0.5)
+    return False
+
+
+def import_pdf(name, before=None):
+    """Reach the confirmed PDF route, pick the fixture in SAF and wait for a settled,
+    validated import. One entry tap per screen, one fixture tap, one new document.
+
+    Returns True only when settle_import() proved the new document exists with the
+    right name/PDF marker; there is no screenshot-based or 'no exception' PASS.
+    """
+    if before is None:
+        before = doc_ids()
+    if not reach_pdf_picker():
+        note(f"{name}: could not reach the PDF picker through a confirmed entry")
+        return False
+    if not choose_fixture_in_saf(name):
+        return False
+    if not settle_import(name, before):
+        return False
+    return_to_library()
     shot("library_after_import")
     return True
 
