@@ -457,21 +457,127 @@ class AtlasImportEntryTests(unittest.TestCase):
 
     # ---- explicit settled result ---------------------------------------------
 
-    def test_settle_import_waits_for_valid_document(self):
-        library = self._hierarchy(ids=("swNavScan",))
-        seq = [set(), {"doc-1"}]
+    def test_settle_import_valid_candidate_retained_then_revalidated(self):
+        # A valid doc while the viewer is in front is only a candidate: retention
+        # must run and the same id must re-validate before True.
+        viewer = self._hierarchy(texts=("Compress",))
+        seq = [set(), {"doc-1"}, {"doc-1"}]
+        rtl_calls = []
 
         def fake_doc_ids():
             return seq.pop(0) if len(seq) > 1 else {"doc-1"}
 
-        with patch.object(a, "hierarchy", return_value=library), \
+        with patch.object(a, "hierarchy", return_value=viewer), \
              patch.object(a, "doc_ids", side_effect=fake_doc_ids), \
              patch.object(a, "doc_display_name", return_value="marksheet_scan_300dpi"), \
              patch.object(a, "doc_pdf_bytes", return_value=b"%PDF-1.4 fictional"), \
+             patch.object(a, "return_to_library",
+                          side_effect=lambda: rtl_calls.append(True) or True), \
              patch.object(a, "soft_tap"), patch.object(a, "shot"), \
              patch.object(a, "note"), patch.object(a.time, "sleep"), \
              patch.object(a.time, "monotonic", side_effect=[0, 1, 2, 3]):
             self.assertTrue(a.settle_import("marksheet_scan_300dpi.pdf", set(), timeout=10))
+        self.assertEqual(len(rtl_calls), 1, "retention must be attempted exactly once")
+
+    def test_settle_import_valid_doc_without_retention_is_false(self):
+        viewer = self._hierarchy(texts=("Compress",))
+        with patch.object(a, "hierarchy", return_value=viewer), \
+             patch.object(a, "doc_ids", return_value={"doc-1"}), \
+             patch.object(a, "doc_display_name", return_value="x"), \
+             patch.object(a, "doc_pdf_bytes", return_value=b"%PDF"), \
+             patch.object(a, "return_to_library", return_value=False), \
+             patch.object(a, "soft_tap"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 1]):
+            self.assertFalse(a.settle_import("x.pdf", set(), timeout=10))
+
+    def test_settle_import_post_retention_missing_id_reject(self):
+        seq = [set(), {"doc-1"}, set()]
+
+        def fake_doc_ids():
+            return seq.pop(0) if len(seq) > 1 else set()
+
+        with patch.object(a, "hierarchy", return_value=self._hierarchy()), \
+             patch.object(a, "doc_ids", side_effect=fake_doc_ids), \
+             patch.object(a, "doc_display_name", return_value="x"), \
+             patch.object(a, "doc_pdf_bytes", return_value=b"%PDF"), \
+             patch.object(a, "return_to_library", return_value=True), \
+             patch.object(a, "soft_tap"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 1, 2]):
+            self.assertFalse(a.settle_import("x.pdf", set(), timeout=10))
+
+    def test_settle_import_post_retention_changed_id_reject(self):
+        seq = [set(), {"doc-1"}, {"doc-2"}]
+
+        def fake_doc_ids():
+            return seq.pop(0) if len(seq) > 1 else {"doc-2"}
+
+        with patch.object(a, "hierarchy", return_value=self._hierarchy()), \
+             patch.object(a, "doc_ids", side_effect=fake_doc_ids), \
+             patch.object(a, "doc_display_name", return_value="x"), \
+             patch.object(a, "doc_pdf_bytes", return_value=b"%PDF"), \
+             patch.object(a, "return_to_library", return_value=True), \
+             patch.object(a, "soft_tap"), patch.object(a, "shot"), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 1, 2]):
+            self.assertFalse(a.settle_import("x.pdf", set(), timeout=10))
+
+    def test_return_to_library_viewer_back_keep_library(self):
+        viewer = self._hierarchy(texts=("Compress",))
+        keep_sheet = self._hierarchy(texts=("Keep",))
+        library = self._hierarchy(ids=("swNavScan",))
+        seq = [viewer, keep_sheet, library]
+        events = []
+        with patch.object(a, "hierarchy",
+                          side_effect=lambda: seq.pop(0) if len(seq) > 1 else seq[0]), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: events.append(("tap", w)) or True), \
+             patch.object(a, "back", side_effect=lambda: events.append(("back",))), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"):
+            self.assertTrue(a.return_to_library())
+        self.assertEqual(events, [("back",), ("tap", {"text": "Keep"})])
+
+    def test_return_to_library_background_nav_under_keep_not_early_success(self):
+        # The Library id is still visible behind the modal; it must not count until
+        # Keep has actually been tapped.
+        keep_with_nav = self._hierarchy(ids=("swNavScan", "swNavLibrary"), texts=("Keep",))
+        library = self._hierarchy(ids=("swNavScan",))
+        seq = [keep_with_nav, library]
+        events = []
+        with patch.object(a, "hierarchy",
+                          side_effect=lambda: seq.pop(0) if len(seq) > 1 else seq[0]), \
+             patch.object(a, "soft_tap",
+                          side_effect=lambda **w: events.append(("tap", w)) or True), \
+             patch.object(a, "back", side_effect=lambda: events.append(("back",))), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"):
+            self.assertTrue(a.return_to_library())
+        self.assertEqual(events, [("tap", {"text": "Keep"})])
+        self.assertNotIn(("back",), events)
+
+    def test_return_to_library_keep_tap_failure_is_false(self):
+        keep_sheet = self._hierarchy(texts=("Keep",))
+        old = a.CTX.get("required_failed")
+        try:
+            a.CTX["required_failed"] = False
+            with patch.object(a, "hierarchy", return_value=keep_sheet), \
+                 patch.object(a, "soft_tap", return_value=False), \
+                 patch.object(a, "note"), patch.object(a.time, "sleep"):
+                self.assertFalse(a.return_to_library())
+            self.assertTrue(a.CTX["required_failed"], "failed Keep is a required-tap failure")
+        finally:
+            a.CTX["required_failed"] = bool(old)
+
+    def test_return_to_library_missing_keep_is_false(self):
+        viewer = self._hierarchy(texts=("Compress",))
+        library = self._hierarchy(ids=("swNavScan",))
+        seq = [viewer, library]
+        with patch.object(a, "hierarchy",
+                          side_effect=lambda: seq.pop(0) if len(seq) > 1 else seq[0]), \
+             patch.object(a, "soft_tap", return_value=True), \
+             patch.object(a, "back"), patch.object(a, "note"), \
+             patch.object(a.time, "sleep"):
+            self.assertFalse(a.return_to_library())
 
     def test_settle_import_refuses_double_import(self):
         library = self._hierarchy(ids=("swNavScan",))
@@ -493,6 +599,7 @@ class AtlasImportEntryTests(unittest.TestCase):
              patch.object(a, "doc_ids", return_value={"doc-1"}), \
              patch.object(a, "doc_display_name", return_value="x"), \
              patch.object(a, "doc_pdf_bytes", return_value=b"%PDF"), \
+             patch.object(a, "return_to_library", return_value=True), \
              patch.object(a, "shot"), patch.object(a, "note"), \
              patch.object(a.time, "sleep"), \
              patch.object(a.time, "monotonic", side_effect=[0, 1, 2, 3]):
@@ -540,7 +647,9 @@ class AtlasImportEntryTests(unittest.TestCase):
              patch.object(a, "shot"), patch.object(a, "doc_ids", return_value=before):
             self.assertTrue(a.import_pdf("receipt_aug.pdf", before))
         settle.assert_called_once_with("receipt_aug.pdf", before)
-        rtl.assert_called_once_with()
+        # Retention belongs to settle_import, whose result import_pdf checks; the
+        # orchestration layer must never call it again unchecked.
+        rtl.assert_not_called()
 
     # ---- preserved strict guards / per-import validation ---------------------
 

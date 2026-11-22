@@ -650,21 +650,19 @@ def choose_fixture_in_saf(name):
 
 
 def settle_import(name, before, timeout=120):
-    """Resolve the import's settled outcome, not the tap: exactly one new library
-    document with the fixture's name and a real PDF marker. The DevicePdfGate
-    consent ('Import all') and the retention ('Keep') sheet are explicit taps —
-    never bypassed. Returns True only on a validated settled import."""
+    """Resolve the import's settled outcome. A valid document is only a CANDIDATE:
+    it exists in the repo while the viewer is still in front. The viewer's
+    Back -> Keep retention must actually complete and the SAME one id, name and
+    PDF marker must be re-validated afterwards before this returns True. No
+    positive result is registered while the viewer has not been resolved."""
     before_ids = set(before)
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    candidate = None
+    while candidate is None and time.monotonic() < deadline:
         texts = {node_text(n) for n in hierarchy().iter("node")}
         if IMPORT_CONSENT_TEXT in texts:            # explicit source consent
             soft_tap(text=IMPORT_CONSENT_TEXT)
             time.sleep(1)
-            continue
-        if IMPORT_KEEP_TEXT in texts:               # explicit retention choice
-            soft_tap(text=IMPORT_KEEP_TEXT)
-            time.sleep(0.5)
             continue
         added = sorted(set(doc_ids()) - before_ids)
         if len(added) > 1:
@@ -672,26 +670,59 @@ def settle_import(name, before, timeout=120):
             return False
         _, problems = validate_one_import(
             name, {"import_ok": True, "ids": added}, doc_display_name, doc_pdf_bytes)
-        if not problems:
-            shot("import_settled")
-            note(f"settled {name}: new ids={added}; name+PDF marker verified")
-            return True
+        if not problems and len(added) == 1:
+            candidate = added[0]                    # remember the EXACT new id
+            break
         time.sleep(1)
-    note(f"{name}: import did not settle within {timeout}s")
-    return False
+    if candidate is None:
+        note(f"{name}: import did not settle within {timeout}s")
+        return False
+    # Candidate found is NOT success: drive the retention decision. Its result is
+    # required, not optional; a failed/unknown return is never counted as kept.
+    if not return_to_library():
+        note(f"{name}: Back/Keep retention did not reach a settled Library")
+        return False
+    # Re-validate the SAME id after retention: missing, extra or changed ids are
+    # unknown state, never a PASS. Nothing is discarded to make this look clean.
+    final_added = sorted(set(doc_ids()) - before_ids)
+    if final_added != [candidate]:
+        note(f"{name}: post-retention ids {final_added} != candidate {[candidate]}")
+        return False
+    _, problems = validate_one_import(
+        name, {"import_ok": True, "ids": final_added}, doc_display_name, doc_pdf_bytes)
+    if problems:
+        note(f"{name}: post-retention validation failed: " + "; ".join(problems))
+        return False
+    shot("import_settled")
+    note(f"settled {name}: retained id={candidate}; name+PDF marker verified after retention")
+    return True
 
 
 def return_to_library():
-    """Leave a viewer/retention sheet so the next fixture starts from a Library entry."""
-    for _ in range(4):
-        kind = import_entry_plan(hierarchy())["kind"]
-        if kind in ("empty_import", "nav_scan"):
-            return True
-        if soft_tap(text=IMPORT_KEEP_TEXT):
+    """Complete the viewer's retention decision and confirm a settled Library.
+
+    The Library stays visible behind the Keep modal, so a visible Keep confirmation
+    is handled FIRST: no Library/id-based success may be acknowledged while that
+    modal is up. Only an actual Keep tap followed by a Library entry counts. The
+    Keep tap is required (failure returns False); Discard is never tapped and no
+    import route is taken again.
+    """
+    kept = False
+    for _ in range(6):
+        root = hierarchy()
+        texts = {node_text(n) for n in root.iter("node")}
+        if IMPORT_KEEP_TEXT in texts:                # modal in front: decide first
+            if not require_tap(text=IMPORT_KEEP_TEXT):
+                note("Keep sheet visible but the required Keep tap failed")
+                return False
+            kept = True
             time.sleep(0.5)
             continue
+        if import_entry_plan(root)["kind"] in ("empty_import", "nav_scan"):
+            return kept                              # only after an actual Keep
         back()
         time.sleep(0.5)
+    note("viewer did not resolve to a settled Library in bounded steps")
     return False
 
 
@@ -699,8 +730,9 @@ def import_pdf(name, before=None):
     """Reach the confirmed PDF route, pick the fixture in SAF and wait for a settled,
     validated import. One entry tap per screen, one fixture tap, one new document.
 
-    Returns True only when settle_import() proved the new document exists with the
-    right name/PDF marker; there is no screenshot-based or 'no exception' PASS.
+    settle_import() owns the whole settle: it drives the viewer's Back -> Keep
+    retention, checks that required result, and re-validates the same id/name/PDF
+    after retention. True therefore never means 'a doc appeared before Back/Keep'.
     """
     if before is None:
         before = doc_ids()
@@ -711,7 +743,6 @@ def import_pdf(name, before=None):
         return False
     if not settle_import(name, before):
         return False
-    return_to_library()
     shot("library_after_import")
     return True
 
