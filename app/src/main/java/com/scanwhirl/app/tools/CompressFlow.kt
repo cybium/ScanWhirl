@@ -162,6 +162,9 @@ class CompressFlow(
             RadioButton(activity).apply {
                 id = View.generateViewId()
                 text = activity.getString(R.string.compress_est_pending, levelNames[index])
+                // COPY_DIET §3: an enabled option label is P14, never dim grey.
+                setTextColor(SwStyle.color(activity, R.color.sw_sh2_text_primary))
+                textSize = 14f
                 // B2-M3 (device sweep 2026-11-19): a bare RadioButton was a 32dp-high row.
                 // The rule is 48dp minimum on every touch target; the visual density stays,
                 // the row just gets breathing room around the same text.
@@ -174,10 +177,11 @@ class CompressFlow(
         rows.forEach { dialogBinding.levelGroup.addView(it) }
         (dialogBinding.levelGroup.getChildAt(1) as? RadioButton)?.isChecked = true
 
+        // SH2: non-destructive settings sheet. SwSheet's X is the only dismissal;
+        // a second Cancel below the pinned primary duplicated it (critique "Sheets generally").
         val sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(activity)
             .setTitle(R.string.compress_level_title)
             .setScrollableContent(dialogBinding.root)
-            .setSecondary(android.R.string.cancel)
             .build()
         val session = ++sheetSeq
         activeSheet = sheet
@@ -215,15 +219,44 @@ class CompressFlow(
         fun showEstimate(index: Int, bytes: Long?) {
             if (!current()) return
             measured[index] = true
-            rows[index].text = if (bytes == null) {
-                activity.getString(R.string.compress_est_failed, levelNames[index])
-            } else {
-                activity.getString(
-                    R.string.compress_est_item,
-                    levelNames[index],
-                    StatusLine.formatBytes(bytes)
+            if (bytes == null) {
+                rows[index].text = activity.getString(R.string.compress_est_failed, levelNames[index])
+                return
+            }
+            // COPY_DIET §3: level and measured number are P14; "about" stays S14.
+            val sizeText = StatusLine.formatBytes(bytes)
+            val full = activity.getString(R.string.compress_est_item, levelNames[index], sizeText)
+            val styled = android.text.SpannableString(full)
+            val flags = android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            val p = SwStyle.color(activity, R.color.sw_sh2_text_primary)
+            val s = SwStyle.color(activity, R.color.sw_sh2_text_secondary)
+            fun mark(token: String, color: Int, bold: Boolean) {
+                var from = full.indexOf(token)
+                while (from >= 0) {
+                    val end = from + token.length
+                    styled.setSpan(android.text.style.ForegroundColorSpan(color), from, end, flags)
+                    styled.setSpan(android.text.style.AbsoluteSizeSpan(14, true), from, end, flags)
+                    if (bold) {
+                        styled.setSpan(
+                            android.text.style.StyleSpan(android.graphics.Typeface.BOLD), from, end, flags
+                        )
+                    }
+                    from = full.indexOf(token, end)
+                }
+            }
+            mark(levelNames[index], p, bold = true)
+            val connectorStart = full.indexOf(levelNames[index]) + levelNames[index].length
+            val connectorEnd = full.indexOf(sizeText)
+            if (connectorEnd > connectorStart) {
+                styled.setSpan(
+                    android.text.style.ForegroundColorSpan(s), connectorStart, connectorEnd, flags
+                )
+                styled.setSpan(
+                    android.text.style.AbsoluteSizeSpan(14, true), connectorStart, connectorEnd, flags
                 )
             }
+            mark(sizeText, p, bold = false)
+            rows[index].text = styled
         }
 
         fun showFailedEstimates() {
@@ -267,8 +300,17 @@ class CompressFlow(
         }
 
         dialogBinding.compressModeGroup.setOnCheckedChangeListener { _, _ -> applyMode() }
-        // V2T T2: free decimal-KB chips. A typed target always wins; the selected
-        // chip is exposed by Material's filter-chip checked state for TalkBack.
+        // V2T T2: free decimal-KB chips in a 2x2 grid. A typed target always wins;
+        // the selected chip is exposed by Material's filter-chip checked state for TalkBack.
+        // The grid is two plain rows (not a ChipGroup), so the single-choice rule is enforced here.
+        val chipIds = intArrayOf(
+            R.id.v2t_quick_20, R.id.v2t_quick_50, R.id.v2t_quick_100, R.id.v2t_quick_200
+        )
+        fun clearQuickChips() {
+            chipIds.forEach { id ->
+                dialogBinding.root.findViewById<com.google.android.material.chip.Chip>(id)?.isChecked = false
+            }
+        }
         var suppressChip = false
         CompressionPresentation.quickTargetKb.forEach { kb ->
             val id = when (kb) {
@@ -280,6 +322,10 @@ class CompressFlow(
             dialogBinding.root.findViewById<com.google.android.material.chip.Chip>(id)
                 ?.setOnClickListener {
                     suppressChip = true
+                    chipIds.forEach { other ->
+                        dialogBinding.root.findViewById<com.google.android.material.chip.Chip>(other)?.isChecked =
+                            other == id
+                    }
                     dialogBinding.editCompressTarget.setText(
                         activity.getString(CompressionPresentation.quickTargetLabel(kb))
                     )
@@ -291,7 +337,7 @@ class CompressFlow(
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = clearError()
             override fun afterTextChanged(s: android.text.Editable?) {
-                if (!suppressChip) dialogBinding.v2tQuickGroup.clearCheck()
+                if (!suppressChip) clearQuickChips()
             }
         })
         dialogBinding.editCompressTarget.setOnEditorActionListener { _, actionId, _ ->
@@ -338,15 +384,43 @@ class CompressFlow(
         )
     }
 
+    /**
+     * COPY_DIET §3: deciding numbers are P14, the supporting connector stays S14.
+     * Spans are added to the exact formatted text, never a second paragraph.
+     */
+    private fun primarySpans(text: String, vararg tokens: String): android.text.SpannableString {
+        val spanned = android.text.SpannableString(text)
+        val p = SwStyle.color(activity, R.color.sw_sh2_text_primary)
+        tokens.forEach { token ->
+            if (token.isEmpty()) return@forEach
+            var from = text.indexOf(token)
+            while (from >= 0) {
+                val end = from + token.length
+                val flags = android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                spanned.setSpan(android.text.style.ForegroundColorSpan(p), from, end, flags)
+                spanned.setSpan(
+                    android.text.style.AbsoluteSizeSpan(14, true), from, end, flags
+                )
+                spanned.setSpan(
+                    android.text.style.StyleSpan(android.graphics.Typeface.BOLD), from, end, flags
+                )
+                from = text.indexOf(token, end)
+            }
+        }
+        return spanned
+    }
+
     /** W2: the exact source, before any measurement. */
     private fun bindIdentity(binding: DialogCompressBinding, identity: CompressIdentity) {
         binding.compressSourceName.text = identity.name
-        binding.compressSourceMeta.text = activity.resources.getQuantityString(
+        val sizeText = StatusLine.formatBytes(identity.sizeBytes)
+        val meta = activity.resources.getQuantityString(
             R.plurals.page_count_and_date,
             identity.pageCount,
             identity.pageCount,
-            StatusLine.formatBytes(identity.sizeBytes)
+            sizeText
         )
+        binding.compressSourceMeta.text = primarySpans(meta, identity.pageCount.toString(), sizeText)
         val doc = identity.doc
         if (doc != null) {
             // DocThumbBinder is the app's one privacy decision: page image only for an ordinary

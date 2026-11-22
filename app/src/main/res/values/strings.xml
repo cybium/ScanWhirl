@@ -413,8 +413,10 @@
     <string name="compress_title">Compress PDF</string>
     <string name="compress_source_scan">Saved scan</string>
     <string name="compress_source_file">PDF file</string>
-    <string name="compress_level_title">Compression level</string>
-    <string name="compress_target_label">Custom size (optional)</string>
+    <string name="compress_level_title">Compress</string>
+    <string name="compress_target_label">Maximum file size</string>
+    <!-- SH2: short example above the KB chips of the Compress sheet. -->
+    <string name="compress_target_placeholder">100 KB</string>
     <string name="compress_level_low">Best quality</string>
     <string name="compress_level_medium">Balanced</string>
     <string name="compress_level_high">Smaller</string>
@@ -426,10 +428,10 @@
     <string name="compress_failed">Compression failed: %1$s</string>
 
     <!-- UI-B3 (#7, #8, #9-now): two explicit aims, then a measured result. -->
-    <string name="compress_mode_quality">Choose quality</string>
-    <string name="compress_mode_target">Aim for a file size</string>
-    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB. Numbers alone mean KB</string>
-    <string name="compress_target_required">Type the size you need, like 500 KB or 3 MB</string>
+    <string name="compress_mode_quality">Quality</string>
+    <string name="compress_mode_target">Maximum file size</string>
+    <string name="compress_target_help">Enter KB or MB. Numbers alone mean KB.</string>
+    <string name="compress_target_required">Enter a maximum size</string>
     <string name="compress_action">Compress</string>
     <string name="compress_result_header">Compressed</string>
     <string name="compress_result_size">File now %1$s</string>

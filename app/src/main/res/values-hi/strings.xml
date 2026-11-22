@@ -188,20 +188,22 @@
     <string name="compress_level_high">छोटा</string>
     <string name="compress_level_low">सबसे साफ़</string>
     <string name="compress_level_medium">बीच का</string>
-    <string name="compress_level_title">कितना छोटा करें</string>
+    <string name="compress_level_title">फ़ाइल छोटी करें</string>
     <string name="compress_level_ultra">सबसे छोटा</string>
     <string name="compress_pick_scan">छोटा करने के लिए स्कैन चुनें</string>
     <string name="compress_source_file">PDF फ़ाइल</string>
     <string name="compress_source_scan">सहेजा गया स्कैन</string>
-    <string name="compress_target_label">अपनी ज़रूरत का आकार (चाहें तो)</string>
+    <string name="compress_target_label">फ़ाइल का अधिकतम आकार</string>
+    <!-- SH2: short example above the KB chips of the Compress sheet. -->
+    <string name="compress_target_placeholder">100 KB</string>
     <string name="compress_target_missed">%1$s तक नहीं पहुँच सके। यही सबसे छोटा नतीजा है।</string>
     <string name="compress_title">PDF का आकार घटाएँ</string>
 
     <!-- UI-B3 (#7, #8, #9-now): दो साफ़ तरीके, फिर मापा हुआ नतीजा। -->
-    <string name="compress_mode_quality">गुणवत्ता चुनें</string>
-    <string name="compress_mode_target">फ़ाइल का आकार तय करें</string>
-    <!-- review --> <string name="compress_target_help">KB या MB में लिखें, जैसे 500 KB या 3 MB। अकेले अंकों का मतलब KB होता है।</string>
-    <string name="compress_target_required">ज़रूरी आकार लिखें, जैसे 500 KB या 3 MB</string>
+    <string name="compress_mode_quality">गुणवत्ता</string>
+    <string name="compress_mode_target">फ़ाइल का अधिकतम आकार</string>
+    <string name="compress_target_help">KB या MB में लिखें। अकेले अंकों का मतलब KB है।</string>
+    <string name="compress_target_required">अधिकतम आकार लिखें</string>
     <string name="compress_action">छोटा करें</string>
     <string name="compress_result_header">छोटा किया गया</string>
     <string name="compress_result_size">फ़ाइल अब %1$s</string>

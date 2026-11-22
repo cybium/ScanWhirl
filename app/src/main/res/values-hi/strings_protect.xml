@@ -4,7 +4,7 @@
     <string name="protect_sheet_title">PDF सुरक्षित करें</string>
     <string name="protect_change_title">पासवर्ड बदलें</string>
     <string name="protect_close">बंद करें</string>
-    <string name="protect_sheet_note">इस PDF को खोलने वाले को पासवर्ड डालना होगा, कहीं भी, किसी भी PDF ऐप में।</string>
+    <string name="protect_sheet_note">यह PDF खोलने के लिए पासवर्ड चाहिए</string>
     <plurals name="protect_doc_meta">
         <item quantity="one">%1$d पन्ना · %2$s</item>
         <item quantity="other">%1$d पन्ने · %2$s</item>
@@ -21,7 +21,7 @@
     <string name="protect_meter_strong">बहुत मज़बूत · %1$d अक्षर</string>
     <string name="protect_confirm_ok">पासवर्ड एक जैसे हैं</string>
     <string name="protect_aes_title">AES-256 से सुरक्षित</string>
-    <string name="protect_aes_note">सुरक्षा का आज का तरीका। यह कितना मज़बूत होगा, यह आपके पासवर्ड पर निर्भर है। 10 या ज़्यादा अक्षर रखें।</string>
+    <string name="protect_aes_note">मज़बूत पासवर्ड रखें: 10 या अधिक अक्षर</string>
     <string name="protect_remember_title">तिजोरी में याद रखें</string>
     <string name="protect_remember_note">पासवर्ड तिजोरी में सहेजें। इसे इस्तेमाल करने के लिए पहले तिजोरी खोलें।</string>
     <string name="protect_action_share">सुरक्षित करें और भेजें</string>
