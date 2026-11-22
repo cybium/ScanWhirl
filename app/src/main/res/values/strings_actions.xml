@@ -7,9 +7,9 @@
     <string name="doc_actions">Actions</string>
     <!-- Dock label: "Read text" replaces "Text". Short enough for a quarter-width
          dock cell in Hindi at 130 % (the sheet row keeps btn_ocr_text). -->
-    <string name="dock_read_text">Read text</string>
+    <string name="dock_read_text">OCR</string>
     <!-- Section header above Compress / Sign / Read text / Share. -->
-    <string name="doc_actions_header">Work on this document</string>
+    <string name="doc_actions_header">Document actions</string>
     <!-- Why a row is greyed out for a legacy Vault item. -->
     <string name="doc_actions_vault_reason">Take this document out of the Vault first.</string>
     <!-- The document behind a stale sheet id is gone (deleted while the sheet was open). -->
@@ -18,7 +18,7 @@
     <!-- UI-B6 (GPT judgement 2026-11-19b, item 1): the document workspace's seven named
          actions. Labels are short enough for a quarter-width cell at 360 dp; the panel
          reflows to two growing columns at 160 % type instead of shrinking them. -->
-    <string name="doc_action_edit_crop">Edit / crop</string>
+    <string name="doc_action_edit_crop">Edit &amp; crop</string>
     <string name="doc_action_save_pdf">Save PDF</string>
     <!-- Where Save PDF puts the copy: Documents, never replacing or moving the library file. -->
     <string name="doc_action_save_hint">Save PDF adds a copy in Documents.</string>

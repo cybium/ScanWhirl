@@ -1,37 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- FORM1: हिंदी जोड़ी। शब्दावली JUDGE_HINDI / HINDI_REVIEW_1.3.0 के अनुसार है। -->
-    <string name="form1_title">आवेदन पत्र के लिए फ़ोटो और हस्ताक्षर</string>
+    <!-- FORM1 / lane F: हिंदी जोड़ी। शब्दावली HINDI_REVIEW_1.3.0 के अनुसार है। -->
+    <string name="form1_title">फ़ॉर्म फ़ोटो और हस्ताक्षर</string>
     <string name="form1_check_rules">अपने आवेदन पत्र के ठीक नियम देखें</string>
     <string name="form1_notice">ये उदाहरण मात्र हैं। सही px, KB और DPI के लिए मौजूदा सूचना देखें। कुछ पोर्टल लाइव फ़ोटो का चरण भी माँगते हैं, जो बिना इंटरनेट के संभव नहीं है।</string>
     <string name="form1_preset_photo">फ़ोटो</string>
     <string name="form1_preset_signature">हस्ताक्षर</string>
-    <string name="form1_preset_thumb">अंगूठे का निशान</string>
+    <string name="form1_preset_thumb">अँगूठे का निशान</string>
     <string name="form1_preset_declaration">घोषणा</string>
-    <string name="form1_preset_custom">मर्ज़ी</string>
+    <string name="form1_preset_custom">अपना</string>
     <string name="form1_example">उदाहरण: %1$d × %2$d px, %3$d से %4$d KB तक, JPG</string>
     <string name="form1_photo_cm_note">कुछ आवेदन पत्र इसके बजाय लगभग 3.5 × 4.5 cm माँगते हैं।</string>
+
+    <!-- Lane F: स्थायी लेबल (संकेत लिखते ही गायब हो जाते हैं)। -->
+    <string name="form1_width_label">चौड़ाई</string>
+    <string name="form1_height_label">ऊँचाई</string>
+    <string name="form1_min_label">न्यूनतम KB</string>
+    <string name="form1_max_label">अधिकतम KB</string>
+    <string name="form1_unit_label">इकाई</string>
     <string name="form1_width_hint">चौड़ाई</string>
     <string name="form1_height_hint">ऊँचाई</string>
     <string name="form1_min_hint">न्यूनतम KB</string>
     <string name="form1_max_hint">अधिकतम KB</string>
+    <string name="form1_unit_px_spoken">पिक्सेल</string>
+    <string name="form1_unit_cm_spoken">सेंटीमीटर</string>
+    <string name="form1_unit_mm_spoken">मिलीमीटर</string>
+    <string name="form1_unit_inch_spoken">इंच</string>
+
     <string name="form1_readout">फ़ाइल बनेगी: %1$d × %2$d px</string>
-    <string name="form1_cleanup">हस्ताक्षर साफ़ करें (सफ़ेद कागज़, गहरा लेख)</string>
+    <string name="form1_cleanup">हस्ताक्षर साफ़ करें</string>
     <string name="form1_pick">फ़ोटो चुनें</string>
     <string name="form1_apply">फ़ाइल बनाएँ</string>
+
+    <!-- Lane F: KB सीमा की स्थानीय, तुरंत जाँच। -->
+    <string name="form1_kb_blank">दोनों KB सीमाएँ दर्ज करें।</string>
+    <string name="form1_kb_invalid">KB सीमाएँ पूरे अंक होनी चाहिए: न्यूनतम कम से कम 1, अधिकतम उससे कम नहीं।</string>
+
+    <!-- Lane F: केवल इसी फ़ोन पर प्रिसेट सहेजें / लागू करें। -->
+    <string name="form1_save_preset">प्रिसेट सहेजें</string>
+    <string name="form1_use_preset">सहेजा प्रिसेट लागू करें</string>
+    <string name="form1_preset_saved">प्रिसेट इसी फ़ोन पर सहेजा गया।</string>
+    <string name="form1_no_preset">अभी सहेजा प्रिसेट नहीं है। पहले प्रिसेट सहेजें।</string>
+    <string name="form1_preset_original">मूल</string>
+    <string name="form1_preset_cleaned">साफ़ किया</string>
+    <string name="form1_cleanup_preview">सफ़ाई का पूर्वावलोकन</string>
+    <string name="form1_preparing">छवि तैयार की जा रही है…</string>
+
     <string name="form1_min_miss">तस्वीर बदले बिना न्यूनतम आकार नहीं मिला। सबसे बड़ी सही फ़ाइल रखी गई: %1$s।</string>
-    <string name="form1_max_miss">सबसे छोटी सही फ़ाइल भी आपकी अधिकतम सीमा से ऊपर है। सीमाएँ देखें।</string>
+    <!-- Lane F: माँगे गए पिक्सेल चुपचाप नहीं घटाए जाते। -->
+    <string name="form1_max_miss">इन आयामों पर आकार सीमा पूरी नहीं हुई। छोटा आकार या अधिक सीमा आज़माएँ।</string>
     <string name="form1_pick_failed">वह फ़ोटो नहीं पढ़ी जा सकी। JPG या PNG तस्वीर चुनें।</string>
     <string name="form1_encode_failed">फ़ाइल नहीं बन सकी। दूसरी फ़ोटो या दूसरी सीमाएँ आज़माएँ।</string>
     <string name="form1_note_measured">माप: %1$s (%2$d बाइट) · %3$d × %4$d px · %5$d DPI</string>
     <string name="form1_note_in_band">आपकी %1$s से %2$s सीमा के भीतर।</string>
     <string name="form1_note_below_min">आपकी न्यूनतम सीमा से कम। %1$s</string>
     <string name="form1_note_above_max">आपकी अधिकतम सीमा से ऊपर। %1$s</string>
+
+    <!-- Lane F: अलग पिक्सेल / DPI / KB जाँच; केवल सीमा के भीतर होना तैयारी नहीं है। -->
+    <string name="form1_result_pixels_ok">पिक्सेल: अनुरोध अनुसार %1$d × %2$d।</string>
+    <string name="form1_result_pixels_changed">पिक्सेल: %1$d × %2$d पर बदले गए।</string>
+    <string name="form1_result_dpi_ok">DPI: अनुरोध अनुसार %1$d।</string>
+    <string name="form1_result_dpi_changed">DPI: लिखा गया %1$d, अनुरोधित %2$d।</string>
+    <string name="form1_band_label">KB सीमा:</string>
+    <string name="form1_result_ready">तैयार: पिक्सेल, DPI और KB सीमा सभी मेल खाते हैं।</string>
+    <string name="form1_result_not_ready">तैयार नहीं: %1$s</string>
+
     <string name="form1_source_kept">आपकी मूल फ़ोटो नहीं बदली गई।</string>
     <string name="form1_size_too_large">यह आकार फ़ोटो के लिए बहुत बड़ा है। 4000 px तक लें।</string>
     <string name="form1_out_of_memory">यह फ़ोटो इस फ़ोन के लिए बहुत बड़ी है। छोटी तस्वीर आज़माएँ।</string>
     <string name="form1_selected">चुना गया</string>
     <string name="form1_not_selected">नहीं चुना गया</string>
     <!-- Tools टाइल (मुफ़्त): आवेदन पत्र के लिए फ़ोटो या हस्ताक्षर तैयार करें। -->
-    <string name="tool_form_ready">फ़ॉर्म के लिए फ़ोटो और हस्ताक्षर</string>
+    <string name="tool_form_ready">फ़ॉर्म फ़ोटो और हस्ताक्षर</string>
 </resources>

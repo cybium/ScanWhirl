@@ -64,44 +64,57 @@ class L1QuickToolsAccessTest {
     }
 
     @Test(timeout = 30_000)
-    fun `the quick editor exposes named Move earlier and Move later actions with boundary no-ops`() {
+    fun `the quick editor exposes named move up and down buttons with boundary no-ops`() {
+        // Council §7: OLD advertised uxL1MoveEarlier/Later accessibility actions on tiles.
+        // NEW uses visible, labelled ▲/▼ buttons. The intent is unchanged: reordering is
+        // available by name, boundary presses are no-ops, and changes stay in the draft
+        // until Done.
+        fun button(content: View, id: Int, tag: String): View {
+            val found = mutableListOf<View>()
+            fun walk(v: View) {
+                if (v.id == id && v.tag == tag) found += v
+                if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+            walk(content)
+            return found.single()
+        }
         val controller = Robolectric.buildActivity(ShellActivity::class.java).setup()
         try {
             val activity = controller.get()
             idle()
-            val editor = openEditor(activity)
-            val content = editor.findViewById<ViewGroup>(R.id.swSheetContent)
-            val tiles = mutableListOf<ToolTile>()
-            fun walk(v: View) {
-                if (v is ToolTile) tiles += v
-                if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
-            }
-            walk(content)
-            assertTrue("the editor renders tiles", tiles.size > 2)
             val before = Prefs.quickTools(app)
-            val first = tiles.first { it.tool?.id == before.first() }
-            val last = tiles.first { it.tool?.id == before.last() }
-            val firstInfo = tileInfo(first)
-            val lastInfo = tileInfo(last)
-            // Actions are advertised by id; boundary no-ops are not advertised at all.
-            assertTrue(
-                "first tile has no Move earlier at the boundary",
-                firstInfo.actionList.none { it.id == R.id.uxL1MoveEarlier }
-            )
-            assertTrue(
-                "last tile has no Move later at the boundary",
-                lastInfo.actionList.none { it.id == R.id.uxL1MoveLater }
-            )
-
-            val middle = tiles.first { it.tool?.id == before[1] }
-            middle.performAccessibilityAction(R.id.uxL1MoveEarlier, null)
+            val editor = openEditor(activity)
+            var content = editor.findViewById<ViewGroup>(R.id.swSheetContent)
+            // Boundary no-ops: first cannot move up, last cannot move down.
+            button(content, R.id.cbQuickUp, before.first()).performClick()
             idle()
-            assertEquals(before, Prefs.quickTools(app)) // draft only until Done
+            content = editor.findViewById<ViewGroup>(R.id.swSheetContent)
+            button(content, R.id.cbQuickDown, before.last()).performClick()
+            idle()
             editor.findViewById<View>(R.id.swSheetPrimary).performClick()
             idle()
-            assertEquals(before[1], Prefs.quickTools(app)[0])
+            assertEquals("boundary moves change nothing", before, Prefs.quickTools(app))
         } finally {
             controller.pause().stop().destroy()
+            Prefs.resetQuickTools(app)
+        }
+
+        val second = Robolectric.buildActivity(ShellActivity::class.java).setup()
+        try {
+            val activity = second.get()
+            idle()
+            val before = Prefs.quickTools(app)
+            val editor = openEditor(activity)
+            val content = editor.findViewById<ViewGroup>(R.id.swSheetContent)
+            // A real move: the third tool moves up one place, but only after Done.
+            button(content, R.id.cbQuickUp, before[2]).performClick()
+            idle()
+            assertEquals(before, Prefs.quickTools(app))
+            editor.findViewById<View>(R.id.swSheetPrimary).performClick()
+            idle()
+            assertEquals(before[2], Prefs.quickTools(app)[1])
+        } finally {
+            second.pause().stop().destroy()
             Prefs.resetQuickTools(app)
         }
     }

@@ -354,7 +354,11 @@ class ToolsHubScreen(
             val minimum = SwStyle.dp(context, 64f * maxOf(1f, resources.configuration.fontScale))
             // HorizontalScrollView gives its child UNSPECIFIED width; use its actual viewport.
             val available = if (singleRow) viewportWidth else MeasureSpec.getSize(widthMeasureSpec)
-            val fitting = maxOf(1, available / minimum)
+            // Five columns is the design ceiling at 100% (a wider phone must not squeeze
+            // "Watermark" into six 64dp slots and break it mid-word). Large system fonts
+            // still reduce the count through [minimum]; the cap only stops the 411dp phone
+            // from trading whole words for a sixth column.
+            val fitting = minOf(5, maxOf(1, available / minimum))
             columnWidth = maxOf(minimum, available / fitting)
             columnCount = if (singleRow) maxOf(1, childCount) else fitting
             val heights = mutableListOf<Int>()

@@ -35,7 +35,7 @@ class TilesFixUiTest {
             "merge", "split", "extract", "organize_pages", "insert_pages", "folders",
             "batch_rename", "batch_tools",
             "compress", "resize",
-            "pdf_to_images", "long_image", "to_word", "to_powerpoint", "to_excel", "to_text",
+            "pdf_to_images", "long_image", "to_word", "to_powerpoint", "to_excel",
             "zip", "searchable_pdf", "pdfa",
             "sign", "add_text", "draw", "highlight", "watermark", "page_numbers", "stamp", "redact",
             "protect", "unlock", "vault", "remove_metadata", "read_text"
@@ -57,9 +57,10 @@ class TilesFixUiTest {
 
     @Test
     fun `the derived counts match the shipped catalogue`() {
-        // Owner F6/F7/F20 removed six tiles from the 43-tool catalogue; FORM1 adds form_ready.
-        assertEquals(38, ToolRegistry.all.size)
-        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        // Owner F6/F7/F20 removed six tiles; FORM1 added form_ready; council lane N
+        // merged to_text into OCR, so one fewer tile ships.
+        assertEquals(37, ToolRegistry.all.size)
+        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals("one tile is still Coming soon", 1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         // PRO_PLAN line 10-11 (accepted): folder creation and move-to-folder are FREE;
         // only tags and the other Pro tools stay on sale.

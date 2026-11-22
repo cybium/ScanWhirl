@@ -25,7 +25,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 3,500+ Robolectric tests + lint + the merged-manifest privacy build exceed 20 minutes.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
