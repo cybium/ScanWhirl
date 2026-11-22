@@ -1478,12 +1478,12 @@ class ToolSetupActivity : BaseActivity() {
                 target = targetBytes
                 execute({
                     val out = if (targetBytes != null) {
-                        repo.compressScanToTarget(doc.id, targetBytes).id
+                        repo.compressScanToTargetForResult(doc.id, targetBytes)?.id
                     } else {
                         val (quality, maxDim) = compressLevel()
-                        repo.compressScan(doc.id, quality, maxDim).id
+                        repo.compressScanForResult(doc.id, quality, maxDim)?.id
                     }
-                    val ids = listOf(out)
+                    val ids = listOfNotNull(out)
                     // L3-02 P1: this block runs on Dispatchers.IO, so hashing here
                     // never blocks the main thread.
                     val identity = ToolResultActivity.captureOutputIdentityBlocking(
@@ -1491,6 +1491,11 @@ class ToolSetupActivity : BaseActivity() {
                     )
                     Pair(ids, identity)
                 }) { (ids, identity) ->
+                    if (ids.isEmpty()) {
+                        startActivity(ToolResultActivity.intentLastResult(this))
+                        finish()
+                        return@execute
+                    }
                     openDocs(ids, targetBytes = targetBytes,
                         receiptSourceId = doc.id, outputIdentity = identity)
                 }

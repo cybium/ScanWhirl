@@ -2,7 +2,10 @@ package com.scanwhirl.app.ui.kit
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -34,28 +37,34 @@ data class ComparePane(
     val emptyText: String? = null
 )
 
-/** The whole comparison. [outcome] is the sentence said before the Before | After control. */
+/** How much proof this result carries. NONE means no image at all (state-only tools). */
+enum class CompareMode { ZOOM_STACKED, AFTER_ONLY, NONE }
+
+/**
+ * The whole comparison. [outcome] is kept for compatibility/a11y; the visible hero lives in the
+ * result screen. [mode] decides whether we show a stacked zoom pair, one After page, or nothing.
+ */
 data class CompareModel(
     val outcome: String,
     val before: ComparePane,
     val after: ComparePane,
     val pageLabel: String? = null,
-    val showToggle: Boolean = true
+    val showToggle: Boolean = true,
+    val mode: CompareMode = CompareMode.ZOOM_STACKED
 )
 
 /**
- * Lane C: one Before | After surface for every result screen (council §6).
+ * Lane RS: the one proof surface on a tool result.
  *
- * - segmented control, default After, 48dp targets, one shared frame;
- * - the page/paper keeps its own white but the canvas behind it is [R.color.sw_cc_canvas]
- *   with a 1dp [R.color.sw_cc_page_edge] edge — never a white host;
- * - both page images are decoded bounded and OFF the main thread, then swapped in place;
- * - when the original (or the result) image is unavailable, the honest empty text is
- *   shown in that pane instead of a blank white rectangle;
- * - captions and tabs carry TalkBack labels and the caption is a polite live region.
+ * - Compress/Resize: Before ABOVE After, full width, the SAME top-left crop rectangle and the same
+ *   scale on both, so text stays legible in portrait and sharpness loss is visible (lead decision,
+ *   replacing the old segmented Before|After toggle).
+ * - Stamp/Sign/Watermark/Page numbers: one After page on the dark canvas, no Before.
+ * - Protect/Unlock/OCR/Clear metadata: no image at all.
  *
- * The draggable divider was considered and deferred (accessibility cost); the segmented
- * control gives the same before/after proof with two labeled 48dp targets.
+ * Every page is decoded bounded and OFF the main thread. Results are generation-guarded; both the
+ * decoded source pages and the crops this view owns are recycled on rebind and on detach. A
+ * locked/vaulted source is never passed here by the producer.
  */
 class CompareView @JvmOverloads constructor(
     context: Context,
@@ -64,19 +73,24 @@ class CompareView @JvmOverloads constructor(
 ) : LinearLayout(context, attrs, defStyleAttr) {
 
     private val outcomeView: TextView
-    private val beforeTab: TextView
-    private val afterTab: TextView
+    private val beforeLabel: TextView
+    private val afterLabel: TextView
     private val pageChip: TextView
-    private val frame: FrameLayout
-    private val pageFrame: FrameLayout
-    private val image: ImageView
+    private val beforeFrame: FrameLayout
+    private val afterFrame: FrameLayout
+    private val beforePageFrame: FrameLayout
+    private val afterPageFrame: FrameLayout
+    private val beforeImage: ImageView
+    private val afterImage: ImageView
     private val caption: TextView
     private val detail: TextView
+    private val zoomCaption: TextView
 
     private var model: CompareModel? = null
-    private var showingAfter = true
     private var beforeBitmap: Bitmap? = null
     private var afterBitmap: Bitmap? = null
+    private var beforeCrop: Rect? = null
+    private var afterCrop: Rect? = null
 
     /** The one in-flight decode; cancelled on a new bind and on detach. */
     private var decodeJob: Job? = null
@@ -85,9 +99,11 @@ class CompareView @JvmOverloads constructor(
 
     /** Test seam: called on the decode (IO) thread just before each bounded decode. */
     internal var decodeProbe: ((String) -> Unit)? = null
+    /** Test seam: called with the identical crop rectangle chosen for each pane. */
+    internal var cropProbe: ((Rect) -> Unit)? = null
     /** Test seam: called after both images (or honest empty states) are rendered. */
     internal var onDecodeComplete: (() -> Unit)? = null
-    /** Test seam: the bitmaps this view freed (after the ImageView was cleared). */
+    /** Test seam: the bitmaps this view freed (after the ImageViews were cleared). */
     internal var onBitmapsReleased: ((Bitmap?, Bitmap?) -> Unit)? = null
 
     init {
@@ -98,25 +114,36 @@ class CompareView @JvmOverloads constructor(
         )
         contentDescription = context.getString(R.string.cc_compare_label)
 
-        // The outcome sentence is the headline; the Before | After control sits below it.
+        // Kept as an a11y node only: the outcome sentence is the result screen's hero now.
         outcomeView = SwStyle.text(
-            context, 15f, ContextCompat.getColor(context, R.color.text_hologram_hi), bold = true
+            context, 13f, ContextCompat.getColor(context, R.color.text_hologram_mid), bold = true
         ).apply {
             id = R.id.ccOutcome
+            visibility = GONE
             maxLines = Int.MAX_VALUE
         }
         addView(outcomeView, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val tabs = LinearLayout(context).apply { orientation = HORIZONTAL }
-        beforeTab = newTab(R.string.cc_before, R.string.cc_show_before).apply { id = R.id.ccBeforeTab }
-        afterTab = newTab(R.string.cc_after, R.string.cc_show_after).apply { id = R.id.ccAfterTab }
-        val tabH = SwStyle.dp(context, 48f)
-        tabs.addView(beforeTab, LayoutParams(0, tabH, 1f))
-        tabs.addView(afterTab, LayoutParams(0, tabH, 1f))
-        addView(tabs, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        beforeLabel = newLabel(R.string.rs_before_size_label, R.string.cc_show_before).apply { id = R.id.ccBeforeTab }
+        addView(beforeLabel, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        beforeFrame = newCanvasFrame().apply { id = R.id.ccBeforeFrame }
+        beforePageFrame = newPageFrame()
+        val beforePair = newPage(beforeFrame, beforePageFrame, R.id.ccBeforeImage)
+        beforeImage = beforePair.second
+        addView(beforeFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(context, 132f)).apply { topMargin = SwStyle.dp(context, 4f) })
+
+        afterLabel = newLabel(R.string.rs_after_size_label, R.string.cc_show_after).apply { id = R.id.ccAfterTab }
+        addView(afterLabel, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 8f) })
+
+        afterFrame = newCanvasFrame().apply { id = R.id.ccPageFrame }
+        afterPageFrame = newPageFrame()
+        val afterPair = newPage(afterFrame, afterPageFrame, R.id.ccAfterImage)
+        afterImage = afterPair.second
+        addView(afterFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(context, 132f)).apply { topMargin = SwStyle.dp(context, 4f) })
 
         pageChip = SwStyle.text(
-            context, 12f, ContextCompat.getColor(context, R.color.sw_cc_boundary),
+            context, 14f, ContextCompat.getColor(context, R.color.sw_text_primary),
             bold = true, metadata = true
         ).apply {
             id = R.id.ccPageChip
@@ -125,81 +152,97 @@ class CompareView @JvmOverloads constructor(
         }
         addView(pageChip, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val inset = SwStyle.dp(context, 8f)
-        frame = FrameLayout(context).apply {
-            id = R.id.ccPageFrame
-            // The HOST is the dark canvas; the white lives only in the page below.
-            background = ColorDrawable(canvasColor())
-            setPadding(inset, inset, inset, inset)
-        }
-        pageFrame = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(ContextCompat.getColor(context, R.color.sw_cc_page))
-                cornerRadius = SwStyle.dp(context, 4f).toFloat()
-                setStroke(
-                    SwStyle.dp(context, 1f).coerceAtLeast(1),
-                    ContextCompat.getColor(context, R.color.sw_cc_page_edge)
-                )
-            }
-            clipToOutline = true
-        }
-        image = ImageView(context).apply {
-            id = R.id.ccPageImage
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-            contentDescription = context.getString(R.string.cc_compare_label)
-        }
-        pageFrame.addView(image, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        frame.addView(pageFrame, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        addView(
-            frame,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(context, 200f)).apply { topMargin = SwStyle.dp(context, 8f) }
-        )
-
         caption = SwStyle.text(
-            context, 14f, ContextCompat.getColor(context, R.color.text_hologram_hi), bold = true
+            context, 13f, ContextCompat.getColor(context, R.color.text_hologram_hi), bold = true
         ).apply {
             id = R.id.ccCaption
             maxLines = Int.MAX_VALUE
+            visibility = GONE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
-        addView(
-            caption,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 10f) }
-        )
+        addView(caption, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         detail = SwStyle.text(
-            context, 12f, ContextCompat.getColor(context, R.color.text_hologram_mid),
+            context, 14f, ContextCompat.getColor(context, R.color.sw_text_secondary),
             metadata = true
         ).apply {
             id = R.id.ccDetail
             maxLines = Int.MAX_VALUE
+            visibility = GONE
         }
-        addView(
-            detail,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 4f) }
-        )
+        addView(detail, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 2f) })
 
-        beforeTab.setOnClickListener { select(false) }
-        afterTab.setOnClickListener { select(true) }
-        select(true)
+        zoomCaption = SwStyle.text(
+            context, 14f, ContextCompat.getColor(context, R.color.sw_text_secondary), metadata = true
+        ).apply {
+            id = R.id.rsZoomCaption
+            text = context.getString(R.string.rs_zoom_caption)
+            gravity = Gravity.CENTER
+        }
+        addView(zoomCaption, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 6f) })
     }
 
     private fun canvasColor(): Int = ContextCompat.getColor(context, R.color.sw_cc_canvas)
 
-    private fun newTab(labelRes: Int, a11yRes: Int): TextView =
+    private fun newLabel(captionRes: Int, a11yRes: Int): TextView =
         SwStyle.asButton(
             SwStyle.text(
-                context, 13f, ContextCompat.getColor(context, R.color.text_hologram_hi),
+                context, 14f, ContextCompat.getColor(context, R.color.sw_text_primary),
                 bold = true, metadata = true
             ).apply {
-                text = context.getString(labelRes)
+                text = context.getString(captionRes)
                 contentDescription = context.getString(a11yRes)
-                gravity = Gravity.CENTER
                 minimumHeight = SwStyle.dp(context, 48f)
+                gravity = Gravity.CENTER_VERTICAL
             }
         )
+
+    private fun newCanvasFrame(): FrameLayout = FrameLayout(context).apply {
+        background = ColorDrawable(canvasColor())
+        setPadding(SwStyle.dp(context, 8f), SwStyle.dp(context, 8f), SwStyle.dp(context, 8f), SwStyle.dp(context, 8f))
+    }
+
+    private fun newPageFrame(): FrameLayout = FrameLayout(context).apply {
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(ContextCompat.getColor(context, R.color.sw_cc_page))
+            cornerRadius = SwStyle.dp(context, 4f).toFloat()
+            setStroke(
+                SwStyle.dp(context, 1f).coerceAtLeast(1),
+                ContextCompat.getColor(context, R.color.sw_cc_page_edge)
+            )
+        }
+        clipToOutline = true
+    }
+
+    private fun newPage(host: FrameLayout, page: FrameLayout, imageId: Int): Pair<FrameLayout, ImageView> {
+        val image = ImageView(context).apply {
+            id = imageId
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = context.getString(R.string.cc_compare_label)
+        }
+        page.addView(image, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        host.addView(page, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        return page to image
+    }
+
+    /**
+     * The same normalized top-left text-block region for both pages (40% of the width => ~2.5x
+     * zoom). Both panes use this exact rectangle and the same full-width display box.
+     */
+    internal fun zoomRect(width: Int, height: Int): Rect = Rect(
+        (width * 0.06f).toInt(),
+        (height * 0.08f).toInt(),
+        (width * 0.46f).toInt(),
+        (height * 0.42f).toInt()
+    )
+
+    internal fun zoomRects(): Pair<Rect?, Rect?> = beforeCrop to afterCrop
 
     /**
      * Bind new data and (when paths are present) decode both panes off the main thread.
@@ -208,52 +251,124 @@ class CompareView @JvmOverloads constructor(
     fun bind(
         model: CompareModel,
         scope: CoroutineScope,
-        mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+        mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
+        canDecode: (String) -> Boolean = { true }
     ) {
-        // A new result invalidates any decode still running and frees what we held before.
         decodeGeneration++
         decodeJob?.cancel()
         decodeJob = null
         releaseBitmaps()
+        beforeCrop = null
+        afterCrop = null
 
         this.model = model
         outcomeView.text = model.outcome
-        visibility = if (model.showToggle || model.outcome.isNotBlank()) VISIBLE else GONE
         pageChip.text = model.pageLabel
         pageChip.visibility = if (model.pageLabel.isNullOrBlank()) GONE else VISIBLE
-        beforeTab.visibility = if (model.showToggle) VISIBLE else GONE
-        afterTab.visibility = if (model.showToggle) VISIBLE else GONE
-        select(true)
+
+        when (model.mode) {
+            CompareMode.NONE -> {
+                visibility = GONE
+                onDecodeComplete?.invoke()
+                return
+            }
+            CompareMode.AFTER_ONLY -> {
+                visibility = VISIBLE
+                beforeLabel.visibility = GONE
+                beforeFrame.visibility = GONE
+                afterLabel.visibility = VISIBLE
+                afterFrame.visibility = VISIBLE
+                zoomCaption.visibility = GONE
+            }
+            CompareMode.ZOOM_STACKED -> {
+                visibility = VISIBLE
+                beforeLabel.visibility = VISIBLE
+                beforeFrame.visibility = VISIBLE
+                afterLabel.visibility = VISIBLE
+                afterFrame.visibility = VISIBLE
+                zoomCaption.visibility = VISIBLE
+            }
+        }
+
+        beforeLabel.text = if (model.mode == CompareMode.ZOOM_STACKED) {
+            context.getString(R.string.cc_before)
+        } else {
+            model.before.caption
+        }
+        afterLabel.text = if (model.mode == CompareMode.ZOOM_STACKED) {
+            context.getString(R.string.rs_after_label)
+        } else {
+            model.after.caption.ifBlank { context.getString(R.string.rs_after_label) }
+        }
+        beforeLabel.contentDescription = context.getString(
+            R.string.cc_caption_a11y, model.outcome, beforeLabel.text
+        )
+        afterLabel.contentDescription = context.getString(
+            R.string.cc_caption_a11y, model.outcome, afterLabel.text
+        )
 
         val beforePath = model.before.imagePath?.takeIf { it.isNotBlank() }
         val afterPath = model.after.imagePath?.takeIf { it.isNotBlank() }
+        // Missing-source facts are known now, not after asynchronous image decoding.
+        renderEmpty()
         if (beforePath == null && afterPath == null) {
             onDecodeComplete?.invoke()
             return
         }
         val generation = decodeGeneration
         decodeJob = scope.launch {
-            val before = decode(beforePath)
-            val after = decode(afterPath)
+            val before = decode(beforePath, canDecode)
+            val after = decode(afterPath, canDecode)
+            // Crop both with the same rule, off Main, then free the full decoded pages.
+            val bc = before?.let { zoomRect(it.width, it.height) }
+            val ac = after?.let {
+                if (model.mode == CompareMode.AFTER_ONLY) Rect(0, 0, it.width, it.height)
+                else zoomRect(it.width, it.height)
+            }
+            val beforeCropBitmap = if (before != null && bc != null) crop(before, bc) else null
+            val afterCropBitmap = if (after != null && ac != null) crop(after, ac) else null
+            before?.recycle()
+            if (after !== before) after?.recycle()
             withContext(mainDispatcher) {
                 if (generation != decodeGeneration) {
-                    // Rebound or detached while decoding: never display a stale page.
-                    recycleDecoded(before, after)
-                    onBitmapsReleased?.invoke(before, after)
+                    recycleDecoded(beforeCropBitmap, afterCropBitmap)
+                    onBitmapsReleased?.invoke(beforeCropBitmap, afterCropBitmap)
                     return@withContext
                 }
-                beforeBitmap = before
-                afterBitmap = after
+                beforeBitmap = beforeCropBitmap
+                afterBitmap = afterCropBitmap
+                beforeCrop = bc
+                afterCrop = ac
+                bc?.let { cropProbe?.invoke(it) }
+                ac?.let { cropProbe?.invoke(it) }
                 render()
                 onDecodeComplete?.invoke()
             }
         }
     }
 
-    /**
-     * Detach ends the surface's ownership of its decoded pages. Cancel first so an in-flight
-     * decode cannot publish a bitmap into a dead view, then clear and free what we hold.
-     */
+    private fun renderEmpty() {
+        val lines = mutableListOf<String>()
+        model?.let { m ->
+            if (m.mode == CompareMode.ZOOM_STACKED && m.before.imagePath == null) {
+                m.before.emptyText?.let { lines.add(it) }
+            }
+            if (m.after.imagePath == null) m.after.emptyText?.let { lines.add(it) }
+        }
+        detail.text = lines.joinToString("\n")
+        detail.visibility = if (lines.isEmpty()) GONE else VISIBLE
+    }
+
+    private fun crop(source: Bitmap, rect: Rect): Bitmap? = try {
+        val w = (rect.right - rect.left).coerceAtLeast(1)
+        val h = (rect.bottom - rect.top).coerceAtLeast(1)
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(source, rect, Rect(0, 0, w, h), Paint())
+        out
+    } catch (_: Exception) {
+        null
+    }
+
     public override fun onDetachedFromWindow() {
         decodeGeneration++
         decodeJob?.cancel()
@@ -262,9 +377,10 @@ class CompareView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
-    /** Detach the drawable BEFORE recycling, so no frame can draw a freed bitmap. */
+    /** Detach the drawables BEFORE recycling, so no frame can draw a freed bitmap. */
     private fun releaseBitmaps() {
-        image.setImageDrawable(null)
+        beforeImage.setImageDrawable(null)
+        afterImage.setImageDrawable(null)
         val before = beforeBitmap
         val after = afterBitmap
         beforeBitmap = null
@@ -274,76 +390,64 @@ class CompareView @JvmOverloads constructor(
         onBitmapsReleased?.invoke(before, after)
     }
 
-    /** Only bitmaps this view decoded are ever recycled; [image] is already cleared. */
     private fun recycleDecoded(before: Bitmap?, after: Bitmap?) {
         if (before != null && !before.isRecycled) before.recycle()
         if (after != null && !after.isRecycled && after !== before) after.recycle()
     }
 
-    private suspend fun decode(path: String?): Bitmap? = withContext(Dispatchers.IO) {
+    private suspend fun decode(path: String?, canDecode: (String) -> Boolean): Bitmap? = withContext(Dispatchers.IO) {
         if (path == null) return@withContext null
-        decodeProbe?.invoke(path)
         try {
+            if (!canDecode(path)) return@withContext null
+            decodeProbe?.invoke(path)
             val file = File(path)
             if (!file.isFile || file.length() == 0L) return@withContext null
-            // Bounded by header sample: the full encoded bytes are never held in memory.
             ImageTools.decodeSampledFile(file, 1200)
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun select(after: Boolean) {
-        showingAfter = after
-        beforeTab.isSelected = !after
-        afterTab.isSelected = after
-        render()
-    }
-
     private fun render() {
         val current = model ?: return
-        val pane = if (showingAfter) current.after else current.before
-        val bitmap = if (showingAfter) afterBitmap else beforeBitmap
+        beforeImage.visibility = GONE
+        afterImage.visibility = GONE
+        beforeImage.setImageDrawable(null)
+        afterImage.setImageDrawable(null)
 
-        caption.text = pane.caption
-        caption.contentDescription = context.getString(
-            R.string.cc_caption_a11y, current.outcome, pane.caption
-        )
-
-        val lines = mutableListOf<String>()
-        if (bitmap != null) {
-            image.visibility = VISIBLE
-            image.setImageBitmap(bitmap)
-            image.contentDescription = context.getString(
-                if (showingAfter) R.string.cc_after_image_a11y else R.string.cc_before_image_a11y,
-                pane.caption
+        beforeBitmap?.let {
+            beforeImage.visibility = VISIBLE
+            beforeImage.setImageBitmap(it)
+            beforeImage.contentDescription = context.getString(
+                R.string.cc_before_image_a11y, current.before.caption
             )
-            lines.addAll(pane.detail)
-        } else {
-            // No image: an honest line instead of a blank white rectangle.
-            image.visibility = GONE
-            image.setImageDrawable(null)
-            pane.emptyText?.let { lines.add(it) }
-            lines.addAll(pane.detail)
         }
-        detail.text = lines.joinToString("\n")
-        detail.visibility = if (lines.isEmpty()) GONE else VISIBLE
+        afterBitmap?.let {
+            afterImage.visibility = VISIBLE
+            afterImage.setImageBitmap(it)
+            afterImage.contentDescription = context.getString(
+                R.string.cc_after_image_a11y, current.after.caption
+            )
+        }
+        renderEmpty()
     }
 
     // ---- test seams -------------------------------------------------------
 
-    internal fun showBefore() = select(false)
-    internal fun showAfter() = select(true)
-    internal fun isShowingAfter(): Boolean = showingAfter
-    internal fun captionText(): String = caption.text.toString()
     internal fun outcomeText(): String = outcomeView.text.toString()
+    internal fun captionText(): String = afterLabel.text.toString()
+    internal fun beforeCaptionText(): String = beforeLabel.text.toString()
     internal fun emptyLabel(): TextView = detail
-    internal fun displayedBitmap(): Bitmap? = (image.drawable as? BitmapDrawable)?.bitmap
+    internal fun displayedBitmap(): Bitmap? = (afterImage.drawable as? BitmapDrawable)?.bitmap
     internal fun heldBitmaps(): Pair<Bitmap?, Bitmap?> = beforeBitmap to afterBitmap
     internal fun decodeGeneration(): Int = decodeGeneration
-    internal fun pageImageView(): ImageView = image
-    internal fun compareFrame(): FrameLayout = frame
-    internal fun pageFrameView(): FrameLayout = pageFrame
-    internal fun beforeButton(): TextView = beforeTab
-    internal fun afterButton(): TextView = afterTab
+    internal fun pageImageView(): ImageView = afterImage
+    internal fun compareFrame(): FrameLayout = afterFrame
+    internal fun pageFrameView(): FrameLayout = afterPageFrame
+    internal fun beforeButton(): TextView = beforeLabel
+    internal fun afterButton(): TextView = afterLabel
+    internal fun beforeImageView(): ImageView = beforeImage
+    internal fun isShowingAfter(): Boolean = true
+    internal fun showBefore() = Unit
+    internal fun showAfter() = Unit
 }

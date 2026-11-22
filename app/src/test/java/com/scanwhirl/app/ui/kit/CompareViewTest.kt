@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.kit
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.os.Looper
 import android.view.View
@@ -31,8 +32,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Lane C: the reusable Before | After surface. Tested first at 100% in EN and HI, then the
- * off-main bounded decode and the dark-canvas guard (council §4/§6).
+ * Lane RS: the proof surface is a STACKED zoom pair (Before above After, full width), one After
+ * page for mark tools, and no image at all for state-only tools. Off-main bounded decode and the
+ * generation-guarded recycle contract from lane C are unchanged.
  */
 abstract class CompareViewBase {
 
@@ -43,7 +45,8 @@ abstract class CompareViewBase {
         afterPath: String? = null,
         beforeCaption: String = "290 KB",
         afterCaption: String = "113 KB",
-        page: String? = null
+        page: String? = null,
+        mode: CompareMode = CompareMode.ZOOM_STACKED
     ) = CompareModel(
         outcome = "Compressed · 113 KB",
         before = ComparePane(
@@ -54,10 +57,10 @@ abstract class CompareViewBase {
             imagePath = afterPath, caption = afterCaption,
             emptyText = app.getString(R.string.cc_no_after_image)
         ),
-        pageLabel = page
+        pageLabel = page,
+        mode = mode
     )
 
-    /** Bind and wait for the off-main decode to be rendered (deterministic, no looper guessing). */
     protected fun bindAndWait(view: CompareView, m: CompareModel) {
         val done = CountDownLatch(1)
         view.onDecodeComplete = { done.countDown() }
@@ -78,53 +81,53 @@ abstract class CompareViewBase {
     }
 
     @Test
-    fun `default is After and the caption carries the after numbers`() {
+    fun `before and after are both visible as full width stacked labels`() {
         val view = CompareView(app)
         bindAndWait(view, model())
-        assertTrue("default pane is After", view.isShowingAfter())
-        assertEquals("113 KB", view.captionText())
+        assertEquals(View.VISIBLE, view.beforeButton().visibility)
+        assertEquals(View.VISIBLE, view.afterButton().visibility)
+        assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
+        assertEquals(app.getString(R.string.rs_after_label), view.captionText())
         assertEquals("Compressed · 113 KB", view.outcomeText())
-        assertTrue("After tab selected", view.afterButton().isSelected)
-        assertFalse("Before tab not selected", view.beforeButton().isSelected)
+        val zoom = view.findViewById<View>(R.id.rsZoomCaption)
+        assertEquals(View.VISIBLE, zoom.visibility)
+        assertEquals(app.getString(R.string.rs_zoom_caption),
+            (zoom as android.widget.TextView).text.toString())
     }
 
     @Test
-    fun `tapping Before swaps the caption and the selected tab`() {
+    fun `the two zoom panes use the same crop rectangle`() {
         val view = CompareView(app)
-        bindAndWait(view, model())
-        view.showBefore()
-        assertEquals("290 KB", view.captionText())
-        assertTrue("Before tab selected", view.beforeButton().isSelected)
-        assertFalse(view.afterButton().isSelected)
-        view.showAfter()
-        assertEquals("113 KB", view.captionText())
-        assertTrue(view.afterButton().isSelected)
+        val rects = mutableListOf<Rect>()
+        view.cropProbe = { rects.add(it) }
+        bindAndWait(view, model(
+            beforePath = jpeg("rb", 1600, 2100).path,
+            afterPath = jpeg("ra", 1600, 2100).path
+        ))
+        assertEquals("one crop per pane", 2, rects.size)
+        assertEquals("identical crop on both pages", rects[0], rects[1])
+        val width = rects[0].right - rects[0].left
+        assertTrue("about 2.5x zoom (40% of page width): ${rects[0]}",
+            width in 620..680)
     }
 
     @Test
     fun `a missing original is an honest text state, not a blank white page`() {
         val view = CompareView(app)
         bindAndWait(view, model(afterPath = jpeg("after", 100, 140).path))
-        view.showBefore()
         assertEquals(app.getString(R.string.cc_no_before_image), view.emptyLabel().text.toString())
-        assertEquals(View.GONE, view.pageImageView().visibility)
-        view.showAfter()
+        assertEquals(View.GONE, view.beforeImageView().visibility)
         assertEquals(View.VISIBLE, view.pageImageView().visibility)
     }
 
     @Test
-    fun `TalkBack names the caption and both 48dp tabs as buttons`() {
+    fun `TalkBack names both panes and keeps 48dp label targets`() {
         val view = CompareView(app)
         bindAndWait(view, model())
-        assertTrue(
-            "caption announces outcome and the current numbers",
-            view.findViewById<View>(R.id.ccCaption).contentDescription.toString()
-                .contains("Compressed · 113 KB") &&
-                view.findViewById<View>(R.id.ccCaption).contentDescription.toString()
-                    .contains("113 KB")
-        )
-        assertEquals(app.getString(R.string.cc_show_before), view.beforeButton().contentDescription)
-        assertEquals(app.getString(R.string.cc_show_after), view.afterButton().contentDescription)
+        assertTrue("before pane announces the outcome",
+            view.beforeButton().contentDescription.toString().contains("Compressed · 113 KB"))
+        assertTrue("after pane announces the outcome",
+            view.afterButton().contentDescription.toString().contains("Compressed · 113 KB"))
         val target = 48f * app.resources.displayMetrics.density - 1
         assertTrue("Before is a 48dp target", view.beforeButton().minimumHeight >= target)
         assertTrue("After is a 48dp target", view.afterButton().minimumHeight >= target)
@@ -190,7 +193,7 @@ abstract class CompareViewBase {
     }
 
     @Test(timeout = 30_000)
-    fun `no recycled bitmap is ever drawn after a rebind`() {
+    fun `no recycled bitmap is drawn after a rebind`() {
         val view = CompareView(app)
         bindAndWait(view, model(
             beforePath = jpeg("nr-b1", 200, 300).path,
@@ -206,36 +209,61 @@ abstract class CompareViewBase {
         assertNotNull("new page displayed", shownAfter)
         assertFalse("after pane is not a recycled bitmap", recycled.any { it === shownAfter })
         assertFalse("after pane bitmap is live", shownAfter!!.isRecycled)
-
-        view.showBefore()
-        val shownBefore = view.displayedBitmap()
+        val shownBefore = (view.beforeImageView().drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
         assertNotNull("before page displayed", shownBefore)
         assertFalse("before pane is not a recycled bitmap", recycled.any { it === shownBefore })
         assertFalse("before pane bitmap is live", shownBefore!!.isRecycled)
-
-        view.showAfter()
-        val reshownAfter = view.displayedBitmap()
-        assertFalse("after pane still live after toggling", reshownAfter!!.isRecycled)
     }
 
     @Test
-    fun `the compare controls stay usable at 130 and 200 percent font`() {
+    fun `the stacked controls stay usable at 130 and 200 percent font`() {
         listOf(1.3f, 2.0f).forEach { scale ->
             RuntimeEnvironment.setFontScale(scale)
             try {
                 val view = CompareView(app)
                 bindAndWait(view, model())
-                assertEquals(app.getString(R.string.cc_before), view.beforeButton().text.toString())
-                assertEquals(app.getString(R.string.cc_after), view.afterButton().text.toString())
+                assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
+                assertEquals(app.getString(R.string.rs_after_label), view.captionText())
                 assertTrue("48dp targets survive $scale", view.beforeButton().minimumHeight >=
                     48f * app.resources.displayMetrics.density - 1)
-                assertTrue("outcome still visible at $scale", view.outcomeText().isNotBlank())
-                view.showBefore()
-                assertEquals("290 KB", view.captionText())
+                assertTrue("outcome still present at $scale", view.outcomeText().isNotBlank())
             } finally {
                 RuntimeEnvironment.setFontScale(1.0f)
             }
         }
+    }
+
+    @Test(timeout = 30_000)
+    fun `mark preview includes the full page and bottom right mark`() {
+        val bmp = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.WHITE)
+        for (y in 270 until 300) for (x in 170 until 200) bmp.setPixel(x, y, Color.BLACK)
+        val file = File(app.cacheDir, "rs_mark.jpg")
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+        bmp.recycle()
+        val view = CompareView(app)
+        try {
+            bindAndWait(view, model(afterPath = file.path, mode = CompareMode.AFTER_ONLY))
+            assertEquals(Rect(0, 0, 200, 300), view.zoomRects().second)
+            val shown = requireNotNull(view.displayedBitmap())
+            assertTrue(Color.red(shown.getPixel(190, 290)) < 30)
+        } finally { view.onDetachedFromWindow() }
+    }
+
+    @Test(timeout = 30_000)
+    fun `protection is checked immediately before each decode`() {
+        val file = jpeg("denied", 200, 300)
+        val view = CompareView(app)
+        val done = CountDownLatch(1)
+        var decoded = 0
+        view.decodeProbe = { decoded++ }
+        view.onDecodeComplete = { done.countDown() }
+        view.bind(model(afterPath = file.path),
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            mainDispatcher = Dispatchers.Unconfined, canDecode = { false })
+        assertTrue(done.await(20, TimeUnit.SECONDS))
+        assertEquals(0, decoded)
+        assertNull(view.displayedBitmap())
     }
 
     @Test(timeout = 30_000)
@@ -284,7 +312,7 @@ class CompareViewHiTest : CompareViewBase() {
         assertEquals("मूल पन्ना उपलब्ध नहीं है।", app.getString(R.string.cc_no_before_image))
         val view = CompareView(app)
         bindAndWait(view, model())
-        assertEquals("बाद में", view.afterButton().text.toString())
-        assertEquals("पहले", view.beforeButton().text.toString())
+        assertEquals("पहले", view.beforeCaptionText())
+        assertEquals("बाद में", view.captionText())
     }
 }

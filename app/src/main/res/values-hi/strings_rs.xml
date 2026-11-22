@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane rs: Hindi parity for the compact result screen. Glossary: फ़ाइल, प्रति, पन्ना,
+     मूल फ़ाइल, छोटा करना, तस्वीर; no loanwords, full stop at sentence ends. -->
+<resources>
+    <string name="rs_size_hero">%1$s → %2$s</string>
+    <string name="rs_chip_percent"> %1$d%% छोटी</string>
+    <string name="rs_chip_ratio"> %1$d गुना छोटी</string>
+
+    <string name="rs_saved_prefix">“</string>
+    <string name="rs_saved_suffix_kept">” सहेजी गई · मूल फ़ाइल रखी गई</string>
+    <string name="rs_saved_suffix_no_source">” सहेजी गई</string>
+    <string name="rs_saved_suffix_missing">” सहेजी गई · मूल फ़ाइल नहीं मिली</string>
+    <string name="rs_saved_line_a11y">%1$s के रूप में सहेजी गई। खोलने के लिए दबाएँ।</string>
+
+    <string name="rs_hero_a11y_size">%1$s से %2$s तक छोटा किया गया, %3$s</string>
+    <string name="rs_reduction_a11y_percent">%1$d प्रतिशत छोटी</string>
+    <string name="rs_reduction_a11y_ratio">%1$d गुना छोटी</string>
+
+    <string name="rs_already_compact_title">पहले ही छोटी है</string>
+    <string name="rs_already_compact_msg">छोटी प्रति नहीं बनी। मूल फ़ाइल वैसी ही है।</string>
+    <string name="rs_try_strong">और छोटा करें</string>
+
+    <string name="rs_zoom_caption">अक्षरों की स्पष्टता जाँचने के लिए ज़ूम</string>
+    <string name="rs_before_size_label">पहले · %1$s</string>
+    <string name="rs_after_size_label">बाद में · %1$s</string>
+    <string name="rs_after_label">बाद में</string>
+
+    <string name="rs_more">और</string>
+
+    <string name="rs_delta_larger"> %1$s ज़्यादा</string>
+    <string name="rs_delta_smaller"> %1$s कम</string>
+    <string name="rs_saved_documents">Documents में सहेजा गया</string>
+    <string name="rs_save_another_copy">एक और प्रति सहेजें</string>
+    <string name="rs_remove_copy_note">आपकी मूल फ़ाइल रखी गई है।</string>
+    <string name="rs_not_smaller_title">फ़ाइल छोटी नहीं कर सके</string>
+
+    <string name="rs_under_limit"> %1$s से कम</string>
+    <string name="rs_over_limit"> %1$s से ज़्यादा</string>
+    <string name="rs_at_limit"> %1$s पर</string>
+    <string name="rs_pixels_ok"> %1$d × %2$d पिक्सेल</string>
+    <string name="rs_dpi_ok"> %1$d DPI</string>
+    <string name="rs_size_failure"> %1$s · %2$s चाहिए</string>
+    <string name="rs_try_larger">बड़ा आकार आज़माएँ</string>
+    <string name="rs_target_missed">%1$s तक नहीं पहुँच सके</string>
+    <string name="rs_floor_miss">%1$s की सीमा तक नहीं पहुँचे। सबसे छोटी प्रति: %2$s।</string>
+    <string name="rs_where_library">कागज़ात में सहेजी गई</string>
+    <string name="rs_where_documents">Documents/ScanWhirl में सहेजी गई</string>
+    <string name="rs_where_documents_existing">Documents/ScanWhirl में पहले से है</string>
+    <string name="rs_where_chosen">चुनी जगह पर सहेजी गई</string>
+    <string name="rs_details_title">विवरण</string>
+    <string name="rs_unsaved_output">फ़ाइल रखने के लिए प्रति सहेजें</string>
+    <string name="rs_state_only">झलक उपलब्ध नहीं है</string>
+    <string name="rs_exact_bytes">%1$d बाइट</string>
+
+    <plurals name="rs_fact_pages">
+        <item quantity="one">%1$d पन्ना</item>
+        <item quantity="other">%1$d पन्ने</item>
+    </plurals>
+    <plurals name="rs_fact_pages_added">
+        <item quantity="one">%1$d पन्ना जोड़ा गया</item>
+        <item quantity="other">%1$d पन्ने जोड़े गए</item>
+    </plurals>
+    <plurals name="rs_fact_text_pages">
+        <item quantity="one">%1$d पन्ने में लिखा मिला</item>
+        <item quantity="other">%1$d पन्नों में लिखा मिला</item>
+    </plurals>
+</resources>

@@ -38,7 +38,7 @@ class CompressTargetStreamingTest {
         )
         assertTrue(
             "H3-2: a saved scan's target size goes through the streaming repository call",
-            flow.contains("repo.compressScanToTarget(")
+            flow.contains("repo.compressScanToTargetForResult(")
         )
         assertTrue(
             "H3-2: a picked PDF's target size streams into staging through the repository",

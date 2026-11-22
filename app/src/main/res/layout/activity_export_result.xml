@@ -5,8 +5,6 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- test25 Phase 5D: cyan hairline over the existing sf_appbar (foreground
-         keeps the current background). -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -26,48 +24,75 @@
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginBottom="8dp"
         android:layout_weight="1"
         android:fillViewport="true">
 
         <LinearLayout
+            android:id="@+id/rsExportColumn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp"
-            android:paddingBottom="24dp">
+            android:paddingBottom="20dp">
 
-            <com.google.android.material.card.MaterialCardView
+            <!-- One hero row: the measured size line and one reduction chip. -->
+            <LinearLayout
+                android:id="@+id/rsExportHeroBlock"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardCornerRadius="14dp"
-                app:cardElevation="1dp">
+                android:orientation="vertical">
 
-                <!-- Kept for existing callers/tests; the real comparison is ccCompare below. -->
-                <ImageView
-                    android:id="@+id/resultPreview"
+                <TextView
+                    android:id="@+id/resultStats"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:adjustViewBounds="true"
-                    android:background="@null"
-                    android:contentDescription="@null"
-                    android:maxHeight="420dp"
-                    android:scaleType="fitCenter"
+                    android:textColor="@color/sw_text_primary"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/rsChipExport"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_rs_chip"
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:textColor="@color/rv_accent"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
                     android:visibility="gone" />
+            </LinearLayout>
 
-                <com.scanwhirl.app.ui.kit.CompareView
-                    android:id="@+id/ccCompare"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="220dp" />
-            </com.google.android.material.card.MaterialCardView>
-
+            <!-- One receipt row. -->
             <TextView
-                android:id="@+id/resultStats"
+                android:id="@+id/rsSavedExport"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
+                android:layout_marginTop="8dp"
+                android:textColor="@color/sw_text_secondary"
+                android:textSize="14sp" />
+
+            <!-- Kept for existing callers/tests; never a white host. -->
+            <ImageView
+                android:id="@+id/resultPreview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:background="@null"
+                android:contentDescription="@null"
+                android:maxHeight="420dp"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
+
+            <com.scanwhirl.app.ui.kit.CompareView
+                android:id="@+id/ccCompare"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="220dp" />
 
             <TextView
                 android:id="@+id/resultWarning"
@@ -77,40 +102,58 @@
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?attr/colorError"
                 android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/rsExportMorePanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveResult"
+                    style="@style/Widget.ScanWhirl.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/result_save_documents"
+                    app:icon="@drawable/ic_download" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
-    <!-- test25 Phase 5D: inset floating glass dock.
-         F1-FIT (atlas 2026-11-20): at 200 % text the CTA broke into
-         "Save to / Downlo / ads" because both buttons shared one row. The row
-         is a FlowRowLayout: side by side while both labels fit, otherwise one
-         full-width action per row. The scroll above it keeps 24 dp of bottom
-         padding so no line ends flush against this fixed bar. -->
-    <com.scanwhirl.app.ui.FlowRowLayout
+    <!-- Open / Share / More are pinned; all other content scrolls above them. -->
+    <LinearLayout
         android:id="@+id/exportDock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="8dp"
+        android:layout_marginBottom="8dp"
         android:background="@drawable/bg_dock_glass"
+        android:orientation="vertical"
         android:padding="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenResult"
+            style="@style/Widget.ScanWhirl.Button.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/tools_result_open"
+            app:icon="@drawable/ic_sym_folder_open" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnShareResult"
             style="@style/Widget.ScanWhirl.Button.Secondary"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="4dp"
-            android:layout_marginVertical="2dp"
             android:text="@string/result_share"
             app:icon="@drawable/ic_share" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveResult"
-            android:layout_width="wrap_content"
+            android:id="@+id/btnMoreResult"
+            style="@style/Widget.ScanWhirl.Button.Secondary"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="4dp"
-            android:layout_marginVertical="2dp"
-            android:text="@string/result_save_downloads"
-            app:icon="@drawable/ic_download" />
-    </com.scanwhirl.app.ui.FlowRowLayout>
+            android:text="@string/rs_more" />
+    </LinearLayout>
 </LinearLayout>

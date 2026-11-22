@@ -120,22 +120,24 @@ abstract class U4CopyIconsBase {
                 View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY))
             root.layout(0, 0, root.measuredWidth, root.measuredHeight)
             assertEquals(2, name.maxLines)
-            assertFalse("receipt must not repeat output name", summary.text.contains("Fictional receipt"))
-            assertTrue(summary.text.contains(string("u4_where_library")))
-            val spans = (summary.text as? Spanned)?.getSpans(0, summary.text.length, RelativeSizeSpan::class.java)
-            assertTrue("measured first line must be a visual headline", spans?.any { it.sizeChange > 1.5f } == true)
-            assertTrue("measured result precedes name", summary.top < name.top)
-            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.toolResultAlsoSave).visibility)
+            assertFalse("hero must not repeat output name", summary.text.contains("Fictional receipt"))
+            assertTrue("one saved receipt line: ${name.text}", name.text.toString().contains("Fictional receipt"))
+            assertTrue("the hero is a visual headline", summary.textSize >= 20f)
+            assertTrue("measured result precedes receipt", summary.top < name.top)
+            val also = activity.findViewById<View>(R.id.toolResultAlsoSave)
+            assertNotNull("the save offer exists in the More panel", also)
+            activity.findViewById<View>(R.id.toolResultMore).performClick()
+            assertEquals(View.VISIBLE, also.visibility)
         } }
         val file = File(app.cacheDir, "fictional-output.docx").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "to_word", files = listOf(file))
         ).use { scenario -> scenario.onActivity { activity ->
-            assertEquals("single file is named in its type card only", View.GONE,
-                activity.findViewById<View>(R.id.toolResultName).visibility)
+            assertTrue("single file is named in its type card",
+                activity.findViewById<View>(R.id.toolResultFileName).visibility == View.VISIBLE)
             assertEquals(file.name, activity.findViewById<TextView>(R.id.toolResultFileName).text.toString())
-            assertTrue("export location is still honest",
-                activity.findViewById<TextView>(R.id.toolResultSummary).text.contains(activity.getString(R.string.w3_where_app_output)))
+            assertTrue("export file is named in the one receipt line",
+                activity.findViewById<TextView>(R.id.toolResultName).text.toString().contains(file.name))
         } }
     }
 
@@ -150,6 +152,7 @@ abstract class U4CopyIconsBase {
         ).use { scenario -> scenario.onActivity { activity ->
             val root = activity.findViewById<ViewGroup>(android.R.id.content)
             val density = activity.resources.displayMetrics.density
+            activity.findViewById<View>(R.id.toolResultMore).performClick()
             root.measure(View.MeasureSpec.makeMeasureSpec((320 * density).toInt(), View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec((640 * density).toInt(), View.MeasureSpec.EXACTLY))
             root.layout(0, 0, root.measuredWidth, root.measuredHeight)

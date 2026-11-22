@@ -184,7 +184,7 @@
     <!-- review --> <string name="compress_est_item">%1$s · लगभग %2$s</string>
     <string name="compress_estimating">आकार का अनुमान लगाया जा रहा है…</string>
     <string name="compress_failed">फ़ाइल छोटी नहीं की जा सकी: %1$s</string>
-    <!-- review --> <string name="compress_grew_warning">नई प्रति मूल से बड़ी है। मूल को रखें।</string>
+    <string name="compress_grew_warning">छोटी प्रति नहीं बनी। मूल फ़ाइल वैसी ही है।</string>
     <string name="compress_level_high">छोटा</string>
     <string name="compress_level_low">सबसे साफ़</string>
     <string name="compress_level_medium">बीच का</string>
@@ -206,7 +206,7 @@
     <string name="compress_target_required">अधिकतम आकार लिखें</string>
     <string name="compress_action">छोटा करें</string>
     <string name="compress_result_header">छोटा किया गया</string>
-    <string name="compress_result_size">फ़ाइल अब %1$s</string>
+    <string name="compress_result_size">%1$s</string>
     <string name="compress_result_under_limit">%1$s · आपकी %2$s सीमा के भीतर</string>
     <string name="compress_result_over_limit">%1$s · आपकी %2$s सीमा से ऊपर</string>
     <string name="compress_result_size_unknown">आकार मापा नहीं जा सका</string>
@@ -355,7 +355,7 @@
     <string name="resize_borders_helper">सफ़ेद पट्टियाँ जुड़ेंगी; तस्वीर नहीं खींची जाएगी। पिक्सेल %1$d × %2$d रहेंगे।</string>
     <string name="resize_minmax">न्यूनतम और अधिकतम KB</string>
     <string name="resize_target_missed">पिक्सेल %1$d × %2$d वैसे ही रखे गए, पर यह आकार %3$s तक नहीं पहुँच सका।</string>
-    <string name="result_before_after">पहले %1$s  →  अब %2$s</string>
+    <string name="result_before_after">%1$s → %2$s</string>
     <string name="result_dimensions">%1$d × %2$d px</string>
     <string name="result_save_documents">Documents में सहेजें</string>
     <string name="result_save_downloads">Downloads में सहेजें</string>

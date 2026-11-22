@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- COPY_DIET §1: semantic text roles. Legacy names stay for other callers. -->
+<resources>
+    <color name="sw_text_primary">#FFFFFF</color>
+    <color name="sw_text_secondary">#B3BCC2</color>
+    <color name="sw_text_tertiary">#8D979E</color>
+</resources>

@@ -2,7 +2,7 @@
 <!-- V2T lane strings: tool result continuity and quick targets. Lane-prefixed keys only. -->
 <resources>
     <!-- T1: durable, honest output receipt. -->
-    <string name="v2t_new_copy_original_kept">New copy; original kept.</string>
+    <string name="v2t_new_copy_original_kept">Original kept</string>
     <string name="v2t_original_missing">Original is no longer in the library.</string>
     <string name="v2t_merge_failed">Could not merge these PDFs. Choose different files.</string>
     <string name="v2t_status_label">Result status</string>
@@ -13,6 +13,6 @@
     <string name="v2t_size_50">50 KB</string>
     <string name="v2t_size_100">100 KB</string>
     <string name="v2t_size_200">200 KB</string>
-    <string name="v2t_compress_this_copy">Compress this copy</string>
-    <string name="v2t_protect_this_copy">Protect this copy</string>
+    <string name="v2t_compress_this_copy">Compress</string>
+    <string name="v2t_protect_this_copy">Protect</string>
 </resources>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane rs: the compact, honest result screen. Every visible line has EN/HI parity. -->
+<resources>
+    <!-- The one hero line for a size tool. -->
+    <string name="rs_size_hero">%1$s → %2$s</string>
+    <string name="rs_chip_percent"> %1$d%% smaller</string>
+    <string name="rs_chip_ratio"> %1$d× smaller</string>
+
+    <!-- The one receipt line: a tappable name between a prefix and a suffix. -->
+    <string name="rs_saved_prefix">Saved as “</string>
+    <string name="rs_saved_suffix_kept">” · original kept</string>
+    <string name="rs_saved_suffix_no_source">”</string>
+    <string name="rs_saved_suffix_missing">” · original not found</string>
+    <string name="rs_saved_line_a11y">Saved as %1$s. Tap to open it.</string>
+
+    <!-- TalkBack reads the hero as one sentence. -->
+    <string name="rs_hero_a11y_size">Compressed from %1$s to %2$s, %3$s</string>
+    <string name="rs_reduction_a11y_percent">%1$d percent smaller</string>
+    <string name="rs_reduction_a11y_ratio">%1$d times smaller</string>
+
+    <!-- A size tool that did not make the file smaller. -->
+    <string name="rs_already_compact_title">Already compact</string>
+    <string name="rs_already_compact_msg">No smaller copy made. Original kept.</string>
+    <string name="rs_try_strong">Try Strong</string>
+
+    <!-- The comparison zoom. -->
+    <string name="rs_zoom_caption">Zoomed to check sharpness</string>
+    <string name="rs_before_size_label">Before · %1$s</string>
+    <string name="rs_after_size_label">After · %1$s</string>
+    <string name="rs_after_label">After</string>
+
+    <!-- Pinned bottom actions. -->
+    <string name="rs_more">More</string>
+
+    <!-- Lead additions: rounding honesty, durable save state, explicit removal, outcome class. -->
+    <string name="rs_delta_larger"> %1$s larger</string>
+    <string name="rs_delta_smaller"> %1$s smaller</string>
+    <string name="rs_saved_documents">Saved to Documents</string>
+    <string name="rs_save_another_copy">Save another copy</string>
+    <string name="rs_remove_copy_note">Your original is kept.</string>
+    <string name="rs_not_smaller_title">Could not make it smaller</string>
+
+    <!-- COPY_DIET §2 Results rows: exact replacement copy and one-argument limit chips. -->
+    <string name="rs_under_limit"> Under %1$s</string>
+    <string name="rs_over_limit"> Above %1$s</string>
+    <string name="rs_at_limit"> At %1$s</string>
+    <string name="rs_pixels_ok"> %1$d × %2$d px</string>
+    <string name="rs_dpi_ok"> %1$d DPI</string>
+    <string name="rs_size_failure"> %1$s · needs %2$s</string>
+    <string name="rs_try_larger">Try larger size</string>
+    <string name="rs_target_missed">Could not reach %1$s</string>
+    <string name="rs_floor_miss">Limit %1$s not reached. Smallest copy: %2$s.</string>
+    <string name="rs_where_library">Saved in Library</string>
+    <string name="rs_where_documents">Saved to Documents/ScanWhirl</string>
+    <string name="rs_where_documents_existing">Already in Documents/ScanWhirl</string>
+    <string name="rs_where_chosen">Saved to chosen location</string>
+    <string name="rs_details_title">Details</string>
+    <string name="rs_unsaved_output">Save a copy to keep this file</string>
+    <string name="rs_state_only">Preview unavailable</string>
+    <string name="rs_exact_bytes">%1$d bytes</string>
+
+    <!-- One measured fact for tools with no size change. -->
+    <plurals name="rs_fact_pages">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <plurals name="rs_fact_pages_added">
+        <item quantity="one">%1$d page added</item>
+        <item quantity="other">%1$d pages added</item>
+    </plurals>
+    <plurals name="rs_fact_text_pages">
+        <item quantity="one">Text found on %1$d page</item>
+        <item quantity="other">Text found on %1$d pages</item>
+    </plurals>
+</resources>

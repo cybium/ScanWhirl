@@ -182,7 +182,7 @@
     <string name="tools_result_type_docx">DOCX</string>
     <string name="tools_result_type_xlsx">XLSX</string>
     <string name="tools_result_type_pptx">PPTX</string>
-    <string name="tools_result_pptx_note">स्लाइड पर पन्ने की तस्वीर है। पहचाना गया लिखा हुआ बोलते समय की टिप्पणियों में है।</string>
+    <string name="tools_result_pptx_note">तस्वीर वाली स्लाइड · लिखावट टिप्पणियों में</string>
     <string name="tools_result_type_zip">ZIP</string>
     <string name="tools_result_type_pdf">PDF</string>
     <plurals name="tools_result_sheets">

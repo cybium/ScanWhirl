@@ -544,7 +544,12 @@ class CompressFlow(
         activity.lifecycleScope.launch {
             try {
                 val before = if (doc.pdfFile.exists()) doc.pdfFile.length() else 0L
-                val out = repo.compressScan(doc.id, level.quality, level.maxDim)
+                val out = repo.compressScanForResult(doc.id, level.quality, level.maxDim)
+                if (out == null) {
+                    activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                        beforeBytes = before, receiptSourceId = doc.id, outcomeClass = "NOT_SMALLER"))
+                    return@launch
+                }
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true,
@@ -578,9 +583,15 @@ class CompressFlow(
             try {
                 val before = CompressIdentity.sizeOf(doc)
                 // F11: streaming, one page at a time. F11 (H3-5): recognised text is carried over.
-                val out = repo.compressScanToTarget(doc.id, target, onPage = { done, total ->
+                val out = repo.compressScanToTargetForResult(doc.id, target, onPage = { done, total ->
                     activity.runOnUiThread { progress.setProgress(done, total) }
                 })
+                if (out == null) {
+                    activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                        targetBytes = target, beforeBytes = before, receiptSourceId = doc.id,
+                        outcomeClass = "NOT_SMALLER"))
+                    return@launch
+                }
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true,
                     receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
@@ -742,6 +753,7 @@ class CompressFlow(
                 val out = repo.importPdfAsScanSelected(
                     uri, name, level.dpi, level.maxDim ?: 3000, level.quality,
                     indices = indices,
+                    rejectNotSmallerThan = before,
                     onPage = { done, total ->
                         activity.runOnUiThread {
                             sheet?.setMessage(
@@ -763,6 +775,12 @@ class CompressFlow(
                         activity, activity.getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
                     ).show()
                 }
+            } catch (e: ScanRepository.NotSmaller) {
+                // Rejected inside staging: nothing was published; the durable receipt is saved.
+                sheet?.dismiss()
+                activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                    targetBytes = e.target, beforeBytes = e.before.takeIf { it > 0 },
+                    outcomeClass = "NOT_SMALLER"))
             } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(
@@ -792,6 +810,7 @@ class CompressFlow(
                 // from disk; the old code collected every rendered JPEG in memory first.
                 val out = repo.importPdfToTarget(
                     uri, baseName, indices, target,
+                    rejectNotSmallerThan = before,
                     onPage = { done, total ->
                         activity.runOnUiThread {
                             sheet?.setMessage(
@@ -815,6 +834,12 @@ class CompressFlow(
                         activity, activity.getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
                     ).show()
                 }
+            } catch (e: ScanRepository.NotSmaller) {
+                // Rejected inside staging: nothing was published; the durable receipt is saved.
+                sheet?.dismiss()
+                activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                    targetBytes = e.target, beforeBytes = e.before.takeIf { it > 0 },
+                    outcomeClass = "NOT_SMALLER"))
             } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(

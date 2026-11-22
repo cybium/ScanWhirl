@@ -19,6 +19,7 @@ import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.util.StatusLine
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -110,21 +111,19 @@ class CompressResultFlowTest {
                     activity.findViewById<View>(R.id.toolResultSave)
                 )
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                val beforeLine = app.getString(
-                    R.string.compress_result_before,
-                    StatusLine.formatBytes(source.pdf.size.toLong())
-                )
-                assertTrue(
-                    "B2-M2/B3: the before size must survive as its own line: '$summary'",
-                    summary.contains(beforeLine)
-                )
                 assertEquals(
-                    "B3: the result leads with the measured size",
+                    "RS: the one hero line is before → after",
                     app.getString(
-                        R.string.compress_result_size,
+                        R.string.rs_size_hero,
+                        StatusLine.formatBytes(source.pdf.size.toLong()),
                         StatusLine.formatBytes(copy.pdfFile.length())
                     ),
-                    summary.substringBefore("\n")
+                    summary
+                )
+                assertTrue(
+                    "RS: the one receipt line names the saved copy",
+                    activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+                        .contains(copy.name)
                 )
             }
         }
@@ -208,14 +207,8 @@ class CompressResultFlowTest {
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
                 val bytes = requireNotNull(repo.getDocument(ids.single())).pdfFile.length()
                 assertTrue(
-                    "B2-M2/B3: the honest target-miss line must appear: '$summary'",
-                    summary.contains(
-                        app.getString(
-                            R.string.compress_result_over_limit,
-                            StatusLine.formatBytes(bytes),
-                            "1 KB"
-                        )
-                    )
+                    "RS: the one hero line contains the measured size: $summary",
+                    summary.contains(StatusLine.formatBytes(bytes))
                 )
                 assertNotNull(
                     "the same result still offers Also save in Documents",
@@ -230,11 +223,11 @@ class CompressResultFlowTest {
                 }
                 walk(activity.window!!.decorView)
                 assertTrue(
-                    "CP1: the header of a real target miss says the size was not reached: $texts",
+                    "RS: a real target miss is the title: $texts",
                     texts.contains(app.getString(R.string.cp1_compress_header_missed))
                 )
-                assertTrue(
-                    "CP1: and the smallest readable copy is named: '$summary'",
+                assertFalse(
+                    "RS: no stacked note sentence above the visual",
                     summary.contains(app.getString(R.string.cp1_compress_floor_miss, "1 KB", StatusLine.formatBytes(bytes)))
                 )
             }

@@ -72,7 +72,7 @@ class O1OfficeResultNoteTest {
         launch(deck) { activity ->
             assertTrue(
                 "the result must still name the speaker notes: '${noteOf(activity)}'",
-                waitUntil { noteOf(activity).contains("speaker notes", ignoreCase = true) }
+                waitUntil { noteOf(activity).contains("notes", ignoreCase = true) }
             )
         }
     }

@@ -83,41 +83,50 @@ abstract class CompressCp1HonestyBase {
             scenario.onActivity { activity ->
                 idle()
                 val shown = texts(activity.window!!.decorView)
-                assertTrue("honest miss header: $shown", shown.contains(app.getString(R.string.cp1_compress_header_missed)))
-                assertFalse("never titled Compressed: $shown", shown.contains(app.getString(R.string.compress_result_header)))
+                assertTrue("honest miss title: $shown", shown.contains(app.getString(R.string.cp1_compress_header_missed)))
+                assertFalse("never titled with a tool name sentence: $shown",
+                    shown.contains(app.getString(R.string.compress_result_header)))
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                assertTrue("the readable floor miss is said out loud: $summary", summary.contains(note))
+                assertFalse("no stacked note sentences above the visual: $summary", summary.contains(note))
                 assertNotNullAlsoSave(activity)
             }
         }
     }
 
-    @Test
-    fun `a copy that grew is titled Larger than the original even under the limit`() {
+    @Test(timeout = 30_000)
+    fun `a copy that grew is discarded and reopened as Couldn't make it smaller`() {
         val id = docId()
         val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
-        val warning = app.getString(R.string.compress_grew_warning)
-        ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(
-                app, "compress", docIds = listOf(id),
-                targetBytes = bytes + 100_000, beforeBytes = 1L,
-                note = warning, compressGrew = true
-            )
-        ).use { scenario ->
+        val intent = ToolResultActivity.intent(
+            app, "compress", docIds = listOf(id),
+            targetBytes = bytes + 100_000, beforeBytes = 1L,
+            note = app.getString(R.string.compress_grew_warning), compressGrew = true,
+            outputIdentity = ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+        )
+        ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 val shown = texts(activity.window!!.decorView)
-                assertTrue("honest grown header: $shown", shown.contains(app.getString(R.string.cp1_compress_header_grew)))
-                assertFalse("never titled Compressed: $shown", shown.contains(app.getString(R.string.compress_result_header)))
-                val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                val targetShown = com.scanwhirl.app.util.StatusLine.formatBytes(bytes + 100_000)
-                val underTail = app.getString(
-                    R.string.compress_result_under_limit, "", targetShown
-                ).substringAfter("· ")
-                assertTrue("the under-limit sentence is still there: $summary", summary.contains(underTail))
-                assertTrue("and the larger-than-original warning: $summary", summary.contains(warning))
+                assertTrue("honest not-smaller title: $shown", shown.contains(app.getString(R.string.rs_not_smaller_title)))
+                assertFalse("never titled Compressed: $shown",
+                    shown.contains(app.getString(R.string.compress_result_header)))
+                assertEquals(app.getString(R.string.rs_already_compact_title),
+                    activity.findViewById<TextView>(R.id.toolResultSummary).text.toString())
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (repo.getDocument(id) != null && System.nanoTime() < deadline) {
+                    idle()
+                    Thread.sleep(10)
+                }
+                assertTrue("our own grown output is not kept", repo.getDocument(id) == null)
             }
         }
+        ActivityScenario.launch<ToolResultActivity>(ToolResultActivity.intentLastResult(app))
+            .use { scenario ->
+                scenario.onActivity { activity ->
+                    assertEquals(app.getString(R.string.rs_not_smaller_title),
+                        activity.findViewById<TextView>(R.id.rsTitle).text.toString())
+                }
+            }
     }
 
     private fun assertNotNullAlsoSave(activity: ToolResultActivity) {
@@ -137,8 +146,8 @@ abstract class CompressCp1HonestyBase {
             scenario.onActivity { activity ->
                 idle()
                 assertTrue(
-                    "a real compression is still called Compressed",
-                    texts(activity.window!!.decorView).contains(app.getString(R.string.compress_result_header))
+                    "RS: the top bar names the tool, not a sentence",
+                    texts(activity.window!!.decorView).contains(app.getString(R.string.tool_compress))
                 )
             }
         }

@@ -97,6 +97,8 @@ class ResultAlsoSaveTest {
             ToolResultActivity.intent(app, "split", docIds = listOf(id))
         ).use { scenario ->
             scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.toolResultMore).performClick()
+                idle()
                 val button = activity.findViewById<TextView>(R.id.toolResultAlsoSave)
                 assertNotNull("a document result must offer Also save", button)
                 assertEquals(
@@ -355,10 +357,10 @@ class ResultAlsoSaveTest {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val text = summaryText(activity)
+                val receipt = activity.findViewById<TextView>(R.id.toolResultName).text.toString()
                 assertTrue(
-                    "W3: the result must say where the new copy is: $text",
-                    text.contains("Saved in Library") && !text.contains("Rent receipt")
+                    "RS: the one receipt line names the saved copy: $receipt",
+                    receipt.contains("Rent receipt")
                 )
             }
         }
@@ -372,12 +374,11 @@ class ResultAlsoSaveTest {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val text = summaryText(activity)
-                assertFalse("W3: an export is not a library document: $text", text.contains("Saved in Library"))
-                assertTrue(
-                    "W3: an export says plainly that it lives in the app until saved: $text",
-                    text.contains("Prepared in ScanWhirl")
-                )
+                val receipt = activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+                assertFalse("RS: an export is not a library document: $receipt",
+                    receipt.contains(app.getString(R.string.rs_saved_suffix_kept)))
+                assertTrue("RS: the one receipt line names the prepared file: $receipt",
+                    receipt.contains(docx.name))
             }
         }
     }
@@ -391,9 +392,13 @@ class ResultAlsoSaveTest {
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
             assertTrue(
-                "W3: the receipt names the Documents copy: ${summaryTextOf(scenario)}",
+                "RS: the button is a durable Saved to Documents state",
                 pollUntil {
-                    summaryTextOf(scenario).contains("Also in Documents/ScanWhirl: Rent receipt.pdf")
+                    var label = ""
+                    scenario.onActivity {
+                        label = it.findViewById<TextView>(R.id.toolResultAlsoSave).text.toString()
+                    }
+                    label == app.getString(R.string.rs_saved_documents)
                 }
             )
         }
@@ -436,9 +441,10 @@ class ResultAlsoSaveTest {
                 pollUntil { written.toByteArray().contentEquals(source) }
             )
             assertTrue(
-                "W3: the receipt names the chosen location: ${summaryTextOf(scenario)}",
+                "RS: a verified save confirms in a toast",
                 pollUntil {
-                    summaryTextOf(scenario).contains("In the location you chose: Rent receipt.pdf")
+                    ShadowToast.getTextOfLatestToast().orEmpty()
+                        .contains(app.getString(R.string.tools_result_saved, "").trim())
                 }
             )
         }
@@ -607,15 +613,11 @@ class ResultAlsoSaveTest {
             scenario.onActivity { activity ->
                 idle()
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                assertTrue(
-                    "the honest target-miss line is shown: $summary",
-                    summary.contains(
-                        app.getString(
-                            R.string.compress_result_over_limit,
-                            StatusLine.formatBytes(bytes),
-                            "1 B"
-                        )
-                    )
+                assertEquals("RS: the one hero line is the measured size", StatusLine.formatBytes(bytes), summary)
+                assertEquals(
+                    "RS: the target miss is the title",
+                    app.getString(R.string.cp1_compress_header_missed),
+                    activity.findViewById<TextView>(R.id.rsTitle).text.toString()
                 )
             }
         }
@@ -631,16 +633,7 @@ class ResultAlsoSaveTest {
             scenario.onActivity { activity ->
                 idle()
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                assertTrue(
-                    "the size was met and is said: $summary",
-                    summary.contains(
-                        app.getString(
-                            R.string.compress_result_under_limit,
-                            StatusLine.formatBytes(bytes),
-                            StatusLine.formatBytes(100_000_000L)
-                        )
-                    )
-                )
+                assertEquals("RS: the one hero line is the measured size", StatusLine.formatBytes(bytes), summary)
                 assertFalse("no miss when the size was met: $summary", summary.contains(missSuffix()))
             }
         }
@@ -685,14 +678,8 @@ class ResultAlsoSaveTest {
                 result.onActivity { activity ->
                     val summary = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
                     assertTrue(
-                        "the size the person typed reaches the result and is answered: $summary",
-                        summary.contains(
-                            app.getString(
-                                R.string.compress_result_over_limit,
-                                StatusLine.formatBytes(bytes),
-                                "1 KB"
-                            )
-                        )
+                        "RS: the measured size is the hero: $summary",
+                        summary.contains(StatusLine.formatBytes(bytes))
                     )
                 }
             }

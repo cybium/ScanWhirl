@@ -260,15 +260,29 @@ class ResizeFlow(
         return activity.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { compute(bytes, opts) }
+                val rejected = result.bytes.size >= bytes.size
+                if (rejected) withContext(Dispatchers.IO) {
+                    com.scanwhirl.app.store.V2tResultReceiptStore(activity).save(
+                        com.scanwhirl.app.store.V2tResultReceiptStore.Receipt(
+                            toolId = "resize", docIds = emptyList(), files = emptyList(),
+                            mime = "image/jpeg", note = null, targetBytes = null,
+                            beforeBytes = bytes.size.toLong(), outputIdentity = null,
+                            receiptSourceId = null, sourceKept = true, chosenLocationName = null,
+                            documentsExistingName = null, undone = false,
+                            savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
+                        )
+                    )
+                }
                 val dir = resizeOutputDir(activity.cacheDir)
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val fileName = "${base}_${result.width}x${result.height}.jpg"
                 val file = File(dir, fileName)
-                withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
+                // Decide before writing even a cache result. Activity death cannot leave a grown copy.
+                if (!rejected) withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
 
                 // Report from the saved file, decoded again, not from the request.
                 val saved = withContext(Dispatchers.IO) {
-                    val raw = file.readBytes()
+                    val raw = if (rejected) result.bytes else file.readBytes()
                     val dims = ImageTools.imageSize(raw)
                     Triple(raw.size.toLong(), dims?.first, dims?.second)
                 }
@@ -282,8 +296,8 @@ class ResizeFlow(
                 activity.startActivity(
                     ExportResultActivity.intent(
                         activity,
-                        outputPath = file.path,
-                        previewPath = file.path,
+                        outputPath = if (rejected) "" else file.path,
+                        previewPath = if (rejected) null else file.path,
                         mime = result.mime,
                         displayName = fileName,
                         beforeBytes = bytes.size.toLong(),
@@ -291,7 +305,9 @@ class ResizeFlow(
                         width = saved.second ?: result.width,
                         height = saved.third ?: result.height,
                         title = name,
-                        warning = warning
+                        warning = if (rejected) null else warning,
+                        outcome = if (rejected) "NOT_SMALLER" else null,
+                        toolId = "resize"
                     )
                 )
             } catch (e: CancellationException) {

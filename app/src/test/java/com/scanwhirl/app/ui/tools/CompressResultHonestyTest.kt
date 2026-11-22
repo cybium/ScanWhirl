@@ -118,18 +118,13 @@ abstract class CompressResultHonestyBase {
                 idle()
                 val lines = summaryLines(activity)
                 assertEquals(
-                    "B3: the first line is the measured size and the target status",
-                    app.getString(
-                        R.string.compress_result_under_limit,
-                        fmt(bytes),
-                        fmt(target)
-                    ),
+                    "RS: the one hero line is before → after",
+                    app.getString(R.string.rs_size_hero, fmt(bytes + 1024), fmt(bytes)),
                     lines.first()
                 )
-                assertEquals(
-                    "B3: the before size follows on its own line",
-                    app.getString(R.string.compress_result_before, fmt(bytes + 1024)),
-                    lines[1]
+                assertTrue(
+                    "RS: the reduction chip replaces the sentence",
+                    activity.findViewById<TextView>(R.id.rsChip).visibility == View.VISIBLE
                 )
             }
         }
@@ -152,18 +147,11 @@ abstract class CompressResultHonestyBase {
                 idle()
                 val first = summaryLines(activity).first()
                 assertEquals(
-                    "measured == target says exactly at the limit",
-                    app.getString(R.string.compress_result_at_limit, fmt(bytes), fmt(bytes)),
-                    first
+                    "RS: an unmeasured before yields the one size line",
+                    fmt(bytes), first
                 )
-                assertFalse(
-                    "B3: no above-limit line at the boundary: $first",
-                    first.contains(overTail())
-                )
-                assertFalse(
-                    "W3: equality is not called under the limit: $first",
-                    first.contains(underTail())
-                )
+                assertFalse("no old above-limit sentence: $first", first.contains(overTail()))
+                assertFalse("no old under-limit sentence: $first", first.contains(underTail()))
             }
         }
     }
@@ -189,15 +177,11 @@ abstract class CompressResultHonestyBase {
                 val measuredShown = app.getString(
                     R.string.w3_size_with_exact_bytes, fmt(measured), measured
                 )
-                assertTrue(
-                    "W3: the above-limit line carries the exact byte count: $first",
-                    first.startsWith(measuredShown)
-                )
                 assertEquals(
-                    "W3: and still states the honest miss",
-                    app.getString(R.string.compress_result_over_limit, measuredShown, fmt(target)),
-                    first
+                    "RS: the one hero line is the measured size, no target sentence",
+                    fmt(measured), first
                 )
+                assertFalse("no old above-limit sentence: $first", first.contains(overTail()))
             }
         }
     }
@@ -218,15 +202,11 @@ abstract class CompressResultHonestyBase {
                 val measuredShown = app.getString(
                     R.string.w3_size_with_exact_bytes, fmt(measured), measured
                 )
-                assertTrue(
-                    "W3: the under-limit line carries the exact byte count: $first",
-                    first.startsWith(measuredShown)
-                )
                 assertEquals(
-                    "W3: and still states the honest hit",
-                    app.getString(R.string.compress_result_under_limit, measuredShown, fmt(target)),
-                    first
+                    "RS: the one hero line is the measured size, no target sentence",
+                    fmt(measured), first
                 )
+                assertFalse("no old under-limit sentence: $first", first.contains(underTail()))
             }
         }
     }
@@ -242,10 +222,11 @@ abstract class CompressResultHonestyBase {
             scenario.onActivity { activity ->
                 idle()
                 val first = summaryLines(activity).first()
+                assertEquals("RS: the measured size is the one hero line", fmt(bytes), first)
                 assertEquals(
-                    "B3: the miss is said first, in the measured numbers",
-                    app.getString(R.string.compress_result_over_limit, fmt(bytes), fmt(1024)),
-                    first
+                    "RS: a target miss is a persisted title, not a sentence",
+                    app.getString(R.string.cp1_compress_header_missed),
+                    activity.findViewById<TextView>(R.id.rsTitle).text.toString()
                 )
             }
         }
@@ -311,10 +292,10 @@ abstract class CompressResultHonestyBase {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val text = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
+                val text = activity.findViewById<TextView>(R.id.toolResultName).text.toString()
                 assertTrue(
-                    "B3: the result says where the original is: $text",
-                    text.contains(app.getString(R.string.compress_result_source_kept))
+                    "RS: the one receipt line says the original is kept: $text",
+                    text.contains(app.getString(R.string.rs_saved_suffix_kept))
                 )
             }
         }
@@ -357,9 +338,11 @@ abstract class CompressResultHonestyBase {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
+                activity.findViewById<View>(R.id.toolResultMore).performClick()
+                idle()
                 val also = activity.findViewById<TextView>(R.id.toolResultAlsoSave)
                 assertNotNull("B3: the miss keeps the save offer", also)
-                assertTrue("and it is visible", also.isShown)
+                assertTrue("and it is visible in the More panel", also.isShown)
                 val open = activity.findViewById<TextView>(R.id.toolResultOpen)
                 assertEquals(
                     "B3: Open is the filled action",
@@ -510,7 +493,7 @@ class CompressResultHindiWordingTest {
 
     @Test
     fun `the Hindi lines read like everyday speech`() {
-        assertEquals("फ़ाइल अब 544 KB", app.getString(R.string.compress_result_size, "544 KB"))
+        assertEquals("544 KB", app.getString(R.string.compress_result_size, "544 KB"))
         assertEquals("पहले: 824 KB", app.getString(R.string.compress_result_before, "824 KB"))
         assertEquals(
             "544 KB · आपकी 100 KB सीमा के भीतर",

@@ -143,13 +143,8 @@ class IdCardPreviewFixIdCropTest {
                 val host = requireNotNull(activity.findViewById<View>(R.id.toolResultPreviewHost))
                 val preview = requireNotNull(activity.findViewById<ImageView>(R.id.toolResultPreview))
                 assertEquals("no dark padding for other tools", 0, host.paddingStart)
-                val background = preview.background
-                assertNotNull("the old white box stays", background)
-                assertEquals(
-                    "the old white box stays",
-                    Color.WHITE,
-                    (background as ColorDrawable).color
-                )
+                assertEquals("no duplicate full-page preview card", View.GONE, host.visibility)
+                assertNull("no white preview drawable", preview.drawable)
             }
         }
     }

@@ -41,11 +41,8 @@ class ResultNameTest {
                 idle()
                 val name = activity.findViewById<TextView>(R.id.toolResultName)
                 val summary = activity.findViewById<TextView>(R.id.toolResultSummary)
-                assertTrue("name line: ${name.text}", name.text.toString() == "isz14 - Merged")
-                assertTrue("page count: ${summary.text}", summary.text.toString().contains("2 pages"))
-                assertTrue("every result leads with its measured output size: ${summary.text}",
-                    summary.text.toString().startsWith(activity.getString(R.string.compress_result_size,
-                        com.scanwhirl.app.util.StatusLine.formatBytes(requireNotNull(repo.getDocument(id)).pdfFile.length()))))
+                assertTrue("saved line names the output: ${name.text}", name.text.toString().contains("isz14 - Merged"))
+                assertTrue("one measured fact: ${summary.text}", summary.text.toString().contains("2 pages"))
             }
         }
     }
@@ -81,7 +78,7 @@ class ResultNameTest {
             scenario.onActivity { activity ->
                 idle()
                 val name = activity.findViewById<TextView>(R.id.toolResultName)
-                assertTrue("file name: ${name.text}", name.text.toString() == file.name)
+                assertTrue("file name: ${name.text}", name.text.toString().contains(file.name))
             }
         }
     }

@@ -64,10 +64,10 @@ class V2t_T2_QuickTargetsTest {
         assertEquals("50 KB", en["v2t_size_50"])
         assertEquals("100 KB", en["v2t_size_100"])
         assertEquals("200 KB", en["v2t_size_200"])
-        assertEquals("Compress this copy", en["v2t_compress_this_copy"])
-        assertEquals("Protect this copy", en["v2t_protect_this_copy"])
-        assertEquals("इस प्रति को छोटा करें", hi["v2t_compress_this_copy"])
-        assertEquals("इस प्रति को सुरक्षित करें", hi["v2t_protect_this_copy"])
+        assertEquals("Compress", en["v2t_compress_this_copy"])
+        assertEquals("Protect", en["v2t_protect_this_copy"])
+        assertEquals("छोटा करें", hi["v2t_compress_this_copy"])
+        assertEquals("सुरक्षित करें", hi["v2t_protect_this_copy"])
     }
 
     @Test
