@@ -53,10 +53,10 @@ class V2vFindEmptyTest {
             val empty = ShadowDialog.getLatestDialog()
             assertNotNull("a named empty-outcome sheet must be shown", empty)
             assertEquals("the honest title",
-                app.getString(R.string.v2v_find_none_title),
+                app.getString(R.string.cdf1_find_none_title),
                 empty!!.findViewById<TextView>(R.id.swSheetTitle).text.toString())
             assertEquals("the caveat stays in the sheet",
-                app.getString(R.string.find_none_clean),
+                app.getString(R.string.cdf1_find_none_body),
                 empty.findViewById<TextView>(R.id.swSheetMessage).text.toString())
         } finally {
             shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -66,8 +66,8 @@ class V2vFindEmptyTest {
 
     @Test(timeout = 30_000)
     fun `Hindi empty-outcome wording is lane-native`() {
-        val hi = java.io.File("src/main/res/values-hi/strings_v2v.xml").readText(Charsets.UTF_8)
+        val hi = java.io.File("src/main/res/values-hi/strings_copydiet_fx1.xml").readText(Charsets.UTF_8)
         assertTrue("HI must name the empty outcome",
-            hi.contains("<string name=\"v2v_find_none_title\">कोई निजी जानकारी नहीं मिली</string>"))
+            hi.contains("<string name=\"cdf1_find_none_title\">कोई मिलान नहीं मिला</string>"))
     }
 }

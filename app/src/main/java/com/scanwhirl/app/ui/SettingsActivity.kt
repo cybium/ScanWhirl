@@ -202,7 +202,7 @@ class SettingsActivity : BaseActivity() {
         }
         texts.addView(
             android.widget.TextView(this).apply {
-                setText(R.string.settings_ocr_language)
+                setText(R.string.cdf1_ocr_language)
                 setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_hi))
                 textSize = 15f
             }
@@ -263,7 +263,7 @@ class SettingsActivity : BaseActivity() {
         )
         texts.addView(
             android.widget.TextView(this).apply {
-                setText(R.string.settings_block_screenshots_note)
+                setText(R.string.cdf1_block_screenshots_note)
                 textSize = 12.5f
                 setPadding(0, (2 * d).toInt(), 0, 0)
                 setTextColor(
@@ -438,7 +438,7 @@ class SettingsActivity : BaseActivity() {
         val labels = languages.map { getString(ocrLanguageLabel(it)) }
         val checked = languages.indexOf(com.scanwhirl.app.util.OcrLanguageSettings.get(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.settings_ocr_language)
+            .setTitle(R.string.cdf1_ocr_language)
             .setMessage(R.string.u4_ocr_language_note)
             .setOptions(labels, checked) { which, _ ->
                 com.scanwhirl.app.util.OcrLanguageSettings.set(this, languages[which])
@@ -486,7 +486,7 @@ class SettingsActivity : BaseActivity() {
             com.scanwhirl.app.util.AppLanguage.label(tag)
         }
         // C1 (2026-11-20 owner): say what the row changes, not only the language name.
-        binding.subLanguage.text = getString(R.string.settings_language_summary, appLanguage)
+        binding.subLanguage.text = getString(R.string.cdf1_language_summary, appLanguage)
         binding.subViewer.setText(
             if (Prefs.defaultViewer(this) == Prefs.VIEWER_SYSTEM) {
                 R.string.viewer_system
@@ -500,7 +500,7 @@ class SettingsActivity : BaseActivity() {
         if (::subOcrLanguage.isInitialized) {
             // C1 (2026-11-20 owner): the second language row now says what it changes.
             subOcrLanguage.text = getString(
-                R.string.settings_ocr_language_summary,
+                R.string.cdf1_ocr_language_summary,
                 getString(ocrLanguageLabel(com.scanwhirl.app.util.OcrLanguageSettings.get(this)))
             )
         }
@@ -508,7 +508,7 @@ class SettingsActivity : BaseActivity() {
         val sizeMode = TextSizePrefs.mode(this)
         binding.subTextSize.setText(textSizeLabel(sizeMode))
         binding.textSizePercent.text =
-            getString(R.string.cz_text_size_preview, TextSizePrefs.percent(sizeMode))
+            getString(R.string.cdf1_text_size_preview, TextSizePrefs.percent(sizeMode))
     }
 
     // ---- Lane Z: Text size ---------------------------------------------------
@@ -517,7 +517,7 @@ class SettingsActivity : BaseActivity() {
         TextSizePrefs.MODE_SMALL -> R.string.cz_text_size_small
         TextSizePrefs.MODE_LARGE -> R.string.cz_text_size_large
         TextSizePrefs.MODE_LARGEST -> R.string.cz_text_size_largest
-        else -> R.string.cz_text_size_default
+        else -> R.string.cdf1_text_size_default
     }
 
     /** Persist the choice and recreate: BaseActivity reads it in attachBaseContext. */
@@ -588,14 +588,72 @@ class SettingsActivity : BaseActivity() {
         return total
     }
 
+    /**
+     * FX1 critic: the bytes the safe sweep would actually delete RIGHT NOW. Entries that are
+     * still in use, or from the last 24 hours, stay in the total but are not removable. This
+     * mirrors PrivacySweep's age gate so the row can never say "no removable files" while a
+     * cleanup would in fact free bytes (or the reverse).
+     */
+    private fun removableTemporaryBytes(): Long {
+        val cache = cacheDir ?: return 0L
+        val jobRunning = runCatching { PrivacySweep.backupRunning() }.getOrDefault(false)
+        val vaultUnlocked = runCatching {
+            com.scanwhirl.app.store.vault.VaultSession.isUnlocked()
+        }.getOrDefault(false)
+        val now = System.currentTimeMillis()
+        var total = 0L
+        PrivacySweep.CACHE_DIRS.forEach { name ->
+            if (name == "vault_open" && vaultUnlocked) return@forEach
+            if (name == "fullbackup" && jobRunning) return@forEach
+            val dir = File(cache, name)
+            if (name in PrivacySweep.CAPTURE_CACHE_DIRS) {
+                dir.listFiles()?.forEach { entry ->
+                    if (now - entry.lastModified() > PrivacySweep.CAPTURE_CACHE_MAX_AGE_MS) {
+                        total += if (entry.isDirectory) entry.dirSize() else entry.length()
+                    }
+                }
+            } else {
+                total += dir.dirSize()
+            }
+        }
+        cache.listFiles()?.forEach { file ->
+            val plainFile = file.isFile &&
+                PrivacySweep.CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }
+            val plainDir = file.isDirectory &&
+                PrivacySweep.CACHE_DIR_PREFIXES.any { file.name.startsWith(it) }
+            val backupTemp = PrivacySweep.BACKUP_CACHE_PREFIXES.any { file.name.startsWith(it) }
+            when {
+                plainFile -> total += file.length()
+                plainDir -> total += file.dirSize()
+                backupTemp && !jobRunning ->
+                    total += if (file.isDirectory) file.dirSize() else file.length()
+            }
+        }
+        val documents = File(cache, "documents")
+        if (documents.isDirectory) {
+            documents.listFiles()?.forEach { child ->
+                if (child.name != "share") {
+                    total += if (child.isDirectory) child.dirSize() else child.length()
+                }
+            }
+        }
+        return total
+    }
+
     private fun refreshStorageSizes() {
         lifecycleScope.launch {
             val sizes = withContext(Dispatchers.IO) {
                 storageThreadProbe?.invoke(Thread.currentThread().name)
-                File(filesDir, "documents").dirSize() to temporaryBytes()
+                Triple(
+                    File(filesDir, "documents").dirSize(),
+                    temporaryBytes(),
+                    removableTemporaryBytes()
+                )
             }
             binding.subLibrarySize.text = SizeUnits.format(sizes.first)
             binding.subTempSize.text = SizeUnits.format(sizes.second)
+            binding.subTempRemovable.text =
+                getString(R.string.cz_storage_removable, SizeUnits.format(sizes.third))
         }
     }
 
@@ -612,11 +670,13 @@ class SettingsActivity : BaseActivity() {
             }
             withContext(Dispatchers.Main) {
                 binding.storageReceipt.text = if (freed > 0L) {
-                    getString(R.string.cz_storage_cleared, SizeUnits.format(freed))
+                    getString(R.string.cdf1_storage_cleared, SizeUnits.format(freed))
                 } else {
-                    getString(R.string.cz_storage_nothing)
+                    getString(R.string.cdf1_storage_nothing)
                 }
                 binding.rowClearTemp.isEnabled = true
+                // FX1: recompute BOTH numbers from the disk after the sweep, so a total that
+                // is still nonzero is never printed next to "already empty".
                 refreshStorageSizes()
             }
         }
