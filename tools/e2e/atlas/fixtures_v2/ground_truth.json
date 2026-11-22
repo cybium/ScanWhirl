@@ -1,0 +1,31 @@
+{
+  "fictional": true,
+  "seed": 20261122,
+  "generator": "tools/e2e/atlas/fixtures_v2/make_fixtures.py",
+  "notice_text": "नमूना नगर पंचायत\nकार्यालय सूचना\nदिनांक: २२ नवंबर २०२६\nविषय: छात्रवृत्ति आवेदन शिविर\nसभी विद्यार्थियों को सूचित किया जाता है कि छात्रवृत्ति आवेदन\nशिविर ३० नवंबर २०२६ को सुबह १० बजे से शाम ४ बजे तक\nसामुदायिक भवन, नमूना नगर में आयोजित किया जाएगा।\nकृपया अपना अंक पत्र, फोटो और पते का प्रमाण साथ लाएँ।\nआवेदन की जाँच निःशुल्क है। मूल कागज़ वापस दिए जाएँगे।\nअधूरी जानकारी होने पर सहायता कक्ष से संपर्क करें।\nयह केवल परीक्षण के लिए काल्पनिक सूचना है।\nनमूना — किसी वास्तविक कार्यालय द्वारा जारी नहीं।",
+  "bill_page2_only": [
+    "मीटर-संख्या 4471",
+    "Consumer No 88-4471-SAMPLE"
+  ],
+  "bill_text_layer_pages": [
+    1
+  ],
+  "receipt_order": [
+    "aug",
+    "sep",
+    "oct"
+  ],
+  "signature": {
+    "template": "references/signature_crop.png",
+    "fictional": true
+  },
+  "face_geometry_reference": "references/portrait_crop.png",
+  "phone_root": "/sdcard/Download/ScanWhirlQA",
+  "marksheet_scan_dpi": 300,
+  "marksheet_fine_print_points": 7.44,
+  "camera_realism": [
+    "synthetic page photo",
+    "background",
+    "grain"
+  ]
+}

@@ -12,7 +12,8 @@ shows up here.
 | `tools/e2e/flows.sh` / `flow_driver.py` | F1–F9 device checklist journeys after smoke, text/description driven |
 | `tools/e2e/uitool.py` | uiautomator dump / find-by-view-id / tap / screenshot sanity |
 | `tools/e2e/make_pdf.py` | writes the two self-authored PDF fixtures at run time |
-| `tools/e2e/run_e2e.ps1` | push a worktree snapshot to `ci/e2e-<name>` and print the run URL |
+| `tools/e2e/run_e2e.ps1` | push a worktree snapshot to `ci/e2e-<name>` (or `atlas/<sha>` with `-Atlas`) and print the run URL |
+| `tools/e2e/atlas/` | **Tool Atlas**: one flow per tool with step screenshots, pulled output and `verify_result.py`, see its README |
 
 ## How to run it
 

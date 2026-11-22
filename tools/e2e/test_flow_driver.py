@@ -146,6 +146,24 @@ class FlowSelectorsTest(unittest.TestCase):
                 self.assertTrue(s[key], (lang, key))
             self.assertIn("2", s["vault_tab_relock"])
 
+    def test_launch_uses_requested_locale_not_device_locale_query(self):
+        # The Library selector must come from the locale WE requested, never from
+        # `cmd locale get-app-locales` output (which broke fixture staging).
+        old = f.REQUESTED_LOCALE
+        try:
+            with patch.object(f, "adb") as adb, patch.object(f, "wait") as wait:
+                f.locale("en", "1.0")
+                wait.assert_called_once_with(desc="Library")
+                for call in adb.call_args_list:
+                    self.assertNotIn("get-app-locales", call.args)
+            with patch.object(f, "adb") as adb, patch.object(f, "wait") as wait:
+                f.locale("hi", "1.0")
+                wait.assert_called_once_with(desc=f.strings("hi")["shell_nav_library"])
+                for call in adb.call_args_list:
+                    self.assertNotIn("get-app-locales", call.args)
+        finally:
+            f.REQUESTED_LOCALE = old
+
 
 if __name__ == "__main__":
     unittest.main()

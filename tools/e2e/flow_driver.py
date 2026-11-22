@@ -221,7 +221,23 @@ def capture(tag):
     (OUT / f"{tag}.png").write_bytes(adb("exec-out", "screencap", "-p", binary=True))
 
 
+# The locale WE requested, set by locale() before every launch(). This is the single
+# source of truth for UI selectors. Never derive a selector from
+# `cmd locale get-app-locales PKG`: that query can be empty or report a fallback
+# locale, which made the harness wait for the Hindi Library tab while the app was
+# actually English and aborted fixture staging before any fixture was imported.
+REQUESTED_LOCALE = "en"
+
+
+def library_desc(lang=None):
+    """Content description of the Library tab for the requested locale."""
+    lang = lang or REQUESTED_LOCALE
+    return strings("hi" if str(lang).startswith("hi") else "en")["shell_nav_library"]
+
+
 def locale(lang="en", scale="1.0"):
+    global REQUESTED_LOCALE
+    REQUESTED_LOCALE = lang
     adb("shell", "settings", "put", "system", "font_scale", scale)
     adb("shell", "cmd", "locale", "set-app-locales", PKG, "--locales", lang)
     launch()
@@ -233,7 +249,7 @@ def launch():
     # App data is preserved. This is not a reset or a production-app command.
     adb("shell", "am", "start", "-W", "-f", "0x10008000", "-n",
         f"{PKG}/com.scanwhirl.app.ui.shell.ShellActivityCyan")
-    wait(desc="Library" if "en" in adb("shell", "cmd", "locale", "get-app-locales", PKG) else "कागज़ात")
+    wait(desc=library_desc())
 
 
 def strings(lang):
