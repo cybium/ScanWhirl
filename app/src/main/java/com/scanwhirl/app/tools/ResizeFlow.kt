@@ -21,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 
 /**
@@ -112,11 +113,18 @@ class ResizeFlow(
             if (w in 1..12000 && h in 1..12000) {
                 b.cropPreview.aspectRatio = w.toFloat() / h
             }
+            // Text budget: one short helper. The byte-limit explanation sits
+            // behind the ⓘ button; the numbers already live in the fields.
             val helper = if (b.resizeModeCrop.isChecked) R.string.resize_crop_helper
             else R.string.resize_borders_helper
-            b.helperText.text = activity.getString(helper, w, h)
+            b.helperText.text = activity.getString(helper)
         }
         refreshFrame()
+
+        // Details behind an ⓘ tap, never on the face of the work screen.
+        b.btnResizeInfo.setOnClickListener {
+            Toast.makeText(activity, R.string.resize_info_detail, Toast.LENGTH_LONG).show()
+        }
 
         b.resizeModeGroup.setOnCheckedChangeListener { _, _ ->
             b.cropPreview.isVisible = b.resizeModeCrop.isChecked
@@ -240,19 +248,37 @@ class ResizeFlow(
         sheet.show()
     }
 
+    companion object {
+        /** A handful of tries is enough for a genuine same-millisecond name collision. */
+        private const val MAX_OUTPUT_DIR_ATTEMPTS = 8
+    }
+
     /**
      * Every run writes into its own folder under the FileProvider-exposed
      * `cacheDir/documents` tree. The cold-start sweep deletes it, and a second
      * resize can never overwrite the first one's result.
+     *
+     * Call ONLY from Dispatchers.IO (see [doResize]): a full or unwritable file
+     * system must fail fast, never spin or block the main thread. The parent is
+     * created once; only a genuine name collision is retried, with a small bound.
      */
     fun resizeOutputDir(cacheDir: File): File {
         val root = File(cacheDir, "documents/resize")
-        while (true) {
+        if (!root.isDirectory && !root.mkdirs() && !root.isDirectory) {
+            throw IOException("Cannot create resize output folder: ${root.path}")
+        }
+        for (attempt in 0 until MAX_OUTPUT_DIR_ATTEMPTS) {
             val candidate = File(
                 root, "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
             )
-            if (!candidate.exists() && candidate.mkdirs()) return candidate
+            if (candidate.mkdir()) return candidate
+            if (candidate.isDirectory) return candidate // lost a race, still a valid folder
+            if (!candidate.exists()) {
+                // Not a collision: the file system refused the write (e.g. no space).
+                throw IOException("Cannot create resize output folder: ${candidate.path}")
+            }
         }
+        throw IOException("Could not reserve a unique resize output folder")
     }
 
     internal fun doResize(bytes: ByteArray, name: String, opts: ExactResize.Options): Job {
@@ -260,7 +286,7 @@ class ResizeFlow(
         return activity.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { compute(bytes, opts) }
-                val dir = resizeOutputDir(activity.cacheDir)
+                val dir = withContext(Dispatchers.IO) { resizeOutputDir(activity.cacheDir) }
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val fileName = "${base}_${result.width}x${result.height}.jpg"
                 val file = File(dir, fileName)
@@ -302,6 +328,9 @@ class ResizeFlow(
                 failWith(R.string.f8_reason_unreadable)
             } catch (e: OutOfMemoryError) {
                 failWith(R.string.f8_reason_too_large)
+            } catch (e: IOException) {
+                // One short honest line, not a "Resize failed: <raw error>" receipt.
+                Toast.makeText(activity, R.string.resize_save_failed, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 val reason = if (ImageTools.isTooLargePhoto(e)) R.string.f8_reason_too_large
                 else R.string.f8_reason_unreadable
