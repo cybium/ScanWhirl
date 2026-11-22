@@ -11,6 +11,7 @@
   row by row underneath, and the target field is usable from the first frame.
 -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/compressScroll"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -130,6 +131,42 @@
             android:layout_marginTop="4dp"
             android:orientation="vertical"
             android:visibility="gone">
+
+            <!-- V2T T2: one free decimal-KB quick-target row, shared with Resize. -->
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/v2t_quick_group"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/v2t_quick_20"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/v2t_size_20" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/v2t_quick_50"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/v2t_size_50" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/v2t_quick_100"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/v2t_size_100" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/v2t_quick_200"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/v2t_size_200" />
+            </com.google.android.material.chip.ChipGroup>
 
             <EditText
                 android:id="@+id/editCompressTarget"
