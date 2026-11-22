@@ -14,11 +14,8 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.util.ImportFixtures
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import org.robolectric.Robolectric
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -53,6 +50,7 @@ class S1StartupResumeTest {
         // These are process-wide seams; a test that failed mid-flight must not leak a queued
         // offer job or the "sheet showing" guard into the next test in the same fork.
         ScanLauncher.resetResumeOfferStateForTest()
+        ScanLauncher.offerDispatcherForTest = null
         ShadowDialog.reset()
     }
 
@@ -60,8 +58,8 @@ class S1StartupResumeTest {
     fun resetResumeState() {
         ScanLauncher.resetColdStartOfferForTest()
         ScanLauncher.resetResumeOfferStateForTest()
+        ScanLauncher.offerDispatcherForTest = null
         ShadowDialog.reset()
-        kotlinx.coroutines.Dispatchers.resetMain()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -124,11 +122,11 @@ class S1StartupResumeTest {
         val staged = stagePending()
         // onCreate schedules the offer on lifecycleScope (Main). The old test only did create()
         // and *assumed* that coroutine had not run yet; on a loaded runner it could reach
-        // show() and consume the once-per-process guard before rotation. Queue Main for this
-        // window so the first instance is deterministically cancelled before it can show.
+        // show() and consume the once-per-process guard before rotation. Queue a deterministic
+        // dispatcher for that coroutine so the first instance is cancelled before it can show.
         // This pins the cancel-before-show window, not a pending storage-recovery state.
         val scheduler = TestCoroutineScheduler()
-        Dispatchers.setMain(StandardTestDispatcher(scheduler))
+        ScanLauncher.offerDispatcherForTest = StandardTestDispatcher(scheduler)
         var first: ActivityController<ShellActivity>? = null
         var recreated: ActivityController<ShellActivity>? = null
         try {
@@ -147,7 +145,7 @@ class S1StartupResumeTest {
             // offer on the real main dispatcher. No offer-state reset between the two instances:
             // the once-per-process cold-start guard must still be un-consumed after rotation.
             scheduler.advanceUntilIdle()
-            Dispatchers.resetMain()
+            ScanLauncher.offerDispatcherForTest = null
             recreated = Robolectric.buildActivity(ShellActivity::class.java).setup(state)
             idle()
             await { resumeOfferShown() }
@@ -155,7 +153,7 @@ class S1StartupResumeTest {
         } finally {
             first?.destroy()
             recreated?.pause()?.stop()?.destroy()
-            Dispatchers.resetMain()
+            ScanLauncher.offerDispatcherForTest = null
             staged.deleteRecursively()
         }
     }
