@@ -376,10 +376,23 @@ class ToolSetupActivity : BaseActivity() {
      */
     private fun applyRunEnabled() {
         if (!::runButton.isInitialized) return
-        val ready = tool.id != "merge" || selected.size >= 2
+        // A name is mandatory wherever the screen offers an editable name field: an erased field
+        // must never silently fall back to an auto-generated name.
+        val ready = (tool.id != "merge" || selected.size >= 2) &&
+            (!hasNameField() || nameText.isNotBlank())
         runButton.isEnabled = ready
         runButton.isClickable = ready
         runButton.alpha = if (ready) 1f else DISABLED_ALPHA
+    }
+
+    private fun hasNameField(): Boolean = toolId == "duplicate" || toolId == "merge"
+
+    /** Inline validation under the name field; text watcher and rotation both rebuild it. */
+    private fun refreshNameError() {
+        if (!hasNameField()) return
+        val error = optionsHost.findViewWithTag<TextView>(NAME_ERROR_TAG)
+        error?.isVisible = nameText.isBlank()
+        applyRunEnabled()
     }
 
     private fun header(): View {
@@ -1013,6 +1026,19 @@ class ToolSetupActivity : BaseActivity() {
         )
         optionsHost.addView(row)
         optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+                tag = NAME_ERROR_TAG
+                text = getString(R.string.co_name_required)
+                contentDescription = text
+                isVisible = nameText.isBlank()
+                setLineSpacing(0f, 1.2f)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
+        )
+        optionsHost.addView(
             SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
                 tag = RECEIPT_TAG
                 text = getString(R.string.co_new_copy_receipt)
@@ -1180,6 +1206,7 @@ class ToolSetupActivity : BaseActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 onChange(s?.toString().orEmpty())
+                this@ToolSetupActivity.refreshNameError()
                 if (this@ToolSetupActivity.tool.id == "split" || this@ToolSetupActivity.tool.id == "extract") {
                     optionsHost.findViewById<TextView>(R.id.toolSetupRangePreview)
                         ?.let { updateRangePreview(it) }
@@ -1751,6 +1778,8 @@ class ToolSetupActivity : BaseActivity() {
         const val RECEIPT_TAG = "co_new_copy_receipt"
         /** The scrollable clearance child below the last option. */
         const val BOTTOM_SPACER_TAG = "co_bottom_spacer"
+        /** Inline required-name error under the editable field. */
+        const val NAME_ERROR_TAG = "co_name_required"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
 

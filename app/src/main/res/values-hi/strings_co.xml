@@ -5,4 +5,5 @@
     <string name="co_name_hint">दस्तावेज़ का नाम</string>
     <string name="co_name_extension">.pdf</string>
     <string name="co_new_copy_receipt">नई प्रति सहेजी गई। मूल जैसा है।</string>
+    <string name="co_name_required">पहले नाम लिखें।</string>
 </resources>
