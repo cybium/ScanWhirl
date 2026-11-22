@@ -150,8 +150,8 @@ class LibraryRowActionsTest {
             scenario.onActivity { activity ->
                 val sheet = openRowActions(activity, shown)
                 assertEquals(
-                    "the sheet is the shared Actions sheet",
-                    app.getString(R.string.doc_actions),
+                    "the sheet is the shared Document actions sheet",
+                    app.getString(R.string.v3_actions_title),
                     sheetTitle(sheet)
                 )
                 assertEquals(

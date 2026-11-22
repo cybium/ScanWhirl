@@ -542,7 +542,8 @@ class RetrievalSlice5Test {
                 val excerpt = a.findViewById<TextView>(R.id.findExcerpt)
                 assertTrue(excerpt.text.toString().startsWith("Page 2"))
                 assertTrue(excerpt.text.toString().contains("ZEPHYRQUILL"))
-                assertTrue(a.findViewById<View>(R.id.findNote).isVisible)
+                assertFalse("the permanent note moved behind More",
+                    a.findViewById<View>(R.id.findNote).isVisible)
                 // Page-shaped placeholders: only the pages in view are bound, not the document.
                 assertTrue(pager(a).childCount <= 3)
             }
@@ -559,7 +560,7 @@ class RetrievalSlice5Test {
                 scenario.onActivity { a ->
                     assertEquals("start $page/$key", 0, shownPage(a))
                     if (page >= 0) {
-                        assertEquals(app.getString(R.string.reader_start_changed), ShadowToast.getTextOfLatestToast())
+                        assertEquals(app.getString(R.string.v3_reader_start_changed), ShadowToast.getTextOfLatestToast())
                     }
                     assertFalse(a.findViewById<View>(R.id.findPanel).isVisible)
                 }
@@ -581,7 +582,7 @@ class RetrievalSlice5Test {
         ActivityScenario.launch<PdfViewerActivity>(intent).use { scenario ->
             scenario.onActivity { a ->
                 assertEquals(0, shownPage(a))
-                assertTrue(pollUntil { status(a) == app.getString(R.string.reader_find_out_of_step) })
+                assertTrue(pollUntil { status(a) == app.getString(R.string.v3_reader_find_out_of_step) })
             }
         }
         assertNull(PdfViewerActivity.startPage(1, "page_001.jpg", 5, null))
@@ -649,7 +650,7 @@ class RetrievalSlice5Test {
                     .performIdentifierAction(R.id.action_find, 0)
                 a.findViewById<EditText>(R.id.findInput).setText("platypus")
                 assertTrue(pollUntil { status(a).startsWith("No match") })
-                assertTrue(status(a).contains(app.getString(R.string.reader_find_pending)))
+                assertTrue(status(a).contains(app.getString(R.string.v3_reader_find_pending)))
                 assertFalse(a.findViewById<View>(R.id.findNav).isVisible)
                 assertFalse(a.findViewById<View>(R.id.findExcerpt).isVisible)
             }
@@ -661,7 +662,7 @@ class RetrievalSlice5Test {
                     .performIdentifierAction(R.id.action_find, 0)
                 a.findViewById<EditText>(R.id.findInput).setText("invoice")
                 assertTrue(pollUntil { status(a).startsWith("Match 1 of 2") })
-                assertTrue(status(a).contains(app.getString(R.string.reader_find_partial, 2, 5)))
+                assertTrue(status(a).contains(app.getString(R.string.v3_reader_find_partial, 2, 5)))
             }
         }
     }
@@ -673,7 +674,7 @@ class RetrievalSlice5Test {
             scenario.onActivity { a ->
                 a.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar).menu
                     .performIdentifierAction(R.id.action_find, 0)
-                assertTrue(pollUntil { status(a) == app.getString(R.string.reader_find_no_text) })
+                assertTrue(pollUntil { status(a) == app.getString(R.string.v3_reader_find_no_text) })
             }
         }
         val external = File(app.cacheDir, "outside.pdf").apply { writeBytes(ByteArray(1024) { 2 }) }
@@ -682,7 +683,7 @@ class RetrievalSlice5Test {
             scenario.onActivity { a ->
                 a.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar).menu
                     .performIdentifierAction(R.id.action_find, 0)
-                assertEquals(app.getString(R.string.reader_find_external), status(a))
+                assertEquals(app.getString(R.string.v3_reader_find_external), status(a))
                 assertFalse(a.findViewById<EditText>(R.id.findInput).isEnabled)
                 assertFalse(a.findViewById<View>(R.id.findNav).isVisible)
             }

@@ -340,17 +340,14 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
 
-        // UI-B6 (GPT judgement 2026-11-19b, item 1): the document screen is the workspace.
-        // Seven named actions, each bound to the document this screen shows:
-        //  - Edit / crop, Read text and Share keep their pre-B6 handlers and ids;
-        //  - Compress runs the SAME guarded handler the Actions sheet runs
-        //    (CompressFlow.startWith(doc), no source chooser);
-        //  - Sign goes through ProOffer.require, then the stamp editor armed with Sign for
-        //    THIS id — never the generic picker and never a trial promise;
-        //  - Save PDF is the one save-to-Documents copy (the icon-only toolbar route is gone);
-        //  - More is the named Actions sheet.
-        // A locked or Vault document keeps Compress, Sign and Read text disabled with the
-        // sheet's own reason (applyActionAvailability): no handler is reachable from them.
+        // V3: the dock is one compact row — Edit & crop, OCR, Share and Actions — each bound to
+        // the document this screen shows. Compress, Sign and Save-copy now live in the Actions
+        // sheet; their ids and guarded handlers stay in a GONE layout container so the existing
+        // behaviour tests still drive exactly the same flows by id.
+        //  - Edit / crop, OCR and Share keep their pre-V3 handlers and ids;
+        //  - Actions opens the one named Actions sheet (rename/move/copy/protect/Trash/export);
+        //  - a locked or Vault document keeps OCR (and the hidden Compress/Sign) disabled with
+        //    the sheet's own reason (applyActionAvailability): no handler is reachable.
         binding.btnShare.setOnClickListener {
             document?.let { doc ->
                 traceAction("share", doc)
@@ -394,7 +391,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 onUsed = { noteImportUsed() },
                 // The More sheet's output is chosen after this answer, so finishing here means
                 // offering the save choices; the chosen action can then be tapped again.
-                onFinishEditing = { finishEditingThen { _ -> Unit } }
+                onFinishEditing = { finishEditingThen { _ -> Unit } },
+                // V3: "Save copy to Documents" is now a sheet row; it runs the same guarded
+                // save-to-Documents handler the old dock button ran. OCR and Share stay in the
+                // dock, so the viewer's sheet does not repeat them.
+                onExport = { savePdfToDocuments() },
+                includeDockActions = false
             )
         }
         applyActionPanel()
@@ -575,34 +577,25 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /**
-     * UI-B6 (GPT judgement 2026-11-19b, item 1): the document workspace panel.
+     * V3 (screenshot critique runs 5-6): the dock is ONE compact row of four named actions:
+     * Edit &amp; crop · OCR · Share · Actions. Everything else lives in the Actions sheet.
      *
-     * Seven NAMED actions, each its own labelled 48 dp+ target:
-     * Edit / crop · Read text · Share · Compress · Sign (+ Pro) · Save PDF · More.
-     *
-     *  - 4 + 3 on a 360 dp phone; 3 + 3 + 1 on a 320 dp phone (a 320 dp quarter-width cell
-     *    cannot hold "Read text"/"Compress" at 130 % without breaking a word);
+     *  - one row of four at normal type (the labels are short enough even at 320 dp);
      *  - from 160 % type the panel moves into the scroll flow ABOVE the pages as two growing
-     *    columns (the last action keeps the full width), inside the one scroll owner;
+     *    columns, inside the one scroll owner;
      *  - labels wrap but are never ellipsized, and no label is ever shrunk below 12 sp.
+     *  - Compress, Sign and Save keep their handlers (and their test seams) in the layout's
+     *    GONE container; the person opens them from the Actions sheet.
      */
     private fun applyActionPanel() {
         applyActionLabels()
         val fontScale = resources.displayMetrics.scaledDensity / resources.displayMetrics.density
         val large = fontScale >= 1.6f
-        val narrow = resources.configuration.screenWidthDp < 360
-        val columns = when {
-            large -> 2
-            narrow -> 3
-            else -> 4
-        }
+        val columns = if (large) 2 else 4
         val items = listOf(
             binding.btnEdit,
             binding.btnText,
             binding.btnShare,
-            binding.btnCompress,
-            binding.btnSign,
-            binding.btnSavePdf,
             binding.btnMore
         )
         val grid = binding.actionGrid
@@ -656,17 +649,18 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private fun applyActionLabels() {
         binding.btnEdit.text = getString(R.string.doc_action_edit_crop)
         binding.btnEdit.contentDescription = getString(R.string.doc_action_edit_crop)
-        binding.btnText.text = getString(R.string.dock_read_text)
-        binding.btnText.contentDescription = getString(R.string.dock_read_text)
+        binding.btnText.text = getString(R.string.v3_ocr)
+        binding.btnText.contentDescription = getString(R.string.v3_ocr_a11y)
         binding.btnShare.text = getString(R.string.share_pdf)
         binding.btnShare.contentDescription = getString(R.string.share_pdf)
         binding.btnCompress.text = getString(R.string.tool_compress)
         binding.btnCompress.contentDescription = getString(R.string.tool_compress)
-        binding.btnSavePdf.text = getString(R.string.doc_action_save_pdf)
+        binding.btnSavePdf.text = getString(R.string.v3_save_copy)
         // Spoken: the visible label also says where the copy goes.
         binding.btnSavePdf.contentDescription = getString(R.string.save_pdf_device)
-        binding.btnMore.text = getString(R.string.more)
-        binding.btnMore.contentDescription = getString(R.string.doc_action_more_desc)
+        // V3: the fourth dock cell is the named Actions sheet, not a generic "More".
+        binding.btnMore.text = getString(R.string.doc_actions)
+        binding.btnMore.contentDescription = getString(R.string.v3_actions_title)
         applySignLabel()
     }
 
@@ -722,7 +716,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         val items = listOf(
             binding.btnCompress to getString(R.string.tool_compress),
             binding.btnSign to getString(R.string.tool_sign),
-            binding.btnText to getString(R.string.dock_read_text)
+            binding.btnText to getString(R.string.v3_ocr)
         )
         for ((button, label) in items) {
             button.isEnabled = !blocked

@@ -438,24 +438,18 @@ class ImportPdfFixFlowTest {
     }
 
     /**
-     * W1: an import the user shared from the document screen's Actions sheet is theirs. Back must
-     * close the screen without a Keep/Discard question and without deleting it.
+     * W1: an import the user shared from the document screen is theirs. Back must close the
+     * screen without a Keep/Discard question and without deleting it. V3: Share is a dock
+     * action (the Actions sheet no longer repeats it).
      */
     @Test(timeout = 60_000)
-    fun `an import shared from the Actions sheet is kept on Back, with no delete question`() {
+    fun `an import shared from the viewer dock is kept on Back, with no delete question`() {
         val imported = DocFixtures.saved(repo, app, pages = 2, name = "Fee receipt Oct - FAKE")
         ActivityScenario.launch<DocumentViewerActivity>(
             DocumentViewerActivity.intent(app, imported, freshImport = true)
         ).use { scenario ->
             scenario.onActivity { activity ->
-                activity.findViewById<View>(R.id.btnMore).performClick()
-                idle()
-                val sheet = requireNotNull(ShadowDialog.getLatestDialog()) {
-                    "the Actions sheet opens"
-                }
-                requireNotNull(
-                    sheet.window?.decorView?.findViewWithTag<View>("docActions:share")
-                ) { "the sheet has a Share row" }.performClick()
+                activity.findViewById<View>(R.id.btnShare).performClick()
                 assertTrue(
                     "Share reaches the chooser",
                     waitUntil { shadowOf(activity).peekNextStartedActivity() != null }
