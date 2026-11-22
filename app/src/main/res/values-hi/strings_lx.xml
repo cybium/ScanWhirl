@@ -5,33 +5,42 @@
     <string name="lx_tool_sub">सूची के शीर्षकों को पन्नों से जोड़ें</string>
     <string name="lx_choose_doc">दस्तावेज़ चुनें</string>
     <string name="lx_from_pdf">PDF फ़ाइल से</string>
-    <string name="lx_choose_pages">सूची पन्ना चुनें</string>
-    <string name="lx_pages_selected">चुने गए सूची पन्ने: %1$d</string>
+    <string name="lx_choose_pages">विषय-सूची चुनें</string>
+    <plurals name="lx_pages_selected">
+        <item quantity="one">विषय-सूची का %1$d पन्ना</item>
+        <item quantity="other">विषय-सूची के %1$d पन्ने</item>
+    </plurals>
     <string name="lx_page_number">पन्ना %1$d</string>
     <string name="lx_offset_label">छपा पन्ना १ = PDF पन्ना</string>
     <string name="lx_offset_earlier">पिछला पन्ना अंक</string>
     <string name="lx_offset_later">अगला पन्ना अंक</string>
-    <string name="lx_calibrate">एक शीर्षक को उसके पन्ने से मिलाएँ</string>
-    <string name="lx_suggestions">सुझाए गए लिंक। हर एक की पुष्टि करें।</string>
+    <string name="lx_calibrate">शीर्षक मिलाएँ</string>
+    <string name="lx_calibrate_hint">शीर्षक को उसके PDF पन्ने से मिलाएँ</string>
+    <string name="lx_suggestions">सुझाए लिंक जाँचें</string>
     <string name="lx_confidence_high">उच्च</string>
     <string name="lx_confidence_medium">मध्यम</string>
     <string name="lx_confidence_low">कम</string>
     <string name="lx_title_hint">शीर्षक</string>
     <string name="lx_printed_page_hint">छपा पन्ना</string>
     <string name="lx_add_entry">प्रविष्टि जोड़ें</string>
-    <string name="lx_create">लिंक वाली प्रति बनाएँ</string>
+    <string name="lx_create">प्रति बनाएँ</string>
     <string name="lx_copy_name">प्रति का नाम</string>
-    <string name="lx_result">लिंक वाली प्रति बनी। %1$d लिंक, %2$d बुकमार्क।</string>
-    <string name="lx_original_kept">मूल दस्तावेज़ नहीं बदला है।</string>
-    <string name="lx_skipped">%1$d सुझाव छोड़ दिए गए (पन्ना दस्तावेज़ से बाहर)।</string>
+    <string name="lx_result">%1$d लिंक · %2$d बुकमार्क</string>
+    <string name="lx_original_kept">मूल फ़ाइल वैसी ही है</string>
+    <plurals name="lx_skipped">
+        <item quantity="one">%1$d छोड़ा गया: पन्ना PDF के बाहर है</item>
+        <item quantity="other">%1$d छोड़े गए: पन्ने PDF के बाहर हैं</item>
+    </plurals>
     <string name="lx_no_ocr">पहले इस दस्तावेज़ की लिखावट पहचानें।</string>
-    <string name="lx_no_geometry">इस पन्ने पर अक्षरों की जानकारी नहीं मिली। पहले लिखावट पहचानें।</string>
+    <string name="lx_no_geometry">पहले इस पन्ने की लिखावट पढ़ें</string>
     <string name="lx_protected">सुरक्षित दस्तावेज़ में लिंक नहीं बनेगा। मूल दस्तावेज़ नहीं बदला है।</string>
     <string name="lx_vault">तिजोरी के दस्तावेज़ में लिंक नहीं बनेगा।</string>
     <string name="lx_pdfa">PDF/A प्रति में लिंक नहीं बनते।</string>
-    <string name="lx_pro_badge">Pro · पहली बार मुफ़्त</string>
-    <string name="lx_trial_title">लिंक सूची पहली बार मुफ़्त</string>
-    <string name="lx_trial_msg">पहली बार में पूरी गुणवत्ता वाली लिंक वाली प्रति बनेगी, बिना शुल्क और बिना निशान। आगे इसके लिए Pro चाहिए ({Play price}, एक बार भुगतान)। अपने आप शुल्क नहीं लगेगा।</string>
+    <string name="lx_pro_badge">Pro · 1 बार मुफ़्त</string>
+    <string name="lx_trial_title">एक बार मुफ़्त आज़माएँ</string>
+    <!-- PRO_PLAN item 3: Play's localized price in %1$s, none shown when it is unavailable. -->
+    <string name="lx_trial_msg">पहली बार में पूरी गुणवत्ता वाली प्रति सहेजी जाएगी, बिना शुल्क और बिना निशान। आगे इस काम के लिए Pro (%1$s, एक बार भुगतान) चाहिए। अपने आप शुल्क नहीं लगेगा।</string>
+    <string name="lx_trial_msg_no_price">पहली बार में पूरी गुणवत्ता वाली प्रति सहेजी जाएगी, बिना शुल्क और बिना निशान। आगे इस काम के लिए Pro (एक बार भुगतान) चाहिए। अपने आप शुल्क नहीं लगेगा।</string>
     <string name="lx_try_free">मुफ़्त आज़माएँ</string>
     <string name="lx_not_now">अभी नहीं</string>
     <string name="lx_open">खोलें</string>
@@ -39,8 +48,10 @@
     <string name="lx_done">पूरा</string>
     <string name="lx_link_description">दबाने पर %1$s खुलेगा</string>
     <string name="lx_no_entries">कोई सूची प्रविष्टि नहीं मिली। खुद जोड़ें।</string>
-    <string name="lx_working">लिंक वाली प्रति बन रही है…</string>
+    <string name="lx_working">प्रति बन रही है…</string>
     <string name="lx_reading">सूची पन्ना पढ़ा जा रहा है…</string>
-    <string name="lx_error">लिंक वाली प्रति नहीं बन सकी: %1$s</string>
-    <string name="lx_limited">लिंक उसी ऐप में चलते हैं जो इन्हें मानता है। सुनने वाली सहायता बिना चिह्न वाले लिंक को नहीं बोल सकती।</string>
+    <string name="lx_error">प्रति नहीं बन सकी: %1$s</string>
+    <string name="lx_more">और</string>
+    <string name="lx_limited_short">लिंक की सीमाएँ</string>
+    <string name="lx_limited">लिंक उन्हीं PDF ऐप में खुलेंगे जो इन्हें चलाते हैं। सुनने वाली सहायता बिना टैग वाले लिंक नहीं भी बता सकती है।</string>
 </resources>
