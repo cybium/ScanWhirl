@@ -52,8 +52,8 @@ class FormReadyStringsTest {
         val required = listOf(
             "form1_exam_label", "form1_exam_ug_photo", "form1_exam_ug_signature",
             "form1_exam_ug_thumb", "form1_exam_pg_photo", "form1_exam_pg_signature",
-            "form1_exam_pg_thumb", "form1_example_exam", "form1_mode_fit",
-            "form1_mode_crop", "form1_mode_helper"
+            "form1_exam_pg_thumb", "form1_example_exam", "form1_exam_choose",
+            "form1_mode_fit", "form1_mode_crop"
         )
         for (file in listOf(en, hi)) {
             val present = keys(file)

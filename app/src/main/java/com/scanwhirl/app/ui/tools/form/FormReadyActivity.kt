@@ -22,6 +22,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
@@ -97,12 +98,11 @@ class FormReadyActivity : BaseActivity() {
     private lateinit var applyBar: FrameLayout
 
     private val presetChips = mutableMapOf<String, TextView>()
-    private val examChips = mutableMapOf<String, TextView>()
     private val dpiChips = mutableMapOf<Int, TextView>()
     private val unitChips = mutableMapOf<FormUnit, TextView>()
+    private lateinit var examButton: TextView
     private lateinit var modeFitChip: TextView
     private lateinit var modeCropChip: TextView
-    private lateinit var modeHelper: TextView
 
     /** FORMPIX: Fit is the default for every preset; Crop is an explicit secondary action. */
     private enum class FrameMode { FIT, CROP }
@@ -289,50 +289,16 @@ class FormReadyActivity : BaseActivity() {
         }
         column.addView(aboutDetails)
 
-        // FORMPIX: exam-named examples first. Six short chips in two rows of three; each applies
-        // an editable example with the notice's KB band and pixels marked as suggested.
-        val examLabel = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
-            id = R.id.formReadyExamLabel
-            text = getString(R.string.form1_exam_label)
-            maxLines = Int.MAX_VALUE
-            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
-        }
-        column.addView(examLabel)
-        val exams = listOf(
-            Triple(R.id.formReadyExamUgPhoto, FormPresets.NEET_UG_PHOTO, R.string.form1_exam_ug_photo),
-            Triple(R.id.formReadyExamUgSignature, FormPresets.NEET_UG_SIGNATURE, R.string.form1_exam_ug_signature),
-            Triple(R.id.formReadyExamUgThumb, FormPresets.NEET_UG_THUMB, R.string.form1_exam_ug_thumb),
-            Triple(R.id.formReadyExamPgPhoto, FormPresets.NEET_PG_PHOTO, R.string.form1_exam_pg_photo),
-            Triple(R.id.formReadyExamPgSignature, FormPresets.NEET_PG_SIGNATURE, R.string.form1_exam_pg_signature),
-            Triple(R.id.formReadyExamPgThumb, FormPresets.NEET_PG_THUMB, R.string.form1_exam_pg_thumb)
+        // FORMPIX: one compact Exam chooser instead of six always-visible chips, so the 40-word
+        // screen budget is kept. The menu lists the NEET examples with notice KB bands.
+        examButton = modeChip(R.id.formReadyExam, R.string.form1_exam_label) { showExamMenu(it) }
+        examButton.contentDescription = getString(R.string.form1_exam_choose)
+        examButton.background = SwStyle.rounded(
+            this, SwStyle.color(this, R.color.glass_surface), 12f
         )
-        for ((rowId, defs) in listOf(
-            R.id.formReadyExamRow1 to exams.subList(0, 3),
-            R.id.formReadyExamRow2 to exams.subList(3, 6)
-        )) {
-            val row = LinearLayout(this).apply {
-                id = rowId
-                orientation = LinearLayout.HORIZONTAL
-            }
-            for ((id, spec, labelRes) in defs) {
-                val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                    this.id = id
-                    text = getString(labelRes)
-                    gravity = Gravity.CENTER
-                    maxLines = Int.MAX_VALUE
-                    minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
-                    isClickable = true
-                    isFocusable = true
-                    setOnClickListener { selectPreset(spec) }
-                }
-                examChips[spec.id] = chip
-                chipA11y(chip)
-                row.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (id != defs.last().first) marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
-                })
-            }
-            column.addView(row)
-        }
+        column.addView(examButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 10f) })
 
         // FORMPIX: Fit whole photo is the default. Crop is a secondary action that only shows the
         // frame editor when the person asks for it.
@@ -349,13 +315,6 @@ class FormReadyActivity : BaseActivity() {
             })
         }
         column.addView(modeRow)
-        modeHelper = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
-            id = R.id.formReadyModeHelper
-            text = getString(R.string.form1_mode_helper)
-            maxLines = Int.MAX_VALUE
-            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
-        }
-        column.addView(modeHelper)
 
         // Council §1: preset names stay in full; a two-column grid (not shorter words) fixes the
         // mid-word break at 100%. Five presets -> rows of 2 / 2 / 1.
@@ -804,6 +763,24 @@ class FormReadyActivity : BaseActivity() {
         refresh()
     }
 
+    /** FORMPIX: the exam list lives behind one control to keep the screen under 40 words. */
+    private fun showExamMenu(anchor: View) {
+        val specs = FormPresets.EXAM
+        val labels = listOf(
+            R.string.form1_exam_ug_photo, R.string.form1_exam_ug_signature,
+            R.string.form1_exam_ug_thumb, R.string.form1_exam_pg_photo,
+            R.string.form1_exam_pg_signature, R.string.form1_exam_pg_thumb
+        )
+        PopupMenu(this, anchor).apply {
+            specs.forEachIndexed { i, spec -> menu.add(0, i, i, getString(labels[i])) }
+            setOnMenuItemClickListener { item ->
+                selectPreset(specs[item.itemId])
+                true
+            }
+            show()
+        }
+    }
+
     /**
      * FORMPIX: the exact source pixels this run uses. Fit keeps the whole EXIF-normalised source
      * (the encoder letterboxes it uniformly); Crop uses the existing snapped-rect path.
@@ -1102,7 +1079,6 @@ class FormReadyActivity : BaseActivity() {
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
         for ((id, chip) in presetChips) paint(chip, id == spec.id)
-        for ((id, chip) in examChips) paint(chip, id == spec.id)
         paint(modeFitChip, frameMode == FrameMode.FIT)
         paint(modeCropChip, frameMode == FrameMode.CROP)
         for ((d, chip) in dpiChips) {

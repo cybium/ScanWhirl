@@ -2,8 +2,8 @@
 <resources>
     <!-- FORM1 / lane F: COPY_DIET 1.3.0 form table. Every entry has an EN + HI pair. -->
     <string name="form1_title">Form photo</string>
-    <string name="form1_notice">Check your form\'s pixel, KB and DPI limits</string>
-    <string name="form1_about_requirements">About form requirements</string>
+    <string name="form1_notice">Check current notice</string>
+    <string name="form1_about_requirements">About</string>
     <string name="form1_notice_details">Presets are examples only. Some portals also ask for a live photo step that cannot be done offline.</string>
     <string name="form1_expanded">Expanded</string>
     <string name="form1_collapsed">Collapsed</string>
@@ -12,10 +12,11 @@
     <string name="form1_preset_thumb">Thumb impression</string>
     <string name="form1_preset_declaration">Declaration</string>
     <string name="form1_preset_custom">Custom</string>
-    <string name="form1_example_label">Example preset</string>
+    <string name="form1_example_label">Example</string>
     <string name="form1_example">%1$d × %2$d px · %3$d to %4$d KB · JPG</string>
     <!-- FORMPIX: exam-named editable examples; pixels are suggested, the KB band is official. -->
-    <string name="form1_exam_label">NEET exam examples</string>
+    <string name="form1_exam_label">Exam</string>
+    <string name="form1_exam_choose">Choose an exam</string>
     <string name="form1_exam_ug_photo">NEET UG photo</string>
     <string name="form1_exam_ug_signature">NEET UG signature</string>
     <string name="form1_exam_ug_thumb">NEET UG thumb</string>
@@ -25,7 +26,6 @@
     <string name="form1_example_exam">Suggested %1$d × %2$d px · %3$d to %4$d KB · JPG</string>
     <string name="form1_mode_fit">Fit whole photo</string>
     <string name="form1_mode_crop">Crop</string>
-    <string name="form1_mode_helper">Fit keeps the whole photo. Crop trims the edges.</string>
     <string name="form1_photo_cm_note">Some forms ask for about 3.5 × 4.5 cm instead.</string>
 
     <!-- Lane F: persistent labels (hints vanish once a field has text). -->

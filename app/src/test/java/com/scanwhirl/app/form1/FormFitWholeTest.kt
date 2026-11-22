@@ -108,6 +108,18 @@ class FormFitWholeTest {
     private fun textOf(activity: FormReadyActivity, id: Int): String =
         activity.findViewById<TextView>(id).text.toString()
 
+    /** Pick an exam preset the way a person does: open the one Exam chooser, tap a named row. */
+    private fun chooseExam(a: FormReadyActivity, labelRes: Int) {
+        a.findViewById<View>(R.id.formReadyExam).performClick()
+        idle()
+        val popup = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu()
+        assertNotNull("exam chooser must open", popup)
+        val item = (0 until popup!!.menu.size()).map { popup.menu.getItem(it) }
+            .first { it.title == a.getString(labelRes) }
+        popup.menu.performIdentifierAction(item.itemId, 0)
+        idle()
+    }
+
     @Test(timeout = 30_000)
     fun `fit whole is the default for every preset and hides the crop editor`() {
         val c = controller()
@@ -207,8 +219,7 @@ class FormFitWholeTest {
         try {
             val a = c.get()
             idle()
-            a.findViewById<View>(R.id.formReadyExamUgPhoto).performClick()
-            idle()
+            chooseExam(a, R.string.form1_exam_ug_photo)
             assertEquals("neet_ug_photo", a.currentSpecIdForTest())
             assertEquals(350, a.currentWidthPxForTest())
             assertEquals(450, a.currentHeightPxForTest())
@@ -217,8 +228,7 @@ class FormFitWholeTest {
             assertFalse(a.cropModeForTest())
             assertTrue("pixels must be marked suggested", textOf(a, R.id.formReadyExample).contains("Suggested"))
 
-            a.findViewById<View>(R.id.formReadyExamPgSignature).performClick()
-            idle()
+            chooseExam(a, R.string.form1_exam_pg_signature)
             assertEquals("neet_pg_signature", a.currentSpecIdForTest())
             assertEquals(276, a.currentWidthPxForTest())
             assertEquals(118, a.currentHeightPxForTest())
@@ -228,8 +238,7 @@ class FormFitWholeTest {
 
             a.setCropModeForTest(true)
             idle()
-            a.findViewById<View>(R.id.formReadyExamUgThumb).performClick()
-            idle()
+            chooseExam(a, R.string.form1_exam_ug_thumb)
             assertFalse("choosing any preset returns to Fit", a.cropModeForTest())
             assertEquals(400, a.currentWidthPxForTest())
             assertEquals(150, a.currentHeightPxForTest())

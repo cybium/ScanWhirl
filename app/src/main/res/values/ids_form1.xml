@@ -10,19 +10,10 @@
     <item name="formReadyPresetThumb" type="id" />
     <item name="formReadyPresetDeclaration" type="id" />
     <item name="formReadyPresetCustom" type="id" />
-    <!-- FORMPIX: compact exam row and the Fit/Crop choice. -->
-    <item name="formReadyExamLabel" type="id" />
-    <item name="formReadyExamRow1" type="id" />
-    <item name="formReadyExamRow2" type="id" />
-    <item name="formReadyExamUgPhoto" type="id" />
-    <item name="formReadyExamUgSignature" type="id" />
-    <item name="formReadyExamUgThumb" type="id" />
-    <item name="formReadyExamPgPhoto" type="id" />
-    <item name="formReadyExamPgSignature" type="id" />
-    <item name="formReadyExamPgThumb" type="id" />
+    <!-- FORMPIX: one Exam chooser and the Fit/Crop choice. -->
+    <item name="formReadyExam" type="id" />
     <item name="formReadyModeFit" type="id" />
     <item name="formReadyModeCrop" type="id" />
-    <item name="formReadyModeHelper" type="id" />
     <item name="formReadyPresetRow1" type="id" />
     <item name="formReadyPresetRow2" type="id" />
     <item name="formReadyPresetRow3" type="id" />

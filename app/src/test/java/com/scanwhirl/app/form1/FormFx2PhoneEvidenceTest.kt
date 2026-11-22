@@ -496,16 +496,14 @@ class FormFx2PhoneEvidenceTest {
             val a = c.get()
             idle()
             a.findViewById<View>(R.id.formReadyPresetSignature).performClick()
-            a.findViewById<View>(R.id.formReadyCleanup).performClick()
             idle()
             a.acceptPickedBytes(jpegSolid(Color.WHITE, 600, 500), "signature.jpg")
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() && a.cropReadyForTest() })
-            // FORMPIX old->new: preview/export crop equality is a Crop-mode contract now.
+            // FORMPIX old->new: preview/export crop equality is a Crop-mode contract now. Turn
+            // cleanup on ONCE after the frame is set, so one preview generation is in flight.
             a.setCropModeForTest(true)
             // Deliberately off-aspect: the unsnapped float rect would differ from the saved crop.
             a.setCropRectForTest(RectF(50f, 50f, 400f, 300f))
-            a.findViewById<View>(R.id.formReadyCleanup).performClick()
-            idle()
             a.findViewById<View>(R.id.formReadyCleanup).performClick()
             idle()
             assertTrue("preview never appeared", waitUntil(20_000) { a.previewVisibleForTest() })
