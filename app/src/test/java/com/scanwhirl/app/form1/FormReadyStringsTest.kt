@@ -55,4 +55,22 @@ class FormReadyStringsTest {
             assertFalse("en dash in ${file.name}", text.contains('–'))
         }
     }
+
+    @Test
+    fun `copy diet removed keys are gone and new keys exist in both locales`() {
+        val removed = listOf(
+            "form1_check_rules", "form1_kb_invalid", "form1_kb_max_nonpositive",
+            "form1_result_pixels_ok", "form1_result_dpi_ok", "form1_note_measured",
+            "form1_note_below_min", "form1_note_above_max"
+        )
+        val added = listOf(
+            "form1_example_label", "form1_min_miss_constraint",
+            "form1_note_measured_short", "form1_note_bytes"
+        )
+        for (file in listOf(en, hi)) {
+            val present = keys(file)
+            for (key in removed) assertFalse("stale COPY_DIET key $key in ${file.name}", key in present)
+            for (key in added) assertTrue("missing COPY_DIET key $key in ${file.name}", key in present)
+        }
+    }
 }
