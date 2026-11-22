@@ -300,9 +300,13 @@ def verify(journey, path, extra=None, spec=None, label="verifier"):
     return {"status": status, "reason": f"exit {proc.returncode}", "checks": checks}
 
 
-def result(detail="", verify_result=None, output=None):
+def result(detail="", verify_result=None, output=None, ok=None):
+    # A screenshot-only tool is a PASS only when the flow proved an effect
+    # (a pulled output or an explicitly reported UI action), never because no
+    # exception happened. No silent "PASS" for an empty library.
     return {"detail": detail, "verifier": verify_result,
-            "output": str(output) if output else None}
+            "output": str(output) if output else None,
+            "ok": bool(output) if ok is None else bool(ok)}
 
 
 # --------------------------------------------------------------- tool recipes
@@ -325,7 +329,9 @@ def prepare_library():
 def import_pdf(name):
     """Create sheet -> Import PDF -> SAF: test-fixture root, fallback to Download."""
     for attempt in range(2):
-        if not soft_tap(desc=strings("en")["create_disc_desc"]):
+        # Empty Library has a dedicated Import tile; the nav Scan disc is the
+        # same action on a populated Library. ids are locale-independent.
+        if not (soft_tap(rid="swEmptyImport") or soft_tap(rid="swNavScan")):
             break
         try:
             wait(timeout=8, text="Import PDF")
@@ -333,13 +339,19 @@ def import_pdf(name):
         except AssertionError:
             if attempt == 1:
                 note("Import PDF entry did not appear")
-    if not soft_tap(text="Import PDF"):
+    root = hierarchy()
+    labels = [(n.get("text") or "", n.get("content-desc") or "") for n in root.iter("node")]
+    if any("Import PDF" in a or "Import PDF" in b for a, b in labels):
+        soft_tap(text="Import PDF")
+    elif not any("Show roots" in b for _, b in labels):
+        note("create sheet offered no Import PDF route")
+        back()
         return False
     try:
         wait(desc="Show roots")
         soft_tap(desc="Show roots")
     except AssertionError:
-        pass
+        note("SAF 'Show roots' control not found (picker may already list files)")
     # The test APK ships a DocumentsProvider named exactly this; SAF lists it as a root.
     if soft_tap(text="ScanWhirl test fixtures"):
         note("SAF: using ScanWhirl test fixtures provider")
@@ -674,7 +686,7 @@ def f_import_pdf():
         present = True
     except AssertionError:
         pass
-    return result(f"import returned {ok}; named document in Library={present}", None, None)
+    return result(f"import returned {ok}; named document in Library={present}", None, None, ok=present)
 
 
 def f_trash_restore():
@@ -698,13 +710,17 @@ def f_trash_restore():
         soft_tap(desc="Me")
         soft_tap(rid="swMeTrash")
         shot("trash_view")
+        restored = False
         for label in ("Restore", "Move back", "Undo"):
             if soft_tap(text=label):
                 shot("trash_restored")
+                restored = True
                 break
     else:
         note("no named card available for a Trash journey")
-    return result("J5 is a phone-evidence journey; screenshots are the evidence", None, None)
+        restored = False
+    return result("J5 is a phone-evidence journey; screenshots are the evidence",
+                  None, None, ok=restored)
 
 
 def f_vault():
@@ -713,13 +729,16 @@ def f_vault():
     soft_tap(desc="Vault")
     shot("vault_open")
     # PIN/decryption is Robolectric territory; open the screen and record the state.
+    acted = False
     for label in ("Add", "Add to Vault", "Move", "Create PIN", "Continue"):
         if soft_tap(text=label):
             shot("vault_action")
+            acted = True
             break
     soft_tap(desc="Library")
     shot("vault_back")
-    return result("J8 is a phone-evidence journey; screenshots are the evidence", None, None)
+    return result("J8 is a phone-evidence journey; screenshots are the evidence",
+                  None, None, ok=acted)
 
 
 FLOWS = {
@@ -802,7 +821,8 @@ def main():
             detail = res.get("detail", "")
             ver = res.get("verifier")
             output = res.get("output")
-            status = "PASS" if ver is None else ver["status"]
+            ok = res.get("ok", bool(output))
+            status = ("PASS" if ok else "FAIL") if ver is None else ver["status"]
             vreason = ver.get("reason", "") if ver else "screenshot-only (no numeric verifier)"
             checks = ver.get("checks", []) if ver else []
             reason = "" if status == "PASS" else (ver.get("reason") or detail or "tool did not complete")
