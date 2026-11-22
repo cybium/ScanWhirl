@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.RsExternalCompressRejectTest,com.scanwhirl.app.ui.tools.RsReviewSafetyTest,com.scanwhirl.app.ui.tools.RsReviewSafetyHiTest
