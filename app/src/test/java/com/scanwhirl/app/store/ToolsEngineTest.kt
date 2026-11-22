@@ -183,19 +183,41 @@ class ToolsEngineTest {
     }
 
     @Test
-    fun `pdf to images writes a single png for one page and a zip for many`() {
-        val one = DocFixtures.saved(repo, app, pages = 1)
-        val single = work("one.png")
-        runBlocking { repo.pdfToImages(one, ScanRepository.ImageExportFormat.PNG, zip = false, outFile = single) }
-        val singleBytes = single.readBytes()
+    fun `pdf to images writes separate files unless a zip bundle is chosen`() {
+        // FF-J changed this expectation. OLD: "one png for one page and a zip for many" asserted
+        // that two pages with zip=false still produced one .zip. NEW: the chosen layout controls
+        // the container; two pages give two named PNGs, and a ZIP is an explicit opt-in.
+        val many = DocFixtures.saved(repo, app, pages = 2)
+        val dir = work("ffj_engine").apply { mkdirs() }
+        val separate = runBlocking {
+            com.scanwhirl.app.tools.PdfToJExport.export(
+                repo,
+                com.scanwhirl.app.tools.PdfToJExport.Request(
+                    many, listOf(0, 1), ScanRepository.ImageExportFormat.PNG,
+                    com.scanwhirl.app.tools.PdfToJOptions.Layout.SEPARATE, quality = 100
+                ),
+                dir, "Doc"
+            )
+        }
+        assertNull("separate layout must not force a zip", separate.zip)
+        assertEquals(listOf("Doc page 1.png", "Doc page 2.png"), separate.files.map { it.name })
+        val singleBytes = separate.files.first().readBytes()
         assertEquals(0x89, singleBytes[0].toInt() and 255)
         assertEquals("PNG", String(singleBytes, 1, 3, Charsets.US_ASCII))
 
-        val many = DocFixtures.saved(repo, app, pages = 2)
-        val zipped = work("many.png.zip")
-        runBlocking { repo.pdfToImages(many, ScanRepository.ImageExportFormat.PNG, zip = false, outFile = zipped) }
-        ZipFile(zipped).use { zip ->
-            assertEquals(2, zip.entries().toList().count { it.name.endsWith(".png") })
+        val zipped = runBlocking {
+            com.scanwhirl.app.tools.PdfToJExport.export(
+                repo,
+                com.scanwhirl.app.tools.PdfToJExport.Request(
+                    many, listOf(0, 1), ScanRepository.ImageExportFormat.PNG,
+                    com.scanwhirl.app.tools.PdfToJOptions.Layout.ZIP, quality = 100
+                ),
+                dir, "Bundle"
+            )
+        }
+        val zip = requireNotNull(zipped.zip) { "the ZIP bundle was chosen" }
+        ZipFile(zip).use { archive ->
+            assertEquals(2, archive.entries().toList().count { it.name.endsWith(".png") })
         }
     }
 

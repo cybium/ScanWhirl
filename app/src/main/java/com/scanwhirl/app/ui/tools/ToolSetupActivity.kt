@@ -31,6 +31,8 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.tools.CompressionPresentation
+import com.scanwhirl.app.tools.PdfToJExport
+import com.scanwhirl.app.tools.PdfToJOptions
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentActionDispatcher
 import com.scanwhirl.app.ui.DocumentViewerActivity
@@ -42,6 +44,7 @@ import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.ui.protect.UnlockSheet
+import com.scanwhirl.app.ui.tools.form.FormReadyActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
 import com.scanwhirl.app.util.OutputNames
@@ -87,6 +90,11 @@ class ToolSetupActivity : BaseActivity() {
 
     private var format = ScanRepository.ImageExportFormat.JPG
     private var quality = 90
+    // ---- FF-J: PDF to JPG (owned block; lane fx1 owns this sheet's thumbnails) -------
+    private var pdfPagesText = ""
+    private var pdfLayout = PdfToJOptions.Layout.SEPARATE
+    private var pdfFormMode = false
+    // ---- end FF-J ------------------------------------------------------------------
     private var level = 1
     private var target: Long? = null
     private var rangesText = ""
@@ -162,6 +170,10 @@ class ToolSetupActivity : BaseActivity() {
         outState.putStringArrayList(KEY_SELECTED, ArrayList(selected))
         outState.putString(KEY_FORMAT, format.name)
         outState.putInt(KEY_QUALITY, quality)
+        // FF-J: keep the typed pages and the explicit separate/ZIP choice across recreation.
+        outState.putString(KEY_PDF_PAGES, pdfPagesText)
+        outState.putString(KEY_PDF_LAYOUT, pdfLayout.name)
+        outState.putBoolean(KEY_PDF_FORM, pdfFormMode)
         outState.putInt(KEY_LEVEL, level)
         outState.putString(KEY_RANGES, rangesText)
         outState.putString(KEY_NAME, nameText)
@@ -179,6 +191,10 @@ class ToolSetupActivity : BaseActivity() {
             }
             ?: format
         quality = saved.getInt(KEY_QUALITY, quality)
+        pdfPagesText = saved.getString(KEY_PDF_PAGES).orEmpty()
+        pdfLayout = saved.getString(KEY_PDF_LAYOUT)
+            ?.let { runCatching { PdfToJOptions.Layout.valueOf(it) }.getOrNull() } ?: pdfLayout
+        pdfFormMode = saved.getBoolean(KEY_PDF_FORM, false)
         level = saved.getInt(KEY_LEVEL, level)
         rangesText = saved.getString(KEY_RANGES).orEmpty()
         nameText = saved.getString(KEY_NAME).orEmpty()
@@ -745,7 +761,62 @@ class ToolSetupActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
-        optionsHost.addView(note(getString(R.string.tools_setup_images_note)))
+        // ---- FF-J: choose pages / separate files vs ZIP / one-image form handoff ----
+        // Kept as one clearly separated block; lane fx1 owns this sheet's thumbnails.
+        optionsHost.addView(
+            field(R.string.ffj_pages_hint, R.id.toolSetupPdfPages, pdfPagesText) { pdfPagesText = it }
+        )
+        val layoutRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val separate = chip(getString(R.string.ffj_separate), R.id.toolSetupPdfSeparate)
+        val zip = chip(getString(R.string.ffj_zip), R.id.toolSetupPdfZip)
+        fun paintLayout() {
+            paintChip(separate, pdfLayout == PdfToJOptions.Layout.SEPARATE)
+            paintChip(zip, pdfLayout == PdfToJOptions.Layout.ZIP)
+        }
+        separate.setOnClickListener { pdfLayout = PdfToJOptions.Layout.SEPARATE; paintLayout() }
+        zip.setOnClickListener { pdfLayout = PdfToJOptions.Layout.ZIP; paintLayout() }
+        layoutRow.addView(separate, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 48f)
+        ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        layoutRow.addView(zip, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 48f)
+        ))
+        optionsHost.addView(layoutRow)
+        paintLayout()
+
+        val form = chip(getString(R.string.ffj_form), R.id.toolSetupPdfForm)
+        form.setOnClickListener {
+            pdfFormMode = !pdfFormMode
+            paintChip(form, pdfFormMode)
+            // FF-J: this option hands the chosen page to Form photo with source context.
+            if (pdfFormMode) openFormHandoff()
+        }
+        optionsHost.addView(form, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 48f)
+        ))
+        paintChip(form, pdfFormMode)
+        // ---- end FF-J ---------------------------------------------------------------
+
+        // FF-J: the shared images note still describes the old forced-ZIP batch flow.
+        optionsHost.addView(note(getString(R.string.ffj_note)))
+    }
+
+    /** FF-J: hand the chosen page to the existing Form photo screen with source context. */
+    private fun openFormHandoff() {
+        val doc = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } }
+        val pages = if (pdfPagesText.isBlank()) {
+            doc?.pageFiles?.indices?.toList().orEmpty()
+        } else {
+            runCatching { PdfToJOptions.parsePages(pdfPagesText, doc?.pageCount ?: 0) }
+                .getOrDefault(emptyList())
+        }
+        startActivity(FormReadyActivity.intent(this).apply {
+            putExtra(EXTRA_FFJ_SOURCE_DOC, doc?.id.orEmpty())
+            putExtra(EXTRA_FFJ_SOURCE_PAGE, pages.firstOrNull()?.toString().orEmpty())
+        })
     }
 
     private fun buildCompressOptions() {
@@ -1485,18 +1556,44 @@ class ToolSetupActivity : BaseActivity() {
                 }
             }
             "pdf_to_images" -> {
+                // ---- FF-J: explicit pages, separate files by default, ZIP opt-in -------
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
+                val pages = if (pdfPagesText.isBlank()) {
+                    doc.pageFiles.indices.toList()
+                } else {
+                    runCatching { PdfToJOptions.parsePages(pdfPagesText, doc.pageCount) }
+                        .getOrElse { return fail(getString(R.string.tools_setup_bad_ranges)) }
+                }
+                if (pages.isEmpty()) return fail(getString(R.string.tools_setup_bad_ranges))
+                val form = if (pdfFormMode) {
+                    if (pages.size != 1) return fail(getString(R.string.ffj_form_one_page))
+                    PdfToJExport.FormSpec(200, 230, 10_000L, 200_000L, 200)
+                } else null
+                val label = getString(
+                    if (format == ScanRepository.ImageExportFormat.PNG) R.string.tools_setup_png
+                    else R.string.tools_setup_jpg
+                )
                 execute({
-                    val dir = outputDir()
-                    val single = doc.pageCount == 1
-                    val extension = if (format == ScanRepository.ImageExportFormat.PNG) "png" else "jpg"
-                    val name = "${baseName(doc)}.$extension" + if (!single) ".zip" else ""
-                    val out = File(dir, name)
-                    repo.pdfToImages(doc.id, format, zip = !single, outFile = out, quality = quality)
-                    val result = ResultFiles(listOf(out), mimeFor(out))
-                    result to captureFiles(result.files)
-                }) { (result, identity) -> openFiles(result.files, result.mime, outputIdentity = identity) }
+                    val result = PdfToJExport.export(
+                        repo,
+                        PdfToJExport.Request(
+                            docId = doc.id, pageIndices = pages, format = format,
+                            layout = pdfLayout, quality = quality, form = form
+                        ),
+                        outputDir(), baseName(doc)
+                    )
+                    val receipt = if (result.zip != null) {
+                        getString(R.string.ffj_zip_receipt, result.files.size)
+                    } else {
+                        val first = result.outputs.first()
+                        getString(R.string.ffj_receipt, label, first.width, first.height, first.bytes)
+                    }
+                    Triple(result.files, captureFiles(result.files), receipt)
+                }) { (files, identity, receipt) ->
+                    openFiles(files, mimeFor(files.first()), note = receipt, outputIdentity = identity)
+                }
+                // ---- end FF-J --------------------------------------------------------
             }
             "long_image" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1787,6 +1884,12 @@ class ToolSetupActivity : BaseActivity() {
         private const val KEY_SELECTED = "com.scanwhirl.app.ui.tools.SELECTED"
         private const val KEY_FORMAT = "com.scanwhirl.app.ui.tools.FORMAT"
         private const val KEY_QUALITY = "com.scanwhirl.app.ui.tools.QUALITY"
+        // FF-J recreation + source-context handoff to the Form photo lane.
+        private const val KEY_PDF_PAGES = "com.scanwhirl.app.ui.tools.FFJ_PAGES"
+        private const val KEY_PDF_LAYOUT = "com.scanwhirl.app.ui.tools.FFJ_LAYOUT"
+        private const val KEY_PDF_FORM = "com.scanwhirl.app.ui.tools.FFJ_FORM"
+        const val EXTRA_FFJ_SOURCE_DOC = "ffj_source_doc"
+        const val EXTRA_FFJ_SOURCE_PAGE = "ffj_source_page"
         private const val KEY_LEVEL = "com.scanwhirl.app.ui.tools.LEVEL"
         private const val KEY_RANGES = "com.scanwhirl.app.ui.tools.RANGES"
         private const val KEY_NAME = "com.scanwhirl.app.ui.tools.NAME"

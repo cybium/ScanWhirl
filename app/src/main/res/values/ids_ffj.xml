@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FF-J keeps its own ids so no other lane's ids file is edited. -->
+<resources>
+    <item name="toolSetupPdfPages" type="id" />
+    <item name="toolSetupPdfSeparate" type="id" />
+    <item name="toolSetupPdfZip" type="id" />
+    <item name="toolSetupPdfForm" type="id" />
+</resources>

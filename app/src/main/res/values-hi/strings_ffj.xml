@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FF-J: Hindi parity. पन्ने/फ़ाइल/तस्वीर per the judged glossary; no rejected loanwords. -->
+<resources>
+    <string name="ffj_pages_hint">पन्ने, जैसे 2 या 1,3</string>
+    <string name="ffj_separate">अलग JPG फ़ाइलें</string>
+    <string name="ffj_zip">ZIP बंडल</string>
+    <string name="ffj_form">फ़ॉर्म के लिए एक तस्वीर तैयार करें</string>
+    <string name="ffj_form_one_page">फ़ॉर्म तस्वीर के लिए एक पन्ना चुनें।</string>
+    <string name="ffj_note">सिर्फ़ वही पन्ने चुनें जो आपके फ़ॉर्म में चाहिए।</string>
+    <string name="ffj_receipt">%1$s · %2$d × %3$d · %4$d KB</string>
+    <string name="ffj_zip_receipt">%1$d JPG फ़ाइलें एक ZIP बंडल में</string>
+</resources>

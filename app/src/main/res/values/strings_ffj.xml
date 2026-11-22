@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FF-J: PDF to a usable individual image. One short helper line; pixels and bytes shown. -->
+<resources>
+    <string name="ffj_pages_hint">Pages, like 2 or 1,3</string>
+    <string name="ffj_separate">Separate JPG files</string>
+    <string name="ffj_zip">ZIP bundle</string>
+    <string name="ffj_form">Prepare one image for a form</string>
+    <string name="ffj_form_one_page">Choose one page for a form image.</string>
+    <string name="ffj_note">Pick only the pages your form asks for.</string>
+    <string name="ffj_receipt">%1$s · %2$d × %3$d · %4$d KB</string>
+    <string name="ffj_zip_receipt">%1$d JPG files in one ZIP bundle</string>
+</resources>
