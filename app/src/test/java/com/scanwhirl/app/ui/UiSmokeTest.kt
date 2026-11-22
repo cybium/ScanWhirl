@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -31,6 +32,8 @@ import androidx.core.view.isVisible
 class UiSmokeTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -1263,8 +1266,11 @@ class UiSmokeTest {
     }
 
     @Test(timeout = 60_000)
-    fun `resize caps output under the requested max bytes`() {
-        // A striped source so it has room to shrink.
+    fun `resize with a small target keeps requested pixels and reports an honest miss`() {
+        // OLD (691c1587): ImageTools.resize(maxBytes = 8000) silently shrank
+        // the pixels until the file fit, so a requested canvas was never exact.
+        // NEW (FF-R): 200 x 230 stays fixed; the byte result is reported as a
+        // miss instead of being faked by changing dimensions.
         val bmp = android.graphics.Bitmap.createBitmap(
             600, 600, android.graphics.Bitmap.Config.ARGB_8888
         )
@@ -1278,13 +1284,17 @@ class UiSmokeTest {
         val src = com.scanwhirl.app.util.ImageTools.encodeJpeg(bmp, 95)
         bmp.recycle()
 
-        val result = com.scanwhirl.app.util.ImageTools.resize(
+        val result = com.scanwhirl.app.tools.ExactResize.process(
             src,
-            com.scanwhirl.app.util.ImageTools.ResizeOptions(maxBytes = 8_000, dpi = 0)
+            com.scanwhirl.app.tools.ExactResize.Options(200, 230, maxBytes = 8_000)
         )
-        assertTrue(
-            "output ${result.bytes.size} B should fit under 8000 B",
-            result.bytes.size <= 8_000
+        assertEquals(200, result.width)
+        assertEquals(230, result.height)
+        assertEquals(200 to 230, com.scanwhirl.app.util.ImageTools.imageSize(result.bytes))
+        assertEquals(
+            "bytesMet must describe the real saved bytes, not a silent shrink",
+            result.bytes.size <= 8_000,
+            result.bytesMet
         )
     }
 

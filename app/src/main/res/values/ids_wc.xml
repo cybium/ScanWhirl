@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lane WC word-count gate. Screens set this keyed tag on views that show
+         user content (file/document names, OCR text) so the gate counts only
+         words the app itself writes. No screen code is owned by this lane; the
+         helper UserContent.mark(view) is the single supported way to set it. -->
+    <item name="sw_user_content" type="id" />
+</resources>

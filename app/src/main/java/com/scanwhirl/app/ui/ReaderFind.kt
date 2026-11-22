@@ -107,6 +107,7 @@ internal class ReaderFind(
                 false
             }
         }
+        b.btnFindMore.setOnClickListener { showFindMore() }
         b.btnFindClose.setOnClickListener { close() }
         b.btnFindPrev.setOnClickListener { step(-1) }
         b.btnFindNext.setOnClickListener { step(+1) }
@@ -122,7 +123,7 @@ internal class ReaderFind(
         restoreIndex = restore
         b.findPanel.isVisible = true
         if (docId == null) {
-            show(Outcome.Unavailable(R.string.reader_find_external))
+            show(Outcome.Unavailable(R.string.v3_reader_find_external))
             return
         }
         b.findInput.isEnabled = true
@@ -171,14 +172,14 @@ internal class ReaderFind(
                 when {
                     snap == null -> Outcome.Unavailable(R.string.doc_not_found)
                     // PDF-only document: no page images, so no stored page text to search.
-                    snap.pageKeys.isEmpty() -> Outcome.Unavailable(R.string.reader_find_no_text)
-                    snap.pageKeys.size != pdfPageCount -> Outcome.Unavailable(R.string.reader_find_out_of_step)
+                    snap.pageKeys.isEmpty() -> Outcome.Unavailable(R.string.v3_reader_find_no_text)
+                    snap.pageKeys.size != pdfPageCount -> Outcome.Unavailable(R.string.v3_reader_find_out_of_step)
                     else -> Outcome.Ready(
                         q, PageTextMatches.find(q, snap.pageKeys, snap.ocr), snap.ocr, snap.pending
                     )
                 }
             } catch (_: Exception) {
-                Outcome.Unavailable(R.string.reader_find_no_text)
+                Outcome.Unavailable(R.string.v3_reader_find_no_text)
             }
             main.post { if (!destroyed && gen == generation && isOpen) show(result) }
         }
@@ -190,7 +191,7 @@ internal class ReaderFind(
             is Outcome.Unavailable -> {
                 matches = emptyList()
                 index = -1
-                b.findInput.isEnabled = docId != null && result.message != R.string.reader_find_out_of_step
+                b.findInput.isEnabled = docId != null && result.message != R.string.v3_reader_find_out_of_step
             }
             is Outcome.Ready -> {
                 matches = result.result.hits.flatMap { hit ->
@@ -241,9 +242,9 @@ internal class ReaderFind(
                 val cov = o.result.coverage
                 when {
                     o.query.isBlank() -> lines += res.getString(
-                        if (cov.isEmpty && !o.pending) R.string.reader_find_no_text else R.string.reader_find_type
+                        if (cov.isEmpty && !o.pending) R.string.v3_reader_find_no_text else R.string.reader_find_type
                     )
-                    cov.isEmpty && !o.pending -> lines += res.getString(R.string.reader_find_no_text)
+                    cov.isEmpty && !o.pending -> lines += res.getString(R.string.v3_reader_find_no_text)
                     matches.isEmpty() -> lines += res.getString(R.string.reader_find_none, o.query)
                     else -> {
                         val m = matches[index]
@@ -264,9 +265,9 @@ internal class ReaderFind(
                         excerptDesc = res.getString(R.string.reader_find_excerpt_desc, m.pageIndex + 1, ex.text)
                     }
                 }
-                if (o.pending) lines += res.getString(R.string.reader_find_pending)
+                if (o.pending) lines += res.getString(R.string.v3_reader_find_pending)
                 else if (cov.isPartial) lines += res.getString(
-                    R.string.reader_find_partial, cov.indexedPages, cov.totalPages
+                    R.string.v3_reader_find_partial, cov.indexedPages, cov.totalPages
                 )
             }
         }
@@ -280,7 +281,17 @@ internal class ReaderFind(
             v.isEnabled = canStep
             v.alpha = if (canStep) 1f else 0.45f
         }
-        b.findNote.isVisible = outcome is Outcome.Ready && matches.isNotEmpty()
+        // V3: the explanation is no longer printed under every search; More owns it.
+        b.findNote.isVisible = false
+    }
+
+    /** V3: the full Find explanation, available on demand instead of permanently. */
+    private fun showFindMore() {
+        com.scanwhirl.app.ui.kit.SwSheet.note(
+            context,
+            context.getString(R.string.v3_find_more_a11y),
+            context.getString(R.string.v3_reader_find_note_more)
+        ).show()
     }
 
     companion object {

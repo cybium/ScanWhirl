@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.app.Dialog
@@ -40,6 +42,8 @@ import java.io.IOException
 
 /** Minimal themed Home host: LockFlow only needs these four calls from its host. */
 class K1LockHostActivity : AppCompatActivity(), HomeHost {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     override fun refreshList() = Unit
     override fun showProgress(titleRes: Int): SwProgress =
         SwProgress.show(this, getString(titleRes))
@@ -57,6 +61,8 @@ class K1LockHostActivity : AppCompatActivity(), HomeHost {
 @Config(sdk = [35])
 class ImportLifecycleTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private var controller: ActivityController<K1LockHostActivity>? = null

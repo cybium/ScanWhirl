@@ -101,9 +101,11 @@ class ProPriceFallbackTest {
         return out
     }
 
-    private fun oneTimeMark(activity: ShellActivity): TextView =
+    // OLD: the "one time" suffix beside the amount. COPY_DIET PRO2 removed it; the single S14
+    // payment line below the price is now the only payment disclosure on this card.
+    private fun paymentLine(activity: ShellActivity): TextView =
         textViews(activity.findViewById(R.id.swProScreen))
-            .single { it.text.toString() == activity.getString(R.string.pro_one_time) }
+            .single { it.text.toString() == activity.getString(R.string.copydiet_pro2_once) }
 
     @Test
     fun `no Play price shows no amount and no rupee on the Pro screen`() {
@@ -128,9 +130,11 @@ class ProPriceFallbackTest {
                     stringFromSources("values", "pro_price_play"),
                     shown
                 )
+                assertTrue("the single payment line is present even with no amount", paymentLine(activity).isShown)
                 assertFalse(
-                    "no 'one time' next to a missing amount",
-                    oneTimeMark(activity).isShown
+                    "the duplicate 'one time' suffix is gone",
+                    textViews(activity.findViewById(R.id.swProScreen))
+                        .any { it.text.toString() == activity.getString(R.string.pro_one_time) }
                 )
             }
         }
@@ -148,7 +152,7 @@ class ProPriceFallbackTest {
                 idle()
 
                 assertEquals("Play's own price string is shown verbatim", "$4.99", priceText(activity))
-                assertTrue("the amount keeps its 'one time' mark", oneTimeMark(activity).isShown)
+                assertTrue("the single payment line stays beside a real price", paymentLine(activity).isShown)
             }
         }
     }

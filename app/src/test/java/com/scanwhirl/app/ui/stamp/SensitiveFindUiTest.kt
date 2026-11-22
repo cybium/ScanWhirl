@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.stamp
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -40,6 +42,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class SensitiveFindUiTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private var controller: ActivityController<StampEditorActivity>? = null
@@ -191,7 +195,7 @@ class SensitiveFindUiTest {
         val snackbar = screen.findViewById<TextView>(
             com.google.android.material.R.id.snackbar_text
         )
-        assertEquals(app.getString(R.string.find_none_clean), snackbar?.text?.toString())
+        assertEquals(app.getString(R.string.cdf1_find_none_body), snackbar?.text?.toString())
     }
 
     @Test(timeout = 30_000)

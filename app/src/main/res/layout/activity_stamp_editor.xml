@@ -37,48 +37,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <LinearLayout
-            android:id="@+id/pageNav"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="@dimen/sw_space_2"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="@dimen/sw_space_1">
-
-            <TextView
-                android:id="@+id/prevPage"
-                android:layout_width="48dp"
-                android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:contentDescription="@string/stamp_prev_page"
-                android:gravity="center"
-                android:text="@string/stamp_prev_symbol"
-                android:textColor="@color/cyan_primary"
-                android:textSize="22sp" />
-
-            <TextView
-                android:id="@+id/pageIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="64dp"
-                android:gravity="center"
-                android:textColor="@color/text_hologram_mid"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/nextPage"
-                android:layout_width="48dp"
-                android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:contentDescription="@string/stamp_next_page"
-                android:gravity="center"
-                android:text="@string/stamp_next_symbol"
-                android:textColor="@color/cyan_primary"
-                android:textSize="22sp" />
-        </LinearLayout>
-
         <TextView
             android:id="@+id/hint"
             android:layout_width="match_parent"
@@ -90,9 +48,51 @@
             android:paddingHorizontal="@dimen/sw_space_3"
             android:paddingVertical="6dp"
             android:textColor="@color/text_hologram_mid"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:visibility="gone" />
     </FrameLayout>
+
+    <!-- FX1 critic: the page pill is its own row below the canvas, never painted over a page. -->
+    <LinearLayout
+        android:id="@+id/pageNav"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingVertical="@dimen/sw_space_1">
+
+        <TextView
+            android:id="@+id/prevPage"
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:contentDescription="@string/stamp_prev_page"
+            android:gravity="center"
+            android:text="@string/stamp_prev_symbol"
+            android:textColor="@color/cyan_primary"
+            android:textSize="22sp" />
+
+        <TextView
+            android:id="@+id/pageIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="64dp"
+            android:gravity="center"
+            android:textColor="@color/text_hologram_hi"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nextPage"
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:contentDescription="@string/stamp_next_page"
+            android:gravity="center"
+            android:text="@string/stamp_next_symbol"
+            android:textColor="@color/cyan_primary"
+            android:textSize="22sp" />
+    </LinearLayout>
 
     <View
         android:layout_width="match_parent"
@@ -159,8 +159,8 @@
             android:layout_marginStart="@dimen/sw_space_3"
             android:layout_weight="1"
             android:text="@string/stamp_no_selection"
-            android:textColor="@color/text_hologram_dim"
-            android:textSize="12sp" />
+            android:textColor="@color/text_hologram_mid"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <LinearLayout

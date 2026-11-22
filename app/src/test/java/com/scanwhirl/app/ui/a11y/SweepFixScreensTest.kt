@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui.a11y
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -62,6 +63,8 @@ import java.io.File
 class SweepFixScreensTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -365,7 +368,7 @@ class SweepFixScreensTest {
                 )
                 assertTrue(
                     "the name is the row's own label, got \"$name\"",
-                    name.contains(a.getString(R.string.settings_ocr_language), ignoreCase = true)
+                    name.contains(a.getString(R.string.cdf1_ocr_language), ignoreCase = true)
                 )
             }
         }

@@ -84,7 +84,7 @@
             android:gravity="center"
             android:paddingTop="4dp"
             android:paddingBottom="6dp"
-            android:textColor="@color/text_hologram_mid"
-            android:textSize="12sp" />
+            android:textColor="@color/v3_text_primary"
+            android:textSize="14sp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -20,7 +20,9 @@
     <string name="cz_storage_temporary">Temporary files size</string>
     <string name="cz_storage_clear">Clear temporary files</string>
     <string name="cz_storage_cleared">Freed %1$s of temporary files. Library and Vault untouched.</string>
-    <string name="cz_storage_nothing">Nothing to clear. Temporary files are already empty.</string>
+    <!-- FX1 critic: total vs removable are shown apart; never "already empty" beside a number. -->
+    <string name="cz_storage_removable">Removable now: %1$s</string>
+    <string name="cz_storage_nothing">No removable temporary files. Files in use or from the last 24 hours are kept.</string>
 
     <!-- Item 2: Rate and feedback -->
     <string name="cz_support_section">Support</string>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V3 copy diet (qa/audit-1.3.0/uiux/COPY_DIET.md, section 2 Reader/V3 and
+     Viewer/actions, sections 3-4). Lane-local keys: never rename a shared
+     strings*.xml key from a parallel owner. Every value has an EN/HI pair. -->
+<resources>
+    <!-- Viewer: the protected distinction is a short S line, not a privacy paragraph. -->
+    <string name="v3_protected_banner">Shared PDF needs a password; pages open here</string>
+
+    <!-- Actions sheet: named title, category (not folder) action, sentence-case section. -->
+    <string name="v3_actions_title">Document actions</string>
+    <!-- The one export label, local so the shared "Save PDF" key is not renamed. -->
+    <string name="v3_save_copy">Save copy to Documents</string>
+    <string name="v3_set_category">Set category</string>
+    <string name="v3_organize">Organize</string>
+
+    <!-- Dock / sheet OCR: short P action label, descriptive TalkBack name. -->
+    <string name="v3_ocr">OCR</string>
+    <string name="v3_ocr_a11y">Extract text, OCR</string>
+
+    <!-- Reader find: one-line states and the explanation behind (i) More. -->
+    <string name="v3_find_more">More</string>
+    <string name="v3_find_more_a11y">More about Find</string>
+    <string name="v3_reader_find_note_more">Matches come from recognised text. The page image isn\'t marked.</string>
+    <string name="v3_reader_find_pending">Reading text…</string>
+    <string name="v3_reader_find_partial">Searchable: %1$d of %2$d pages</string>
+    <string name="v3_reader_find_no_text">Read text first to search</string>
+    <string name="v3_reader_find_external">Import this PDF to search its text</string>
+    <string name="v3_reader_find_out_of_step">Page links unavailable: PDF and pages differ</string>
+    <string name="v3_reader_start_changed">Document changed. Opened at page 1.</string>
+    <string name="v3_reader_text_unavailable">Import this PDF to read its text</string>
+    <plurals name="v3_reader_more_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+</resources>

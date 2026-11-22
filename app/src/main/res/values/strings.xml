@@ -402,12 +402,21 @@
     <string name="resize_invalid_size">Enter a valid size (1 to 12000 px)</string>
     <string name="resize_invalid_target">Enter a size like 500 KB or 3 MB</string>
     <string name="resize_done">Saved %1$s (%2$s)</string>
+    <!-- FF-R: exact canvas. Crop keeps the chosen region; borders aspect-fit without stretching. -->
+    <string name="resize_mode_crop">Crop to fit</string>
+    <string name="resize_mode_borders">Fit whole image with borders</string>
+    <string name="resize_crop_helper">Choose which part to keep. Pixels stay %1$d × %2$d. If this size cannot fit, we\'ll tell you.</string>
+    <string name="resize_borders_helper">White bars are added; the picture is not stretched. Pixels stay %1$d × %2$d.</string>
+    <string name="resize_minmax">Minimum and maximum KB</string>
+    <string name="resize_target_missed">Pixels kept at %1$d × %2$d, but %3$s could not be reached at this size.</string>
 
     <string name="compress_title">Compress PDF</string>
     <string name="compress_source_scan">Saved scan</string>
     <string name="compress_source_file">PDF file</string>
-    <string name="compress_level_title">Compression level</string>
-    <string name="compress_target_label">Custom size (optional)</string>
+    <string name="compress_level_title">Compress</string>
+    <string name="compress_target_label">Maximum file size</string>
+    <!-- SH2: short example above the KB chips of the Compress sheet. -->
+    <string name="compress_target_placeholder">100 KB</string>
     <string name="compress_level_low">Best quality</string>
     <string name="compress_level_medium">Balanced</string>
     <string name="compress_level_high">Smaller</string>
@@ -419,10 +428,10 @@
     <string name="compress_failed">Compression failed: %1$s</string>
 
     <!-- UI-B3 (#7, #8, #9-now): two explicit aims, then a measured result. -->
-    <string name="compress_mode_quality">Choose quality</string>
-    <string name="compress_mode_target">Aim for a file size</string>
-    <string name="compress_target_help">Type KB or MB, like 500 KB or 3 MB. Numbers alone mean KB</string>
-    <string name="compress_target_required">Type the size you need, like 500 KB or 3 MB</string>
+    <string name="compress_mode_quality">Quality</string>
+    <string name="compress_mode_target">Maximum file size</string>
+    <string name="compress_target_help">Enter KB or MB. Numbers alone mean KB.</string>
+    <string name="compress_target_required">Enter a maximum size</string>
     <string name="compress_action">Compress</string>
     <string name="compress_result_header">Compressed</string>
     <string name="compress_result_size">File now %1$s</string>

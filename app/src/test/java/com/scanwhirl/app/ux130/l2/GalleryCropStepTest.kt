@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l2
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.net.Uri
@@ -35,6 +37,8 @@ import java.io.File
 @Config(sdk = [35])
 class GalleryCropStepTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val dirs = mutableListOf<File>()
 

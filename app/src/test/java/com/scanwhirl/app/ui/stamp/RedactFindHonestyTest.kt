@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.stamp
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -39,6 +41,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class RedactFindHonestyTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -104,7 +108,7 @@ class RedactFindHonestyTest {
 
         assertEquals(
             "a checked page without matches may say so, with a caveat",
-            app.getString(R.string.find_none_clean),
+            app.getString(R.string.cdf1_find_none_body),
             snackbar(screen)
         )
     }
@@ -118,10 +122,10 @@ class RedactFindHonestyTest {
 
         assertNull(
             "the clean message must never appear when reading failed",
-            snackbar(screen)?.takeIf { it == app.getString(R.string.find_none_clean) }
+            snackbar(screen)?.takeIf { it == app.getString(R.string.cdf1_find_none_body) }
         )
         val warning = requireNotNull(ShadowDialog.getLatestDialog()) { "warning sheet" }
-        assertEquals(app.getString(R.string.find_unreadable_one), sheetMessage(warning))
+        assertEquals(app.getString(R.string.cdf1_find_unreadable_one), sheetMessage(warning))
         assertFalse("a failed read is not reported as a count of hits", screen.editor.hasRedaction())
 
         // The notice's action arms the manual box tool.
@@ -167,7 +171,7 @@ class RedactFindHonestyTest {
         assertNotNull("the hit is still offered", results.findViewById<View>(R.id.swSheetItems))
         assertEquals(
             "the counts do not cover the page that could not be read",
-            app.getString(R.string.find_unreadable_one),
+            app.getString(R.string.cdf1_find_unreadable_one),
             sheetMessage(results)
         )
     }
@@ -183,12 +187,12 @@ class RedactFindHonestyTest {
 
         val warning = pollUntil {
             ShadowDialog.getLatestDialog()?.findViewById<TextView>(R.id.swSheetMessage)
-                ?.text?.toString() == app.getString(R.string.find_unreadable_one)
+                ?.text?.toString() == app.getString(R.string.cdf1_find_unreadable_one)
         }
         assertTrue("an OCR failure must be reported as unreadable", warning)
         assertNull(
             "no 'nothing found' snackbar after a failed read",
-            snackbar(screen)?.takeIf { it == app.getString(R.string.find_none_clean) }
+            snackbar(screen)?.takeIf { it == app.getString(R.string.cdf1_find_none_body) }
         )
     }
 }

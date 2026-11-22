@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.vault
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -38,6 +40,8 @@ import java.io.File
 @Config(sdk = [35])
 class VaultKdfThreadTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var store: VaultStore
     private var controller: ActivityController<VaultActivity>? = null

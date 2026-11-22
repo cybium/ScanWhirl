@@ -1,4 +1,5 @@
 package com.scanwhirl.app
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -59,6 +60,8 @@ import java.io.File
 class FixCopyTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var store: VaultStore
@@ -405,7 +408,8 @@ class FixCopyTest {
             "compress_level_medium" to "Balanced",
             "compress_level_high" to "Smaller",
             "compress_level_ultra" to "Smallest",
-            "compress_target_label" to "Custom size (optional)",
+            // SH2 COPY_DIET: OLD "Custom size (optional)" -> NEW "Maximum file size".
+            "compress_target_label" to "Maximum file size",
             "settings_auto_enhance_summary" to
                 "Cleans up scans. Off keeps the photo as taken.",
             "settings_searchable_pdf_summary" to
@@ -448,6 +452,8 @@ class FixCopyTest {
 
     /** Records what `DocumentsContract.deleteDocument` asks the provider to do. */
     class RecordingDocumentsProvider : ContentProvider() {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         val calls = mutableListOf<Pair<String, Uri?>>()
 
         override fun onCreate(): Boolean = true
