@@ -208,6 +208,75 @@ open class RsReviewSafetyTest {
         }
     }
 
+    private fun visibleWords(root: View): List<String> {
+        val words = mutableListOf<String>()
+        fun walk(v: View) {
+            if (v.visibility != View.VISIBLE) return
+            if (v is TextView) words += v.text.toString().split(Regex("\\s+"))
+                .filter { it.any(Char::isLetter) && !it.contains("UserDocument") }
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
+        return words
+    }
+
+    @Test(timeout = 30_000)
+    fun longProducerNotesNeverExceedFortyWordsAndOpenInDetails() {
+        val file = RsFixtures.jpeg("form_note", 600, 500, app)
+        val success = "Form photo ready: 600 × 500 px · 48 KB. The photo was cropped to the " +
+            "requested size, the background was flattened to white and the file was saved as a " +
+            "baseline JPEG at 300 dpi so the portal can read it.\n" +
+            "Check the portal's own size limit before you upload this file, because every " +
+            "portal publishes different rules and they change without notice."
+        val failure = "Could not prepare the photo. The picture is smaller than the size " +
+            "requested, the face could not be found with enough confidence, and the edges are " +
+            "too close to the frame. Retake the photo in better light and try again with a " +
+            "plain background behind you."
+        for (note in listOf(success, failure)) {
+            for (withFile in listOf(true, false)) {
+                val c = Robolectric.buildActivity(ToolResultActivity::class.java,
+                    ToolResultActivity.intent(app, "form_ready",
+                        files = if (withFile) listOf(file) else emptyList(),
+                        mime = "image/jpeg", note = note))
+                try {
+                    c.setup()
+                    settle(c.get())
+                    for (expanded in listOf(false, true)) {
+                        if (expanded) c.get().findViewById<View>(R.id.toolResultMore)?.performClick()
+                        val words = visibleWords(c.get().findViewById(android.R.id.content))
+                        assertTrue("note/$withFile/$expanded: ${words.size} $words", words.size <= 40)
+                    }
+                    val view = c.get().findViewById<TextView>(R.id.rsMoreNote)
+                    if (view.visibility == View.VISIBLE) {
+                        assertTrue(view.text.toString(), view.text.split(Regex("\\s+")).size <=
+                            ToolResultActivity.MORE_NOTE_WORDS + 1)
+                        assertEquals(2, view.maxLines)
+                        assertTrue(view.hasOnClickListeners())
+                    }
+                } finally { c.destroy() }
+            }
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun rejectedExternalCompressShowsCouldNotMakeItSmallerWithoutOutput() {
+        val c = Robolectric.buildActivity(ToolResultActivity::class.java,
+            ToolResultActivity.intent(app, "compress", beforeBytes = 1_000_000,
+                outcomeClass = "NOT_SMALLER"))
+        try {
+            c.setup()
+            settle(c.get())
+            val texts = mutableListOf<String>()
+            fun walk(v: View) {
+                if (v is TextView) texts += v.text.toString()
+                if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+            walk(c.get().findViewById(android.R.id.content))
+            assertTrue(texts.toString(), texts.any { it == c.get().getString(R.string.rs_not_smaller_title) })
+            assertTrue(visibleWords(c.get().findViewById(android.R.id.content)).size <= 40)
+        } finally { c.destroy() }
+    }
+
     @Test(timeout = 30_000)
     fun exportStatesHaveAtMostFortyAppWords() {
         val file = RsFixtures.jpeg("words", 100, 200, app)

@@ -47,6 +47,7 @@
     <string name="rs_where_documents">Documents/ScanWhirl में सहेजी गई</string>
     <string name="rs_where_documents_existing">Documents/ScanWhirl में पहले से है</string>
     <string name="rs_where_chosen">चुनी जगह पर सहेजी गई</string>
+    <string name="rs_details_title">विवरण</string>
     <string name="rs_unsaved_output">फ़ाइल रखने के लिए प्रति सहेजें</string>
     <string name="rs_state_only">झलक उपलब्ध नहीं है</string>
     <string name="rs_exact_bytes">%1$d बाइट</string>

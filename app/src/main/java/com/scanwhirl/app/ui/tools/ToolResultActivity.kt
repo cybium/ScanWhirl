@@ -965,9 +965,44 @@ class ToolResultActivity : BaseActivity() {
         }
         renderMoreLocation()
         moreNote?.let { view ->
-            val text = note?.takeIf { it.isNotBlank() }
-            view.isVisible = text != null
-            view.text = text.orEmpty()
+            // UX_RULES_SCANNER: never the full producer paragraph. At most a 2-line summary
+            // (<= MORE_NOTE_WORDS words); the rest sits behind an info "Details" sheet.
+            val full = note?.trim()?.takeIf { it.isNotBlank() }
+            view.isVisible = full != null
+            view.maxLines = 2
+            view.ellipsize = android.text.TextUtils.TruncateAt.END
+            if (full == null) {
+                view.text = ""
+                view.setCompoundDrawablesRelative(null, null, null, null)
+                view.setOnClickListener(null)
+                view.isClickable = false
+            } else {
+                val firstLine = full.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+                val words = firstLine.split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val summary = if (words.size > MORE_NOTE_WORDS) {
+                    words.take(MORE_NOTE_WORDS).joinToString(" ") + "…"
+                } else firstLine
+                view.text = summary
+                if (summary != full) {
+                    val d = androidx.appcompat.content.res.AppCompatResources
+                        .getDrawable(this, R.drawable.ic_sym_info)?.mutate()
+                    val size = SwStyle.dp(this, 18f)
+                    d?.setBounds(0, 0, size, size)
+                    d?.setTint(SwStyle.color(this, R.color.sw_text_secondary))
+                    view.setCompoundDrawablesRelative(null, null, d, null)
+                    view.compoundDrawablePadding = SwStyle.dp(this, 6f)
+                    view.contentDescription = summary + ". " + getString(R.string.rs_details_title)
+                    view.isClickable = true
+                    view.setOnClickListener {
+                        com.scanwhirl.app.ui.kit.SwSheet.note(this, getString(R.string.rs_details_title), full)
+                    }
+                } else {
+                    view.setCompoundDrawablesRelative(null, null, null, null)
+                    view.contentDescription = null
+                    view.setOnClickListener(null)
+                    view.isClickable = false
+                }
+            }
         }
         renderV2tStatus()
         bindCompare()
@@ -1870,6 +1905,9 @@ class ToolResultActivity : BaseActivity() {
     }
 
     companion object {
+        /** Word cap of the More-panel note summary; the rest is in the Details sheet. */
+        internal const val MORE_NOTE_WORDS = 10
+
         private const val EXTRA_TOOL_ID = "tool_id"
         private const val EXTRA_DOC_IDS = "doc_ids"
         private const val EXTRA_FILES = "files"

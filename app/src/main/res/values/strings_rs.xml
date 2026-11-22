@@ -54,6 +54,7 @@
     <string name="rs_where_documents">Saved to Documents/ScanWhirl</string>
     <string name="rs_where_documents_existing">Already in Documents/ScanWhirl</string>
     <string name="rs_where_chosen">Saved to chosen location</string>
+    <string name="rs_details_title">Details</string>
     <string name="rs_unsaved_output">Save a copy to keep this file</string>
     <string name="rs_state_only">Preview unavailable</string>
     <string name="rs_exact_bytes">%1$d bytes</string>

@@ -2338,21 +2338,28 @@ class ScanRepository(private val context: Context) {
         compressScanToTarget(id, targetBytes, rejectNotSmaller = true, onPage = onPage)
     } catch (_: NotSmaller) { null }
 
-    private class NotSmaller : IOException()
+    /** Thrown when a staged compress output is not smaller than its source; nothing was published. */
+    class NotSmaller(val before: Long = 0L, val target: Long? = null) : IOException()
 
-    private fun rejectGrownStagedPdf(source: ScanDocument, stagedPdf: File, target: Long?) {
-        val before = source.pdfFile.length()
+    private fun rejectGrownStagedPdf(source: ScanDocument, stagedPdf: File, target: Long?) =
+        rejectGrownStaged(source.pdfFile.length(), stagedPdf, target, source.id)
+
+    /**
+     * Staged rejection shared by library and external/device-PDF compression: measured inside
+     * staging, before any publish. [sourceId] is null for an external file.
+     */
+    private fun rejectGrownStaged(before: Long, stagedPdf: File, target: Long?, sourceId: String?) {
         if (before <= 0L || stagedPdf.length() < before) return
         // Persist BEFORE returning to the Activity, and before any atomic publish or recovery seal.
         V2tResultReceiptStore(context).save(V2tResultReceiptStore.Receipt(
             toolId = "compress", docIds = emptyList(), files = emptyList(),
             mime = "application/pdf", note = null, targetBytes = target, beforeBytes = before,
-            outputIdentity = null, receiptSourceId = source.id, sourceKept = true,
+            outputIdentity = null, receiptSourceId = sourceId, sourceKept = sourceId != null,
             chosenLocationName = null, documentsExistingName = null, undone = false,
             savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
         ))
         OpFaults.at("compress:rejected")
-        throw NotSmaller()
+        throw NotSmaller(before, target)
     }
 
     /**
@@ -2474,7 +2481,8 @@ class ScanRepository(private val context: Context) {
         vaulted: Boolean,
         onPlan: (suspend (PdfImportBudget.Plan) -> ImportDecision)?,
         onPage: ((Int, Int) -> Unit)?,
-        preset: ImportDecision? = null
+        preset: ImportDecision? = null,
+        rejectNotSmallerThan: Long = 0L
     ): ScanDocument? = withContext(Dispatchers.IO) {
         val staging = File(importStagingDir, UUID.randomUUID().toString().take(12))
         if (!staging.mkdirs()) throw PdfImport.ImportException(PdfImport.Reason.SAVE_FAILED, "Could not prepare the import")
@@ -2515,6 +2523,7 @@ class ScanRepository(private val context: Context) {
             if (!pdfFile.isFile || pdfFile.length() == 0L) {
                 throw PdfImport.ImportException(PdfImport.Reason.NO_SPACE, "Could not write the document")
             }
+            if (rejectNotSmallerThan > 0L) rejectGrownStaged(rejectNotSmallerThan, pdfFile, null, null)
             val title = name?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: nextDocumentName()
             try {
                 writeMeta(staging, title)
@@ -2680,10 +2689,13 @@ class ScanRepository(private val context: Context) {
         maxDim: Int = 2048,
         quality: Int = 85,
         indices: List<Int>,
+        /** >0: reject (throw [NotSmaller], publish nothing) an output not smaller than this. */
+        rejectNotSmallerThan: Long = 0L,
         onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument? = importPdfInternal(
         uri, name, dpi, maxDim, quality, vaulted = false,
-        onPlan = null, onPage = onPage, preset = ImportDecision.Pages(indices)
+        onPlan = null, onPage = onPage, preset = ImportDecision.Pages(indices),
+        rejectNotSmallerThan = rejectNotSmallerThan
     )
 
     /**
@@ -2703,6 +2715,8 @@ class ScanRepository(private val context: Context) {
         dpi: Float = 150f,
         maxDim: Int = 2048,
         quality: Int = 85,
+        /** >0: reject (throw [NotSmaller], publish nothing) an output not smaller than this. */
+        rejectNotSmallerThan: Long = 0L,
         onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument? {
         require(targetBytes > 0) { "Target size must be positive" }
@@ -2717,7 +2731,9 @@ class ScanRepository(private val context: Context) {
             quality = quality,
             preset = ImportDecision.Pages(indices)
         ) { planned ->
-            buildAndPublish(docName, null, 0L) { staging ->
+            buildAndPublish(docName, null, 0L,
+                validateOutput = { if (rejectNotSmallerThan > 0L) rejectGrownStaged(rejectNotSmallerThan, it, targetBytes, null) }
+            ) { staging ->
                 val total = planned.sumOf { it.indices.size }
                 var done = 0
                 for (pdf in planned) {
