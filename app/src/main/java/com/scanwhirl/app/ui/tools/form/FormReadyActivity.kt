@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -41,9 +42,11 @@ import com.scanwhirl.app.util.SignatureCleanup
 import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 
 /**
  * FORM1: prepare a photo, signature, thumb impression or declaration for an Indian exam/government
@@ -64,7 +67,13 @@ class FormReadyActivity : BaseActivity() {
     private lateinit var heightField: EditText
     private lateinit var minField: EditText
     private lateinit var maxField: EditText
+    private lateinit var bandErrorView: TextView
     private lateinit var cleanupBox: CheckBox
+    private lateinit var savePresetButton: TextView
+    private lateinit var usePresetButton: TextView
+    private lateinit var cleanupPreview: View
+    private lateinit var previewOriginal: ImageView
+    private lateinit var previewCleaned: ImageView
     private lateinit var readout: TextView
     private lateinit var example: TextView
     private lateinit var photoCmNote: TextView
@@ -76,6 +85,21 @@ class FormReadyActivity : BaseActivity() {
     private val presetChips = mutableMapOf<String, TextView>()
     private val dpiChips = mutableMapOf<Int, TextView>()
     private val unitChips = mutableMapOf<FormUnit, TextView>()
+
+    /** Lane F1: one durable id for this operation; the output name is derived from it. */
+    private var opId: String = UUID.randomUUID().toString()
+
+    private var encodeJob: Job? = null
+    private var previewJob: Job? = null
+    private var previewGeneration = 0
+    private var previewOriginalBitmap: Bitmap? = null
+    private var previewCleanedBitmap: Bitmap? = null
+
+    /** True while a worker still reads the preview bitmap; onDestroy must not recycle it then. */
+    @Volatile
+    private var bitmapInUse = false
+    @Volatile
+    private var destroyed = false
 
     private var spec: FormPresets.Spec = FormPresets.PHOTO
     private var unit: FormUnit = FormUnit.PX
@@ -103,15 +127,41 @@ class FormReadyActivity : BaseActivity() {
     @Volatile
     internal var lastNoteForTest: String? = null
 
+    /** Lane F2: the accessible status announced whenever a source starts preparing. */
+    internal var lastAnnouncedForTest: String? = null
+
+    /** Lane F1: how many times a worker had to recycle a bitmap after onDestroy had run. */
+    internal var deferredBitmapRecyclesForTest: Int = 0
+
+    private fun announcePreparing() {
+        val message = getString(R.string.form1_preparing)
+        lastAnnouncedForTest = message
+        progress.contentDescription = message
+        progress.announceForAccessibility(message)
+    }
+
     private val pick = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) {
             showPickPrompt()
         } else {
-            val bytes = runCatching {
-                contentResolver.openInputStream(uri)?.use { ImageTools.readPageBytes(it) }
-            }.getOrNull()
-            if (bytes == null) showPickFailure() else acceptPickedBytes(bytes)
+            // Lane F1: never read gallery bytes on the main thread, and never read an unbounded
+            // stream. The resolver call and the bounded read both happen on the worker.
+            showPreparing()
+            lifecycleScope.launch {
+                val bytes = withContext(Dispatchers.IO) {
+                    runCatching {
+                        contentResolver.openInputStream(uri)?.use { FormPresets.readBounded(it) }
+                    }.getOrNull()
+                }
+                progress.isVisible = false
+                if (bytes == null) showPickFailure() else acceptPickedBytes(bytes)
+            }
         }
+    }
+
+    private fun showPreparing() {
+        progress.isVisible = true
+        announcePreparing()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,6 +207,7 @@ class FormReadyActivity : BaseActivity() {
             setOnClickListener { finish() }
         })
         bar.addView(SwStyle.text(this, 20f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            id = R.id.formReadyTitle
             text = getString(R.string.form1_title)
             maxLines = Int.MAX_VALUE
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -176,32 +227,43 @@ class FormReadyActivity : BaseActivity() {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, SwStyle.dp(this@FormReadyActivity, 10f))
         })
 
-        val presetRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val presetDefs = listOf(
-            R.id.formReadyPresetPhoto to (FormPresets.PHOTO to R.string.form1_preset_photo),
-            R.id.formReadyPresetSignature to (FormPresets.SIGNATURE to R.string.form1_preset_signature),
-            R.id.formReadyPresetThumb to (FormPresets.THUMB to R.string.form1_preset_thumb),
-            R.id.formReadyPresetDeclaration to (FormPresets.DECLARATION to R.string.form1_preset_declaration),
-            R.id.formReadyPresetCustom to (FormPresets.CUSTOM to R.string.form1_preset_custom)
+        // Council §1: preset names stay in full; a two-column grid (not shorter words) fixes the
+        // mid-word break at 100%. Five presets -> rows of 2 / 2 / 1.
+        val presets = listOf(
+            Triple(R.id.formReadyPresetPhoto, FormPresets.PHOTO, R.string.form1_preset_photo),
+            Triple(R.id.formReadyPresetSignature, FormPresets.SIGNATURE, R.string.form1_preset_signature),
+            Triple(R.id.formReadyPresetThumb, FormPresets.THUMB, R.string.form1_preset_thumb),
+            Triple(R.id.formReadyPresetDeclaration, FormPresets.DECLARATION, R.string.form1_preset_declaration),
+            Triple(R.id.formReadyPresetCustom, FormPresets.CUSTOM, R.string.form1_preset_custom)
         )
-        for ((id, def) in presetDefs) {
-            val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                this.id = id
-                text = getString(def.second)
-                gravity = Gravity.CENTER
-                maxLines = Int.MAX_VALUE
-                minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { selectPreset(def.first) }
+        for ((rowId, defs) in listOf(
+            R.id.formReadyPresetRow1 to presets.subList(0, 2),
+            R.id.formReadyPresetRow2 to presets.subList(2, 4),
+            R.id.formReadyPresetRow3 to presets.subList(4, 5)
+        )) {
+            val row = LinearLayout(this).apply {
+                id = rowId
+                orientation = LinearLayout.HORIZONTAL
             }
-            presetChips[def.first.id] = chip
-            chipA11y(chip)
-            presetRow.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
-            })
+            for ((id, spec, labelRes) in defs) {
+                val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                    this.id = id
+                    text = getString(labelRes)
+                    gravity = Gravity.CENTER
+                    maxLines = Int.MAX_VALUE
+                    minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { selectPreset(spec) }
+                }
+                presetChips[spec.id] = chip
+                chipA11y(chip)
+                row.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
+                })
+            }
+            column.addView(row)
         }
-        column.addView(presetRow)
 
         example = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
             id = R.id.formReadyExample
@@ -216,10 +278,19 @@ class FormReadyActivity : BaseActivity() {
         }
         column.addView(photoCmNote)
 
-        val dims = LinearLayout(this).apply {
+        val dimLabels = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
         }
+        dimLabels.addView(fieldLabel(R.id.formReadyWidthLabel, R.string.form1_width_label),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+            })
+        dimLabels.addView(fieldLabel(R.id.formReadyHeightLabel, R.string.form1_height_label),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        column.addView(dimLabels)
+
+        val dims = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         widthField = numberField(R.id.formReadyWidth, R.string.form1_width_hint)
         heightField = numberField(R.id.formReadyHeight, R.string.form1_height_hint)
         dims.addView(widthField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -228,18 +299,25 @@ class FormReadyActivity : BaseActivity() {
         dims.addView(heightField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(dims)
 
-        val units = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        column.addView(fieldLabel(R.id.formReadyUnitLabel, R.string.form1_unit_label).apply {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)
-        }
-        for (u in listOf(FormUnit.PX, FormUnit.CM, FormUnit.MM, FormUnit.INCH)) {
+        })
+        val units = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for ((u, id, spoken) in listOf(
+            Triple(FormUnit.PX, R.id.formReadyUnitPx, R.string.form1_unit_px_spoken),
+            Triple(FormUnit.CM, R.id.formReadyUnitCm, R.string.form1_unit_cm_spoken),
+            Triple(FormUnit.MM, R.id.formReadyUnitMm, R.string.form1_unit_mm_spoken),
+            Triple(FormUnit.INCH, R.id.formReadyUnitInch, R.string.form1_unit_inch_spoken)
+        )) {
             val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                this.id = id
                 text = u.name.lowercase()
+                contentDescription = getString(spoken)
                 gravity = Gravity.CENTER
                 minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { unit = u; refresh() }
+                setOnClickListener { changeUnit(u) }
             }
             unitChips[u] = chip
             chipA11y(chip)
@@ -249,10 +327,19 @@ class FormReadyActivity : BaseActivity() {
         }
         column.addView(units)
 
-        val bands = LinearLayout(this).apply {
+        val bandLabels = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
         }
+        bandLabels.addView(fieldLabel(R.id.formReadyMinLabel, R.string.form1_min_label),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+            })
+        bandLabels.addView(fieldLabel(R.id.formReadyMaxLabel, R.string.form1_max_label),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        column.addView(bandLabels)
+
+        val bands = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         minField = numberField(R.id.formReadyMinKb, R.string.form1_min_hint)
         maxField = numberField(R.id.formReadyMaxKb, R.string.form1_max_hint)
         bands.addView(minField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -260,6 +347,14 @@ class FormReadyActivity : BaseActivity() {
         })
         bands.addView(maxField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(bands)
+
+        bandErrorView = SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.laser_danger)).apply {
+            id = R.id.formReadyBandError
+            isVisible = false
+            maxLines = Int.MAX_VALUE
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
+        }
+        column.addView(bandErrorView)
 
         val dpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -269,14 +364,19 @@ class FormReadyActivity : BaseActivity() {
         dpiRow.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
             text = "DPI"
         }, LinearLayout.LayoutParams(SwStyle.dp(this, 44f), ViewGroup.LayoutParams.WRAP_CONTENT))
-        for (d in FormPresets.SUPPORTED_DPI) {
+        for ((d, id) in listOf(
+            FormPresets.DPI_100 to R.id.formReadyDpi100,
+            FormPresets.DPI_200 to R.id.formReadyDpi200,
+            FormPresets.DPI_300 to R.id.formReadyDpi300
+        )) {
             val chip = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                this.id = id
                 text = d.toString()
                 gravity = Gravity.CENTER
                 minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { dpi = d; refresh() }
+                setOnClickListener { changeDpi(d) }
             }
             dpiChips[d] = chip
             chipA11y(chip)
@@ -291,11 +391,42 @@ class FormReadyActivity : BaseActivity() {
             text = getString(R.string.form1_cleanup)
             setTextColor(SwStyle.color(this@FormReadyActivity, R.color.text_hologram_hi))
             buttonTintList = ColorStateList.valueOf(SwStyle.color(this@FormReadyActivity, R.color.cyan_primary))
+            gravity = Gravity.CENTER_VERTICAL
             maxLines = Int.MAX_VALUE
             minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
-            setOnCheckedChangeListener { _, checked -> if (!settingFields) { cleanup = checked } }
+            setOnCheckedChangeListener { _, checked ->
+                if (!settingFields) {
+                    cleanup = checked
+                    refreshCleanupPreview()
+                }
+            }
         }
         column.addView(cleanupBox)
+
+        // Lane F2: a local save/use pair. No account, no cloud, no permission.
+        val presetActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
+        }
+        savePresetButton = action(getString(R.string.form1_save_preset), R.id.formReadySavePreset, false) { savePreset() }
+        usePresetButton = action(getString(R.string.form1_use_preset), R.id.formReadyUsePreset, false) { useSavedPreset() }
+        presetActions.addView(savePresetButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+        })
+        presetActions.addView(usePresetButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        column.addView(presetActions)
+
+        // Lane F2 / council §4: before/after on a dark canvas, shown before cleanup is applied.
+        cleanupPreview = LinearLayout(this).apply {
+            id = R.id.formReadyCleanupPreview
+            orientation = LinearLayout.HORIZONTAL
+            isVisible = false
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)
+            contentDescription = context.getString(R.string.form1_cleanup_preview)
+        }
+        previewOriginal = addPreviewCell(cleanupPreview as LinearLayout, R.id.formReadyPreviewOriginal, R.string.form1_preset_original)
+        previewCleaned = addPreviewCell(cleanupPreview as LinearLayout, R.id.formReadyPreviewCleaned, R.string.form1_preset_cleaned)
+        column.addView(cleanupPreview)
 
         readout = SwStyle.text(this, 15f, SwStyle.color(this, R.color.cyan_primary), bold = true).apply {
             id = R.id.formReadyReadout
@@ -311,7 +442,11 @@ class FormReadyActivity : BaseActivity() {
 
         cropView = CropView(this).apply {
             id = R.id.formReadyCrop
-            background = SwStyle.rounded(this@FormReadyActivity, 0xFF000000.toInt(), radiusDp = 14f)
+            // Council §4: a dark canvas hosts the page; never a white page host.
+            background = SwStyle.rounded(
+                this@FormReadyActivity, SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2),
+                radiusDp = 14f
+            )
         }
         column.addView(cropView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@FormReadyActivity, 220f)
@@ -347,6 +482,39 @@ class FormReadyActivity : BaseActivity() {
         return root
     }
 
+    private fun fieldLabel(id: Int, labelRes: Int): TextView =
+        SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+            this.id = id
+            text = getString(labelRes)
+            maxLines = Int.MAX_VALUE
+        }
+
+    private fun addPreviewCell(parent: LinearLayout, id: Int, labelRes: Int): ImageView {
+        val cell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val image = ImageView(this).apply {
+            this.id = id
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 96f)
+            background = SwStyle.rounded(
+                this@FormReadyActivity, SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2),
+                radiusDp = 12f
+            )
+        }
+        cell.addView(image, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@FormReadyActivity, 110f)
+        ))
+        cell.addView(SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            text = getString(labelRes)
+            gravity = Gravity.CENTER
+            maxLines = Int.MAX_VALUE
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        parent.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = SwStyle.dp(this@FormReadyActivity, 4f)
+        })
+        return image
+    }
+
     private fun numberField(id: Int, hintRes: Int): EditText = EditText(this).apply {
         this.id = id
         hint = getString(hintRes)
@@ -366,8 +534,14 @@ class FormReadyActivity : BaseActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 if (settingFields) return
                 when (this@apply.id) {
-                    R.id.formReadyWidth -> widthValue = s?.toString()?.toFloatOrNull() ?: 0f
-                    R.id.formReadyHeight -> heightValue = s?.toString()?.toFloatOrNull() ?: 0f
+                    R.id.formReadyWidth -> {
+                        widthValue = s?.toString()?.toFloatOrNull() ?: 0f
+                        updateCropAspect() // crop follows the edited dimensions
+                    }
+                    R.id.formReadyHeight -> {
+                        heightValue = s?.toString()?.toFloatOrNull() ?: 0f
+                        updateCropAspect()
+                    }
                     R.id.formReadyMinKb -> minKb = s?.toString()?.toIntOrNull() ?: 0
                     R.id.formReadyMaxKb -> maxKb = s?.toString()?.toIntOrNull() ?: 0
                 }
@@ -386,6 +560,8 @@ class FormReadyActivity : BaseActivity() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
                 super.onInitializeAccessibilityNodeInfo(host, info)
                 val on = host.tag as? Boolean == true
+                // F2: these are single-choice sets, so announce a radio, not a bare checkable.
+                info.className = android.widget.RadioButton::class.java.name
                 info.isCheckable = true
                 info.isChecked = on
                 info.stateDescription = host.context.getString(
@@ -424,7 +600,7 @@ class FormReadyActivity : BaseActivity() {
         maxKb = preset.maxKb
         cleanup = preset.signatureCleanup
         writeFields()
-        cropView.aspectRatio = preset.aspect
+        updateCropAspect()
         refresh()
     }
 
@@ -446,6 +622,127 @@ class FormReadyActivity : BaseActivity() {
         FormPresets.toPixels(widthValue.coerceAtLeast(1f), unit, dpi) to
             FormPresets.toPixels(heightValue.coerceAtLeast(1f), unit, dpi)
 
+    /** F1: editing dimensions must re-shape the crop frame; the aspect setter is CropView's API. */
+    private fun updateCropAspect() {
+        val (w, h) = currentPixels()
+        cropView.aspectRatio = w.toFloat() / h.coerceAtLeast(1)
+    }
+
+    /** F1: changing unit converts the numbers, so a 3.5 cm entry stays 3.5 cm, not 3.5 px. */
+    private fun changeUnit(next: FormUnit) {
+        if (next == unit) return
+        val (wPx, hPx) = currentPixels()
+        unit = next
+        widthValue = FormPresets.fromPixels(wPx, next, dpi)
+        heightValue = FormPresets.fromPixels(hPx, next, dpi)
+        writeFields()
+        updateCropAspect()
+        refresh()
+    }
+
+    /** F1: a DPI change keeps the requested pixels by re-expressing a physical size. */
+    private fun changeDpi(next: Int) {
+        if (next == dpi) return
+        val (wPx, hPx) = currentPixels()
+        dpi = next
+        if (unit != FormUnit.PX) {
+            widthValue = FormPresets.fromPixels(wPx, unit, dpi)
+            heightValue = FormPresets.fromPixels(hPx, unit, dpi)
+        }
+        writeFields()
+        updateCropAspect()
+        refresh()
+    }
+
+    private fun savePreset() {
+        FormPresets.saveEditable(this, FormPresets.Editable(
+            widthValue, heightValue, unit, dpi, minKb, maxKb, cleanup
+        ))
+        errorView.text = getString(R.string.form1_preset_saved)
+        errorView.isVisible = true
+        refresh()
+    }
+
+    private fun useSavedPreset() {
+        val saved = FormPresets.loadEditable(this)
+        if (saved == null) {
+            errorView.text = getString(R.string.form1_no_preset)
+            errorView.isVisible = true
+            return
+        }
+        errorView.isVisible = false
+        unit = saved.unit
+        dpi = saved.dpi
+        minKb = saved.minKb
+        maxKb = saved.maxKb
+        cleanup = saved.cleanup
+        widthValue = saved.width
+        heightValue = saved.height
+        writeFields()
+        updateCropAspect()
+        refresh()
+    }
+
+    /** F2: compute a small original/processed pair on a worker; apply never uses this copy. */
+    private fun refreshCleanupPreview() {
+        previewJob?.cancel()
+        val generation = ++previewGeneration
+        val source = bitmap
+        val rect = cropView.getCropRect()
+        if (!cleanup || source == null || source.isRecycled || bitmapInUse ||
+            rect.width() < 1f || rect.height() < 1f
+        ) {
+            releasePreviewBitmaps()
+            cleanupPreview.isVisible = false
+            return
+        }
+        val left = rect.left.toInt().coerceIn(0, source.width - 1)
+        val top = rect.top.toInt().coerceIn(0, source.height - 1)
+        val width = rect.width().toInt().coerceIn(1, source.width - left)
+        val height = rect.height().toInt().coerceIn(1, source.height - top)
+        // The copy is made on the caller's thread while the source is known live; the bounded
+        // scaling and thresholding run on a worker.
+        val region = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
+        if (region == null) {
+            cleanupPreview.isVisible = false
+            return
+        }
+        previewJob = lifecycleScope.launch {
+            try {
+                val pair = withContext(Dispatchers.IO) {
+                    val scale = (240f / maxOf(width, height).toFloat()).coerceAtMost(1f)
+                    val pw = (width * scale).toInt().coerceAtLeast(1)
+                    val ph = (height * scale).toInt().coerceAtLeast(1)
+                    val original = Bitmap.createScaledBitmap(region, pw, ph, true)
+                    val cleaned = SignatureCleanup.clean(original)
+                    original to cleaned
+                }
+                if (generation != previewGeneration || previewJob?.isActive != true || destroyed) {
+                    pair.first.recycle()
+                    pair.second.recycle()
+                    return@launch
+                }
+                releasePreviewBitmaps()
+                previewOriginalBitmap = pair.first
+                previewCleanedBitmap = pair.second
+                previewOriginal.setImageBitmap(pair.first)
+                previewCleaned.setImageBitmap(pair.second)
+                cleanupPreview.isVisible = true
+            } finally {
+                region.recycle()
+            }
+        }
+    }
+
+    private fun releasePreviewBitmaps() {
+        previewOriginalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        previewCleanedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        previewOriginalBitmap = null
+        previewCleanedBitmap = null
+        previewOriginal.setImageBitmap(null)
+        previewCleaned.setImageBitmap(null)
+    }
+
     private fun refresh() {
         val (w, h) = currentPixels()
         val tooLarge = !FormPresets.fitsFormLimit(w, h)
@@ -461,8 +758,26 @@ class FormReadyActivity : BaseActivity() {
             errorView.isVisible = false
             errorView.text = ""
         }
-        applyButton.isEnabled = hasImageForTest() && !tooLarge
+        // F1: blank / non-numeric / nonpositive / reversed KB fields are errors right here, not
+        // silently turned into zero and sent to the encoder.
+        val minText = minField.text.toString()
+        val maxText = maxField.text.toString()
+        val bandMessage = when {
+            minText.isBlank() || maxText.isBlank() -> getString(R.string.form1_kb_blank)
+            minKb < 1 || maxKb < minKb -> getString(R.string.form1_kb_invalid)
+            else -> null
+        }
+        if (bandMessage == null) {
+            bandErrorView.isVisible = false
+            bandErrorView.text = ""
+        } else {
+            bandErrorView.text = bandMessage
+            bandErrorView.isVisible = true
+        }
+        usePresetButton.isEnabled = FormPresets.loadEditable(this) != null
+        applyButton.isEnabled = hasImageForTest() && !tooLarge && bandMessage == null
         applyButton.alpha = if (applyButton.isEnabled) 1f else 0.5f
+        refreshCleanupPreview()
         val hi = SwStyle.color(this, R.color.text_hologram_hi)
         val ink = SwStyle.color(this, R.color.sw_disc_ink)
         val cyan = SwStyle.color(this, R.color.cyan_primary)
@@ -500,6 +815,7 @@ class FormReadyActivity : BaseActivity() {
         outState.putInt(KEY_MAX, maxKb)
         outState.putInt(KEY_DPI, dpi)
         outState.putBoolean(KEY_CLEANUP, cleanup)
+        outState.putString(KEY_OP_ID, opId)
         imagePath?.let { outState.putString(KEY_IMAGE, it) }
         val rect = cropView.getCropRect()
         if (rect.width() > 0f && rect.height() > 0f) {
@@ -516,6 +832,7 @@ class FormReadyActivity : BaseActivity() {
         maxKb = state.getInt(KEY_MAX, spec.maxKb)
         dpi = state.getInt(KEY_DPI, spec.dpi)
         cleanup = state.getBoolean(KEY_CLEANUP, spec.signatureCleanup)
+        opId = state.getString(KEY_OP_ID).takeUnless { it.isNullOrBlank() } ?: UUID.randomUUID().toString()
         writeFields()
         refresh()
         // Apply the aspect while the crop view has no image: the setter cannot re-fit anything
@@ -531,8 +848,10 @@ class FormReadyActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             val decoded = withContext(Dispatchers.IO) {
-                runCatching { File(path).takeIf { it.isFile && it.length() > 0L }?.readBytes() }
-                    .getOrNull()
+                runCatching {
+                    File(path).takeIf { it.isFile && it.length() in 1L..FormPresets.MAX_SOURCE_BYTES }
+                        ?.inputStream()?.use { FormPresets.readBounded(it) }
+                }.getOrNull()
                     ?.let { runCatching { ImageTools.decodeSampled(it, 2400) }.getOrNull() }
             }
             progress.isVisible = false
@@ -564,7 +883,7 @@ class FormReadyActivity : BaseActivity() {
 
     /** Test seam for the SAF picker (which cannot run under Robolectric) and its real callback. */
     internal fun acceptPickedBytes(bytes: ByteArray) {
-        progress.isVisible = true
+        showPreparing()
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
                 val upright = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
@@ -582,9 +901,10 @@ class FormReadyActivity : BaseActivity() {
                 showPickFailure()
                 return@launch
             }
-            bitmap?.takeIf { !it.isRecycled }?.recycle()
+            if (!bitmapInUse) bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
             cropView.setImage(decoded)
+            updateCropAspect()
             errorView.isVisible = false
             pickButton.isVisible = false
             refresh() // re-checks the size cap before enabling Apply
@@ -629,29 +949,34 @@ class FormReadyActivity : BaseActivity() {
         val doCleanup = cleanup
 
         busy = true
-        progress.isVisible = true
-        lifecycleScope.launch {
+        bitmapInUse = true
+        showPreparing()
+        encodeJob?.cancel()
+        encodeJob = lifecycleScope.launch {
             try {
                 val (result, file) = withContext(Dispatchers.IO) {
                     val region = Bitmap.createBitmap(source, left, top, width, height)
                     val cleaned = if (doCleanup) SignatureCleanup.clean(region) else null
                     try {
                         val encoded = ExactKbEncoder.encode(
-                            cleaned ?: region, targetW, targetH, dpiNow, minBytes, maxBytes
+                            cleaned ?: region, targetW, targetH, dpiNow, minBytes, maxBytes,
+                            isCancelled = { encodeJob?.isCancelled == true || destroyed }
                         )
                         val dir = File(cacheDir, "form1_out").apply { mkdirs() }
-                        val out = File(dir, "form_ready_${System.currentTimeMillis()}.jpg")
+                        // F1: a durable operation id, not wall-clock time, names the output. A
+                        // recreation keeps the same id and cannot produce a second random file.
+                        val out = File(dir, "form_ready_${opId}.jpg")
                         Durable.writeFile(out, encoded.bytes)
                         encoded to out
                     } finally {
                         cleaned?.recycle()
-                        if (region !== source) region.recycle()
+                        region.recycle()
                     }
                 }
                 progress.isVisible = false
                 busy = false
                 lastOutput = file
-                val note = buildNote(result)
+                val note = buildNote(result, targetW, targetH, dpiNow)
                 lastNoteForTest = note
                 startActivity(ToolResultActivity.intent(
                     this@FormReadyActivity, TOOL_ID,
@@ -665,8 +990,6 @@ class FormReadyActivity : BaseActivity() {
             } catch (e: OutOfMemoryError) {
                 // The phone cannot hold this rendition. Free the preview on every path and say
                 // so in the app's own words instead of letting the process die.
-                progress.isVisible = false
-                busy = false
                 cropView.clearImage()
                 bitmap?.takeIf { !it.isRecycled }?.recycle()
                 bitmap = null
@@ -674,21 +997,50 @@ class FormReadyActivity : BaseActivity() {
                 errorView.isVisible = true
                 refresh()
             } catch (e: Exception) {
-                progress.isVisible = false
-                busy = false
                 errorView.text = getString(R.string.form1_encode_failed)
                 errorView.isVisible = true
+            } finally {
+                // F1: onDestroy must never recycle a bitmap a worker still holds. When destroy
+                // won the race, the worker releases it here instead.
+                bitmapInUse = false
+                if (destroyed) {
+                    source.takeIf { !it.isRecycled }?.recycle()
+                    if (bitmap === source) bitmap = null
+                    deferredBitmapRecyclesForTest++
+                }
+                progress.isVisible = false
+                busy = false
             }
         }
     }
 
-    private fun buildNote(result: ExactKbEncoder.Result): String {
+    /**
+     * F1: pixel, DPI and KB band are three separate checks. Landing inside the KB band alone is
+     * NOT overall readiness: the requested pixels and the written DPI must match too.
+     */
+    private fun buildNote(
+        result: ExactKbEncoder.Result,
+        requestedWidth: Int,
+        requestedHeight: Int,
+        requestedDpi: Int
+    ): String {
         val measured = getString(
             R.string.form1_note_measured,
             SizeUnits.format(result.sizeBytes), result.bytes.size,
             result.width, result.height, result.dpi
         )
-        val verdict = when (result.outcome) {
+        val pixelCheck = if (result.width == requestedWidth && result.height == requestedHeight) {
+            getString(R.string.form1_result_pixels_ok, requestedWidth, requestedHeight)
+        } else {
+            getString(R.string.form1_result_pixels_changed, result.width, result.height)
+        }
+        val writtenDpi = ExactKbEncoder.readJfifDpi(result.bytes)
+        val dpiCheck = if (writtenDpi == requestedDpi) {
+            getString(R.string.form1_result_dpi_ok, requestedDpi)
+        } else {
+            getString(R.string.form1_result_dpi_changed, writtenDpi ?: 0, requestedDpi)
+        }
+        val bandCheck = when (result.outcome) {
             ExactKbEncoder.Outcome.IN_BAND -> getString(
                 R.string.form1_note_in_band,
                 SizeUnits.format(minKb * SizeUnits.BYTES_PER_KB),
@@ -702,13 +1054,32 @@ class FormReadyActivity : BaseActivity() {
                 R.string.form1_note_above_max, getString(R.string.form1_max_miss)
             )
         }
-        return measured + "\n" + verdict + "\n" + getString(R.string.form1_source_kept)
+        val bandLabel = getString(R.string.form1_band_label)
+        val problems = mutableListOf<String>()
+        if (result.width != requestedWidth || result.height != requestedHeight) problems += pixelCheck
+        if (writtenDpi != requestedDpi) problems += dpiCheck
+        if (result.outcome != ExactKbEncoder.Outcome.IN_BAND) problems += bandCheck
+        val overall = if (problems.isEmpty()) {
+            getString(R.string.form1_result_ready)
+        } else {
+            getString(R.string.form1_result_not_ready, problems.joinToString(" "))
+        }
+        return listOf(measured, pixelCheck, dpiCheck, "$bandLabel $bandCheck", overall,
+            getString(R.string.form1_source_kept)).joinToString("\n")
     }
 
     override fun onDestroy() {
+        destroyed = true
+        previewJob?.cancel()
+        previewGeneration++
+        releasePreviewBitmaps()
         cropView.clearImage()
-        bitmap?.takeIf { !it.isRecycled }?.recycle()
-        bitmap = null
+        // F1: an encode worker may still be reading this bitmap. Leave it to the worker's
+        // finally block instead of recycling under it.
+        if (!bitmapInUse) {
+            bitmap?.takeIf { !it.isRecycled }?.recycle()
+            bitmap = null
+        }
         if (isFinishing && !isChangingConfigurations) {
             // SEC2 N3: a picked plaintext copy is never needed after the flow ends.
             // An output that was handed off belongs to the result screen; an
@@ -732,7 +1103,15 @@ class FormReadyActivity : BaseActivity() {
     internal fun currentMaxKbForTest(): Int = maxKb
     internal fun currentDpiForTest(): Int = dpi
     internal fun currentCleanupForTest(): Boolean = cleanup
+    internal fun currentUnitForTest(): FormUnit = unit
+    internal fun previewVisibleForTest(): Boolean = cleanupPreview.isVisible
+    internal fun opIdForTest(): String = opId
     internal fun lastOutputForTest(): File? = lastOutput
+    internal fun lastOutputNameForTest(): String? = lastOutput?.name
+
+    internal fun buildNoteForTest(
+        result: ExactKbEncoder.Result, width: Int, height: Int, dpi: Int
+    ): String = buildNote(result, width, height, dpi)
 
     /** Test seams for the confirmed crop frame (the view keeps it in image pixels). */
     internal fun setCropRectForTest(rect: RectF) = cropView.setCropRect(rect)
@@ -765,6 +1144,7 @@ class FormReadyActivity : BaseActivity() {
         private const val KEY_MAX = "form1_max"
         private const val KEY_DPI = "form1_dpi"
         private const val KEY_CLEANUP = "form1_cleanup"
+        private const val KEY_OP_ID = "form1_op_id"
         private const val KEY_IMAGE = "form1_image"
         private const val KEY_RECT = "form1_rect"
 

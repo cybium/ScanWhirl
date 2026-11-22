@@ -68,7 +68,13 @@ object ExactKbEncoder {
         dpi: Int,
         minBytes: Long,
         maxBytes: Long,
-        isCancelled: () -> Boolean = { false }
+        isCancelled: () -> Boolean = { false },
+        /**
+         * Lane F1: OFF by default. The pixels a person asked for are the ground truth; if the
+         * smallest honest JPEG still overflows the maximum, report ABOVE_MAX at those dimensions
+         * instead of quietly rasterizing a smaller picture and calling it a success.
+         */
+        shrinkToFit: Boolean = false
     ): Result {
         require(
             FormPresets.fitsFormLimit(width, height)
@@ -93,8 +99,9 @@ object ExactKbEncoder {
                     bestQ = fit.first
                     break
                 }
-                // Even quality 1 overflows the maximum: shrink honestly and say so through the
-                // reported pixel size. Form presets never reach this branch (10 KB minimum band).
+                // Even quality 1 overflows the maximum. Lane F keeps the requested pixels by
+                // default and reports ABOVE_MAX; shrinking is an explicit opt-in only.
+                if (!shrinkToFit) break
                 val nw = max(MIN_DIM, (w * 0.8f).toInt())
                 val nh = max(MIN_DIM, (h * 0.8f).toInt())
                 if (nw == w && nh == h) break
