@@ -26,6 +26,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * ATLAS-F2 (001_library_2.0): the category chip rail sliced "Receipts 1" at the screen edge
@@ -112,6 +113,25 @@ class LibraryRailMetaFitTest {
         }
     }
 
+    /** Council §7: folder and category share one chooser behind the band's first control. */
+    private fun checkChooser(activity: ShellActivity, label: String) {
+        activity.findViewById<View>(R.id.swAllFolders).performClick()
+        idle()
+        val content = ShadowDialog.getLatestDialog()?.findViewById<ViewGroup>(R.id.swSheetContent)
+        assertNotNull("$label the shared chooser is shown", content)
+        assertNotNull("$label folder rows exist", content!!.findViewById<View>(R.id.swFolderRow))
+        assertNotNull("$label category rows exist", content.findViewById<View>(R.id.swChipRow))
+        for (tv in textViews(content)) {
+            val lay = tv.layout ?: continue
+            for (line in 0 until lay.lineCount) {
+                assertEquals("$label chooser text \"${tv.text}\" is never ellipsized",
+                    0, lay.getEllipsisCount(line))
+            }
+        }
+        ShadowDialog.getLatestDialog()?.dismiss()
+        idle()
+    }
+
     private fun checkRail(activity: ShellActivity, scrollId: Int, rowId: Int, label: String) {
         val scrollView = activity.findViewById<View>(scrollId)
         assertNotNull("$label is shown", scrollView)
@@ -153,47 +173,40 @@ class LibraryRailMetaFitTest {
     }
 
     /**
-     * LEAD DECISION (L1-01): OLD asserted two scrolling chip rails with fading edges
-     * (`swFolderScroll`/`swFolderRow`, `swChipScroll`/`swChipRow`). NEW asserts the single
-     * wrapping Folder/Filter/Sort band: every named control is shown, at least 48dp, and no
-     * control text is clipped or ellipsized at 100 % and 200 % in EN and HI. The folder and
-     * category rails remain inside the band as the one-tap choosers their other tests need.
+     * LEAD DECISION (L1-01 -> council §7): OLD asserted three captioned lines inside one
+     * band plus two visible chip rails. NEW asserts ONE row — [All folders ▾] [Newest ▾]
+     * [count] — with every control at least 48dp and no clipped text at 100 % and 200 % in
+     * EN and HI. Folder and category now share the one chooser sheet behind "All folders ▾";
+     * their rows must still be whole and reachable (the one-tap folder/category intent).
      */
     @Test
-    fun `the one control band shows all three named controls without clipping at 100 and 200 percent`() {
+    fun `the one control row shows all three controls without clipping at 100 and 200 percent`() {
         for (scale in floatArrayOf(1.0f, 2.0f)) {
             RuntimeEnvironment.setFontScale(scale)
             launchReady { activity ->
                 val band = activity.findViewById<View>(R.id.uxL1ControlBand)
-                assertNotNull("the single control band is shown", band)
+                assertNotNull("the single control row is shown", band)
                 assertTrue("the band is visible", band!!.isVisible)
                 val density = activity.resources.displayMetrics.density
                 for ((id, name) in listOf(
-                    R.id.uxL1FolderLabel to "Folder",
-                    R.id.uxL1FilterLabel to "Filter",
-                    R.id.uxL1SortLabel to "Sort"
+                    R.id.swAllFolders to "All folders",
+                    R.id.swSort to "Sort",
+                    R.id.swDocCount to "Count"
                 )) {
                     val control = activity.findViewById<View>(id)
                     assertNotNull("$name control exists", control)
                     assertTrue("$name control is visible", control!!.isVisible)
                     assertTrue("$name control is at least 48dp", control.height >= (48 * density).toInt() - 1)
                 }
-                // No control label is cut; the choosers themselves keep their whole words.
-                for (id in intArrayOf(
-                    R.id.uxL1FolderLabel, R.id.uxL1FilterLabel, R.id.uxL1SortLabel,
-                    R.id.swSort, R.id.swDocCount, R.id.swAllFolders
-                )) {
+                for (id in intArrayOf(R.id.swSort, R.id.swDocCount, R.id.swAllFolders, R.id.cbDocHeading)) {
                     val tv = activity.findViewById<TextView>(id) ?: continue
                     val lay = tv.layout ?: continue
                     for (line in 0 until lay.lineCount) {
-                        assertEquals(
-                            "control $id is never ellipsized at ${scale}x",
-                            0, lay.getEllipsisCount(line)
-                        )
+                        assertEquals("control $id is never ellipsized at ${scale}x",
+                            0, lay.getEllipsisCount(line))
                     }
                 }
-                checkRail(activity, R.id.swFolderScroll, R.id.swFolderRow, "folder chooser @ ${scale}x")
-                checkRail(activity, R.id.swChipScroll, R.id.swChipRow, "filter chooser @ ${scale}x")
+                checkChooser(activity, "chooser @ ${scale}x")
             }
         }
     }
@@ -245,8 +258,7 @@ class LibraryRailMetaFitTest {
         RuntimeEnvironment.setFontScale(2.0f)
         RuntimeEnvironment.setQualifiers("hi-rIN-w320dp-h640dp-xhdpi")
         launchReady { activity ->
-            checkRail(activity, R.id.swFolderScroll, R.id.swFolderRow, "folder rail (hi)")
-            checkRail(activity, R.id.swChipScroll, R.id.swChipRow, "category rail (hi)")
+            checkChooser(activity, "shared chooser (hi)")
             val metas = textViews(activity.findViewById(R.id.swDocList))
                 .filter { it.id == R.id.swDocMeta }
             assertTrue("the Hindi library renders row meta", metas.isNotEmpty())
