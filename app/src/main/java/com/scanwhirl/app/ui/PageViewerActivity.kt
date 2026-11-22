@@ -71,12 +71,15 @@ class PageViewerActivity : BaseActivity() {
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**
-     * PVR: one flight for every operation that mutates the draft and its display state. An edit
-     * holds this lock across its IO work, so a filter-result write and a delete remap can never
-     * interleave. State (filterChoice / pageIds / pages) is only touched while holding it, on the
-     * main thread; the repo calls inside run on IO.
+     * B6: one flight for every operation that mutates the draft and its display state. An edit
+     * holds this lock across its IO work, so a filter-result write, a delete remap, a rotate and a
+     * crop can never interleave. The gate is DOCUMENT-scoped (see [gateFor]): two Activity instances
+     * for the same saved document — a recreation, or a delete still finishing on [deleteScope]
+     * after onDestroy — share the same Mutex, so ordering survives the screen going away.
+     * Initialised in [onCreate] once [docId] is known. State (filterChoice / pageIds / pages) is
+     * only touched while holding it, on the main thread; the repo calls inside run on IO.
      */
-    private val pageOps = Mutex()
+    private lateinit var pageOps: Mutex
 
     /** Last known page (kept when the snap view isn't measurable yet). */
     private var currentPos: Int = 0
@@ -99,6 +102,8 @@ class PageViewerActivity : BaseActivity() {
     /** Crop overlay state: the page being cropped + its display-size copy. */
     private var cropPath: String? = null
     private var cropIndex: Int = -1
+    /** B6: immutable identity of the page being cropped, captured when the overlay opened. */
+    private var cropIdentity: String? = null
     private var cropBitmap: Bitmap? = null
 
     private val fullExecutor = Executors.newSingleThreadExecutor { r ->
@@ -172,6 +177,8 @@ class PageViewerActivity : BaseActivity() {
         })
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // B6: all edit paths below share this gate for the document, across Activity instances.
+        pageOps = gateFor(docId)
         // SECURITY_JUDGE 1.3.0: FLAG_SECURE is per-window, so a page tap from a
         // protected document needs the same document policy resolved here before
         // any preview is drawn. No other page-viewer behaviour changes.
@@ -434,19 +441,27 @@ class PageViewerActivity : BaseActivity() {
     private fun rotateCurrent(clockwise: Boolean) {
         val pos = currentPosition()
         val file = pages.getOrNull(pos) ?: return
+        // B6: capture an IMMUTABLE identity at tap time. The queued edit resolves this against
+        // the live draft under pageOps, after all earlier work including any pending delete —
+        // it must never reuse this tap position, which can point at a neighbour by commit time.
+        val identity = pageIds.getOrNull(pos) ?: file.path
         val dir = stagingDir
         lifecycleScope.launch {
             pageOps.withLock {
                 try {
+                    val liveIndex: Int
                     if (dir != null) {
-                        withContext(Dispatchers.IO) { ImageTools.rotate90(file, clockwise) }
+                        liveIndex = pages.indexOfFirst { it.path == identity }
+                        if (liveIndex < 0) { showPageSkipped(); return@withLock }
+                        withContext(Dispatchers.IO) { ImageTools.rotate90(pages[liveIndex], clockwise) }
                     } else {
                         val id = docId ?: return@withLock
-                        commitPendingDeleteNowLocked()
-                        repo.draftRotate(id, pos, clockwise)
+                        liveIndex = resolveIdentityAfterDeleteLocked(id, identity)
+                        if (liveIndex < 0) { showPageSkipped(); return@withLock }
+                        repo.draftRotate(id, liveIndex, clockwise)
                     }
                     reload()
-                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    currentPos = liveIndex.coerceAtMost(pages.lastIndex)
                     binding.pager.scrollToPosition(currentPos)
                     updateIndicator()
                 } catch (e: Exception) {
@@ -610,21 +625,33 @@ class PageViewerActivity : BaseActivity() {
         // Before the first snap settles there is no snap view yet: use the start page.
         val pos = currentPosition().takeIf { it in pages.indices } ?: currentPos
         val file = pages.getOrNull(pos) ?: return
+        // B6: crop is index-based too. Capture an immutable identity now; the overlay and the
+        // later Apply must use the index this page currently occupies, not the captured position.
+        val identity = pageIds.getOrNull(pos) ?: file.path
         if (binding.cropOverlay.visibility == android.view.View.VISIBLE) return
         lifecycleScope.launch {
+            val livePos: Int
             try {
-                // Land any pending delete first so the page index stays valid.
-                if (stagingDir == null) withContext(Dispatchers.IO) { commitPendingDeleteNow() }
+                livePos = if (stagingDir == null) {
+                    val id = docId ?: return@launch
+                    // One serialized edit: land any pending delete, then re-resolve the identity.
+                    pageOps.withLock { resolveIdentityAfterDeleteLocked(id, identity) }
+                } else {
+                    pages.indexOfFirst { it.path == identity }
+                }
             } catch (_: Exception) {
-                // Best effort; cropping proceeds against the visible page.
+                showPageSkipped()
+                return@launch
             }
-            showCropOverlay(pos, file)
+            if (livePos !in pages.indices) { showPageSkipped(); return@launch }
+            showCropOverlay(livePos, pages[livePos], identity)
         }
     }
 
-    private fun showCropOverlay(pos: Int, file: File) {
+    private fun showCropOverlay(pos: Int, file: File, identity: String) {
         cropIndex = pos
         cropPath = file.path
+        cropIdentity = identity
         // Owner QA: only Cancel / Apply belong on screen while cropping; the page toolbar
         // underneath must not keep visible or clickable areas.
         binding.pageDock.isVisible = false
@@ -685,10 +712,14 @@ class PageViewerActivity : BaseActivity() {
         cropBitmap?.takeIf { !it.isRecycled }?.recycle()
         cropBitmap = null
         cropPath = null
+        cropIdentity = null
     }
 
     private fun applyCrop() {
         val path = cropPath ?: return closeCrop()
+        // B6: keep the tap-time identity before closeCrop() clears it; Apply re-resolves it
+        // under pageOps in case a delete/reorder landed while the overlay was open.
+        val identity = cropIdentity ?: path
         val bmp = cropBitmap ?: return closeCrop()
         val rect = binding.cropView.getCropRect()
         if (rect.width() < 1f || rect.height() < 1f) return closeCrop()
@@ -704,21 +735,25 @@ class PageViewerActivity : BaseActivity() {
         val sx = size.first.toFloat() / bmp.width
         val sy = size.second.toFloat() / bmp.height
         val fileRect = RectF(rect.left * sx, rect.top * sy, rect.right * sx, rect.bottom * sy)
-        val pos = cropIndex
         val dir = stagingDir
         closeCrop()
 
         lifecycleScope.launch {
             pageOps.withLock {
                 try {
+                    val liveIndex: Int
                     if (dir != null) {
-                        withContext(Dispatchers.IO) { ImageTools.cropTo(file, fileRect) }
+                        liveIndex = pages.indexOfFirst { it.path == identity }
+                        if (liveIndex < 0) { showPageSkipped(); return@withLock }
+                        withContext(Dispatchers.IO) { ImageTools.cropTo(pages[liveIndex], fileRect) }
                     } else {
                         val id = docId ?: return@withLock
-                        repo.draftCrop(id, pos, fileRect)
+                        liveIndex = resolveIdentityAfterDeleteLocked(id, identity)
+                        if (liveIndex < 0) { showPageSkipped(); return@withLock }
+                        repo.draftCrop(id, liveIndex, fileRect)
                     }
                     reload()
-                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    currentPos = liveIndex.coerceAtMost(pages.lastIndex)
                     binding.pager.scrollToPosition(currentPos)
                     updateIndicator()
                 } catch (e: Exception) {
@@ -793,6 +828,23 @@ class PageViewerActivity : BaseActivity() {
         if (commitPendingDeleteLocked(id, pending)) {
             withContext(Dispatchers.Main) { dropFilterChoice(pending.identity) }
         }
+    }
+
+    /**
+     * B6: resolve a tap-time identity to the index it occupies RIGHT NOW. Caller holds [pageOps].
+     * Land every queued delete first, re-read the draft, then look the identity up — a UI position
+     * captured before this edit was queued must never reach draftRotate / draftCrop. -1 means the
+     * page is gone: the caller abandons the edit and changes nothing.
+     */
+    private suspend fun resolveIdentityAfterDeleteLocked(id: String, identity: String): Int {
+        commitPendingDeleteNowLocked()
+        if (!reload()) return -1
+        return pageIds.indexOf(identity)
+    }
+
+    /** B6: a queued edit targeted a page that is no longer here; say so briefly. */
+    private fun showPageSkipped() {
+        Toast.makeText(this, R.string.page_edit_skipped, Toast.LENGTH_SHORT).show()
     }
 
     /**
@@ -886,6 +938,18 @@ class PageViewerActivity : BaseActivity() {
     }
 
     companion object {
+        /**
+         * B6: one serial gate per saved document, shared by every Activity instance for that
+         * document — a recreation, or a delete still finishing on a previous screen's
+         * [deleteScope], cannot reorder this screen's queued edits. Staging reviews have no
+         * document id and keep their own per-screen gate.
+         */
+        private val documentGates = mutableMapOf<String, Mutex>()
+
+        @Synchronized
+        private fun gateFor(docId: String?): Mutex =
+            docId?.let { documentGates.getOrPut(it) { Mutex() } } ?: Mutex()
+
         /** Custom accessibility actions for the full-screen page preview. */
         private const val ACTION_ZOOM_PAGE = 0x01000021
         private const val ACTION_CLOSE_ZOOM = 0x01000022

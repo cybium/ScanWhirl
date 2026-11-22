@@ -50,6 +50,7 @@
     <string name="save_as_new">नई फ़ाइल बनाकर सहेजें</string>
     <string name="overwrite_pdf">सहेजी गई PDF की जगह रखें</string>
     <string name="save_changes_title">बदलाव सहेजें?</string>
+    <string name="page_edit_skipped">बदलाव नहीं किया गया: वह पन्ना अब उपलब्ध नहीं है।</string>
     <string name="page_deleted">पन्ना हटाया गया</string>
     <string name="undo">वापस लाएँ</string>
     <!-- review: the 2 entries below were machine-translated at T4.7 — native review pending -->
