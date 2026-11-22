@@ -49,6 +49,11 @@ object V2vFailureCopy {
     fun message(context: android.content.Context, e: Throwable): String {
         val raw = e.localizedMessage.orEmpty().lowercase(Locale.ROOT)
         return when {
+            // V2V review: keep the two actionable OCR-image outcomes specific while
+            // still mapping them through this one localized entry point.
+            raw.contains("32 mb") -> context.getString(R.string.v2v_failure_image_too_large)
+            raw.contains("cannot read this image") ->
+                context.getString(R.string.v2v_failure_image_unreadable)
             e is SecurityException || raw.contains("password") || raw.contains("encrypt") ||
                 raw.contains("denied") || raw.contains("permission") ||
                 raw.contains("corrupt") || raw.contains("malformed") ||

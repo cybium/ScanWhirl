@@ -61,6 +61,27 @@ class V1LocalizedErrorsTest {
             assertFalse("raw heap address leaked: $shown", shown.contains("0x7f00"))
             assertFalse("raw path leaked: $shown", shown.contains("/data/data/"))
         }
+        val unreadable = method.invoke(null, app,
+            java.io.IOException("Cannot read this image. Choose a different image file.")) as String
+        assertTrue("image failure must stay actionable: $unreadable",
+            unreadable.contains("Choose a different image"))
+        val tooLarge = method.invoke(null, app,
+            java.io.IOException("This image exceeds 32 MB. Choose a smaller photo.")) as String
+        assertTrue("size failure must stay actionable: $tooLarge", tooLarge.contains("32 MB"))
+    }
+
+    @Test(timeout = 30_000)
+    fun `OCR tool failures also use the localized mapper, never e dot message`() {
+        for (path in listOf(
+            "src/main/java/com/scanwhirl/app/tools/OcrFlow.kt",
+            "src/main/java/com/scanwhirl/app/tools/HindiTextLauncher.kt"
+        )) {
+            val src = File(path).readText(Charsets.UTF_8)
+            assertFalse("$path still interpolates a raw exception message",
+                src.contains("e.message"))
+            assertTrue("$path must map failures through V2vFailureCopy",
+                src.contains("V2vFailureCopy.message(activity, e)"))
+        }
     }
 
     @Test(timeout = 30_000)
