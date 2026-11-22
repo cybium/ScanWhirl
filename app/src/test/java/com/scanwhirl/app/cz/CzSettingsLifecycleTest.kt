@@ -254,7 +254,7 @@ class CzSettingsLifecycleTest {
                 threads.isNotEmpty() && threads.none { it == "main" }
             )
             val receipt = act.findViewById<TextView>(R.id.storageReceipt).text.toString()
-            assertTrue("receipt was '$receipt'", receipt.contains("temporary files"))
+            assertTrue("receipt was '$receipt'", receipt.contains("Freed") || receipt.contains("No removable temporary files"))
         } finally {
             a.pause().stop().destroy()
         }

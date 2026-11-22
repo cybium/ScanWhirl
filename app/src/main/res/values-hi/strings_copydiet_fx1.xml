@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FX1 copy diet, Hindi. Glossary: पन्ना, प्रति, तस्वीर, लिखावट, साझा, ख़राब.
+     Rejected loanwords are avoided: आकार and चौकोर निशान are used instead. -->
+<resources>
+    <!-- Annotation / FX1 -->
+    <string name="cdf1_stamp_hint_select">निशान खिसकाएँ; आकार बदलने के लिए कोने खींचें</string>
+    <string name="cdf1_find_explanation">खोजने वाली जानकारी चुनें</string>
+    <string name="cdf1_find_none_title">कोई मिलान नहीं मिला</string>
+    <string name="cdf1_find_none_body">अपने आप खोजने में जानकारी छूट सकती है। साझा करने से पहले जाँचें।</string>
+    <string name="cdf1_find_review_page">पन्ने की जाँच करें</string>
+    <string name="cdf1_stamp_no_suggestions">कोई मिलान नहीं मिला। साझा करने से पहले जाँचें।</string>
+    <string name="cdf1_find_unreadable_one">लिखावट नहीं पढ़ सके। निजी जानकारी पर खुद चौकोर निशान बनाएँ।</string>
+    <string name="cdf1_find_draw_box">चौकोर निशान बनाएँ</string>
+    <string name="cdf1_redact_receipt_body">%1$s सहेजी गई। मूल फ़ाइल में निजी जानकारी अब भी है।</string>
+    <string name="cdf1_apply_signature">सभी पन्नों पर हस्ताक्षर</string>
+    <string name="cdf1_apply_signature_apply">हस्ताक्षर लगाएँ</string>
+    <plurals name="cdf1_signed_pages">
+        <item quantity="one">%1$d पन्ने पर हस्ताक्षर लगे</item>
+        <item quantity="other">%1$d पन्नों पर हस्ताक्षर लगे</item>
+    </plurals>
+    <string name="cdf1_undo">वापस लें</string>
+    <string name="cdf1_saving_timed_out">अब भी सहेज रहे हैं। आप पीछे जा सकते हैं।</string>
+
+    <!-- Setup / FX1 -->
+    <string name="cdf1_setup_target_hint">100 KB</string>
+    <string name="cdf1_setup_merge_note">जोड़ने के क्रम में 2 या अधिक दस्तावेज़ चुनें</string>
+    <string name="cdf1_setup_images_note">कई पन्ने ZIP में सहेजे जाते हैं</string>
+    <string name="cdf1_setup_word_note">हर पढ़ी पंक्ति का अलग अनुच्छेद; पन्नों के बीच नया पन्ना</string>
+    <string name="cdf1_setup_word_pictures_note">लिखावट के ऊपर पन्नों की तस्वीरें</string>
+    <string name="cdf1_setup_pptx_note">तस्वीर वाली स्लाइड; लिखावट बोलने की टिप्पणियों में</string>
+    <string name="cdf1_setup_excel_note">फ़ाइल इस्तेमाल करने से पहले तालिका के कॉलम जाँचें</string>
+    <string name="cdf1_setup_no_text">पहले लिखावट पढ़ रहे हैं…</string>
+    <string name="cdf1_setup_metadata_note">EXIF और छोटी झलक के बिना नई प्रति</string>
+    <string name="cdf1_batch_hint">दस्तावेज़ और एक काम चुनें</string>
+    <string name="cdf1_batch_action_note">एक-एक दस्तावेज़ पर काम होगा; रुकावट पर बाकी चलते रहेंगे</string>
+
+    <!-- Settings / FX1 and FX1→W2 -->
+    <string name="cdf1_text_size_default">फ़ोन के अनुसार</string>
+    <string name="cdf1_text_size_preview">फ़ोन की लिखावट के आकार का %1$d%%</string>
+    <string name="cdf1_language_summary">%1$s</string>
+    <string name="cdf1_ocr_language_summary">%1$s</string>
+    <string name="cdf1_ocr_language">लिखावट पढ़ने की भाषा</string>
+    <string name="cdf1_auto_enhance_summary">स्कैन की गई फ़ोटो अपने आप सुधारें</string>
+    <string name="cdf1_auto_copy_summary">Documents/ScanWhirl</string>
+    <string name="cdf1_searchable_pdf_summary">दूसरे ऐप में PDF की लिखावट खोजें</string>
+    <string name="cdf1_block_screenshots_note">सामान्य स्कैन की झलक उतारने से भी रोकें</string>
+    <string name="cdf1_storage_library">कागज़ात</string>
+    <string name="cdf1_storage_temporary">अस्थायी फ़ाइलें</string>
+    <string name="cdf1_storage_clear">अस्थायी फ़ाइलें हटाएँ</string>
+    <string name="cdf1_storage_cleared">%1$s जगह खुली हुई। कागज़ात और तिजोरी वैसी ही हैं।</string>
+    <string name="cdf1_storage_nothing">हटाने लायक अस्थायी फ़ाइलें नहीं हैं</string>
+</resources>

@@ -808,7 +808,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/cz_storage_library"
+                                android:text="@string/cdf1_storage_library"
                                 android:textAppearance="?attr/textAppearanceTitleSmall" />
 
                             <TextView
@@ -818,7 +818,8 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/cz_loading"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
+                                android:textColor="@color/text_hologram_hi"
+                                android:textSize="14sp" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -857,7 +858,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/cz_storage_temporary"
+                                android:text="@string/cdf1_storage_temporary"
                                 android:textAppearance="?attr/textAppearanceTitleSmall" />
 
                             <TextView
@@ -867,7 +868,19 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/cz_loading"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
+                                android:textColor="@color/text_hologram_hi"
+                                android:textSize="14sp" />
+
+                            <!-- FX1 critic: show what can actually be cleared, apart from the total. -->
+                            <TextView
+                                android:id="@+id/subTempRemovable"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/cz_loading"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="@color/text_hologram_hi"
+                                android:textSize="14sp" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -902,7 +915,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/cz_storage_clear"
+                            android:text="@string/cdf1_storage_clear"
                             android:textAppearance="?attr/textAppearanceTitleSmall" />
                     </LinearLayout>
 
@@ -914,7 +927,9 @@
                         android:paddingEnd="16dp"
                         android:paddingBottom="12dp"
                         android:textAppearance="?attr/textAppearanceBodySmall"
-                        android:textColor="?android:attr/textColorSecondary" />
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:accessibilityLiveRegion="polite"
+                        android:importantForAccessibility="yes" />
 
                     <View
                         android:layout_width="match_parent"
