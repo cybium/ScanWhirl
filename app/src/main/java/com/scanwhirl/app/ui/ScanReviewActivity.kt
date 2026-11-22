@@ -170,6 +170,9 @@ class ScanReviewActivity : BaseActivity() {
         }
 
     private var pendingDownload: (() -> Unit)? = null
+
+    /** Latest result snackbar; used to release retake backup state on dismissal. */
+    private var lastSnackbar: Snackbar? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingDownload?.invoke()
@@ -367,6 +370,7 @@ class ScanReviewActivity : BaseActivity() {
         reviewStateHandler.removeCallbacks(persistReviewStateTask)
         // Leaving the screen makes any pending page delete permanent.
         if (!saved) commitPendingDeletes(pendingDeletes.toList())
+        if (saved || isFinishing) clearRetakeBackups()
         super.onDestroy()
     }
 
@@ -1134,11 +1138,29 @@ class ScanReviewActivity : BaseActivity() {
         else HapticFeedbackConstants.LONG_PRESS
 
     /** Result snackbar with Undo when [undo] is given. */
-    private fun snack(text: CharSequence, undo: (() -> Unit)?) {
+    private fun snack(text: CharSequence, undo: (() -> Unit)?) = snack(text, undo, null)
+
+    /** With [onDismissed], the caller can release state when Undo is no longer possible. */
+    private fun snack(
+        text: CharSequence,
+        undo: (() -> Unit)?,
+        onDismissed: ((Int) -> Unit)?
+    ) {
         val bar = styled(Snackbar.make(binding.root, text, Snackbar.LENGTH_LONG))
+        lastSnackbar = bar
         if (undo != null) bar.setAction(R.string.undo) { undo() }
+        if (onDismissed != null) {
+            bar.addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event != DISMISS_EVENT_ACTION) onDismissed(event)
+                }
+            })
+        }
         bar.show()
     }
+
+    /** Test seam for dismissing the visible Undo snackbar deterministically. */
+    internal fun lastSnackbarForTest(): Snackbar? = lastSnackbar
 
     /**
      * Floats above the visible tool row (never over Earlier / Later, so repeated
@@ -1293,24 +1315,31 @@ class ScanReviewActivity : BaseActivity() {
     // V2C C2: durable named receipts
     // ------------------------------------------------------------------
 
-    private fun receiptKey(): String = if (::stagingDir.isInitialized) stagingDir.name else "scan"
-
-    /** Records a named outcome and shows it on the review screen, not only in a Toast. */
+    /** Records a named outcome inside staging and shows it, not only in a Toast. */
     internal fun recordReceipt(name: String, detail: String) {
-        V2cReceiptStore.record(this, receiptKey(), name, detail)
+        if (::stagingDir.isInitialized) {
+            V2cReceiptStore.recordIn(stagingDir, name, detail)
+        }
         showLatestReceipt()
     }
 
-    /** Shows the last receipt for this staging folder, or the last scan receipt. */
+    /** Shows the last receipt of this review, or the last scan receipt if none. */
     internal fun showLatestReceipt() {
         if (!::binding.isInitialized) return
-        val receipt = V2cReceiptStore.latest(this, receiptKey())
+        val receipt = (if (::stagingDir.isInitialized) V2cReceiptStore.latestIn(stagingDir) else null)
             ?: V2cReceiptStore.latest(this, "scan")
         binding.v2cReceipt.isVisible = receipt != null
         if (receipt == null) return
         binding.v2cReceipt.text = "${receipt.name} · ${receipt.detail}"
         binding.v2cReceipt.contentDescription =
             getString(R.string.v2c_receipt_label, receipt.name)
+    }
+
+    /** A retake backup is only for the live Undo window; never leave one behind. */
+    private fun clearRetakeBackups() {
+        if (!::stagingDir.isInitialized || !stagingDir.isDirectory) return
+        stagingDir.listFiles { f -> f.name.endsWith(RETAKE_BACKUP_SUFFIX) }
+            ?.forEach { it.delete() }
     }
 
     // ------------------------------------------------------------------
@@ -1376,6 +1405,8 @@ class ScanReviewActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
+                    // A previous retake's Undo window is over: its backup must not linger.
+                    clearRetakeBackups()
                     val backup = File(target.path + RETAKE_BACKUP_SUFFIX)
                     backup.writeBytes(target.readBytes())
                     val tmp = File(target.path + ".new")
@@ -1393,18 +1424,22 @@ class ScanReviewActivity : BaseActivity() {
                     getString(R.string.v2c_receipt_retake),
                     getString(R.string.v2c_retake_detail, index + 1)
                 )
-                snack(getString(R.string.v2c_receipt_retake)) {
-                    val backup = File(target.path + RETAKE_BACKUP_SUFFIX)
-                    if (backup.exists()) {
-                        backup.copyTo(target, overwrite = true)
-                        backup.delete()
-                        reloadFromDisk()
-                        recordReceipt(
-                            getString(R.string.v2c_receipt_retake),
-                            getString(R.string.undo)
-                        )
-                    }
-                }
+                snack(
+                    getString(R.string.v2c_receipt_retake),
+                    undo = {
+                        val backup = File(target.path + RETAKE_BACKUP_SUFFIX)
+                        if (backup.exists()) {
+                            backup.copyTo(target, overwrite = true)
+                            backup.delete()
+                            reloadFromDisk()
+                            recordReceipt(
+                                getString(R.string.v2c_receipt_retake),
+                                getString(R.string.undo)
+                            )
+                        }
+                    },
+                    onDismissed = { clearRetakeBackups() }
+                )
             } catch (e: Exception) {
                 pageOpBusy = false
                 recordReceipt(
@@ -1423,6 +1458,7 @@ class ScanReviewActivity : BaseActivity() {
     private fun saveAndFinish(policy: SavedCopyPolicy = SavedCopyPolicy.ASK) {
         if (saving) return
         if (pages.isEmpty()) return
+        clearRetakeBackups()
         withStoragePermission {
             reviewStateHandler.removeCallbacks(persistReviewStateTask)
             saving = true
@@ -1553,6 +1589,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     private fun discard() {
+        clearRetakeBackups()
         saved = true // stops any later cleanup concerns; staging is removed now
         // fixflow F22 fallout: a queued review-state write must not leave a file in the folder
         // and keep a discarded scan visible as "unfinished" (see PendingScans.discard).
