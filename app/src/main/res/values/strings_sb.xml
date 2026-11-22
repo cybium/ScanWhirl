@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lane SB: the primary Scan action opens Create; the caption reuses ux130_l1_scan_caption. -->
+    <string name="scan_capture_desc">Scan. Open scan and import options.</string>
+</resources>

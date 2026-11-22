@@ -362,7 +362,7 @@ class LibraryCreateSheetTest {
         launch { activity ->
             val disc = activity.findViewById<View>(R.id.swNavScan)
             assertEquals(
-                activity.getString(R.string.create_disc_desc),
+                activity.getString(R.string.scan_capture_desc),
                 disc.contentDescription?.toString()
             )
         }

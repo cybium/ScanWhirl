@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lane SB: Hindi TalkBack label for the primary Scan action. -->
+    <string name="scan_capture_desc">स्कैन। स्कैन और फ़ाइल जोड़ने के विकल्प खोलें।</string>
+</resources>

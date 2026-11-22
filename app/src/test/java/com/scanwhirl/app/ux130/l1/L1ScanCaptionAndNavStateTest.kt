@@ -58,9 +58,9 @@ class L1ScanCaptionAndNavStateTest {
             val caption = activity.findViewById<TextView>(R.id.uxL1ScanCaption)
             assertNotNull("the caption exists", caption)
             assertEquals("Scan", caption!!.text.toString())
-            assertEquals(
+            assertTrue(
                 "the caption is inside the disc's single focus stop",
-                disc, caption.parent
+                caption.parent?.parent === disc
             )
             assertEquals(
                 "the caption is silent to TalkBack so there is only one Scan target",
