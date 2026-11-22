@@ -27,8 +27,10 @@ import java.io.File
  * Entries in [CAPTURE_CACHE_DIRS] are therefore only reclaimed once they are older than
  * [CAPTURE_CACHE_MAX_AGE_MS] (24 h), long past any restore; a real screen exit deletes them at once.
  *
- * Only app-owned cache directories are touched; the library (`filesDir/documents`), the Vault
- * (`filesDir/vault2`) and user exports are never included.
+ * Only app-owned directories under `cacheDir` are touched. Nothing under `filesDir` is ever
+ * enumerated here: the library (`filesDir/documents`), the Vault (`filesDir/vault2`), user exports
+ * and the app-private durable backup archives (`filesDir/backups`) are all outside this sweep,
+ * so "Clear temporary files" can never delete a finished backup or Library/Vault data.
  */
 object PrivacySweep {
 

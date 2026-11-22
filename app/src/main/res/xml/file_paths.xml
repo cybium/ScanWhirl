@@ -3,7 +3,9 @@
     <files-path name="internal_docs" path="documents/" />
     <files-path name="internal_exports" path="exports/" />
     <cache-path name="cache_docs" path="documents/" />
-    <!-- Full Backup 2.0 archives live here until the user saves or shares them. -->
+    <!-- Final encrypted archives are durable and app-private, so Clear-cache cannot delete them. -->
+    <files-path name="backup_durable" path="backups/" />
+    <!-- Legacy cache archives (from older builds) are still shareable while they last. -->
     <cache-path name="backup" path="fullbackup/" />
     <!-- Android 7-9 only: exports saved to Documents/ScanWhirl are plain files there, so Open/Share needs a
          content URI for exactly that folder (fixresult H1 follow-up). Android 10+ uses MediaStore URIs. -->

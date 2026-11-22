@@ -599,12 +599,47 @@ class FullBackupTest {
         doc("doc_share", "Shareable")
         val file = backup.newArchiveFile()
         backup.write(file, password, FullBackup.Wrap.PASSWORD)
-        assertTrue("the archive lives in cache/fullbackup", file.canonicalPath.contains("fullbackup"))
+        assertTrue(
+            "the archive lives in durable filesDir/backups, not cache",
+            file.parentFile == File(app.filesDir, "backups")
+        )
+        assertFalse("the archive must not live in cache", file.canonicalPath.contains(app.cacheDir.path))
         val uri = androidx.core.content.FileProvider.getUriForFile(
             app, app.packageName + ".fileprovider", file
         )
         assertNotNull("the FileProvider exposes the archive", uri)
         file.delete()
+    }
+
+    @Test
+    fun `a finished backup survives a cache clear and restores from filesDir backups`() {
+        doc("doc_durable", "Durable copy")
+        val durable = backup.newArchiveFile()
+        backup.write(durable, password, FullBackup.Wrap.PASSWORD)
+        assertTrue(
+            "new archives are durable",
+            durable.isFile && durable.parentFile == File(app.filesDir, "backups")
+        )
+
+        // Simulate Android Settings -> Clear cache: the whole cacheDir disappears.
+        app.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+
+        assertTrue("Clear-cache must not delete a finished backup", durable.isFile)
+        assertEquals(FullBackup.Wrap.PASSWORD, backup.header(durable).wrap)
+        File(docsDir, "doc_durable").deleteRecursively()
+        assertEquals(1, backup.restore(durable, password).documents)
+        durable.delete()
+    }
+
+    @Test
+    fun `restore still accepts a legacy archive in cache fullbackup`() {
+        doc("doc_legacy", "Legacy cache copy")
+        val legacy = File(app.cacheDir, "fullbackup/ScanWhirl-legacy.swbackup")
+        backup.write(legacy, password, FullBackup.Wrap.PASSWORD)
+        assertTrue("fixture: the legacy archive is in cache", legacy.isFile)
+        File(docsDir, "doc_legacy").deleteRecursively()
+        assertEquals(1, backup.restore(legacy, password).documents)
+        legacy.delete()
     }
 
     @Test
