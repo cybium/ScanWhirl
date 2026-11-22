@@ -754,6 +754,9 @@ class VaultStore(
                 f.deleteRecursively()
             }
         }
+        // SEC2 R3 LOW: pending plaintext is locally owned even when this Vault
+        // was never set up (or was wiped). Sweep it before any early return.
+        sweepPendingPurges()
         if (!isSetUp()) {
             // An interrupted provisioning transaction: its wraps belong to no Vault and must
             // never shadow a later (or restored) passcode wrap (review MUST-FIX 2).
@@ -788,10 +791,17 @@ class VaultStore(
             }
         }
 
-        // SEC2 N1: independent, locally owned sweep. A pending-purge folder is
-        // authority in its own right: removing the encrypted entry, or losing the
-        // .adding marker, must never strand plaintext. A still-live add owns its
-        // folder and is handled above; a checked failure leaves it for next start.
+        // A marker invalidated above is no longer an owner; sweep again so one
+        // startup can finish cleanup after the marker loop.
+        sweepPendingPurges()
+    }
+
+    /**
+     * SEC2 N1/R3: pending plaintext is locally owned. Removing an encrypted
+     * entry or losing the .adding marker must never strand it. A still-live
+     * add owns its folder; a checked failure leaves it for the next start.
+     */
+    private fun sweepPendingPurges() {
         repo.vaultPendingPurgeIds().forEach { id ->
             if (File(vaultDir, "$ADDING_PREFIX$id").exists()) return@forEach
             try {
@@ -841,6 +851,15 @@ class VaultStore(
     /** Removes every Vault file and key (used by "remove all" and by restore tests). */
     fun wipeAll() = synchronized(LOCK) {
         VaultSession.close()
+        // SEC2 R3 LOW: removing the whole Vault identity must not strand the
+        // private pending-purge plaintext from an earlier interrupted add.
+        var allPendingPurged = true
+        repo.vaultPendingPurgeIds().forEach { id ->
+            if (!runCatching { repo.purgeVaultPendingOriginal(id) }.getOrDefault(false)) {
+                allPendingPurged = false
+            }
+        }
+        if (allPendingPurged) repo.vaultPendingPurgeDir.deleteRecursively()
         vaultDir.deleteRecursively()
         openDir.deleteRecursively()
         File(context.cacheDir, "vault_verify").deleteRecursively()
