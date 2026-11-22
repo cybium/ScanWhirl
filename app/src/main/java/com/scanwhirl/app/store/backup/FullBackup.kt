@@ -257,12 +257,21 @@ class FullBackup(
         return VaultCrypto.deriveKey(normalized, salt, iterations)
     }
 
-    /** Where the UI writes an archive before saving or sharing it (covered by the FileProvider). */
+    /**
+     * Where the UI writes the FINAL ENCRYPTED archive before saving or sharing it.
+     *
+     * DATA SAFETY: this is app-private DURABLE storage, not `cacheDir`. The only copy used to sit
+     * in `cacheDir/fullbackup`, which both Android's Clear-cache and our cold-start privacy sweep
+     * delete, so a person could lose a finished backup just by clearing temporary files. Only the
+     * plaintext scratch container (`fullbackup-<id>.tmp`) stays in cache and is deleted after the
+     * write. The folder is exposed through the FileProvider as `backup_durable` so sharing still
+     * works. Restore accepts archives from here and from the legacy cache location.
+     */
     fun newArchiveFile(): File {
-        val dir = File(context.cacheDir, "fullbackup").apply { mkdirs() }
+        val dir = File(context.filesDir, DURABLE_BACKUPS_DIR).apply { mkdirs() }
         // B1: minute resolution used to make a second backup in the same minute overwrite the
-        // first one's cached .part/.swbackup. Seconds plus a short random suffix keep two
-        // "Back up now" runs apart without exposing anything or needing a new permission.
+        // first one's archive. Seconds plus a short random suffix keep two "Back up now" runs
+        // apart without exposing anything or needing a new permission.
         val stamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss", java.util.Locale.US).format(java.util.Date())
         val unique = UUID.randomUUID().toString().take(6)
         return File(dir, "ScanWhirl-$stamp-$unique.$EXTENSION")
@@ -944,6 +953,8 @@ class FullBackup(
         /** The non-secret "Vault setup not checked yet" marker (Prefs); device state only. */
         private const val PREF_VAULT_PENDING = "vault_setup_confirm_pending"
         const val EXTENSION = "swbackup"
+        /** App-private durable folder for final encrypted archives; never under cacheDir. */
+        internal const val DURABLE_BACKUPS_DIR = "backups"
         const val MIME = "application/octet-stream"
         /**
          * A single picked backup is limited to 2 GiB (larger than the PDF import cap).

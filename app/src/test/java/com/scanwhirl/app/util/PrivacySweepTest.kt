@@ -162,6 +162,48 @@ class PrivacySweepTest {
     }
 
     @Test
+    fun `a cache clear removes cache fullbackup but leaves the durable archive`() {
+        val legacy = file("fullbackup/ScanWhirl-legacy.swbackup", ByteArray(64) { 7 })
+        val durable = File(app.filesDir, "backups/ScanWhirl-durable.swbackup").apply {
+            parentFile?.mkdirs()
+            writeBytes(ByteArray(64) { 8 })
+        }
+
+        // Simulate Android Settings -> Clear cache: the whole cacheDir disappears.
+        cache.listFiles()?.forEach { it.deleteRecursively() }
+
+        assertFalse("the cache copy is gone", legacy.exists())
+        assertFalse("cache/fullbackup is gone", File(cache, "fullbackup").exists())
+        assertTrue("the durable backup survives Clear-cache", durable.isFile)
+        durable.delete()
+    }
+
+    @Test
+    fun `the privacy sweep leaves durable backups library and vault untouched`() {
+        val durable = File(app.filesDir, "backups/ScanWhirl-durable.swbackup").apply {
+            parentFile?.mkdirs()
+            writeBytes(ByteArray(64) { 8 })
+        }
+        val library = File(app.filesDir, "documents/doc1/scan.pdf").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(9))
+        }
+        val vault = File(app.filesDir, "vault2/doc1/manifest.enc").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(6))
+        }
+        val cachedBackup = file("fullbackup/ScanWhirl-legacy.swbackup", ByteArray(64) { 7 })
+
+        PrivacySweep.run(app)
+
+        assertTrue("the sweep must not touch filesDir/backups", durable.isFile)
+        assertTrue("the sweep must not touch the library", library.isFile)
+        assertTrue("the sweep must not touch the Vault", vault.isFile)
+        assertFalse("the sweep still removes a cache archive", cachedBackup.exists())
+        listOf(durable, library, vault).forEach { it.deleteRecursively() }
+    }
+
+    @Test
     fun `the sweep is safe to run twice and on an empty cache`() {
         PrivacySweep.run(app)
         PrivacySweep.run(app)

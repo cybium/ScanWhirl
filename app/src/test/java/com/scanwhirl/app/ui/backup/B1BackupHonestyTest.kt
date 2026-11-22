@@ -227,8 +227,8 @@ class B1BackupHonestyTest {
 
         awaitSheet(app.getString(R.string.backup_ready), 5_000)
         assertTrue(
-            "the cached archive survives a cancel",
-            File(app.cacheDir, "fullbackup").listFiles().orEmpty().any { it.name.endsWith(".swbackup") }
+            "the durable archive survives a cancel",
+            File(app.filesDir, "backups").listFiles().orEmpty().any { it.name.endsWith(".swbackup") }
         )
     }
 
@@ -255,8 +255,8 @@ class B1BackupHonestyTest {
         assertEquals("the failure is reported", app.getString(R.string.backup_failed), toast)
         awaitSheet(app.getString(R.string.backup_ready), 5_000)
         assertTrue(
-            "the cached archive survives a failed write",
-            File(app.cacheDir, "fullbackup").listFiles().orEmpty().any { it.name.endsWith(".swbackup") }
+            "the durable archive survives a failed write",
+            File(app.filesDir, "backups").listFiles().orEmpty().any { it.name.endsWith(".swbackup") }
         )
     }
 

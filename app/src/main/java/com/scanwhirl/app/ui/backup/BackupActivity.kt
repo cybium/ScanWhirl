@@ -65,8 +65,8 @@ class BackupActivity : BaseActivity() {
         var workGateForTest: java.util.concurrent.CountDownLatch? = null
 
         // UXG G2: the encrypted archive is expensive to rebuild. Saved across a configuration
-        // change so the Save/Share offer can be restored after recreation; the bytes stay in the
-        // private cache dir that PrivacySweep clears eventually.
+        // change so the Save/Share offer can be restored after recreation; the bytes are in the
+        // app-private durable filesDir/backups, so Clear-cache cannot remove a ready backup.
         private const val STATE_PENDING = "ux_uxg_backup_pending"
         private const val STATE_PENDING_WARNINGS = "ux_uxg_backup_pending_warnings"
 
@@ -166,8 +166,8 @@ class BackupActivity : BaseActivity() {
 
     private val saveTo = registerForActivityResult(ActivityResultContracts.CreateDocument(FullBackup.MIME)) { uri ->
         // B1: never discard the ready archive before we know the write succeeded. Cancelling the
-        // save dialog used to null `pending` and delete the cached file, so the person lost an
-        // 18 MB backup they had already encrypted. It stays until a confirmed success.
+        // save dialog used to null `pending` and delete the file, so the person lost an 18 MB
+        // backup they had already encrypted. The durable archive stays until a confirmed write.
         val file = pending ?: return@registerForActivityResult
         if (uri == null) {
             // The person backed out of the save dialog: offer the same choices again.
@@ -192,8 +192,8 @@ class BackupActivity : BaseActivity() {
                 toast(getString(R.string.backup_saved_to, destination ?: getString(R.string.backup_saved_name_unknown)))
             } else {
                 toast(R.string.backup_failed)
-                // A failed write is not a finished save. Keep the cached file and let the person
-                // retry "Save to device" or share it, without rebuilding the whole archive.
+                // A failed write is not a finished save. Keep the durable archive and let the
+                // person retry "Save to device" or share it, without rebuilding the whole archive.
                 offerSaving(file)
             }
         }
@@ -231,7 +231,7 @@ class BackupActivity : BaseActivity() {
         setContentView(buildScreen())
         refresh()
         // UXG G2: a configuration change destroyed the previous instance while the encrypted
-        // archive was still waiting for Save/Share. Recover the exact cached file and re-offer
+        // archive was still waiting for Save/Share. Recover the exact durable file and re-offer
         // the same choices instead of forcing the person to rebuild an 18 MB backup.
         val restored = savedInstanceState?.getString(STATE_PENDING)?.let { File(it) }
         if (restored != null && restored.isFile) {
@@ -298,8 +298,8 @@ class BackupActivity : BaseActivity() {
     override fun onDestroy() {
         // UXG G2: rotation destroys and recreates this screen. Keep the encrypted archive across a
         // configuration change; only a real finish (or another non-configuration teardown)
-        // releases the cached bytes. The file lives in the private cache dir, so a crash that
-        // skips this callback still leaves it to PrivacySweep rather than leaking it externally.
+        // releases the unsaved archive. The file lives in app-private filesDir/backups, so a
+        // crash that skips this callback leaves it durable (and never leaks it externally).
         if (!isChangingConfigurations) {
             pending?.delete()
             pending = null
@@ -317,8 +317,8 @@ class BackupActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Coming back from the share sheet (shared or cancelled): the archive is still cached, so
-        // offer "Save to device" again instead of making the user rebuild an 18 MB backup.
+        // Coming back from the share sheet (shared or cancelled): the archive is still in the
+        // durable folder, so offer "Save to device" again instead of rebuilding an 18 MB backup.
         if (!awaitingShareReturn) return
         awaitingShareReturn = false
         val file = pending ?: return
