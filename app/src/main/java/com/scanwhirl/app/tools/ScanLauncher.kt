@@ -63,6 +63,10 @@ class ScanLauncher(
         @Volatile
         private var resumeOfferShowing = false
 
+        /** Test seam: dispatcher for the cold-start offer coroutine (Main.immediate in production). */
+        @Volatile
+        internal var offerDispatcherForTest: kotlinx.coroutines.CoroutineDispatcher? = null
+
         /** Test seams: block the lookup to exercise cancellation, and observe the guard. */
         @Volatile
         internal var beforeResumeLookupForTest: (() -> Unit)? = null
@@ -129,7 +133,7 @@ class ScanLauncher(
      * had already committed, offer to open that document instead of saving again.
      */
     fun offerUnfinishedScan() {
-        activity.lifecycleScope.launch {
+        activity.lifecycleScope.launch(offerDispatcherForTest ?: Dispatchers.Main.immediate) {
             val found = withContext(Dispatchers.IO) { findUnfinished() } ?: return@launch
             show(found)
         }
