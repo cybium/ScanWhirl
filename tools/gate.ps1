@@ -52,7 +52,15 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
     # Always run the lead's current workflow (and the fail-closed verdict script it calls),
     # even if the lane has not merged them yet.
-    foreach ($rel in @(".github/workflows/gate.yml", "tools/ci/gate_verdict.py", "tools/ci/test_gate_verdict.py")) {
+    $overlay = @(".github/workflows/gate.yml", "tools/ci/gate_verdict.py", "tools/ci/test_gate_verdict.py")
+    # The workflow also calls the release manifest privacy check; overlay the whole tools/release folder.
+    $relDir = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current\tools\release"
+    if (Test-Path $relDir) {
+        Get-ChildItem $relDir -File -Recurse | Where-Object { $_.FullName -notmatch '\\__pycache__\\' } | ForEach-Object {
+            $overlay += ("tools/release/" + $_.FullName.Substring($relDir.Length + 1).Replace('\', '/'))
+        }
+    }
+    foreach ($rel in $overlay) {
         $src = Join-Path "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current" $rel
         if (-not (Test-Path $src)) { continue }
         $blob = git -C $root hash-object -w $src

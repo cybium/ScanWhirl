@@ -4,6 +4,8 @@ import android.app.Application
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -24,9 +26,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -36,9 +36,10 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * Owner decision UX-008: the Home Quick tools row is back (compact, at most two rows), the
- * pencil opens ONE editor sheet, and the tiles use the same ToolTile/ToolHost.launchTool path
- * (including the Pro gate) as the Tools tab. Checked in English and Hindi, 100 % and 200 %.
+ * Council §7: the Home Quick tools row keeps the same ToolTile launch path as the Tools
+ * tab, but the editor is now newcomer-safe — a plain "Customize" button, a list of
+ * checkbox rows with FULL names, ▲▼ buttons instead of drag, a "Tap to add or remove"
+ * hint, Reset, and a cap of six. Checked in English and Hindi at 100 % and 200 %.
  */
 abstract class U4QuickToolsBase {
 
@@ -69,11 +70,6 @@ abstract class U4QuickToolsBase {
         return allTiles(row)
     }
 
-    private fun sheetTiles(): List<ToolTile> {
-        val dialog = ShadowDialog.getLatestDialog() ?: return emptyList()
-        return allTiles(dialog.findViewById(R.id.swSheetContent) ?: return emptyList())
-    }
-
     private fun allTiles(group: View): List<ToolTile> {
         val out = mutableListOf<ToolTile>()
         fun walk(view: View) {
@@ -87,13 +83,60 @@ abstract class U4QuickToolsBase {
     }
 
     private fun openEditor(activity: ShellActivity) {
+        // Council §7: the bare pencil is replaced by a plain "Customize" text button.
         activity.findViewById<View>(R.id.swQuickEdit).performClick()
         idle()
-        assertNotNull("the pencil opens the editor sheet", ShadowDialog.getLatestDialog())
+        assertNotNull("Customize opens the editor sheet", ShadowDialog.getLatestDialog())
     }
 
+    private fun sheetContent(): ViewGroup {
+        val dialog = ShadowDialog.getLatestDialog() ?: return LinearLayout(app)
+        return dialog.findViewById(R.id.swSheetContent) ?: LinearLayout(app)
+    }
+
+    private fun checkboxes(): List<CheckBox> {
+        val out = mutableListOf<CheckBox>()
+        fun walk(v: View) {
+            if (v is CheckBox) out += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(sheetContent())
+        return out
+    }
+
+    private fun button(id: Int, tag: String): View {
+        val found = mutableListOf<View>()
+        fun walk(v: View) {
+            if (v.id == id && v.tag == tag) found += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(sheetContent())
+        return found.single()
+    }
+
+    private fun allChildren(view: View): Sequence<View> = sequence {
+        yield(view)
+        if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(allChildren(view.getChildAt(i)))
+    }
+
+    private fun allText(group: View): List<TextView> =
+        allChildren(group).filterIsInstance<TextView>().toList()
+
+    /** The short Home-strip label for a saved tool id, after the council OCR rename. */
+    private fun labelFor(activity: ShellActivity, id: String): String = activity.getString(
+        when (id) {
+            "merge" -> R.string.cb_quick_merge
+            "compress" -> R.string.cb_quick_compress
+            "sign" -> R.string.cb_quick_sign
+            "protect" -> R.string.cb_quick_protect
+            "read_text", "ocr" -> R.string.cb_quick_ocr
+            "to_word" -> R.string.quick_to_word
+            else -> R.string.quick_read_text
+        }
+    )
+
     @Test(timeout = 60_000)
-    fun `defaults visible with title all tools link and pencil`() {
+    fun `defaults visible with title all tools link and Customize button`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
@@ -102,22 +145,28 @@ abstract class U4QuickToolsBase {
                 assertEquals(if (hi) "झटपट काम" else "Quick tools", title.text.toString())
                 val all = activity.findViewById<TextView>(R.id.swQuickAll)
                 assertEquals(if (hi) "सभी काम ›" else "All tools ›", all.text.toString())
+                // OLD: a bare pencil with contentDescription "Edit quick tools".
+                // NEW: a labelled "Customize" text button.
+                val customize = activity.findViewById<TextView>(R.id.swQuickEdit)
+                assertEquals(if (hi) "बदलें" else "Customize", customize.text.toString())
                 assertEquals(
-                    if (hi) "झटपट काम बदलें" else "Edit quick tools",
-                    activity.findViewById<View>(R.id.swQuickEdit).contentDescription.toString()
+                    if (hi) "झटपट काम बदलें" else "Customize quick tools",
+                    customize.contentDescription.toString()
                 )
                 assertNotNull("the first row is on Home", activity.findViewById<View>(R.id.swQuickRow))
-                assertNull("at most two rows", activity.findViewById<View>(R.id.swQuickRow3))
+                assertNull("at most one row", activity.findViewById<View>(R.id.swQuickRow2))
                 assertEquals(
                     "the five council defaults are visible",
                     Prefs.DEFAULT_QUICK_TOOLS,
                     quickTiles(activity).map { it.tool!!.id }
                 )
-                val expected = listOf(
-                    R.string.quick_merge, R.string.quick_compress, R.string.quick_sign,
-                    R.string.quick_protect, R.string.quick_read_text
-                ).map { activity.getString(it) }
-                assertEquals("labels are the judged short EN/HI words", expected, quickTiles(activity).map { it.labelView.text.toString() })
+                // Lane B replaced the pencil with a Customize checkbox editor whose rows use
+                // the cb_quick_* labels; lane N keeps the council's five default tiles.
+                assertEquals(
+                    "labels are the judged short EN/HI words",
+                    Prefs.DEFAULT_QUICK_TOOLS.map { labelFor(activity, it) },
+                    quickTiles(activity).map { it.labelView.text.toString() }
+                )
             }
         }
     }
@@ -171,10 +220,7 @@ abstract class U4QuickToolsBase {
                     "the one Pro screen opens from the Home quick row",
                     activity.findViewById<View>(R.id.swProScreen)
                 )
-                assertNull(
-                    "a gated tile starts no tool activity",
-                    shadowOf(activity).nextStartedActivity
-                )
+                assertNull("a gated tile starts no tool activity", shadowOf(activity).nextStartedActivity)
                 activity.findViewById<View>(R.id.swProClose).performClick()
                 idle()
             }
@@ -192,35 +238,37 @@ abstract class U4QuickToolsBase {
                 openEditor(activity)
                 val dialog = ShadowDialog.getLatestDialog()!!
                 assertEquals(
-                    if (hi) "झटपट काम बदलें" else "Edit quick tools",
+                    if (hi) "झटपट काम बदलें" else "Customize quick tools",
                     dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
                 )
                 assertTrue(
-                    "the editor explains its gestures",
-                    dialog.findViewById<ViewGroup>(R.id.swSheetContent)?.let { root ->
-                        allText(root).any { it.text.toString() == app.getString(R.string.u4_quick_editor_hint) }
-                    } == true
+                    "the editor explains the gesture-free interaction",
+                    allText(sheetContent()).any {
+                        it.text.toString() == app.getString(R.string.cb_quick_editor_hint)
+                    }
                 )
                 assertTrue(
                     "the reset control is in the sheet",
-                    allText(dialog.findViewById(R.id.swSheetContent)).any {
-                        it.text.toString() == app.getString(R.string.u4_quick_reset)
-                    }
+                    allChildren(sheetContent()).any { it.id == R.id.cbQuickReset }
                 )
-                sheetTiles().first { it.tool?.id == added }.performClick()
+                // OLD: a tile click added a seventh. NEW: cap 6, so first uncheck one.
+                checkboxes().first { it.tag == Prefs.DEFAULT_QUICK_TOOLS.first() }.isChecked = false
+                idle()
+                checkboxes().first { it.tag == added }.isChecked = true
                 idle()
                 dialog.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
             }
         }
         assertTrue("the added id is saved", Prefs.quickTools(app).contains(added))
+        assertFalse("the removed id is gone", Prefs.quickTools(app).contains(Prefs.DEFAULT_QUICK_TOOLS.first()))
 
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 assertTrue("the new tile is on Home after relaunch", quickTiles(activity).any { it.tool?.id == added })
                 openEditor(activity)
-                sheetTiles().first { it.tool?.id == added }.performClick()
+                checkboxes().first { it.tag == added }.isChecked = false
                 idle()
                 ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetSecondary).performClick()
                 idle()
@@ -228,42 +276,31 @@ abstract class U4QuickToolsBase {
         }
         assertTrue("Cancel discarded the removal", Prefs.quickTools(app).contains(added))
 
-        // Reorder and reset are driven through the same draft the sheet renders.
+        // Reorder is driven through the labelled ▲/▼ buttons on the draft rows.
+        val beforeReorder = Prefs.quickTools(app)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
-                val first = activity.findViewById<ViewGroup>(R.id.swTabContent).getChildAt(0)
-                val library = if (first is LibraryScreen) first else (first as ViewGroup).getChildAt(0) as? LibraryScreen
-                assertNotNull("the Home screen is a LibraryScreen", library)
-                val last = quickTiles(activity).last().tool!!.id
-                library!!.moveQuickTool(last, 0)
+                button(R.id.cbQuickUp, beforeReorder[1]).performClick()
                 idle()
                 ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
             }
         }
-        assertEquals("the drag order is saved", quickFirstId(), Prefs.quickTools(app).first())
+        assertEquals("the named reorder is saved", beforeReorder[1], quickFirstId())
 
-        // LEAD DECISION (L1-04): OLD clicked Reset then the editor's Done and expected the
-        // defaults to be saved. NEW clicks Reset -> "Reset quick tools?" -> Reset, then the
-        // editor's Done; it also checks Cancel keeps the previously saved set. Draft-only
-        // semantics and persistence are both preserved.
+        // Reset -> confirm -> Done restores the shipped defaults; Cancel keeps the order.
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
                 val editor = ShadowDialog.getLatestDialog()!!
-                allText(editor.findViewById(R.id.swSheetContent))
-                    .first { it.text.toString() == app.getString(R.string.u4_quick_reset) }
-                    .performClick()
+                allChildren(sheetContent()).first { it.id == R.id.cbQuickReset }.performClick()
                 idle()
                 val confirm = ShadowDialog.getLatestDialog()!!
-                assertEquals(
-                    "Reset asks first",
-                    app.getString(R.string.ux130_l1_reset_quick),
-                    confirm.findViewById<TextView>(R.id.swSheetTitle).text.toString()
-                )
+                assertEquals(app.getString(R.string.ux130_l1_reset_quick),
+                    confirm.findViewById<TextView>(R.id.swSheetTitle).text.toString())
                 confirm.findViewById<View>(R.id.swSheetSecondary).performClick()
                 idle()
                 editor.findViewById<View>(R.id.swSheetPrimary).performClick()
@@ -277,18 +314,16 @@ abstract class U4QuickToolsBase {
                 idle()
                 openEditor(activity)
                 val editor = ShadowDialog.getLatestDialog()!!
-                allText(editor.findViewById(R.id.swSheetContent))
-                    .first { it.text.toString() == app.getString(R.string.u4_quick_reset) }
-                    .performClick()
+                allChildren(sheetContent()).first { it.id == R.id.cbQuickReset }.performClick()
                 idle()
-                val confirm = ShadowDialog.getLatestDialog()!!
-                confirm.findViewById<View>(R.id.swSheetPrimary).performClick()
+                ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
                 editor.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
             }
         }
-        assertEquals("reset + Done restores the shipped six", Prefs.DEFAULT_QUICK_TOOLS, Prefs.quickTools(app))
+        assertEquals("reset + Done restores the shipped defaults",
+            Prefs.DEFAULT_QUICK_TOOLS, Prefs.quickTools(app))
         assertTrue(
             "quick_tools is in the backup allowlist",
             java.io.File("src/main/java/com/scanwhirl/app/store/backup/FullBackup.kt")
@@ -297,46 +332,47 @@ abstract class U4QuickToolsBase {
     }
 
     @Test(timeout = 60_000)
-    fun `editor tiles speak add or remove and the twelve limit is focusable`() {
+    fun `editor rows use full names and the cap of six is focusable`() {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
-                val removeTile = sheetTiles().first { it.tool?.id == "merge" }
-                assertEquals(
-                    "a selected tile speaks its remove action",
-                    activity.getString(R.string.quick_remove, activity.getString(R.string.tool_merge)),
-                    removeTile.contentDescription.toString()
+                val boxes = checkboxes()
+                assertTrue("one checkbox per ready tool", boxes.size > 6)
+                val selected = boxes.filter { it.isChecked }.map { it.tag as String }
+                assertEquals("saved tools are checked", Prefs.quickTools(app).toSet(), selected.toSet())
+                // OLD: short tiles spoke "Add/Remove <tool>". NEW: full names on checkboxes
+                // and labelled ▲/▼ buttons, no drag.
+                assertTrue(
+                    "every row names the full tool",
+                    boxes.all { it.text.toString().isNotBlank() }
                 )
-                val addTile = sheetTiles().first { !Prefs.quickTools(activity).contains(it.tool!!.id) }
-                assertEquals(
-                    "an available tile speaks its add action",
-                    activity.getString(R.string.quick_add, activity.getString(addTile.tool!!.title)),
-                    addTile.contentDescription.toString()
+                assertTrue(
+                    "a selected row has named up and down controls",
+                    selected.all { id ->
+                        runCatching { button(R.id.cbQuickUp, id) }.isSuccess &&
+                            runCatching { button(R.id.cbQuickDown, id) }.isSuccess
+                    }
                 )
+                assertNull("no tiles in the editor", allTiles(sheetContent()).firstOrNull())
             }
         }
+        // Council §7: cap 6. A saved list longer than six is kept but cannot add.
         val twelve = ToolRegistry.all.filter { it.status == ToolStatus.READY }
             .map { it.id }.distinct().take(12)
-        assertEquals("the catalogue can fill twelve", 12, twelve.size)
         Prefs.setQuickTools(app, twelve)
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
-                val dialog = ShadowDialog.getLatestDialog()!!
-                val limit = activity.getString(R.string.quick_max_reached)
-                val focusableHint = allChildren(dialog.findViewById(R.id.swSheetContent)!!)
-                    .filter { it.isFocusable && it.contentDescription?.toString() == limit }
-                    .toList()
-                assertTrue("the max-12 hint is on a focusable view", focusableHint.isNotEmpty())
-                val blocked = sheetTiles().filter { !twelve.contains(it.tool?.id) }
-                if (blocked.isNotEmpty()) {
-                    assertTrue(
-                        "a blocked add tile still speaks the limit",
-                        blocked.all { it.contentDescription?.toString() == limit && it.isFocusable }
-                    )
-                }
+                val limit = activity.getString(R.string.cb_quick_max_reached)
+                assertTrue("the cap statement is focusable",
+                    allChildren(sheetContent()).any {
+                        it.id == R.id.cbQuickLimit && it.isFocusable && it.contentDescription?.toString() == limit
+                    })
+                val blocked = checkboxes().filter { !(it.tag as String).let { id -> twelve.contains(id) } }
+                assertTrue("extra tools stay unchecked and cannot add",
+                    blocked.all { !it.isChecked && !it.isEnabled })
             }
         }
     }
@@ -350,10 +386,8 @@ abstract class U4QuickToolsBase {
             scenario.onActivity { activity ->
                 idle()
                 val tile = quickTiles(activity).first { it.tool?.id == proId }
-                assertFalse(
-                    "a Pro build never speaks PRO",
-                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro))
-                )
+                assertFalse("a Pro build never speaks PRO",
+                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro)))
             }
         }
         ProGate.setTestOverride(app, false)
@@ -361,10 +395,8 @@ abstract class U4QuickToolsBase {
             scenario.onActivity { activity ->
                 idle()
                 val tile = quickTiles(activity).first { it.tool?.id == proId }
-                assertTrue(
-                    "Free still hears PRO on a gated tile",
-                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro))
-                )
+                assertTrue("Free still hears PRO on a gated tile",
+                    tile.contentDescription.toString().contains(activity.getString(R.string.badge_pro)))
             }
         }
     }
@@ -396,34 +428,26 @@ abstract class U4QuickToolsBase {
                 assertTrue("a tile is at least 48dp", allTiles(row).first().height >= 48 * density)
 
                 openEditor(activity)
-                val dialog = ShadowDialog.getLatestDialog()!!
-                assertTrue(
-                    "the editor content scrolls instead of clipping",
-                    allChildren(dialog.findViewById(R.id.swSheetContent)).any { it is ScrollView }
-                )
+                assertTrue("the editor content scrolls instead of clipping",
+                    allChildren(sheetContent()).any { it is ScrollView })
                 val problems = mutableListOf<String>()
-                for (tile in sheetTiles()) {
-                    val tv = tile.labelView
-                    val l = tv.layout ?: continue
+                for (box in checkboxes()) {
+                    val l = box.layout ?: continue
                     for (line in 0 until l.lineCount) {
-                        if (l.getEllipsisCount(line) > 0) problems += "ellipsized \"${tv.text}\""
-                        if (l.getLineMax(line) > tv.width - tv.totalPaddingLeft - tv.totalPaddingRight + 1) {
-                            problems += "wide line in \"${tv.text}\""
+                        if (l.getEllipsisCount(line) > 0) problems += "ellipsized \"${box.text}\""
+                        if (l.getLineMax(line) > box.width - box.totalPaddingLeft - box.totalPaddingRight + 1) {
+                            problems += "wide line in \"${box.text}\""
                         }
                     }
                 }
-                assertTrue("editor labels wrap: $problems", problems.isEmpty())
+                assertTrue("editor rows wrap: $problems", problems.isEmpty())
+                for (box in checkboxes().filter { it.isChecked }) {
+                    assertTrue("▲ is a 48dp target", button(R.id.cbQuickUp, box.tag as String).height >= 48 * density - 1)
+                    assertTrue("▼ is a 48dp target", button(R.id.cbQuickDown, box.tag as String).height >= 48 * density - 1)
+                }
             }
         }
     }
-
-    private fun allChildren(view: View): Sequence<View> = sequence {
-        yield(view)
-        if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(allChildren(view.getChildAt(i)))
-    }
-
-    private fun allText(group: View): List<TextView> =
-        allChildren(group).filterIsInstance<TextView>().toList()
 }
 
 @RunWith(RobolectricTestRunner::class)

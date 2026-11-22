@@ -1,16 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- FORM1: views are built in code (like PassportActivity), so their ids live here. -->
+    <item name="formReadyTitle" type="id" />
     <item name="formReadyPresetPhoto" type="id" />
     <item name="formReadyPresetSignature" type="id" />
     <item name="formReadyPresetThumb" type="id" />
     <item name="formReadyPresetDeclaration" type="id" />
     <item name="formReadyPresetCustom" type="id" />
+    <item name="formReadyPresetRow1" type="id" />
+    <item name="formReadyPresetRow2" type="id" />
+    <item name="formReadyPresetRow3" type="id" />
+    <item name="formReadyWidthLabel" type="id" />
+    <item name="formReadyHeightLabel" type="id" />
+    <item name="formReadyMinLabel" type="id" />
+    <item name="formReadyMaxLabel" type="id" />
+    <item name="formReadyUnitLabel" type="id" />
     <item name="formReadyWidth" type="id" />
     <item name="formReadyHeight" type="id" />
     <item name="formReadyMinKb" type="id" />
     <item name="formReadyMaxKb" type="id" />
+    <item name="formReadyBandError" type="id" />
+    <item name="formReadyUnitPx" type="id" />
+    <item name="formReadyUnitCm" type="id" />
+    <item name="formReadyUnitMm" type="id" />
+    <item name="formReadyUnitInch" type="id" />
+    <item name="formReadyDpi100" type="id" />
+    <item name="formReadyDpi200" type="id" />
+    <item name="formReadyDpi300" type="id" />
     <item name="formReadyCleanup" type="id" />
+    <item name="formReadySavePreset" type="id" />
+    <item name="formReadyUsePreset" type="id" />
+    <item name="formReadyCleanupPreview" type="id" />
+    <item name="formReadyPreviewOriginal" type="id" />
+    <item name="formReadyPreviewCleaned" type="id" />
     <item name="formReadyReadout" type="id" />
     <item name="formReadyExample" type="id" />
     <item name="formReadyPhotoCmNote" type="id" />

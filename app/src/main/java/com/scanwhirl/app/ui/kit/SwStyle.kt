@@ -113,10 +113,10 @@ object SwStyle {
         if (em == 0f || AppLanguage.showingHindi(context)) 0f else em
 
     /**
-     * Decorative TextViews used as actions must speak as Buttons. Additive: it changes only the
+     * Decorative views used as actions must speak as Buttons. Additive: it changes only the
      * accessibility node and focusability, never the label, colour or click listener.
      */
-    fun asButton(view: TextView): TextView = view.apply {
+    fun asButton(view: View): View = view.apply {
         isFocusable = true
         ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
             override fun onInitializeAccessibilityNodeInfo(
@@ -128,6 +128,9 @@ object SwStyle {
             }
         })
     }
+
+    /** TextView overload keeps the old call sites and their fluent type. */
+    fun asButton(view: TextView): TextView = view.apply { asButton(this as View) }
 
     /**
      * A new quiet action with a boundary that clears 3:1 against the adjacent ink surface and a

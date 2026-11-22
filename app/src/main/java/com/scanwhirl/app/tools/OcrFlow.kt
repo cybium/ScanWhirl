@@ -11,6 +11,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
+import com.scanwhirl.app.ui.V2vFailureCopy
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrImagePrep
 import com.scanwhirl.app.util.OcrLanguageSettings
@@ -138,13 +139,15 @@ class OcrFlow(
     private fun showFailure(e: Exception) {
         if (e is kotlinx.coroutines.CancellationException) throw e
         if (e is com.scanwhirl.app.util.BoundedCopy.Refused) {
-            Toast.makeText(activity, e.message, Toast.LENGTH_LONG).show()
+            // Refused carries an app-localized reason; still route it through the
+            // one mapper so no raw Throwable message is ever interpolated here.
+            Toast.makeText(activity, V2vFailureCopy.message(activity, e), Toast.LENGTH_LONG).show()
             return
         }
         val text = if (OcrEngine.isUnavailable(e)) {
             activity.getString(R.string.ocr_unavailable_toast)
         } else {
-            activity.getString(R.string.page_op_failed, e.message)
+            activity.getString(R.string.page_op_failed, V2vFailureCopy.message(activity, e))
         }
         Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
     }

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane C (Before/after compare). Lane-prefixed keys only; EN default. -->
+<resources>
+    <!-- Segmented control: same frame, default After. -->
+    <string name="cc_before">Before</string>
+    <string name="cc_after">After</string>
+    <string name="cc_show_before">Show before</string>
+    <string name="cc_show_after">Show after</string>
+    <string name="cc_compare_label">Before and after</string>
+    <string name="cc_selected">selected</string>
+
+    <!-- Numbers and captions. -->
+    <string name="cc_before_size">Before: %1$s</string>
+    <string name="cc_after_size">After: %1$s</string>
+    <string name="cc_size_label">%1$s</string>
+    <string name="cc_pixels">%1$d × %2$d px</string>
+    <string name="cc_page">Page %1$d</string>
+    <string name="cc_no_numbers">Details not available</string>
+    <string name="cc_caption_a11y">%1$s. Showing %2$s.</string>
+
+    <!-- Honest empty states. -->
+    <string name="cc_no_before_image">Original page not available</string>
+    <string name="cc_no_after_image">Result page not available</string>
+    <string name="cc_before_image_a11y">Before image. %1$s</string>
+    <string name="cc_after_image_a11y">After image. %1$s</string>
+
+    <!-- Outcome sentences. -->
+    <string name="cc_outcome_resized">Resized · %1$s</string>
+    <string name="cc_outcome_compressed">Compressed · %1$s</string>
+    <string name="cc_outcome_saved">Saved · %1$s</string>
+    <string name="cc_outcome_unknown">Result</string>
+    <string name="cc_compress_smaller">%1$s → %2$s · %3$d%% smaller</string>
+    <string name="cc_compress_larger">%1$s → %2$s · %3$d%% larger</string>
+    <string name="cc_compress_same">%1$s → %2$s · same size</string>
+    <string name="cc_mark_added">1 mark added</string>
+    <string name="cc_marks_added">%1$d marks added</string>
+    <string name="cc_after_mark">Marked page</string>
+    <string name="cc_fields_removed">%1$d fields removed</string>
+    <string name="cc_text_found">Text found on %1$d of %2$d pages · %3$d words</string>
+    <string name="cc_pages_before_after">%1$d → %2$d pages</string>
+    <string name="cc_state_only">State only; no preview</string>
+</resources>
