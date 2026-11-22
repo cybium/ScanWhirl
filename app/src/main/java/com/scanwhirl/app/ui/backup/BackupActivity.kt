@@ -745,9 +745,9 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun runRestore(file: File, secret: String, allowPrompt: Boolean = true) {
-        beginOperation(WorkOp.RESTORE)
         // The backup carries Vault entries and this phone's Vault is set up: unlock it first, so
-        // the entries can be re-encrypted under its key instead of being skipped.
+        // the entries can be re-encrypted under its key instead of being skipped. The interruption
+        // marker starts only AFTER this gate: cancelling the prompt is not an interrupted restore.
         if (allowPrompt && runCatching { backup.needsVaultUnlock(file) }.getOrDefault(false)) {
             pendingRestore = file to secret
             unlockVault.launch(
@@ -755,6 +755,7 @@ class BackupActivity : BaseActivity() {
             )
             return
         }
+        beginOperation(WorkOp.RESTORE)
         if (busy) return
         startWork(getString(R.string.ux130_l5_backup_restoring))
         lifecycleScope.launch {
