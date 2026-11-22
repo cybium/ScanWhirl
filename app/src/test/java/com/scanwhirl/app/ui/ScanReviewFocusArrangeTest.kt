@@ -11,7 +11,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -25,6 +24,7 @@ import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.ScanFilter
+import com.scanwhirl.app.util.SwActivitySession
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,7 +66,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- 1 / 5 / 30 pages
 
-    @Test fun `one page opens in Focus with Page 1 of 1 and a singular save label`() {
+    @Test(timeout = 30_000) fun `one page opens in Focus with Page 1 of 1 and a singular save label`() {
         val dir = stage(1)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -91,7 +91,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `five pages - filmstrip and arrows move the current page and the order check is explicit`() {
+    @Test(timeout = 30_000) fun `five pages - filmstrip and arrows move the current page and the order check is explicit`() {
         val dir = stage(5)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -127,7 +127,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `thirty pages stay bounded and every control stays reachable`() {
+    @Test(timeout = 30_000) fun `thirty pages stay bounded and every control stays reachable`() {
         val dir = stage(30)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -161,7 +161,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- Focus <-> Arrange
 
-    @Test fun `Focus and Arrange share the current page and survive a recreate`() {
+    @Test(timeout = 30_000) fun `Focus and Arrange share the current page and survive a recreate`() {
         val dir = stage(5)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -206,7 +206,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- reorder durability
 
-    @Test fun `Later Earlier and Move to rename the staged files and the selection follows the page`() {
+    @Test(timeout = 30_000) fun `Later Earlier and Move to rename the staged files and the selection follows the page`() {
         val dir = stage(5)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -247,7 +247,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `moved index follows the page through any move`() {
+    @Test(timeout = 30_000) fun `moved index follows the page through any move`() {
         assertEquals(4, ScanReviewActivity.movedIndex(1, 1, 4))
         assertEquals(1, ScanReviewActivity.movedIndex(2, 0, 4))
         assertEquals(3, ScanReviewActivity.movedIndex(2, 4, 0))
@@ -257,7 +257,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- viewer round trip
 
-    @Test fun `back from the viewer Focus lands on the page shown there with its edited file`() {
+    @Test(timeout = 30_000) fun `back from the viewer Focus lands on the page shown there with its edited file`() {
         val dir = stage(4)
         val files = PendingScans.pages(dir)
         launch(dir).use { scenario ->
@@ -297,7 +297,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- page edits
 
-    @Test fun `Rotate in Focus turns the real file and Undo turns it back`() {
+    @Test(timeout = 30_000) fun `Rotate in Focus turns the real file and Undo turns it back`() {
         val dir = stage(2)
         val page = PendingScans.pages(dir)[0]
         launch(dir).use { scenario ->
@@ -311,7 +311,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `Delete in Focus keeps the position and Undo restores the page`() {
+    @Test(timeout = 30_000) fun `Delete in Focus keeps the position and Undo restores the page`() {
         val dir = stage(3)
         launch(dir).use { scenario ->
             scenario.onActivity { a -> a.showPage(1) }
@@ -343,7 +343,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `Filter in Focus is stored for that page and survives a relaunch`() {
+    @Test(timeout = 30_000) fun `Filter in Focus is stored for that page and survives a relaunch`() {
         val dir = stage(2)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -373,7 +373,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- saving
 
-    @Test fun `Save from Arrange after a move saves exactly one document in the shown order`() {
+    @Test(timeout = 30_000) fun `Save from Arrange after a move saves exactly one document in the shown order`() {
         val dir = stage(3)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -392,7 +392,7 @@ class ScanReviewFocusArrangeTest {
         assertEquals(listOf(121, 120, 122), doc.pageFiles.map { width(it) })
     }
 
-    @Test fun `Save from Focus saves exactly one document with title and category`() {
+    @Test(timeout = 30_000) fun `Save from Focus saves exactly one document with title and category`() {
         val dir = stage(2)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -411,7 +411,7 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- visibility & a11y
 
-    @Test fun `the chosen category chip is visibly marked, not only checked`() {
+    @Test(timeout = 30_000) fun `the chosen category chip is visibly marked, not only checked`() {
         val dir = stage(1)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
@@ -429,7 +429,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `at 200 percent text Save stays on screen and every tool keeps a 48dp target`() {
+    @Test(timeout = 30_000) fun `at 200 percent text Save stays on screen and every tool keeps a 48dp target`() {
         RuntimeEnvironment.setFontScale(2.0f)
         val dir = stage(5)
         launch(dir).use { scenario ->
@@ -461,7 +461,7 @@ class ScanReviewFocusArrangeTest {
         }
     }
 
-    @Test fun `review colours are legible on the dark theme and the icon glyphs resolve`() {
+    @Test(timeout = 30_000) fun `review colours are legible on the dark theme and the icon glyphs resolve`() {
         fun c(id: Int) = ContextCompat.getColor(app, id)
         val bg = c(R.color.rv_bg)
         listOf(R.color.rv_ink, R.color.rv_ink_2, R.color.rv_ink_3, R.color.rv_accent,
@@ -489,7 +489,7 @@ class ScanReviewFocusArrangeTest {
     }
 
     private fun launch(dir: File) =
-        ActivityScenario.launch<ScanReviewActivity>(ScanReviewActivity.intent(app, dir.path, null, "Doc"))
+        SwActivitySession.launch<ScanReviewActivity>(ScanReviewActivity.intent(app, dir.path, null, "Doc"))
 
     private fun width(f: File) = ImageTools.imageSize(f.readBytes())!!.first
     /** Null while a rename pass is mid-flight (page -> tmp -> page). */
@@ -506,12 +506,8 @@ class ScanReviewFocusArrangeTest {
     private fun snackbarText(a: Activity): String? =
         a.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)?.text?.toString()
 
-    private fun <T> ActivityScenario<ScanReviewActivity>.get(block: (ScanReviewActivity) -> T): T {
-        var out: T? = null
-        onActivity { out = block(it) }
-        @Suppress("UNCHECKED_CAST")
-        return out as T
-    }
+    private fun <T> SwActivitySession<ScanReviewActivity>.get(block: (ScanReviewActivity) -> T): T =
+        block(activity)
 
     private fun layout(v: View, w: Int, h: Int) {
         v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
@@ -536,11 +532,11 @@ class ScanReviewFocusArrangeTest {
     }
 
     private fun await(condition: () -> Boolean) {
-        val deadline = System.nanoTime() + 10_000_000_000L
+        val deadline = System.nanoTime() + 20_000_000_000L
         while (System.nanoTime() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
             if (condition()) return
-            Thread.sleep(20)
+            Thread.sleep(5)
         }
         fail("Timed out")
     }

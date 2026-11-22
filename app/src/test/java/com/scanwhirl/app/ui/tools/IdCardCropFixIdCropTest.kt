@@ -16,7 +16,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.view.isVisible
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.Faults
@@ -24,6 +23,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.SwActivitySession
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,12 +67,20 @@ class IdCardCropFixIdCropTest {
     fun setUp() {
         app.getSharedPreferences("scanwhirl_id_card", android.content.Context.MODE_PRIVATE)
             .edit().clear().commit()
+        // Gates and dialogs are process-wide. A test that fails mid-flight must not leak them
+        // into the next test in the same fork (the full suite shares one JVM across classes).
+        IdCardActivity.cropReopenGate = null
+        Faults.resetAll()
+        ShadowDialog.reset()
+        File(app.cacheDir, "id_card_state").deleteRecursively()
     }
 
     @After
     fun tearDown() {
         Faults.resetAll()
         IdCardActivity.cropReopenGate = null
+        ShadowDialog.reset()
+        File(app.cacheDir, "id_card_state").deleteRecursively()
         activity = null
     }
 
@@ -121,8 +129,8 @@ class IdCardCropFixIdCropTest {
         return condition()
     }
 
-    private fun launch(): ActivityScenario<IdCardActivity> =
-        ActivityScenario.launch(IdCardActivity::class.java).also { scenario ->
+    private fun launch(): SwActivitySession<IdCardActivity> =
+        SwActivitySession.launch(IdCardActivity::class.java).also { scenario ->
             scenario.onActivity { activity = it }
             idle()
         }
@@ -132,10 +140,10 @@ class IdCardCropFixIdCropTest {
             ?.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
 
     /** Clicks "Pick from gallery" on the open sheet and delivers a photo from the picker. */
-    private fun pickPhoto(scenario: ActivityScenario<IdCardActivity>, photo: File) =
+    private fun pickPhoto(scenario: SwActivitySession<IdCardActivity>, photo: File) =
         pickPhotoUri(scenario, Uri.fromFile(photo))
 
-    private fun pickPhotoUri(scenario: ActivityScenario<IdCardActivity>, uri: Uri) {
+    private fun pickPhotoUri(scenario: SwActivitySession<IdCardActivity>, uri: Uri) {
         scenario.onActivity { current ->
             idle()
             val dialog = requireNotNull(ShadowDialog.getLatestDialog()) { "no sheet is open" }
@@ -253,7 +261,7 @@ class IdCardCropFixIdCropTest {
         crop.onTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x + dx, y + dy, 0))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a picked photo opens the corner crop screen preset to the auto cropped card`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -316,7 +324,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("nothing is saved before confirming", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `only the confirmed crop is printed on the page`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -360,7 +368,7 @@ class IdCardCropFixIdCropTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Back on the crop screen returns to the side sheet and saves nothing`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -400,7 +408,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("a cancelled crop saves nothing", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the crop screen's own Back button returns to the front sheet`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -438,7 +446,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework: a confirm that is abandoned must not save (critic D2) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Back while the crop is saving leaves the side empty and shows no error`() {
         val photo = photoOfCardOnTable()
         val held = CountDownLatch(1)
@@ -516,7 +524,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework: rotation mid-crop keeps the photo AND the adjusted frame (D5) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotation keeps the front photo and the adjusted crop frame`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -573,7 +581,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotation keeps the back photo and the adjusted crop frame`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -622,7 +630,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("nothing was saved before the layout", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `recreation while the photo is being prepared still opens the crop screen`() {
         val photo = photoOfCardOnTable()
         val started = CountDownLatch(1)
@@ -657,7 +665,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework 2: no picked photo stays behind (judge N1) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Back before the reopened crop screen appears returns to the sheet and removes the photo`() {
         val photo = photoOfCardOnTable()
         val started = CountDownLatch(1)
@@ -712,7 +720,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework 3: a second recreation during the reopen keeps the frame (judge R2-1) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a second recreation during the reopen keeps the adjusted frame`() {
         val photo = photoOfCardOnTable()
         val started = CountDownLatch(1)
@@ -769,7 +777,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework 3: a restored pick that cannot be read says so (judge R2-2) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a restored pick that can no longer be read says so in the side sheet`() {
         val photo = photoOfCardOnTable()
         val provider = registerDeniedProvider(photo)
@@ -825,7 +833,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("no side was accepted", repo.listDocuments().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `finishing while the crop is open removes the cached photo`() {
         val photo = photoOfCardOnTable()
         launch().use { scenario ->
@@ -846,7 +854,7 @@ class IdCardCropFixIdCropTest {
         assertTrue("finishing removes every cached file", stateFiles().isEmpty())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `finishing an abandoned flow removes the cached front side too`() {
         launch().use { scenario ->
             scenario.onActivity { it.acceptCapture(IdCardActivity.Side.FRONT, jpeg(Color.RED)) }
@@ -870,7 +878,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework: a photo with no card edge says so (critic D10) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a photo without a card edge shows the drag the corners hint`() {
         val plain = Bitmap.createBitmap(900, 600, Bitmap.Config.ARGB_8888)
         val photo = try {
@@ -909,7 +917,7 @@ class IdCardCropFixIdCropTest {
 
     // ---- rework: touch target and the screen behind (critic D9) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the crop screen's Back target is 48 dp and the screen behind is hidden`() {
         val photo = photoOfCardOnTable()
         val density = app.resources.displayMetrics.density

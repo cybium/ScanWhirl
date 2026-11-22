@@ -18,12 +18,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
@@ -40,6 +42,7 @@ class SensitiveFindUiTest {
 
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
+    private var controller: ActivityController<StampEditorActivity>? = null
 
     @Before
     fun setUp() {
@@ -47,6 +50,16 @@ class SensitiveFindUiTest {
         repo = ScanRepository(app)
         ProGate.setPro(app, false)
         ProGate.setTestOverride(app, null)
+        // The Find sheets are process-wide ShadowDialog state. A dialog left by a previous
+        // test made getLatestDialog() return the stale sheet on loaded runners.
+        ShadowDialog.reset()
+    }
+
+    @After
+    fun tearDown() {
+        controller?.pause()?.stop()?.destroy()
+        controller = null
+        ShadowDialog.reset()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -54,7 +67,9 @@ class SensitiveFindUiTest {
     private fun activity(id: String): StampEditorActivity {
         val intent = Intent(app, StampEditorActivity::class.java)
             .putExtra(StampEditorActivity.EXTRA_DOC_ID, id)
-        return Robolectric.buildActivity(StampEditorActivity::class.java, intent).setup().get()
+        val c = Robolectric.buildActivity(StampEditorActivity::class.java, intent).setup()
+        controller = c
+        return c.get()
     }
 
     private fun hit(kind: SensitiveScan.Kind) = SensitiveScan.Hit(
@@ -74,7 +89,7 @@ class SensitiveFindUiTest {
     private fun title(dialog: android.app.Dialog): String? =
         dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
 
-    @Test
+    @Test(timeout = 30_000)
     fun `choices come first then groups become adjustable boxes`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Find doc")
         val screen = activity(id)
@@ -131,7 +146,7 @@ class SensitiveFindUiTest {
         )
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `only the chosen kinds are scanned`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Choice doc")
         val screen = activity(id)
@@ -163,7 +178,7 @@ class SensitiveFindUiTest {
         assertEquals("the card is hidden", 1, screen.editor.marks(1).size)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `no hits is said plainly and adds nothing`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Empty find")
         val screen = activity(id)
@@ -179,7 +194,7 @@ class SensitiveFindUiTest {
         assertEquals(app.getString(R.string.find_none_clean), snackbar?.text?.toString())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the mask tool no longer exists in the registry`() {
         assertNull(com.scanwhirl.app.ui.kit.ToolRegistry.byId("mask_aadhaar"))
         val redact = com.scanwhirl.app.ui.kit.ToolRegistry.byId("redact")

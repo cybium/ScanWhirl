@@ -9,17 +9,20 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Looper
 import android.view.View
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.R
+import com.scanwhirl.app.util.SwActivitySession
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -30,6 +33,10 @@ import java.util.concurrent.TimeUnit
  * cause is a stale preparation coroutine: T1 moved the crop cache write into the IO block, but the
  * write still ran after a recreation had superseded that generation, orphaning crop.jpg. These
  * tests reproduce that deterministically and check it stays fixed across repeated runs.
+ *
+ * TEST2: the activity is driven by ActivityController via SwActivitySession (ActivityScenario.close()
+ * hung CI), every gate is reset before AND after each test, and the old blind Thread.sleep(200)
+ * is replaced by a wait for the fresh generation's observable recovery state.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -38,6 +45,13 @@ class T2IdCardCropRaceTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    @Before
+    fun setUp() {
+        IdCardActivity.cropReopenGate = null
+        ShadowDialog.reset()
+        File(app.cacheDir, "id_card_state").deleteRecursively()
+    }
 
     private fun jpeg(): ByteArray {
         val bitmap = Bitmap.createBitmap(120, 80, Bitmap.Config.ARGB_8888)
@@ -54,7 +68,7 @@ class T2IdCardCropRaceTest {
         while (System.currentTimeMillis() < deadline) {
             idle()
             if (condition()) return true
-            Thread.sleep(25)
+            Thread.sleep(5)
         }
         idle()
         return condition()
@@ -95,23 +109,25 @@ class T2IdCardCropRaceTest {
 
     /** One full recreation-during-preparation race, including the denied restore read. */
     private fun runRaceOnce(label: String, index: Int = 0) {
-        org.robolectric.shadows.ShadowDialog.reset()
+        ShadowDialog.reset()
         val authority = "t2.photos.$index"
         val photo = File(app.cacheDir, "t2_card_${System.nanoTime()}.jpg").apply { writeBytes(jpeg()) }
         val denied = provider(photo, authority)
         val uri = Uri.parse("content://$authority/card.jpg")
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        ActivityScenario.launch(IdCardActivity::class.java).use { scenario ->
+        val staleResumed = CountDownLatch(1)
+        SwActivitySession.launch(IdCardActivity::class.java).use { scenario ->
             scenario.onActivity { current ->
                 current.cropPrepareGate = {
                     started.countDown()
                     release.await(10, TimeUnit.SECONDS)
+                    staleResumed.countDown()
                 }
             }
             scenario.onActivity { current ->
                 idle()
-                val sheet = requireNotNull(org.robolectric.shadows.ShadowDialog.getLatestDialog())
+                val sheet = requireNotNull(ShadowDialog.getLatestDialog())
                 sheet.findViewById<View>(com.scanwhirl.app.R.id.swSheetSecondary).performClick()
                 idle()
                 val request = requireNotNull(shadowOf(current).nextStartedActivityForResult)
@@ -125,8 +141,13 @@ class T2IdCardCropRaceTest {
             scenario.recreate()
             idle()
             release.countDown()
-            // The stale coroutine resumes after release; give it time to (wrongly) write the file.
-            Thread.sleep(200)
+            assertTrue("$label: the stale preparation resumed", staleResumed.await(10, TimeUnit.SECONDS))
+            // No blind sleep: wait for the fresh generation to publish its recovery state.
+            assertTrue("$label: the fresh generation settled", waitUntil(10_000) {
+                ShadowDialog.getShownDialogs().lastOrNull { it.isShowing }
+                    ?.findViewById<android.widget.TextView>(R.id.swSheetTitle)?.text?.toString() ==
+                    app.getString(R.string.tools_id_front_title)
+            })
             idle()
             val state = File(app.cacheDir, "id_card_state")
             assertFalse(
@@ -138,14 +159,15 @@ class T2IdCardCropRaceTest {
 
     @After
     fun tearDown() {
-        org.robolectric.shadows.ShadowDialog.reset()
+        IdCardActivity.cropReopenGate = null
+        ShadowDialog.reset()
         File(app.cacheDir, "id_card_state").deleteRecursively()
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a superseded preparation never leaves a cached crop photo`() = runRaceOnce("single")
 
-    @Test
+    @Test(timeout = 30_000)
     fun `five consecutive races never leave a cached crop photo`() {
         repeat(5) { index -> runRaceOnce("run $index", index) }
     }
