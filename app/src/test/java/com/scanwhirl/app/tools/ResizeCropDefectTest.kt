@@ -6,11 +6,13 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.util.FormCrop
 import com.scanwhirl.app.util.ImageTools
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +58,30 @@ class ResizeCropDefectTest {
         val rect = RectF(frame.left * sx, frame.top * sy, frame.right * sx, frame.bottom * sy)
         preview.recycle()
         return rect
+    }
+
+    @Test(timeout = 30_000)
+    fun `dialog aspect updates keep a usable crop frame`() {
+        val bytes = fixture()
+        val (origW, origH) = ExactResize.normalizedSize(bytes)
+        val preview = ExactResize.decodeNormalized(bytes, 900)
+        val activity = Robolectric.buildActivity(androidx.appcompat.app.AppCompatActivity::class.java)
+            .setup().get()
+        val view = CropView(activity)
+        view.setImage(preview)
+        // The dialog's refreshFrame() sets aspectRatio on EVERY text change.
+        // Replacing "3000" with "200" and "4000" with "230" through keyevents
+        // produces these intermediate widths/heights.
+        view.aspectRatio = origW.toFloat() / origH
+        for (w in listOf(300, 30, 3, origW, 2, 20, 200)) view.aspectRatio = w.toFloat() / origH
+        for (h in listOf(400, 40, 4, origH, 2, 23, targetH)) view.aspectRatio = targetW.toFloat() / h
+        val r = view.getCropRect()
+        val sx = origW.toFloat() / preview.width
+        val sy = origH.toFloat() / preview.height
+        val scaled = RectF(r.left * sx, r.top * sy, r.right * sx, r.bottom * sy)
+        assertTrue("crop frame collapsed to ${scaled.width()}x${scaled.height()} source px: $scaled",
+            scaled.width() >= ExactResize.MIN_CROP_SIDE && scaled.height() >= ExactResize.MIN_CROP_SIDE)
+        preview.recycle()
     }
 
     @Test(timeout = 30_000)
