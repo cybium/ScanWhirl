@@ -38,8 +38,9 @@ import org.robolectric.shadows.ShadowDialog
 /**
  * Council §7: the Home Quick tools row keeps the same ToolTile launch path as the Tools
  * tab, but the editor is now newcomer-safe — a plain "Customize" button, a list of
- * checkbox rows with FULL names, ▲▼ buttons instead of drag, a "Tap to add or remove"
- * hint, Reset, and a cap of six. Checked in English and Hindi at 100 % and 200 %.
+ * checkbox rows with FULL names, ▲▼ buttons instead of drag, one "Choose up to 6 tools.
+ * Use the arrows to reorder." instruction, Reset, and a cap of six. The only dismissal
+ * is the X; "Save quick tools" is the pinned primary. Checked in EN and HI at 100 % and 200 %.
  */
 abstract class U4QuickToolsBase {
 
@@ -237,8 +238,10 @@ abstract class U4QuickToolsBase {
                 idle()
                 openEditor(activity)
                 val dialog = ShadowDialog.getLatestDialog()!!
+                // SH2 COPY_DIET: OLD title "Customize quick tools" / "झटपट काम बदलें".
+                // NEW title "Quick tools" / "झटपट काम" (P22).
                 assertEquals(
-                    if (hi) "झटपट काम बदलें" else "Customize quick tools",
+                    if (hi) "झटपट काम" else "Quick tools",
                     dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
                 )
                 assertTrue(
@@ -270,11 +273,12 @@ abstract class U4QuickToolsBase {
                 openEditor(activity)
                 checkboxes().first { it.tag == added }.isChecked = false
                 idle()
-                ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetSecondary).performClick()
+                // SH2: this non-destructive editor has X only; the X discards the draft.
+                ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetClose).performClick()
                 idle()
             }
         }
-        assertTrue("Cancel discarded the removal", Prefs.quickTools(app).contains(added))
+        assertTrue("X discarded the removal", Prefs.quickTools(app).contains(added))
 
         // Reorder is driven through the labelled ▲/▼ buttons on the draft rows.
         val beforeReorder = Prefs.quickTools(app)
@@ -290,7 +294,8 @@ abstract class U4QuickToolsBase {
         }
         assertEquals("the named reorder is saved", beforeReorder[1], quickFirstId())
 
-        // Reset -> confirm -> Done restores the shipped defaults; Cancel keeps the order.
+        // Reset -> confirm -> Save quick tools restores the shipped defaults; Cancel (the
+        // destructive confirmation's own button) keeps the order.
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
@@ -365,11 +370,15 @@ abstract class U4QuickToolsBase {
             scenario.onActivity { activity ->
                 idle()
                 openEditor(activity)
-                val limit = activity.getString(R.string.cb_quick_max_reached)
-                assertTrue("the cap statement is focusable",
+                // SH2: OLD = a second focusable "up to 6" line (cbQuickLimit).
+                // NEW = one instruction line that already states the cap.
+                val instruction = activity.getString(R.string.cb_quick_editor_hint)
+                assertTrue("the single instruction line states the cap",
                     allChildren(sheetContent()).any {
-                        it.id == R.id.cbQuickLimit && it.isFocusable && it.contentDescription?.toString() == limit
+                        it.id == R.id.cbQuickHint && (it as? TextView)?.text?.toString() == instruction
                     })
+                assertTrue("no duplicate cap line",
+                    allChildren(sheetContent()).none { it.id == R.id.cbQuickLimit })
                 val blocked = checkboxes().filter { !(it.tag as String).let { id -> twelve.contains(id) } }
                 assertTrue("extra tools stay unchecked and cannot add",
                     blocked.all { !it.isChecked && !it.isEnabled })

@@ -443,7 +443,7 @@ abstract class CompressSetSheetBase {
     }
 
     @Test
-    fun `Cancel and Back produce no output`() {
+    fun `X and Back produce no output`() {
         val gate = CountDownLatch(1)
         try {
             CompressFlow.estimateForTest = { _, _ ->
@@ -455,12 +455,12 @@ abstract class CompressSetSheetBase {
                 scenario.onActivity { activity ->
                     val before = repo.listDocuments().size
 
-                    // Cancel
+                    // SH2: OLD = swSheetSecondary (Cancel). NEW = swSheetClose (X) only.
                     var decor = openSetSheet(activity)
-                    decor.findViewById<View>(R.id.swSheetSecondary).performClick()
+                    decor.findViewById<View>(R.id.swSheetClose).performClick()
                     idle()
                     assertTrue(
-                        "Cancel closes the sheet",
+                        "X closes the sheet",
                         ShadowDialog.getLatestDialog()?.isShowing != true
                     )
 
@@ -471,7 +471,7 @@ abstract class CompressSetSheetBase {
                     idle()
                     assertTrue("Back closes the sheet", !sheet.isShowing)
 
-                    // Let the held estimates finish: a cancelled sheet still runs nothing.
+                    // Let the held estimates finish: a dismissed sheet still runs nothing.
                     gate.countDown()
                     repeat(20) {
                         idle()
