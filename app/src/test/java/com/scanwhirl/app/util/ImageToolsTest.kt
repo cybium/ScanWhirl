@@ -151,10 +151,23 @@ class ImageToolsTest {
     }
 
     @Test
-    fun `resize honors explicit both-axis size`() {
+    fun `resize honors explicit both-axis size without stretching the subject`() {
+        // OLD (691c1587): ImageTools.resize(100, 400, keepRatio = true) stretched
+        // the whole 4:3 frame into 1:4, making faces 3.3x too tall.
+        // NEW (FF-R): the Resize sheet no longer calls this fitter. It crops a
+        // 20:23 region from the source and resamples once, so 200 x 230 is an
+        // exact canvas without distortion. The legacy util remains for callers
+        // that still need it; this assertion now pins the shipped behaviour.
         val src = jpeg(640, 480)
-        val out = ImageTools.resize(src, ImageTools.ResizeOptions(width = 100, height = 400, keepRatio = true))
-        assertEquals(100 to 400, ImageTools.imageSize(out.bytes))
+        val out = com.scanwhirl.app.tools.ExactResize.process(
+            src, com.scanwhirl.app.tools.ExactResize.Options(width = 200, height = 230)
+        )
+        assertEquals(200 to 230, ImageTools.imageSize(out.bytes))
+        val plan = com.scanwhirl.app.tools.ExactResize.plan(
+            640, 480, com.scanwhirl.app.tools.ExactResize.Options(200, 230)
+        )
+        assertTrue("crop must be 20:23, not a stretched 4:3 frame",
+            kotlin.math.abs(plan.cropRect.width() / plan.cropRect.height() - 200f / 230f) < 0.01f)
     }
 
     @Test
