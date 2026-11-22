@@ -105,7 +105,8 @@ class FormReadyActivityTest {
         assertEquals(60, a.currentHeightPxForTest())
         assertEquals(10, a.currentMinKbForTest())
         assertEquals(20, a.currentMaxKbForTest())
-        assertTrue(a.currentCleanupForTest())
+        // FX2 old->new: signature cleanup is opt-in, OFF on the preset.
+        assertFalse(a.currentCleanupForTest())
         assertTrue(textOf(a, R.id.formReadyReadout).contains("140"))
         assertTrue(textOf(a, R.id.formReadyReadout).contains("60"))
     }
@@ -143,13 +144,14 @@ class FormReadyActivityTest {
         assertEquals(ToolResultActivity::class.java.name, next!!.component!!.className)
         val file = a.lastOutputForTest()!!
         assertTrue("file missing: ${file.path}", file.isFile && file.length() > 0L)
-        assertTrue("larger than 20 KB: ${file.length()}", file.length() <= 20_000L)
+        // FX2 old->new: 20 KB is 20*1024 bytes, and the note's measured KB comes from this file.
+        assertTrue("larger than 20 KiB: ${file.length()}", file.length() <= 20L * 1024)
         assertEquals(200, ExactKbEncoder.readJfifDpi(file.readBytes()))
         val note = a.lastNoteForTest.orEmpty()
-        assertTrue("note missing measured size: $note", note.contains("bytes"))
-        assertTrue("note missing pixels: $note", note.contains("140") && note.contains("60"))
+        assertTrue("note missing pixels measured from the file: $note", note.contains("140") && note.contains("60"))
         assertTrue("note missing DPI: $note", note.contains("DPI"))
-        assertTrue("note must say the original is kept: $note", note.contains("original", ignoreCase = true))
+        assertTrue("note must name the saved file: ${file.name}", file.name.endsWith(" signature.jpg"))
+        assertFalse("no repeated original-kept receipt", note.contains("Original photo kept"))
     }
 
     @Test

@@ -18,6 +18,7 @@ import androidx.core.view.accessibility.AccessibilityNodeProviderCompat
 import androidx.customview.widget.ExploreByTouchHelper
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.util.FormCrop
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -40,6 +41,13 @@ class CropView @JvmOverloads constructor(
 
     /** Crop rectangle in image pixel coordinates. */
     private val crop = RectF()
+
+    /**
+     * FX2: optional focus for the default frame (the detected signature ink box). Null for a photo,
+     * which centres the largest target-aspect frame on the whole upright image. Set before
+     * [setImage]; it never overrides a frame the person has already confirmed.
+     */
+    private var defaultFocus: RectF? = null
 
     /** Where the bitmap is drawn (fitCenter inside the view). */
     private val imageRect = RectF()
@@ -278,6 +286,11 @@ class CropView @JvmOverloads constructor(
         invalidate()
     }
 
+    /** Focus for the next default frame, in image pixels. Null = centre of the whole image. */
+    fun setDefaultFocus(rect: RectF?) {
+        defaultFocus = rect
+    }
+
     /** Drops the current bitmap (before loading another page's copy). */
     fun clearImage() {
         image = null
@@ -308,7 +321,11 @@ class CropView @JvmOverloads constructor(
     private fun resetCrop() {
         val bmp = image ?: return
         crop.set(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat())
-        aspectRatio?.let { fitAspectCentered(it) }
+        aspectRatio?.let {
+            // FX2: one shared geometry function => the frame shown is the frame saved.
+            crop.set(FormCrop.largestCentered(bmp.width, bmp.height, it, defaultFocus))
+        }
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

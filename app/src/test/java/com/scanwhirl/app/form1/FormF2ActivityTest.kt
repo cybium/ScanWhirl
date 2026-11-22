@@ -370,7 +370,11 @@ class FormF2ActivityTest {
             idle()
             a.findViewById<View>(R.id.formReadyPresetSignature).performClick()
             idle()
-            assertTrue("signature preset must turn cleanup on", a.currentCleanupForTest())
+            // FX2 old->new: cleanup is visible but OFF until the person opts in.
+            assertFalse("signature cleanup must start off", a.currentCleanupForTest())
+            a.findViewById<CheckBox>(R.id.formReadyCleanup).performClick()
+            idle()
+            assertTrue("the visible toggle turns cleanup on", a.currentCleanupForTest())
             a.acceptPickedBytes(jpeg())
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() })
             assertTrue("preview never appeared", waitUntil { a.previewVisibleForTest() })
@@ -422,17 +426,21 @@ class FormF2ActivityTest {
             } finally {
                 src.recycle()
             }
+            // FX2 old->new: the note is one hero line + OK/✕ statuses measured from the saved file.
+            a.setCustomValuesForTest(140f, 60f, FormUnit.PX, 200, 1, 20)
+            idle()
+            val sizeText = FormPresets.formatKb(result.sizeBytes)
             val good = a.buildNoteForTest(result, 140, 60, 200)
-            assertTrue(good, good.contains("140 × 60"))
+            assertTrue(good, good.contains(app.getString(R.string.form1_result_hero, 140, 60, sizeText)))
+            assertTrue(good, good.contains(app.getString(R.string.form1_result_ok, sizeText, 200)))
             assertFalse(good, good.contains("Pixels:"))
-            assertTrue(good, good.contains("200 DPI"))
             assertFalse(good, good.contains("DPI:"))
-            assertTrue(good, good.contains("KB band") || good.contains("KB सीमा"))
-            assertTrue(good, good.contains(app.getString(R.string.form1_result_ready)))
 
             val wrong = a.buildNoteForTest(result, 100, 60, 200)
-            assertTrue(wrong, wrong.contains(app.getString(R.string.form1_result_pixels_changed, 140, 60)))
-            assertTrue(wrong, wrong.contains(app.getString(R.string.form1_result_not_ready, "").substringBefore(":")))
+            assertTrue(wrong, wrong.contains(app.getString(
+                R.string.form1_result_px_bad, 140, 60, 100, 60
+            )))
+            assertFalse("a pixel miss must not show OK", wrong.contains("OK"))
         } finally {
             c.pause().stop().destroy()
         }
@@ -537,6 +545,8 @@ class FormF2ActivityTest {
             val a = c.get()
             idle()
             a.findViewById<View>(R.id.formReadyPresetSignature).performClick()
+            a.findViewById<CheckBox>(R.id.formReadyCleanup).performClick()
+            idle()
             a.acceptPickedBytes(jpeg())
             assertTrue("preview never appeared", waitUntil { a.previewVisibleForTest() })
             for (id in listOf(R.id.formReadyCrop, R.id.formReadyPreviewOriginal, R.id.formReadyPreviewCleaned)) {

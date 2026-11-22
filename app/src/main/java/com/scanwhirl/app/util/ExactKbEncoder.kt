@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import kotlinx.coroutines.CancellationException
 import kotlin.math.max
 import kotlin.math.min
@@ -162,13 +163,26 @@ object ExactKbEncoder {
         return best?.let { bestQ to it }
     }
 
-    /** A fresh exact-size ARGB bitmap: alpha composited on white so ink never turns black in JPEG. */
+    /**
+     * A fresh exact-size ARGB bitmap, alpha composited on white so ink never turns black in JPEG.
+     *
+     * FX2: ONE uniform scale. The old `drawBitmap(source, null, Rect(0, 0, w, h))` applied
+     * independent x and y factors whenever the crop frame was not already at the target aspect,
+     * which stretched faces (phone evidence: 0.195 aspect error). The caller now snaps the crop
+     * to the exact target aspect; any sub-pixel remainder is centred as a hairline letterbox, so a
+     * circle stays a circle and a signature stroke keeps its shape on every path.
+     */
     private fun rasterize(source: Bitmap, w: Int, h: Int): Bitmap {
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawColor(Color.WHITE)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        canvas.drawBitmap(source, null, Rect(0, 0, w, h), paint)
+        val scale = FormCrop.uniformScale(source.width, source.height, w, h)
+        val dw = source.width * scale
+        val dh = source.height * scale
+        val dx = (w - dw) / 2f
+        val dy = (h - dh) / 2f
+        canvas.drawBitmap(source, null, RectF(dx, dy, dx + dw, dy + dh), paint)
         return out
     }
 

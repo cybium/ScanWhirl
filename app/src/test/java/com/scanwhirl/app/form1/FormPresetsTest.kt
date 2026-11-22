@@ -9,23 +9,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * FORM1: preset math is pure and testable. The bands are decimal KB (SizeUnits), and the
- * editable unit fields convert through one shared helper so the live pixel readout cannot
+ * FORM1: preset math is pure and testable. Form bands use binary KB (the exam portal's unit)
+ * while the rest of the app keeps decimal SizeUnits; the editable unit fields convert through one
+ * shared helper so the live pixel readout cannot
  * disagree with the encoder.
  */
 class FormPresetsTest {
 
     @Test
-    fun `preset bands are decimal KB not binary KB`() {
-        assertEquals(1_000L, SizeUnits.BYTES_PER_KB)
-        assertEquals(20_000L, FormPresets.PHOTO.minBytes)
-        assertEquals(50_000L, FormPresets.PHOTO.maxBytes)
-        assertEquals(10_000L, FormPresets.SIGNATURE.minBytes)
-        assertEquals(20_000L, FormPresets.SIGNATURE.maxBytes)
-        assertEquals(20_000L, FormPresets.THUMB.minBytes)
-        assertEquals(50_000L, FormPresets.THUMB.maxBytes)
-        assertEquals(50_000L, FormPresets.DECLARATION.minBytes)
-        assertEquals(100_000L, FormPresets.DECLARATION.maxBytes)
+    fun `form preset bands are binary KB matching the portal verifier`() {
+        // FX2 old->new: form bands were decimal 20,000/50,000 bytes (1 KB = 1000) but the phone
+        // portal verifier counts 1024; they are now 20,480/51,200 so "20 KB" really means 20 KiB.
+        assertEquals(1_000L, SizeUnits.BYTES_PER_KB) // the rest of the app stays decimal
+        assertEquals(1_024L, FormPresets.BYTES_PER_KB)
+        assertEquals(20L * 1024, FormPresets.PHOTO.minBytes)
+        assertEquals(50L * 1024, FormPresets.PHOTO.maxBytes)
+        assertEquals(10L * 1024, FormPresets.SIGNATURE.minBytes)
+        assertEquals(20L * 1024, FormPresets.SIGNATURE.maxBytes)
+        assertEquals(20L * 1024, FormPresets.THUMB.minBytes)
+        assertEquals(50L * 1024, FormPresets.THUMB.maxBytes)
+        assertEquals(50L * 1024, FormPresets.DECLARATION.minBytes)
+        assertEquals(100L * 1024, FormPresets.DECLARATION.maxBytes)
     }
 
     @Test
@@ -34,7 +38,9 @@ class FormPresetsTest {
         assertEquals(230, FormPresets.PHOTO.heightPx)
         assertEquals(140, FormPresets.SIGNATURE.widthPx)
         assertEquals(60, FormPresets.SIGNATURE.heightPx)
-        assertTrue(FormPresets.SIGNATURE.signatureCleanup)
+        // FX2 old->new: cleanup was ON for the signature preset and destroyed the ink on the
+        // phone; it is now an explicit opt-in toggle, OFF by default.
+        assertFalse(FormPresets.SIGNATURE.signatureCleanup)
         assertEquals(240, FormPresets.THUMB.widthPx)
         assertEquals(240, FormPresets.THUMB.heightPx)
         assertEquals(200, FormPresets.THUMB.dpi)

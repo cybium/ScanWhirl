@@ -255,7 +255,8 @@ class FormF2UiCritiqueTest {
             a.findViewById<View>(R.id.formReadyPresetSignature).performClick()
             idle()
             assertEquals(View.VISIBLE, box.visibility)
-            assertTrue(a.currentCleanupForTest())
+            // FX2 old->new: the toggle is visible in Signature mode but starts OFF.
+            assertFalse(a.currentCleanupForTest())
 
             a.findViewById<View>(R.id.formReadySavePreset).performClick()
             idle()
