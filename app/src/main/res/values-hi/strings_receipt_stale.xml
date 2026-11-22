@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- F3: भले ही रसीद बची हो, उसके अस्थायी परिणाम की फ़ाइलें हट चुकी हैं। -->
+    <string name="rs_receipt_stale">यह परिणाम अब इस फ़ोन पर नहीं है</string>
+</resources>

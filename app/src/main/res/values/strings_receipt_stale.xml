@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- F3: a last-result receipt survives, but its cache outputs were cleared. -->
+    <string name="rs_receipt_stale">This result is no longer on this phone</string>
+</resources>

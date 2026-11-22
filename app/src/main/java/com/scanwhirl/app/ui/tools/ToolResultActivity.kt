@@ -89,6 +89,12 @@ class ToolResultActivity : BaseActivity() {
     private var undone = false
     private var undoChecking = false
     private var chainChecking = false
+
+    /**
+     * F3: a durable "last result" receipt names cache outputs that may have been cleared while
+     * the receipt itself survived. When any named output is gone, no action may point at it.
+     */
+    private var receiptOutputsMissing = false
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
@@ -297,7 +303,12 @@ class ToolResultActivity : BaseActivity() {
                 }
             }
         }
-        if (docIds.isNotEmpty() || files.isNotEmpty() || alreadyCompact) persistReceipt()
+        if (intent.getBooleanExtra(EXTRA_USE_LAST_RECEIPT, false)) {
+            receiptOutputsMissing = restoredOutputsMissing()
+        }
+        if (!receiptOutputsMissing && (docIds.isNotEmpty() || files.isNotEmpty() || alreadyCompact)) {
+            persistReceipt()
+        }
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -306,6 +317,8 @@ class ToolResultActivity : BaseActivity() {
             savedCopy = readSavedCopy(state)
             chosenLocationName = state.getString(KEY_CHOSEN_NAME)
             documentsExistingName = state.getString(KEY_EXISTING_NAME)
+            // F3: keep the honest state through a rotation, even if bytes vanished meanwhile.
+            receiptOutputsMissing = receiptOutputsMissing || state.getBoolean(KEY_STALE, false)
         }
         saveAs = registerForActivityResult(ActivityResultContracts.CreateDocument(pickerMime())) { uri ->
             uri ?: return@registerForActivityResult
@@ -320,9 +333,13 @@ class ToolResultActivity : BaseActivity() {
         rootView = buildRoot()
         setContentView(rootView)
         if (savedCopy != null || documentsExistingName != null) markDocumentsSaved()
-        render()
-        // W3: if this result was already undone before a rotation, do not offer its actions again.
-        if (undone) showAlreadyUndone()
+        if (receiptOutputsMissing) {
+            showStaleResult()
+        } else {
+            render()
+            // W3: if this result was already undone before a rotation, do not offer its actions again.
+            if (undone) showAlreadyUndone()
+        }
         // v2 UI: 74_motion — the one success moment call for every tool result.
         com.scanwhirl.app.ui.kit.SwMotion.success(this)
     }
@@ -389,6 +406,7 @@ class ToolResultActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_UNDONE, undone)
+        outState.putBoolean(KEY_STALE, receiptOutputsMissing)
         chosenLocationName?.let { outState.putString(KEY_CHOSEN_NAME, it) }
         documentsExistingName?.let { outState.putString(KEY_EXISTING_NAME, it) }
         savedCopy?.let { copy ->
@@ -1810,6 +1828,37 @@ class ToolResultActivity : BaseActivity() {
     }
 
     /**
+     * F3: every output named by a reopened receipt must still be here. A library id must resolve
+     * and a file output must still have bytes. A receipt with no named outputs (already undone, or
+     * a rejected grown copy) is not stale: it offers no output actions in the first place.
+     */
+    private fun restoredOutputsMissing(): Boolean {
+        if (docIds.isEmpty() && files.isEmpty()) return false
+        val missingDoc = docIds.any { id -> runCatching { repo.getDocument(id) }.getOrNull() == null }
+        val missingFile = files.any { file -> !file.isFile || file.length() <= 0L }
+        return missingDoc || missingFile
+    }
+
+    /**
+     * F3: a receipt whose outputs are gone is a fact, not a usable result. Say so in the existing
+     * short-result style and remove every action/preview that would point at missing bytes.
+     * Nothing is recreated, guessed or deleted, and identity checks on live outputs stay intact.
+     */
+    private fun showStaleResult() {
+        listOf(
+            R.id.toolResultOpen, R.id.toolResultShare, R.id.toolResultMore,
+            R.id.toolResultMorePanel, R.id.toolResultUndo, R.id.toolResultSave,
+            R.id.toolResultLibrary, R.id.toolResultAlsoSave, R.id.rsSaveAnother,
+            R.id.v2t_compress_copy, R.id.v2t_protect_copy,
+            R.id.toolResultName, R.id.toolResultPreviewHost, R.id.ccCompare,
+            R.id.rsChip, R.id.rsVisualHost, R.id.v2t_status
+        ).forEach { id -> findViewById<View>(id)?.visibility = View.GONE }
+        if (::bottomBar.isInitialized) bottomBar.isVisible = false
+        summary.text = getString(R.string.rs_receipt_stale)
+        summary.contentDescription = summary.text
+    }
+
+    /**
      * W3: a result that was already undone must not offer its actions again after recreation —
      * the files it names may be gone, and a repeated Undo would make an unverifiable claim.
      */
@@ -1973,6 +2022,9 @@ class ToolResultActivity : BaseActivity() {
         private const val KEY_COPY_FINGERPRINT = "w3_copy_fingerprint"
         private const val KEY_CHOSEN_NAME = "w3_chosen_name"
         private const val KEY_EXISTING_NAME = "w3_existing_name"
+
+        /** F3: the reopened receipt's outputs were already gone; keep that honesty on rotation. */
+        private const val KEY_STALE = "f3_receipt_outputs_missing"
 
         /** F1: view tags for the ID card's two actions (no new ids needed). */
         const val TAG_KEEP = "fixflow:id_card_keep"
