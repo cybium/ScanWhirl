@@ -222,7 +222,10 @@ class ResultAlsoSaveTest {
     fun `the result undo removes the Documents copy of a file result after the bar is gone`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+            ToolResultActivity.intent(
+                app, "to_word", files = listOf(docx), mime = DOCX_MIME,
+                outputIdentity = fileIdentity(docx)
+            )
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
@@ -259,7 +262,7 @@ class ResultAlsoSaveTest {
             relPath = android.os.Environment.DIRECTORY_DOCUMENTS
         )
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+            ToolResultActivity.intent(app, "split", docIds = listOf(id), outputIdentity = docIdentity(id))
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
@@ -295,7 +298,7 @@ class ResultAlsoSaveTest {
             relPath = "${android.os.Environment.DIRECTORY_DOCUMENTS}/ScanWhirl"
         )
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "split", docIds = listOf(id))
+            ToolResultActivity.intent(app, "split", docIds = listOf(id), outputIdentity = docIdentity(id))
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue(
@@ -321,7 +324,10 @@ class ResultAlsoSaveTest {
     fun `a copy that changed after saving is kept and the screen says so`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+            ToolResultActivity.intent(
+                app, "to_word", files = listOf(docx), mime = DOCX_MIME,
+                outputIdentity = fileIdentity(docx)
+            )
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
@@ -331,11 +337,16 @@ class ResultAlsoSaveTest {
             assertTrue("the save is finished", pollUntil { snackShown(scenario) })
 
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            // The authority lane reports this honest failure on the result screen's error line
+            // (not a transient toast); the promise — the screen says the copy was kept — is the same.
             assertTrue(
                 "an edited copy is kept and the screen says why",
                 pollUntil {
-                    ShadowToast.getTextOfLatestToast().orEmpty()
-                        .contains(app.getString(R.string.export_undo_kept_changed, copy.name))
+                    var text = ""
+                    scenario.onActivity {
+                        text = it.findViewById<TextView>(R.id.toolResultError)?.text?.toString().orEmpty()
+                    }
+                    text == app.getString(R.string.export_undo_kept_changed, copy.name)
                 }
             )
             assertNotNull("the edited copy stays where the person can find it", media.rows[copy.id])
@@ -509,7 +520,10 @@ class ResultAlsoSaveTest {
     fun `a recreated result still removes the Documents copy it saved`() {
         val docx = docxResult()
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "to_word", files = listOf(docx), mime = DOCX_MIME)
+            ToolResultActivity.intent(
+                app, "to_word", files = listOf(docx), mime = DOCX_MIME,
+                outputIdentity = fileIdentity(docx)
+            )
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultAlsoSave).performClick() }
             assertTrue("the copy is saved", pollUntil { media.scanwhirlPdfs().size == 1 })
@@ -531,15 +545,20 @@ class ResultAlsoSaveTest {
     fun `undo never claims a removal that did not happen`() {
         val stubborn = File(app.cacheDir, "documents/stubborn.pdf").apply { mkdirs() }
         File(stubborn, "child.bin").writeBytes(byteArrayOf(1, 2, 3))
+        // An untrusted directory with no producer identity is not a valid output: the removal
+        // authority refuses it. The screen must report that honestly and leave it in place.
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "to_word", files = listOf(stubborn), mime = DOCX_MIME)
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
             assertTrue(
-                "W3: a copy that could not be removed is not reported as removed",
+                "an unproven/untrusted output reports the localized refusal",
                 pollUntil {
-                    ShadowToast.getTextOfLatestToast().orEmpty()
-                        .contains("Could not remove every copy")
+                    var text = ""
+                    scenario.onActivity {
+                        text = it.findViewById<TextView>(R.id.toolResultError)?.text?.toString().orEmpty()
+                    }
+                    text == app.getString(R.string.ux130_l3_copy_changed)
                 }
             )
             assertTrue("the copy is still there", stubborn.exists())
@@ -748,10 +767,22 @@ class ResultAlsoSaveTest {
 
     /** A small Word result file. Its bytes matter; it is never opened as a real package. */
     private fun docxResult(): File =
-        File(app.cacheDir, "documents/Offer letter.docx").apply {
+        File(app.cacheDir, "documents/tools/also-save-fixture/Offer letter.docx").apply {
             parentFile?.mkdirs()
             writeBytes(ByteArray(512) { (it % 31 + 3).toByte() })
         }
+
+    /**
+     * Producer-time identities: the real producer computes these on IO at publish time. These
+     * helpers call the SAME public helper the app uses, at fixture creation, never at Undo time.
+     */
+    private fun docIdentity(id: String): String = requireNotNull(
+        ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+    )
+
+    private fun fileIdentity(file: File): String = requireNotNull(
+        ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(file))
+    )
 
     /**
      * The tail of the above-limit sentence, so a test can look for the line without depending on

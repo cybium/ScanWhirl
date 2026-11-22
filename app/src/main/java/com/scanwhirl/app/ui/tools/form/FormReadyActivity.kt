@@ -1166,7 +1166,7 @@ class FormReadyActivity : BaseActivity() {
         encodeJob?.cancel()
         encodeJob = lifecycleScope.launch {
             try {
-                val (result, file) = withContext(Dispatchers.IO) {
+                val (result, file, identity) = withContext(Dispatchers.IO) {
                     val rawRegion = Bitmap.createBitmap(
                         source, snapped.left, snapped.top, snapped.width(), snapped.height()
                     )
@@ -1179,11 +1179,21 @@ class FormReadyActivity : BaseActivity() {
                             cleaned ?: region, targetW, targetH, dpiNow, minBytes, maxBytes,
                             isCancelled = { encodeJob?.isCancelled == true || destroyed }
                         )
-                        val dir = File(cacheDir, "form1_out").apply { mkdirs() }
+                        // One run directory per capture. The former exists()-then-write name in
+                        // the shared form1_out root was not run-unique, so an old receipt could
+                        // name another run's output. Only the directory is new: the final file
+                        // name, photo bytes and encoder are unchanged.
+                        val dir = File(File(cacheDir, "form1_out"), UUID.randomUUID().toString())
+                            .apply { mkdirs() }
                         // UX_RULES_SCANNER §7: a human name derived from the picked file.
                         val out = File(dir, uniqueOutputName(dir))
                         Durable.writeFile(out, encoded.bytes)
-                        encoded to out
+                        // Producer-time F: identity of the final saved bytes, captured on IO
+                        // right after the write (never later, at Undo).
+                        val identity = ToolResultActivity.captureOutputIdentityBlocking(
+                            this@FormReadyActivity, emptyList(), listOf(out)
+                        )
+                        Triple(encoded, out, identity)
                     } finally {
                         cleaned?.recycle()
                         region.recycle()
@@ -1197,7 +1207,8 @@ class FormReadyActivity : BaseActivity() {
                 lastNoteForTest = note
                 startActivity(ToolResultActivity.intent(
                     this@FormReadyActivity, TOOL_ID,
-                    files = listOf(file), mime = "image/jpeg", note = note
+                    files = listOf(file), mime = "image/jpeg", note = note,
+                    outputIdentity = identity
                 ))
                 // SEC2 N3: ownership moves to the result screen before this exits.
                 outputHandedOff = true

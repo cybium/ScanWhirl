@@ -10,6 +10,8 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.tools.ToolResultActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -59,8 +61,14 @@ class L3_02_IdentityThreadProbeTest {
     @Test
     fun `the Undo identity re-check never hashes on the main thread`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "io hash")
+        // Producer-time D2 identity: real producers capture it on IO. Do the same here so the
+        // thread probe sees an IO thread, not Robolectric's main test thread, and the matching
+        // output is still removed with one tap.
+        val identity = requireNotNull(runBlocking(Dispatchers.IO) {
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+        })
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "compress", docIds = listOf(id))
+            ToolResultActivity.intent(app, "compress", docIds = listOf(id), outputIdentity = identity)
         ).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
             val deadline = System.currentTimeMillis() + 5000L

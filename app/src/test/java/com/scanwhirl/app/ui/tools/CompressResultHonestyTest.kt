@@ -85,6 +85,11 @@ abstract class CompressResultHonestyBase {
     private fun doc(name: String = "Receipt"): String =
         DocFixtures.saved(repo, app, pages = 1, name = name)
 
+    /** The real producer's D2 identity, captured at fixture creation with the app's helper. */
+    private fun identityOf(id: String): String = requireNotNull(
+        ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+    )
+
     private fun bytesOf(id: String): Long =
         repo.getDocument(id)?.pdfFile?.let { if (it.exists()) it.length() else 0L } ?: 0L
 
@@ -305,7 +310,7 @@ abstract class CompressResultHonestyBase {
     fun `Undo names the copy it removes`() {
         val id = doc("Undo me")
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "compress", docIds = listOf(id))
+            ToolResultActivity.intent(app, "compress", docIds = listOf(id), outputIdentity = identityOf(id))
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
