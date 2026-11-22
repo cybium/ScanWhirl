@@ -2,10 +2,10 @@
 <!-- w7createtools lane strings: the Tools hub states. English first, Hindi parity in values-hi. -->
 <resources>
     <!-- No tool is shipping in this build: never dressed up as a failed search. -->
-    <string name="w7_tools_empty_title">No tools available</string>
-    <string name="w7_tools_empty_body">No tool is ready in this build yet. Your documents are still in the Library.</string>
+    <string name="w7_tools_empty_title">No tools yet</string>
+    <string name="w7_tools_empty_body">No tool is ready in this build. Your documents are in the Library.</string>
     <!-- The catalogue itself failed: say so and offer one retry, never a blank page. -->
-    <string name="w7_tools_error_title">Tools could not load</string>
+    <string name="w7_tools_error_title">Tools didn\'t load</string>
     <string name="w7_tools_error_body">Something went wrong while listing the tools. Your documents are not affected.</string>
     <string name="w7_tools_retry">Try again</string>
 </resources>

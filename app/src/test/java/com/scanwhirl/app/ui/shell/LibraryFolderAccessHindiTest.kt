@@ -67,13 +67,13 @@ class LibraryFolderAccessHindiTest {
         assertTrue(what, runCatching(condition).getOrDefault(false))
     }
 
-    private fun allTexts(root: View?): List<String> {
+    private fun allTexts(root: View?): List<String> = allTextViews(root).mapNotNull { it.text?.toString() }
+
+    private fun allTextViews(root: View?): List<TextView> {
         if (root == null) return emptyList()
-        val out = mutableListOf<String>()
+        val out = mutableListOf<TextView>()
         fun walk(view: View) {
-            if (view is TextView && view.visibility == View.VISIBLE) {
-                view.text?.toString()?.let { out += it }
-            }
+            if (view is TextView && view.visibility == View.VISIBLE) out += view
             if (view is ViewGroup) {
                 for (i in 0 until view.childCount) walk(view.getChildAt(i))
             }
@@ -108,7 +108,7 @@ class LibraryFolderAccessHindiTest {
                 }
                 val chip = activity.findViewById<TextView>(R.id.swAllFolders)
                 assertTrue(chip.isVisible)
-                assertEquals("सभी फ़ोल्डर", chip.text.toString())
+                assertEquals(activity.getString(R.string.cb_all_folders_control), chip.text.toString())
 
                 chip.performClick()
                 idle()
@@ -125,13 +125,11 @@ class LibraryFolderAccessHindiTest {
                     "the row's More is named in Hindi",
                     byDescription(content, "कर बिल के फ़ोल्डर विकल्प").isNotEmpty()
                 )
-                sheet.findViewById<View>(R.id.swSheetClose).performClick()
-                idle()
-
-                val row = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-                val folderChip = (0 until row.childCount)
-                    .map { row.getChildAt(it) as TextView }
-                    .first { it.text.toString().startsWith("कर बिल") }
+                // Council §7: OLD picked the folder chip from the face rail. NEW picks it
+                // from the shared chooser that "All folders ▾" opens; choosing it filters.
+                val row = content!!.findViewById<ViewGroup>(R.id.swFolderRow)
+                val folderName = repo.listFolders().single()
+                val folderChip = allTextViews(row).first { it.text.toString().startsWith(folderName) }
                 folderChip.performClick()
                 idle()
 

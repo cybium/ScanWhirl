@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2R lane: new view ids only; existing shared ids are untouched. -->
+<resources>
+    <item name="v2rAllTools" type="id" />
+    <item name="v2rVaultDeleteRow" type="id" />
+    <item name="v2rVaultMoveBackRow" type="id" />
+    <item name="v2rShowLess" type="id" />
+    <item name="v2rSeeAllTools" type="id" />
+</resources>

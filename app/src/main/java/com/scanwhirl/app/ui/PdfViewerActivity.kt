@@ -110,6 +110,12 @@ class PdfViewerActivity : BaseActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBack()
         })
+        // V2V: decide the honesty banner immediately, from the document id; the
+        // async dock bind below keeps it in sync after the document is loaded.
+        val earlyDoc = intent.getStringExtra(EXTRA_DOC_ID)
+            ?.let { (application as ScanWhirlApp).repository.getDocument(it) }
+        findViewById<View>(R.id.v2v_protected_banner).visibility =
+            if (earlyDoc?.isLocked == true) View.VISIBLE else View.GONE
         binding.btnZoomClose.setOnClickListener { closeZoom() }
         // UX-L4-03: the indicator is the entry to any page, not just the first 40.
         binding.pdfPageIndicator.setOnClickListener { promptGoToPage() }
@@ -603,6 +609,10 @@ class PdfViewerActivity : BaseActivity() {
             }
             binding.toolbar.logoDescription = getString(R.string.home_protected)
         }
+        // V2V: say plainly that protection is for the shared PDF, not for these
+        // library pages (which are readable on purpose).
+        findViewById<View>(R.id.v2v_protected_banner).visibility =
+            if (doc != null && doc.isLocked) View.VISIBLE else View.GONE
 
         // The dock lives in layout/view_reader_dock.xml (an <include>), so it has
         // no ViewBinding fields: find it by id, which is also how tests reach it.

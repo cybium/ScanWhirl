@@ -538,7 +538,7 @@ class OcrEditorActivity : BaseActivity() {
                 Toast.makeText(
                     this@OcrEditorActivity,
                     if (unavailable) getString(R.string.ocr_unavailable_toast)
-                    else getString(R.string.ocr_lang_failed, e.message.orEmpty()),
+                    else getString(R.string.ocr_lang_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -767,6 +767,28 @@ class OcrEditorActivity : BaseActivity() {
             button.isSingleLine = false
             button.maxLines = 3
             button.ellipsize = null
+        }
+        // The Edit action was the only bare blue text button on this screen. Paint it like
+        // the SwChip actions below it: glass face, cyan hairline, bright label. Style only;
+        // its label, mode toggle and TalkBack name are unchanged.
+        binding.btnEditText.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.glass_surface_raised
+                )
+            )
+            strokeColor = android.content.res.ColorStateList.valueOf(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.sw_cyan_hair
+                )
+            )
+            strokeWidth = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 1f)
+            cornerRadius = com.scanwhirl.app.ui.kit.SwStyle.dp(this@OcrEditorActivity, 12f)
+            setTextColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(
+                    this@OcrEditorActivity, R.color.text_hologram_hi
+                )
+            )
         }
         reflowReadRowForLargeText()
         reflowActionsForLargeText()
@@ -1319,7 +1341,7 @@ class OcrEditorActivity : BaseActivity() {
                 finishSaveAttempt()
                 Toast.makeText(
                     this@OcrEditorActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1451,7 +1473,7 @@ class OcrEditorActivity : BaseActivity() {
                 finishSaveAttempt()
                 Toast.makeText(
                     this@OcrEditorActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
                 return@launch
@@ -1521,7 +1543,7 @@ class OcrEditorActivity : BaseActivity() {
     private fun reportTxtFailure(e: Exception) {
         Toast.makeText(
             this,
-            getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),
+            getString(R.string.text_save_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
             Toast.LENGTH_LONG
         ).show()
     }
@@ -1578,7 +1600,7 @@ class OcrEditorActivity : BaseActivity() {
                     findViewById<View>(R.id.btnSave).isEnabled = true
                     Toast.makeText(
                         this@OcrEditorActivity,
-                        getString(R.string.text_save_failed, e.message ?: e.javaClass.simpleName),
+                        getString(R.string.text_save_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
                         Toast.LENGTH_LONG
                     ).show()
                     // W5: temp text stays on screen; the failure is actionable with Retry.

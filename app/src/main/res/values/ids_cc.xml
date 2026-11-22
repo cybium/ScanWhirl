@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="ccCompare" type="id" />
+    <item name="ccOutcome" type="id" />
+    <item name="ccBeforeTab" type="id" />
+    <item name="ccAfterTab" type="id" />
+    <item name="ccPageFrame" type="id" />
+    <item name="ccPageImage" type="id" />
+    <item name="ccCaption" type="id" />
+    <item name="ccDetail" type="id" />
+    <item name="ccPageChip" type="id" />
+</resources>

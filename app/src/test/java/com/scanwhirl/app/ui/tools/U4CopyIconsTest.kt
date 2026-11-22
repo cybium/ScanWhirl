@@ -39,7 +39,7 @@ abstract class U4CopyIconsBase {
     }
 
     @Test fun resultHeaderIsReadyNotDone() {
-        assertEquals(if (hi) "तैयार" else "Ready", app.getString(R.string.tools_result_done))
+        assertEquals(if (hi) "हो गया" else "Done", app.getString(R.string.tools_result_done))
     }
 
     @Test fun restoreNotesRequestExistingSecrets() {
@@ -95,7 +95,9 @@ abstract class U4CopyIconsBase {
                         activity.findViewById<View>(R.id.uxL1ControlBand)
                     )
                     val sortView = activity.findViewById<TextView>(R.id.swSort)
-                    val heading = (sortView.parent as ViewGroup).getChildAt(0) as TextView
+                    // Council §7: OLD read the heading as the sort row's first sibling.
+                    // NEW reads the sort-dependent plain-text heading row.
+                    val heading = activity.findViewById<TextView>(R.id.cbDocHeading)
                     val expected = if (sort == prefs.LIB_NEWEST || sort == prefs.LIB_OLDEST)
                         activity.getString(R.string.home_recent) else string("u4_library_documents")
                     assertEquals("heading for $sort", expected, heading.text.toString())

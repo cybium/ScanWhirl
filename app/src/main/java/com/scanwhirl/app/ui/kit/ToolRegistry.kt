@@ -132,7 +132,7 @@ object ToolRegistry {
         // its document chooser keeps the honest empty-library state.
         ready(
             "organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages,
-            R.drawable.ic_sym_view_module, "organize reorder pages move",
+            R.drawable.ic_sym_view_module, "organize organize pages reorder move",
             launch = { host, tool ->
                 val activity = host as? android.app.Activity
                 if (activity != null) {
@@ -142,7 +142,7 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add, "insert add pages into pdf", launch = { host, tool ->
+        ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add, "insert insert pages add into pdf", launch = { host, tool ->
             val activity = host as? android.app.Activity
             if (activity == null) {
                 host.comingSoon(tool)
@@ -152,7 +152,7 @@ object ToolRegistry {
         }),
         // PRO_PLAN line 10-11 (accepted 2026-11-18): folder creation and move-to-folder are
         // FREE and stay free. Tags/batch rename remain Pro; this entry only opens folders.
-        ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder tag group", pro = false),
+        ready("folders", ToolGroup.ORGANIZE, R.string.tool_folders, R.drawable.ic_sym_folder_open, "folder folders tag tags group", pro = false),
         // Owner 11-16: the Batch rename tool is Coming soon. The pattern + preview + undo sheet
         // exists, but the owner asked for a Coming-soon tile until that entry point is finished.
         soon(
@@ -160,26 +160,32 @@ object ToolRegistry {
             R.drawable.ic_sym_drive_file_rename, "batch rename many files",
             pro = true, note = R.string.soon_batch_rename
         ),
-        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_view_module, "batch many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Council §2: Batch owns `apps`; `view_module` belongs to Pages/Reorder.
+        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_apps, "batch batch tools many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Optimize (3) — FORM1 is Free (PRO_PLAN.md does not list it, so it never moves behind Pro).
         ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress, "compress smaller size reduce mb छोटा", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("resize", ToolGroup.OPTIMIZE, R.string.tool_resize, R.drawable.ic_sym_aspect_ratio, "resize dimensions pixels"),
-        ready("form_ready", ToolGroup.OPTIMIZE, R.string.tool_form_ready, R.drawable.ic_sym_photo_library,
-            "form form-ready photo signature thumb declaration exam government फ़ॉर्म हस्ताक्षर",
+        // The tile value lives in lane N's strings; strings_form1.xml (lane F) keeps the
+        // longer setup-screen header. Both are "Form photo" / "फ़ॉर्म फ़ोटो".
+        ready("form_ready", ToolGroup.OPTIMIZE, R.string.tool_form_ready_tile, R.drawable.ic_sym_photo_camera,
+            "form form ready form-ready photo signature thumb declaration exam government फ़ॉर्म हस्ताक्षर",
             launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Convert (8)
-        ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf to jpg png images zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Lead decision: "PDF to JPG" replaces "Images". Old words stay as aliases.
+        ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf pdf to images to jpg png images pictures photos zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("long_image", ToolGroup.CONVERT, R.string.tool_long_image, R.drawable.ic_sym_view_day, "long image stitch pages", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("to_word", ToolGroup.CONVERT, R.string.tool_to_word, R.drawable.ic_sym_description, "word docx document text", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("to_powerpoint", ToolGroup.CONVERT, R.string.tools_tool_to_powerpoint, R.drawable.ic_sym_slideshow, "powerpoint pptx slides presentation deck", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "excel xlsx table sheet", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("to_text", ToolGroup.CONVERT, R.string.tool_to_text, R.drawable.ic_sym_notes, "text txt export ocr"),
-        ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip archive export batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "searchable text layer ocr pdf"),
+        ready("to_word", ToolGroup.CONVERT, R.string.tool_to_word, R.drawable.ic_sym_description, "to word word docx document text", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("to_powerpoint", ToolGroup.CONVERT, R.string.tools_tool_to_powerpoint, R.drawable.ic_sym_slideshow, "to powerpoint powerpoint pptx slides presentation deck", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "to excel excel xlsx table sheet", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Council §1: `to_text` is not a tile. .txt export is the Save .txt button inside OCR.
+        ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip zip export archive batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Lead decision: "OCR PDF" replaces "Search PDF"; "searchable" stays as an alias.
+        ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "ocr ocr pdf searchable searchable pdf search search pdf text layer pdf"),
         SwTool(
-            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_approval,
+            // Council §2: PDF/A owns `archive`; Stamp keeps `approval`.
+            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_archive,
             true, ToolStatus.READY, "pdf a archive long term pdfa 2b",
             launch = { host, tool ->
                 val activity = host as? androidx.appcompat.app.AppCompatActivity
@@ -223,8 +229,8 @@ object ToolRegistry {
         // Secure (4)
         // L3: both open a real document chooser, then the Protect/Unlock sheet. Free tools.
         ready(
-            "protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_encrypted,
-            "protect password encrypt aes",
+            "protect", ToolGroup.SECURE, R.string.tool_protect, R.drawable.ic_sym_lock,
+            "protect protect pdf password encrypt aes",
             launch = { host, tool ->
                 val activity = host as? android.app.Activity
                 if (activity == null) {
@@ -241,7 +247,7 @@ object ToolRegistry {
         ),
         ready(
             "unlock", ToolGroup.SECURE, R.string.tool_unlock, R.drawable.ic_sym_lock_open,
-            "unlock password remove protection",
+            "unlock unlock pdf password remove protection",
             launch = { host, tool ->
                 val activity = host as? android.app.Activity
                 if (activity == null) {
@@ -270,10 +276,16 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "clear clear metadata remove metadata metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
-        // Text (1): Hindi is a language choice in the Text screen and Settings, not a tool.
-        ready("read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_notes_lines, "read text ocr recognise copy")
+        // Council §1: OCR is the single text tile; `to_text` and `hindi_text` are not tools.
+        // Hindi is a language chip inside OCR, and .txt export is the Save .txt button there.
+        // Council §2 / lane I: the OCR glyph is `ic_sym_ocr` (the re-exported ic_ocr),
+        // never `notes_lines`.
+        ready(
+            "read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_ocr,
+            "ocr extract text recognize recognise read text to text txt हिंदी लिखा हुआ copy"
+        )
     )
 
     private val byId: Map<String, SwTool> = all.associateBy { it.id }
@@ -301,12 +313,12 @@ object ToolRegistry {
      * added later still gets a job from [groupJob], so the hub can never silently drop it.
      */
     private val jobAssignments: List<Pair<String, ToolJob>> = listOf(
-        // Make it smaller — "Form photo & signature" lives here because its job is sizing
+        // Compress & resize — "Form photo" lives here because its job is sizing
         // a photo/signature to an exact form spec (the Size-it job), same as Compress/Resize.
         "compress" to ToolJob.SMALLER,
         "resize" to ToolJob.SMALLER,
         "form_ready" to ToolJob.SMALLER,
-        // Combine and organise
+        // Combine & organize
         "merge" to ToolJob.ORGANISE,
         "split" to ToolJob.ORGANISE,
         "extract" to ToolJob.ORGANISE,
@@ -315,7 +327,7 @@ object ToolRegistry {
         "folders" to ToolJob.ORGANISE,
         "batch_rename" to ToolJob.ORGANISE,
         "batch_tools" to ToolJob.ORGANISE,
-        // Sign and mark up
+        // Sign & mark up
         "sign" to ToolJob.MARKUP,
         "add_text" to ToolJob.MARKUP,
         "draw" to ToolJob.MARKUP,
@@ -323,17 +335,16 @@ object ToolRegistry {
         "watermark" to ToolJob.MARKUP,
         "page_numbers" to ToolJob.MARKUP,
         "stamp" to ToolJob.MARKUP,
-        // Keep it private (Redact is the "hide private info" job, not a markup)
+        // Privacy (Redact is the "hide private info" job, not a markup)
         "redact" to ToolJob.PRIVATE,
         "protect" to ToolJob.PRIVATE,
         "unlock" to ToolJob.PRIVATE,
         "vault" to ToolJob.PRIVATE,
         "remove_metadata" to ToolJob.PRIVATE,
-        // Get the text
+        // OCR & search
         "read_text" to ToolJob.TEXT,
-        "to_text" to ToolJob.TEXT,
         "searchable_pdf" to ToolJob.TEXT,
-        // Change the format
+        // Convert
         "pdf_to_images" to ToolJob.FORMAT,
         "long_image" to ToolJob.FORMAT,
         "to_word" to ToolJob.FORMAT,
@@ -341,7 +352,7 @@ object ToolRegistry {
         "to_excel" to ToolJob.FORMAT,
         "zip" to ToolJob.FORMAT,
         "pdfa" to ToolJob.FORMAT,
-        // Start something new
+        // Scan & import
         "scan" to ToolJob.NEW,
         "id_card" to ToolJob.NEW,
         "import_pdf" to ToolJob.NEW,
@@ -397,11 +408,16 @@ object ToolRegistry {
             val title = (titleOf(tool) ?: tool.id.replace('_', ' ')).lowercase(Locale.getDefault())
             val idWords = tool.id.replace('_', ' ')
             val keywords = tool.keywords.lowercase(Locale.getDefault())
+            val keywordWords = (keywords + " " + idWords).split(' ')
             val rank = when {
                 title.startsWith(q) -> 0
                 title.split(' ').any { it.startsWith(q) } -> 1
-                (keywords + " " + idWords).split(' ').any { it.startsWith(q) } -> 2
-                title.contains(q) || keywords.contains(q) || idWords.contains(q) -> 3
+                // An exact alias ("read" for OCR) outranks a merely longer word that
+                // starts with it ("reader" in the QR tool). Renamed tools keep their
+                // old names as aliases, so old habits still land on the right tile.
+                keywordWords.any { it == q } -> 2
+                keywordWords.any { it.startsWith(q) } -> 3
+                title.contains(q) || keywords.contains(q) || idWords.contains(q) -> 4
                 else -> null
             }
             rank?.let { index to it }

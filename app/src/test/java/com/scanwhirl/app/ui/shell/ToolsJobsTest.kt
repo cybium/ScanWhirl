@@ -115,13 +115,13 @@ abstract class ToolsJobsBase {
             assertEquals(
                 "job names, in reading order",
                 listOf(
-                    "Make it smaller",
-                    "Combine and organise",
-                    "Sign and mark up",
-                    "Keep it private",
-                    "Get the text",
-                    "Change the format",
-                    "Start something new"
+                    "Compress & resize",
+                    "Combine & organize",
+                    "Sign & mark up",
+                    "Privacy",
+                    "OCR & search",
+                    "Convert",
+                    "Scan & import"
                 ),
                 jobs.map { app.getString(it.first.title) }
             )

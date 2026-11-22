@@ -183,7 +183,7 @@ abstract class T1RecentToolsBase {
     @Test
     fun `the list stops at six newest first`() {
         val launched = listOf(
-            "compress", "merge", "split", "protect", "to_text", "zip", "read_text", "folders"
+            "compress", "merge", "split", "protect", "zip", "read_text", "folders"
         )
         for (id in launched) Prefs.recordRecentTool(app, id)
         val expected = launched.takeLast(Prefs.MAX_RECENT_TOOLS).reversed()

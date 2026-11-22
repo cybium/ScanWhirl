@@ -1,9 +1,13 @@
 package com.scanwhirl.app
 
+import android.app.Activity
 import android.app.Application
+import android.app.Application.ActivityLifecycleCallbacks
 import android.content.ComponentCallbacks2
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -34,12 +38,43 @@ class ScanWhirlApp : Application() {
         @androidx.annotation.VisibleForTesting internal set
 
     companion object {
+        /** Only our own screens are locked; Google's ML Kit scanner runs in our process but is not ours. */
+        private const val OUR_ACTIVITY_PREFIX = "com.scanwhirl.app."
+        /** Book mode capture is the one phone activity allowed to rotate. */
+        private const val BOOK_PAGES_ACTIVITY = "com.scanwhirl.app.ui.book.BookPagesActivity"
+        /** Android tablet breakpoint: smallestScreenWidthDp >= 600 keeps the platform default. */
+        private const val TABLET_SW_DP = 600
+
         fun from(context: Context): ScanWhirlApp =
             context.applicationContext as ScanWhirlApp
     }
 
     override fun onCreate() {
         super.onCreate()
+        // ORI (owner/lead decision 22 Nov): phones are portrait-only; landscape on short phones
+        // broke the scan/review loop. One global policy in the Application instead of a manifest
+        // entry on every activity. It only sets requestedOrientation; it never finishes or
+        // suppresses recreation, so language/theme changes and process death still save state.
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            // API 29+: set before Activity.onCreate, so the first frame is already portrait
+            // (no landscape flash). Also works under Robolectric, which dispatches pre-create.
+            override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) {
+                applyOrientationPolicy(activity)
+            }
+
+            // API < 29 has no pre-create callback; this covers those devices. Setting the same
+            // value again on newer devices is a harmless no-op.
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                applyOrientationPolicy(activity)
+            }
+
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
         // Theme + per-app language come from Settings (dark is the default).
         AppCompatDelegate.setDefaultNightMode(Prefs.nightMode(Prefs.themeMode(this)))
         val tag = Prefs.localeTag(this)
@@ -81,6 +116,26 @@ class ScanWhirlApp : Application() {
         // refreshList; the application must do it once per cold start instead of a screen.
         // Robolectric builds keep it off (tests call [LibraryIndexBackfill.run] directly).
         if (Build.FINGERPRINT != "robolectric") startLibraryIndexBackfill()
+    }
+
+    /**
+     * ORI: lock our screens to portrait on phones only.
+     *
+     * - Activities outside our Java package (notably Google's ML Kit scanner) are untouched.
+     * - Book mode capture is the single allow-listed phone exception.
+     * - Tablets (smallestScreenWidthDp >= 600) keep whatever the platform/manifest says
+     *   (normally SCREEN_ORIENTATION_UNSPECIFIED, i.e. the user's device setting).
+     * - Android 16+ ignores orientation locks on large screens, which is fine.
+     *
+     * The class name (not the application id) is checked so the policy also holds in the
+     * com.scanwhirl.app.test / .demo builds, whose package names differ but whose classes do not.
+     */
+    private fun applyOrientationPolicy(activity: Activity) {
+        val className = activity.javaClass.name
+        if (!className.startsWith(OUR_ACTIVITY_PREFIX)) return
+        if (className == BOOK_PAGES_ACTIVITY) return
+        if (resources.configuration.smallestScreenWidthDp >= TABLET_SW_DP) return
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 
     /**

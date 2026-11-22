@@ -37,6 +37,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
+
+/**
+ * V2V V1: one localized, actionable mapping for failures in the reader/editor
+ * screens. A raw JVM or library message is never shown: it can carry a private
+ * document path or token, and it tells the person nothing they can do next.
+ */
+object V2vFailureCopy {
+    @JvmStatic
+    fun message(context: android.content.Context, e: Throwable): String {
+        val raw = e.localizedMessage.orEmpty().lowercase(Locale.ROOT)
+        return when {
+            // V2V review: keep the two actionable OCR-image outcomes specific while
+            // still mapping them through this one localized entry point.
+            raw.contains("32 mb") -> context.getString(R.string.v2v_failure_image_too_large)
+            raw.contains("cannot read this image") ->
+                context.getString(R.string.v2v_failure_image_unreadable)
+            e is SecurityException || raw.contains("password") || raw.contains("encrypt") ||
+                raw.contains("denied") || raw.contains("permission") ||
+                raw.contains("corrupt") || raw.contains("malformed") ||
+                raw.contains("damaged") ->
+                context.getString(R.string.v2v_failure_unreadable)
+            e is OutOfMemoryError || raw.contains("space") || raw.contains("enospc") ||
+                raw.contains("quota") || raw.contains("memory") ->
+                context.getString(R.string.v2v_failure_no_space)
+            else -> context.getString(R.string.v2v_failure_generic)
+        }
+    }
+}
 
 /**
  * B2 (GPT-6.2 critique #3 and its "Two-tap contract"): ONE named Actions sheet, bound to ONE
@@ -208,7 +237,7 @@ object DocumentActionsSheet {
         ))
         rows.addView(row(
             activity = activity,
-            icon = R.drawable.ic_ocr,
+            icon = R.drawable.ic_sym_ocr,
             label = activity.getString(R.string.btn_ocr_text),
             key = "read_text",
             enabled = !protected,
@@ -282,7 +311,7 @@ object DocumentActionsSheet {
         rows.addView(groupHeader(activity, R.string.bar_tools, R.id.hdrTools, "tools"))
         rows.addView(row(
             activity = activity,
-            icon = R.drawable.ic_sym_encrypted,
+            icon = if (doc.isLocked) R.drawable.ic_sym_lock_open else R.drawable.ic_sym_lock,
             label = activity.getString(
                 if (doc.isLocked) R.string.btn_unlock_pdf else R.string.menu_protect_pdf
             ),
@@ -607,7 +636,7 @@ object DocumentActionsSheet {
                 }
                 host.toast(R.string.saved_as_new, Toast.LENGTH_LONG)
             } catch (e: Exception) {
-                host.toast(activity.getString(R.string.page_op_failed, e.message), Toast.LENGTH_LONG)
+                host.toast(activity.getString(R.string.page_op_failed, V2vFailureCopy.message(activity, e)), Toast.LENGTH_LONG)
             }
         }
     }
@@ -635,7 +664,7 @@ object DocumentActionsSheet {
                     progress.dismiss()
                     Toast.makeText(
                         activity,
-                        activity.getString(R.string.page_op_failed, e.message),
+                        activity.getString(R.string.page_op_failed, V2vFailureCopy.message(activity, e)),
                         Toast.LENGTH_LONG
                     ).show()
                 }
