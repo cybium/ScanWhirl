@@ -104,6 +104,7 @@
     <string name="rotate_right">Rotate right</string>
     <string name="action_delete_page">Delete page</string>
     <string name="page_op_failed">Page operation failed: %1$s</string>
+    <string name="page_edit_skipped">Change skipped: that page is no longer available.</string>
     <string name="page_deleted">Page deleted</string>
     <string name="undo">Undo</string>
     <string name="open">Open</string>
