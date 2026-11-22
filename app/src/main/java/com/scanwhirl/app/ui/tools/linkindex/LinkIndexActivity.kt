@@ -35,6 +35,7 @@ import com.scanwhirl.app.util.LinkIndexDetector
 import com.scanwhirl.app.util.LinkIndexTrial
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguageSettings
+import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.PdfVerifier
@@ -227,7 +228,10 @@ class LinkIndexActivity : BaseActivity() {
             STEP_SET -> {
                 v<TextView>(R.id.lxDocName).text = source?.name.orEmpty()
                 if (v<EditText>(R.id.lxCopyName).text.isNullOrBlank()) {
-                    v<EditText>(R.id.lxCopyName).setText(getString(R.string.lx_copy_name))
+                    val current = source?.name.orEmpty()
+                    val taken = runCatching { repo.listDocuments(includeVaulted = true).map { it.name } }
+                        .getOrDefault(emptyList())
+                    v<EditText>(R.id.lxCopyName).setText(OutputNames.forNewCopy(current, taken))
                 }
                 buildPageStrip()
                 renderOffset()
@@ -278,7 +282,11 @@ class LinkIndexActivity : BaseActivity() {
                 pageOcr.clear()
                 rows.clear()
                 offset = 0
-                v<EditText>(R.id.lxCopyName).setText(doc.name)
+                // Lane O: the editable field starts at the source stem; a taken name
+                // gets " (2)", never a forced "links" suffix.
+                val existing = runCatching { repo.listDocuments(includeVaulted = true).map { it.name } }
+                    .getOrDefault(emptyList())
+                v<EditText>(R.id.lxCopyName).setText(OutputNames.forNewCopy(doc.name, existing))
                 applyStep(STEP_SET)
             }
         }
@@ -502,7 +510,14 @@ class LinkIndexActivity : BaseActivity() {
             toast(getString(R.string.lx_no_entries))
             return
         }
-        val name = v<EditText>(R.id.lxCopyName).text.toString().trim().ifBlank { doc.name }
+        val existingNames = runCatching { repo.listDocuments(includeVaulted = true).map { it.name } }
+            .getOrDefault(emptyList())
+        val typed = v<EditText>(R.id.lxCopyName).text.toString()
+        val name = if (typed.isBlank()) {
+            OutputNames.forNewCopy(doc.name, existingNames)
+        } else {
+            OutputNames.newCopyFromField(typed, existingNames)
+        }
         busy = true
         progress(true, R.string.lx_working)
         lifecycleScope.launch {
