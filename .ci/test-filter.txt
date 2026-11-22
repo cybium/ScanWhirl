@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.ExternalTargetGeometryRegressionTest,com.scanwhirl.app.store.CompressPageGeometryTest,com.scanwhirl.app.store.RsExternalCompressRejectTest,com.scanwhirl.app.store.ToolsEngineTest
