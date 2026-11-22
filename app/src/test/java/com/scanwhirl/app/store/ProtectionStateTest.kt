@@ -9,12 +9,14 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ImportFixtures
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import com.scanwhirl.app.util.PdfGenerator
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Prefs
 import com.scanwhirl.app.util.Sha256
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Rule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -37,6 +39,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class ProtectionStateTest {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
