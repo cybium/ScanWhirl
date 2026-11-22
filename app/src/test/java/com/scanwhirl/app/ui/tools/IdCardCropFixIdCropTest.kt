@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -55,6 +57,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class IdCardCropFixIdCropTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
@@ -159,6 +163,8 @@ class IdCardCropFixIdCropTest {
 
     /** A provider whose photo access is revoked after the first read (R2-2). */
     class DeniedPhotoProvider : android.content.ContentProvider() {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         @Volatile
         var deny = false
         var photo: File? = null

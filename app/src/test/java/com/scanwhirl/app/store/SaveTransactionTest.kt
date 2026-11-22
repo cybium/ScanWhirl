@@ -1,4 +1,6 @@
 package com.scanwhirl.app.store
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -61,6 +63,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class SaveTransactionTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
     private val docsDir get() = File(app.filesDir, "documents").apply { mkdirs() }

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools.linkindex
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -33,6 +35,8 @@ import java.io.File
 @Config(sdk = [35])
 class LinkIndexActivityTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     /** Play's billing seam: answers one price (or null when offline). */
     private class PriceGateway(private val answer: String?) : ProBilling.Gateway {
         override fun setListener(listener: ((ProBilling.Event) -> Unit)?) = Unit

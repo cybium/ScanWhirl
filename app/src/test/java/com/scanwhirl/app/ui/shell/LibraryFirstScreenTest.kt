@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -50,6 +52,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 abstract class LibraryFirstScreenBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
 

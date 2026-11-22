@@ -1,4 +1,6 @@
 package com.scanwhirl.app.sh2
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -38,6 +40,8 @@ import java.io.File
  */
 class Sh2CopyDietResourceTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private fun xml(locale: String, name: String): String {
         // "en" is the base values folder; Hindi only from values-hi (never the base).
         val dir = if (locale == "en") "src/main/res/values" else "src/main/res/values-$locale"
@@ -128,6 +132,8 @@ class Sh2CopyDietRoleHiTest : Sh2CopyDietRoleBase()
 
 abstract class Sh2CopyDietRoleBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 

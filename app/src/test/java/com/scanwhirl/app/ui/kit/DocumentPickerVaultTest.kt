@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.kit
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.drawable.BitmapDrawable
@@ -37,6 +39,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class DocumentPickerVaultTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 

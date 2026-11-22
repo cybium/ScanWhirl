@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l2
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -42,6 +44,8 @@ import java.util.concurrent.TimeUnit
 @Config(sdk = [35])
 class ReviewFixTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val dirs = mutableListOf<File>()
 

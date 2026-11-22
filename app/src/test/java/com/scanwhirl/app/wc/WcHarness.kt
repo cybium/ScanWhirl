@@ -1,4 +1,6 @@
 package com.scanwhirl.app.wc
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -60,6 +62,8 @@ import java.io.File
  */
 class WcHarness {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val repo = ScanRepository(app)
     private lateinit var docA: String
@@ -123,6 +127,8 @@ class WcHarness {
 
     /** A laid-out root plus an owner that destroys the activity/dialog in finally. */
     class Session(val root: View, val activity: Activity?, private val release: () -> Unit) {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         fun close() = release()
     }
 

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -25,6 +27,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class ImportUnlockSheetTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 

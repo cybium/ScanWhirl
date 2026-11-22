@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l3
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.res.Configuration
@@ -30,6 +32,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class L3_04_BatchChipWrapTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
 
     @Before

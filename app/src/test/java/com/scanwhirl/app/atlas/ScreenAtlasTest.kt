@@ -1,4 +1,6 @@
 package com.scanwhirl.app.atlas
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -106,6 +108,8 @@ import java.util.Locale
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xxhdpi")
 class ScreenAtlasTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private companion object {
         const val W = 1080                 // 360 dp * 3 (xxhdpi)
         const val H = 2400                 // 800 dp * 3

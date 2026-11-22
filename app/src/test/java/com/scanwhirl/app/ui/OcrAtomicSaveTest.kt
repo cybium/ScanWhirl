@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -28,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class OcrAtomicSaveTest {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private fun idleUntil(condition: () -> Boolean): Boolean {
         val deadline = System.nanoTime() + 8_000_000_000L
         while (System.nanoTime() < deadline) {

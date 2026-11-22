@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.stamp
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -34,7 +36,11 @@ import org.robolectric.shadows.ShadowToast
 @Config(sdk = [35])
 class StampToolWiringTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     class Host : AppCompatActivity(), ToolHost {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         val events = mutableListOf<String>()
         override fun open(tool: SwTool) { events += "open:${tool.id}" }
         override fun comingSoon(tool: SwTool) { events += "soon:${tool.id}" }

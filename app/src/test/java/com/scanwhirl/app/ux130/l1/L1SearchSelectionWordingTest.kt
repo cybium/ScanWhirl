@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l1
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -41,6 +43,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class L1SearchSelectionWordingTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 

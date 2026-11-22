@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.backup
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -50,6 +52,8 @@ import java.io.OutputStream
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class BackupHonestyTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private var controller: ActivityController<BackupActivity>? = null
 

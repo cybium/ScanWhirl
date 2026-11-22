@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.Manifest
 import android.app.Application
@@ -52,6 +54,8 @@ import java.time.Duration
 @Config(sdk = [28])
 class SaveStoragePermissionTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore

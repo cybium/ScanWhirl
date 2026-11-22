@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Dialog
 import android.util.SparseArray
@@ -42,6 +44,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class PasswordPrivacyTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private var controller: ActivityController<ProtectHostActivity>? = null
 
     private fun host(): AppCompatActivity {
