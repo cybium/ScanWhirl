@@ -523,12 +523,15 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
         if (damage != null) {
             // Never invent pages from a damaged manifest: show the base and offer Discard only.
-            showDraftUnusable(damage.message ?: getString(R.string.draft_damaged))
+            showDraftUnusable(V2vFailureCopy.message(this@DocumentViewerActivity, damage))
         }
         binding.docName.text = doc.name
         // v2 UI: 07_reader_dock — the meta line carries the size as well as the page count.
         docBytes = withContext(Dispatchers.IO) { docSizeBytes(doc) }
         binding.docLockBadge.isVisible = doc.isLocked
+        // V2V: the library copy of a protected document is readable on purpose;
+        // protection belongs to the exported/shared PDF. Be explicit about it.
+        findViewById<View>(R.id.v2v_protected_banner).isVisible = doc.isLocked
         binding.docVaultBadge.isVisible = doc.isVaulted
         // test25 Phase 5C: category tag in the header (recategorise funnels
         // through here too — see promptCategorize()).
@@ -1040,7 +1043,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1088,7 +1091,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1316,7 +1319,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
@@ -1358,7 +1361,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1461,7 +1464,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -1539,7 +1542,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
+                    getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
                 reloadDocument()
@@ -1599,7 +1602,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     this@DocumentViewerActivity,
-                                    getString(R.string.pdf_save_failed, e.message),
+                                    getString(R.string.pdf_save_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -1973,7 +1976,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         } catch (e: Exception) {
             Toast.makeText(
                 this,
-                getString(R.string.page_op_failed, e.message ?: ""),
+                getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -2110,11 +2113,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     private fun showDraftError(e: Exception) {
         if (e is DraftStore.DraftStale || e is DraftStore.DraftDamaged) {
-            showDraftUnusable(e.message ?: getString(R.string.draft_stale))
+            showDraftUnusable(V2vFailureCopy.message(this@DocumentViewerActivity, e))
         } else {
             Toast.makeText(
                 this,
-                getString(R.string.page_op_failed, e.message),
+                getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                 Toast.LENGTH_LONG
             ).show()
         }

@@ -27,6 +27,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.V2vFailureCopy
+import com.scanwhirl.app.ui.TrashActions
 import com.scanwhirl.app.databinding.ActivityStampEditorBinding
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
@@ -398,6 +400,15 @@ class StampEditorActivity : BaseActivity() {
         add(R.id.toolSignature, R.string.stamp_tool_signature, R.drawable.ic_sym_signature) {
             pickSignature()
         }
+        // V2V V2: one saved signature, placed on every page, previewed first and
+        // undoable in one step. The screen itself is already Pro-gated on entry.
+        // Short visible label for 200% reflow; the full contract is spoken.
+        tile(R.id.v2vApplySignature, R.string.v2v_apply_signature_short, R.drawable.ic_sym_signature) {
+            promptApplySignature()
+        }.apply {
+            contentDescription = getString(R.string.v2v_apply_signature)
+            row.addView(this)
+        }
         add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
             promptText()
         }
@@ -437,7 +448,9 @@ class StampEditorActivity : BaseActivity() {
         return ToolTile(this).apply {
             this.id = id
             bind(tool)
+            // V2V: long labels wrap to three full lines instead of ellipsising at 200%.
             labelView.maxLines = 3
+            labelView.ellipsize = null
             setOnClickListener { action() }
             minimumHeight = dp(68f)
             layoutParams = LinearLayout.LayoutParams(
@@ -446,6 +459,29 @@ class StampEditorActivity : BaseActivity() {
                 marginEnd = dp(2f)
             }
         }
+    }
+
+    /** V2V V2: preview the multi-page placement, then apply it as one undoable step. */
+    private fun promptApplySignature() {
+        val saved = signatureStore.list().firstOrNull { it.pngFile?.isFile == true }
+        val file = saved?.pngFile
+        if (file == null) {
+            note(getString(R.string.v2v_no_saved_signature))
+            return
+        }
+        SwSheet.builder(this)
+            .setTitle(R.string.v2v_apply_signature)
+            .setMessage(R.string.v2v_apply_signature_preview)
+            .setPrimary(R.string.v2v_apply_signature_apply) { applySignatureToAllForTest(file) }
+            .setSecondary(R.string.stamp_keep_editing) { }
+            .build()
+            .show()
+    }
+
+    /** Test seam: place a saved signature on every page via the editor's undoable batch. */
+    internal fun applySignatureToAllForTest(file: java.io.File) {
+        addMarkToAll(PageStamp.Mark.Picture(file, signatureBox()))
+        note(getString(R.string.v2v_apply_signature_undo))
     }
 
     private fun promptText() {
@@ -964,21 +1000,65 @@ class StampEditorActivity : BaseActivity() {
         // person who leaves after the new bounded timeout still gets the receipt as a Toast.
     }
 
+    /** Test seam for the persistent receipt without going through the async runner. */
+    internal fun deliverSaveForTest(result: Result<ScanDocument>, labelRes: Int = 0) =
+        deliverSave(result, labelRes)
+
+    /**
+     * V2V V2: a redaction outcome is permanent until the person dismisses it. It
+     * names the new copy, says the original still holds the information, and offers
+     * a NAMED, CONFIRMED Trash route. Nothing is deleted automatically.
+     */
+    private fun showPersistentReceipt(copy: ScanDocument) {
+        SwSheet.builder(this)
+            .setTitle(R.string.v2v_redact_receipt_title)
+            .setMessage(
+                getString(R.string.v2v_redact_receipt_body, copy.name) + "\n" +
+                    getString(R.string.v2v_redact_original_kept)
+            )
+            .setPrimary(R.string.v2v_move_original_to_trash) {
+                confirmTrashOriginal(document.id)
+            }
+            .setSecondary(R.string.v2v_keep_original) { }
+            .build()
+            .show()
+    }
+
+    private fun confirmTrashOriginal(id: String) {
+        SwSheet.builder(this)
+            .setTitle(R.string.v2v_trash_original_confirm)
+            .setMessage(R.string.v2v_trash_original_body)
+            .setPrimary(R.string.v2v_move_original_to_trash) {
+                TrashActions.moveAll(repo, listOf(id))
+                note(getString(R.string.v2v_trash_original_done))
+            }
+            .setSecondary(R.string.v2v_keep_original) { }
+            .build()
+            .show()
+    }
+
     /** Reports the finished save on whichever instance of the screen is alive, exactly once. */
     internal fun deliverSave(result: Result<ScanDocument>, labelRes: Int = 0) {
         StampSaveRunner.consume(document.id)
         val alive = !isFinishing && !isDestroyed
         result.onSuccess { copy ->
             if (alive) setResult(RESULT_OK, Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id))
-            val saved = if (labelRes != 0) {
-                getString(savedReceiptRes(labelRes), copy.name)
-            } else getString(R.string.stamp_saved, copy.name)
-            // App context even when the screen is gone: the receipt must never be lost just
-            // because the person left during the bounded Save wait.
-            Toast.makeText(applicationContext, saved, Toast.LENGTH_LONG).show()
-            if (alive) finish()
+            val redaction = labelRes == R.string.c1_redacted_label ||
+                labelRes == R.string.private_info_label
+            if (alive && redaction) {
+                // V2V V2: the redaction outcome is permanent until dismissed.
+                showPersistentReceipt(copy)
+            } else {
+                val saved = if (labelRes != 0) {
+                    getString(savedReceiptRes(labelRes), copy.name)
+                } else getString(R.string.stamp_saved, copy.name)
+                // App context after a bounded-timeout exit: still one honest receipt.
+                Toast.makeText(applicationContext, saved, Toast.LENGTH_LONG).show()
+            }
+            if (alive && !redaction) finish()
         }.onFailure { error ->
-            val failed = getString(R.string.stamp_save_failed, error.message ?: "")
+            val failed = getString(R.string.stamp_save_failed,
+                V2vFailureCopy.message(this@StampEditorActivity, error))
             if (alive) {
                 saving = false
                 binding.saveCopy.setText(R.string.stamp_save_copy)
@@ -1155,7 +1235,7 @@ class StampEditorActivity : BaseActivity() {
             }
             bitmap.recycle()
         } catch (e: Exception) {
-            note(e.message ?: getString(R.string.stamp_stamp_full))
+            note(V2vFailureCopy.message(this, e))
         }
     }
 
@@ -1397,7 +1477,7 @@ internal object StampSaveRunner {
             val res = if (labelRes != 0) savedReceiptRes(labelRes) else R.string.stamp_saved
             Toast.makeText(ctx, ctx.getString(res, copy.name), Toast.LENGTH_LONG).show()
         }.onFailure { error ->
-            Toast.makeText(ctx, ctx.getString(R.string.stamp_save_failed, error.message ?: ""), Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, ctx.getString(R.string.stamp_save_failed, V2vFailureCopy.message(ctx, error)), Toast.LENGTH_LONG).show()
         }
         consume(id)
     }
