@@ -124,8 +124,8 @@
     <string name="tools_setup_failed">Could not finish: %1$s</string>
     <string name="tools_setup_nothing">This tool has no options.</string>
     <string name="tools_id_card_name">ID card</string>
-    <string name="tools_tool_to_powerpoint">To PowerPoint</string>
-    <string name="tools_tool_batch">Batch tools</string>
+    <string name="tools_tool_to_powerpoint">Slides</string>
+    <string name="tools_tool_batch">Batch</string>
     <string name="tools_id_hint">Scan the front, then the back. Choose one page or one page per side.</string>
     <string name="tools_id_front_title">Front side</string>
     <string name="tools_id_front_msg">Scan the front, or pick a photo from the gallery.</string>
@@ -166,7 +166,7 @@
     <string name="tools_bc_document_name">Business card</string>
 
     <!-- v2 UI: 03_tools_hub - result screen -->
-    <string name="tools_result_done">Ready</string>
+    <string name="tools_result_done">Done</string>
     <string name="tools_result_preview">Result preview</string>
     <string name="tools_result_name_more">%1$s +%2$d more</string>
     <plurals name="tools_result_pages">

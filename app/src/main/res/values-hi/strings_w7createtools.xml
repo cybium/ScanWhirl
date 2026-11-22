@@ -2,9 +2,9 @@
 <!-- w7createtools lane strings, Hindi: same keys and wording intent as values/strings_w7createtools.xml.
      Judged glossary: plain Hindi, no English loanwords for library or loading (HindiGlossaryTermsTest). -->
 <resources>
-    <string name="w7_tools_empty_title">कोई औज़ार उपलब्ध नहीं</string>
-    <string name="w7_tools_empty_body">इस संस्करण में अभी कोई औज़ार तैयार नहीं है। आपके दस्तावेज़ सुरक्षित रखे हैं।</string>
-    <string name="w7_tools_error_title">औज़ार नहीं दिख सके</string>
+    <string name="w7_tools_empty_title">अभी कोई काम नहीं</string>
+    <string name="w7_tools_empty_body">इस बिल्ड में अभी कोई काम तैयार नहीं। आपके दस्तावेज़ कागज़ात में हैं।</string>
+    <string name="w7_tools_error_title">काम नहीं खुले</string>
     <string name="w7_tools_error_body">औज़ारों की सूची बनाते समय कुछ गड़बड़ हुई। आपके दस्तावेज़ों पर कोई असर नहीं पड़ा।</string>
     <string name="w7_tools_retry">फिर कोशिश करें</string>
 </resources>
