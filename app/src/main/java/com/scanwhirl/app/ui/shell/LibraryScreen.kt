@@ -489,7 +489,12 @@ class LibraryScreen(
         renderDocs()
     }
 
+    /** PERF 6: observable count of listing requests, for the cold-start budget test. */
+    internal var reloadRequests: Int = 0
+        private set
+
     fun reload() {
+        reloadRequests++
         val owner = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycleScope
         if (owner == null) {
             // No lifecycle (unit-only host): keep the old synchronous behaviour.
@@ -611,6 +616,9 @@ class LibraryScreen(
      * separate folder, category, sort and count rows are merged here, so the first card
      * starts higher while every folder, category and sort choice keeps a one-tap route.
      */
+    /** True at the device's 200 % setting, where whole-unit stacking beats density. */
+    private fun largeFont(): Boolean = resources.configuration.fontScale >= 1.6f
+
     private fun buildControlBand() {
         val band = LinearLayout(context).apply {
             id = R.id.uxL1ControlBand
@@ -641,15 +649,27 @@ class LibraryScreen(
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
         }
+        // Device reflow (Infinix 411dp/393dp @2.0): a label and its chooser must stay a whole
+        // unit. At large font the caption stacks over a full-width value instead of squeezing
+        // "Newest" into three lines beside a 64dp label.
+        fun valueParams(): LayoutParams = if (largeFont()) {
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        } else {
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        }
         fun line(id: Int, textRes: Int): LinearLayout = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = if (largeFont()) VERTICAL else HORIZONTAL
+            gravity = if (largeFont()) Gravity.START else Gravity.CENTER_VERTICAL
             minimumHeight = SwStyle.dp(context, 48f)
             // G3: the control text sits on the same near-opaque surface as the cards.
             background = readableBand()
             addView(
                 label(id, textRes),
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                if (largeFont()) {
+                    LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                } else {
+                    LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                }
             )
         }.also { band.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
 
@@ -657,7 +677,7 @@ class LibraryScreen(
         val folderLine = line(R.id.uxL1FolderLabel, R.string.ux130_l1_folder_label)
         val folderSectionView = folderSection()
         folderScroll = folderSectionView
-        folderLine.addView(folderSectionView, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        folderLine.addView(folderSectionView, valueParams())
 
         // Filter: the category chips rail, reachable in one tap from the named control.
         val filterLine = line(R.id.uxL1FilterLabel, R.string.ux130_l1_filter_label)
@@ -682,20 +702,20 @@ class LibraryScreen(
             )
         }
         chipScroll = chipScroller
-        filterLine.addView(chipScroller, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        filterLine.addView(chipScroller, valueParams())
 
         // Sort: the same five choices and sort-dependent heading, plus the live count.
         listHeader = line(R.id.uxL1SortLabel, R.string.ux130_l1_sort_label)
         recentHeader = sectionHeader(
             context.getString(R.string.home_recent), context.getString(R.string.home_newest)
         ) { showSortSheet() }.apply { background = readableBand() }
-        listHeader.addView(recentHeader, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        listHeader.addView(recentHeader, valueParams())
         countLabel = SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_dim), bold = true).apply {
             id = R.id.swDocCount
             maxLines = 2
             ellipsize = null
         }
-        listHeader.addView(countLabel, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        listHeader.addView(countLabel, valueParams())
         controlBand = band
     }
 
@@ -1354,7 +1374,7 @@ class LibraryScreen(
     private fun confirmDeleteSelection() {
         val ids = selected.toList()
         SwSheet.builder(context)
-            .setTitle(context.getString(R.string.sel_delete_title, ids.size))
+            .setTitle(context.resources.getQuantityString(R.plurals.v2l_move_to_trash_title, ids.size, ids.size))
             .setMessage(R.string.shell_trash_note)
             .setPrimary(R.string.shell_move_to_trash) {
                 ioWrite({ TrashActions.moveAll(repo, ids) }) { moved ->
@@ -2066,6 +2086,13 @@ class LibraryScreen(
                 setOnClickListener { onAction?.invoke() }
                 minimumHeight = SwStyle.dp(context, 48f)
                 gravity = Gravity.CENTER_VERTICAL
+                // Device reflow: a single sort word must stay one whole line. Full-width at
+                // large font gives it room; never break or ellipsize mid-word.
+                maxLines = 1
+                ellipsize = null
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                //noinspection WrongConstant
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             }
             sortAction = actionView
             row.addView(actionView)
@@ -2629,27 +2656,43 @@ class LibraryScreen(
         return "$pages · ${size(doc)} · ${whenDay(doc)}$tags"
     }
 
+    /**
+     * PERF 1: the repository already measured every byte while listing the library. Never
+     * stat a file on the main thread just to reformat a number we already have.
+     */
     private fun size(doc: ScanDocument): String {
-        val bytes = runCatching {
-            if (doc.pdfFile.exists()) doc.pdfFile.length() else doc.pageFiles.sumOf { it.length() }
-        }.getOrDefault(0L)
-        // CP1: one decimal unit helper (KB = 1000, MB = 1,000,000). The other screens keep a
-        // number and its unit together by post-processing the shared label with an NBSP; do the
-        // same here. A missing/unreadable size stays "—" instead of pretending to be "0 B".
-        if (bytes <= 0) return "—"
+        val bytes = doc.cachedSize
+        // CP1: one decimal unit helper (KB = 1000, MB = 1,000,000). Keep a number and its
+        // unit together with an NBSP. A missing size stays "—", never a pretend "0 B".
+        if (bytes <= 0L) return "—"
         return SizeUnits.format(bytes).replace(' ', '\u00A0')
     }
 
+    /**
+     * PERF 2: one formatter and two Calendar instances per locale, not three allocations on
+     * every bind. Recreated only when the app language actually changes (not device locale).
+     */
+    private var dayFormatter: SimpleDateFormat? = null
+    private var dayFormatterLocale: java.util.Locale? = null
+    private val dayDocCalendar = Calendar.getInstance()
+    private val dayTodayCalendar = Calendar.getInstance()
+
     private fun whenDay(doc: ScanDocument): String {
-        val docDay = Calendar.getInstance().apply { timeInMillis = doc.createdAt }
-        val today = Calendar.getInstance()
-        val fmt = SimpleDateFormat("d MMM", AppLocale.of(context))
-        val sameDay = docDay.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-            docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+        val locale = AppLocale.of(context)
+        val fmt = if (dayFormatter == null || dayFormatterLocale != locale) {
+            SimpleDateFormat("d MMM", locale).also {
+                dayFormatter = it
+                dayFormatterLocale = locale
+            }
+        } else dayFormatter!!
+        dayDocCalendar.timeInMillis = doc.createdAt
+        dayTodayCalendar.timeInMillis = System.currentTimeMillis()
+        val sameDay = dayDocCalendar.get(Calendar.YEAR) == dayTodayCalendar.get(Calendar.YEAR) &&
+            dayDocCalendar.get(Calendar.DAY_OF_YEAR) == dayTodayCalendar.get(Calendar.DAY_OF_YEAR)
         if (sameDay) return context.getString(R.string.shell_today)
-        today.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterday = docDay.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-            docDay.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+        dayTodayCalendar.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterday = dayDocCalendar.get(Calendar.YEAR) == dayTodayCalendar.get(Calendar.YEAR) &&
+            dayDocCalendar.get(Calendar.DAY_OF_YEAR) == dayTodayCalendar.get(Calendar.DAY_OF_YEAR)
         if (yesterday) return context.getString(R.string.shell_yesterday)
         return fmt.format(Date(doc.createdAt))
     }
