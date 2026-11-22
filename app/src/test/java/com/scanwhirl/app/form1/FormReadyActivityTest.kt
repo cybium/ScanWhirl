@@ -19,6 +19,7 @@ import com.scanwhirl.app.ui.tools.form.FormReadyActivity
 import com.scanwhirl.app.util.ExactKbEncoder
 import com.scanwhirl.app.util.FormUnit
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -47,27 +48,39 @@ class FormReadyActivityTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+    private val controllers = mutableListOf<ActivityController<FormReadyActivity>>()
+
+    @Before
+    fun setUp() {
+        // Both are process-wide test hooks. A test that fails mid-flight must not leak a
+        // blocking encode gate or a stale sheet into the next test in the same fork.
+        ExactKbEncoder.beforeEncode = null
+        org.robolectric.shadows.ShadowDialog.reset()
+    }
 
     @After
     fun tearDown() {
+        controllers.forEach { it.pause().stop().destroy() }
+        controllers.clear()
         ExactKbEncoder.beforeEncode = null
+        org.robolectric.shadows.ShadowDialog.reset()
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-w360dp-h800dp-xhdpi")
     }
 
-    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
+    private fun waitUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean {
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+        while (System.nanoTime() < deadline) {
             idle()
             if (condition()) return true
-            Thread.sleep(25)
+            Thread.sleep(5)
         }
         idle()
         return condition()
     }
 
     private fun makeActivity(): FormReadyActivity =
-        Robolectric.buildActivity(FormReadyActivity::class.java).setup().get()
+        Robolectric.buildActivity(FormReadyActivity::class.java).setup().also { controllers += it }.get()
 
     private fun jpeg(color: Int, w: Int = 600, h: Int = 500): ByteArray {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -87,7 +100,7 @@ class FormReadyActivityTest {
         if (root is ViewGroup) for (i in 0 until root.childCount) walk(root.getChildAt(i), out)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `intent and tool id are exposed for the lead to wire`() {
         assertEquals("form_ready", FormReadyActivity.TOOL_ID)
         val intent = FormReadyActivity.intent(app)
@@ -95,7 +108,7 @@ class FormReadyActivityTest {
         assertNotNull(intent)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `selecting a preset updates dimensions band and crop aspect`() {
         val a = makeActivity()
         idle()
@@ -111,7 +124,7 @@ class FormReadyActivityTest {
         assertTrue(textOf(a, R.id.formReadyReadout).contains("60"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `custom unit and dpi give a live pixel readout`() {
         val a = makeActivity()
         idle()
@@ -125,7 +138,7 @@ class FormReadyActivityTest {
         assertTrue(readout, readout.contains("413") && readout.contains("531"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `full flow makes a measured file and opens the shared result`() {
         val a = makeActivity()
         idle()
@@ -154,7 +167,7 @@ class FormReadyActivityTest {
         assertFalse("no repeated original-kept receipt", note.contains("Original photo kept"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a 12000 pixel entry is refused before any bitmap is allocated`() {
         var encodeCalls = 0
         ExactKbEncoder.beforeEncode = { encodeCalls++ }
@@ -178,7 +191,7 @@ class FormReadyActivityTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `an OutOfMemoryError during encode is a localized failure not a crash`() {
         val a = makeActivity()
         idle()
@@ -200,7 +213,7 @@ class FormReadyActivityTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `ActivityController recreate restores preset fields and crop rectangle`() {
         val controller: ActivityController<FormReadyActivity> =
             Robolectric.buildActivity(FormReadyActivity::class.java).setup()
@@ -235,7 +248,7 @@ class FormReadyActivityTest {
         controller.pause().stop().destroy()
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `labels and controls fit at 200 percent font in English and Hindi`() {
         for (lang in listOf("en", "hi")) {
             RuntimeEnvironment.setQualifiers("$lang-w360dp-h800dp-xhdpi")
@@ -276,7 +289,7 @@ class FormReadyActivityTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `selected chips expose their state to TalkBack`() {
         val a = makeActivity()
         idle()

@@ -25,6 +25,8 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.SwActivitySession
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -206,26 +208,53 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- reorder durability
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test(timeout = 30_000) fun `Later Earlier and Move to rename the staged files and the selection follows the page`() {
+        // TEST3: queue the activity's Main dispatcher for the busy window. reorderStaging sets
+        // pageOpBusy synchronously BEFORE launching its IO coroutine, so with the worker queued
+        // the busy state (and therefore Save's refusal) is deterministic on any runner speed.
+        val scheduler = kotlinx.coroutines.test.TestCoroutineScheduler()
+        val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(scheduler)
+        kotlinx.coroutines.Dispatchers.setMain(testDispatcher)
+        // The queued coroutines need both the test scheduler and the main looper pumped; a real
+        // IO thread resumes them asynchronously, so one advanceUntilIdle() is not enough.
+        fun awaitRenamed(condition: () -> Boolean) {
+            val end = System.nanoTime() + 20_000_000_000L
+            while (System.nanoTime() < end) {
+                scheduler.advanceUntilIdle()
+                shadowOf(Looper.getMainLooper()).idle()
+                if (condition()) return
+                Thread.sleep(5)
+            }
+            fail("Timed out")
+        }
+        try {
         val dir = stage(5)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
                 a.showPage(1)
                 a.findViewById<View>(R.id.btnModeArrange).performClick()
+                // TEST3: the rename's IO work can finish before a synchronous read of pageOpBusy.
+                // Hold the activity's Main dispatcher queued for this one window: the click sets
+                // pageOpBusy synchronously BEFORE launching the coroutine, so with the worker
+                // queued the busy state is deterministic. After the Save-refusal is proven we
+                // drain the queued work and the existing width assertions check the rename.
                 a.findViewById<View>(R.id.btnArrLater).performClick()
-                // While the rename pass runs, Save waits instead of reading half-renamed pages.
                 assertTrue(a.pageOpBusy)
+                // While the rename pass runs, Save waits instead of reading half-renamed pages.
                 a.findViewById<View>(R.id.btnSavePdf).performClick()
                 assertEquals(app.getString(R.string.review_busy), ShadowToast.getTextOfLatestToast())
+                // Now let the queued rename (and any launch-time decode) run to completion.
+                scheduler.advanceUntilIdle()
             }
-            await { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
             assertEquals("nothing saved while busy", 0, repo.listDocuments().size)
             scenario.onActivity { a ->
                 assertEquals("selection follows the moved page", 2, a.currentIndex)
                 assertEquals("Page moved to position 3", snackbarText(a))
                 a.findViewById<View>(R.id.btnArrEarlier).performClick()
             }
-            await { widths(dir) == listOf(120, 121, 122, 123, 124) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 121, 122, 123, 124) && !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a ->
                 assertEquals(1, a.currentIndex)
                 a.findViewById<View>(R.id.btnArrMove).performClick()
@@ -233,7 +262,7 @@ class ScanReviewFocusArrangeTest {
                 ShadowDialog.getLatestDialog()
                     .findViewById<ViewGroup>(R.id.swSheetItems).getChildAt(4).performClick()
             }
-            await { widths(dir) == listOf(120, 122, 123, 124, 121) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 122, 123, 124, 121) && !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a -> assertEquals(4, a.currentIndex) }
             assertEquals("no duplicate or temp pages", 5, dir.listFiles()!!.count { it.extension == "jpg" })
             assertTrue(dir.listFiles()!!.none { it.name.startsWith("tmp_") })
@@ -244,6 +273,9 @@ class ScanReviewFocusArrangeTest {
                 val grid = a.findViewById<PageGridView>(R.id.pageGrid)
                 assertEquals(listOf(120, 122, 123, 124, 121), grid.pageOrder().map { width(it) })
             }
+        }
+        } finally {
+            kotlinx.coroutines.Dispatchers.resetMain()
         }
     }
 
