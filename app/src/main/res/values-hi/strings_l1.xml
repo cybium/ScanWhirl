@@ -291,7 +291,7 @@
     <string name="quick_max_reached">ज़्यादा से ज़्यादा 12 झटपट काम रख सकते हैं</string>
     <string name="me_pro_active">ScanWhirl Pro चालू है</string>
     <string name="me_pro_active_summary">धन्यवाद। Pro के सभी काम खुले हैं।</string>
-    <string name="pro_active_sub">Pro के सभी काम खुले हैं। धन्यवाद!</string>
+    <string name="pro_active_sub">Pro के सभी काम खुले हैं। धन्यवाद।</string>
     <string name="settings_test_free">परीक्षण: मुफ़्त उपयोगकर्ता की तरह</string>
     <string name="settings_test_free_summary">सिर्फ़ जाँच के लिए बने ऐप में। Pro खरीदने वाला पन्ना दिखाता है।</string>
     <string name="settings_privacy_section">निजता और सुरक्षा</string>

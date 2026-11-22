@@ -5,12 +5,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.scanwhirl.app.R
-import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ProScreen
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -22,7 +20,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** V2R phone finding (b): "See all Pro tools" must expand the honest full catalogue in place. */
+/**
+ * PRO2 critic fix: the Pro screen keeps ONE "See all N Pro tools" link — the counted one that
+ * opens the Tools hub. The old second, un-counted in-place catalogue link is gone.
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -32,22 +33,23 @@ class V2RProToolsExpansionTest {
 
     @After
     fun tearDown() {
-        controller?.close()
+        controller?.pause()?.stop()?.destroy()
         controller = null
         RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xhdpi")
     }
 
-    private fun screen(): Pair<Activity, ProScreen> {
+    private fun screen(): Triple<Activity, ProScreen, IntArray> {
         controller = Robolectric.buildActivity(Activity::class.java).setup()
         val activity = controller!!.get()
+        val all = IntArray(1)
         val pro = ProScreen(activity, object : ProScreen.Callbacks {
             override fun onClose() = Unit
             override fun onBuy() = Unit
             override fun onRestore() = Unit
-            override fun onSeeAllProTools() = Unit
+            override fun onSeeAllProTools() { all[0]++ }
         })
         activity.setContentView(pro)
-        return activity to pro
+        return Triple(activity, pro, all)
     }
 
     private fun texts(root: View): List<TextView> {
@@ -60,56 +62,34 @@ class V2RProToolsExpansionTest {
         return out
     }
 
-    private fun measure(activity: Activity, root: View) {
-        val d = activity.resources.displayMetrics.density
-        repeat(2) {
-            root.measure(
-                View.MeasureSpec.makeMeasureSpec((360 * d).toInt(), View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec((800 * d).toInt(), View.MeasureSpec.EXACTLY)
-            )
-            root.layout(0, 0, root.measuredWidth, root.measuredHeight)
-        }
-    }
-
-    @Test
-    fun `see all keeps its counted label and expands every named tool with honest tiers`() {
-        val (activity, pro) = screen()
+    @Test(timeout = 30_000)
+    fun `the counted See all link is the only one and it opens the Tools hub`() {
+        val (activity, pro, all) = screen()
+        val counted = activity.getString(R.string.pro_more_tools, ToolRegistry.proCount())
         val more = pro.findViewById<View>(R.id.swProMore) as TextView
-        assertTrue(
-            "the counted label is preserved for ProCountTest",
-            more.text.toString().startsWith("See all ") && more.text.toString().endsWith(" Pro tools")
+        assertEquals("the counted label is preserved for ProCountTest", counted, more.text.toString())
+        assertEquals(
+            "exactly one counted See all link",
+            1,
+            texts(pro).count { it.text.toString() == counted }
         )
-        assertNull("the catalogue is not built until asked", pro.findViewById<View>(R.id.v2rAllTools))
+        assertNull(
+            "no second in-place catalogue link",
+            pro.findViewById<View>(R.id.v2rSeeAllTools)
+        )
+        assertNull("no hidden in-place catalogue", pro.findViewById<View>(R.id.v2rAllTools))
 
-        pro.findViewById<View>(R.id.v2rSeeAllTools)!!.performClick()
-        val box = pro.findViewById<View>(R.id.v2rAllTools)
-        assertNotNull("the catalogue expands in place", box)
-        assertTrue("the catalogue is visible", box!!.isShown)
-        val labels = texts(box).map { it.text.toString() }
-        for (tool in ToolRegistry.all) {
-            assertTrue("${tool.id} is named in the list: $labels", labels.contains(activity.getString(tool.title)))
-        }
-        assertTrue("Pro tier is labelled", labels.any { it == "Pro" })
-        assertTrue("Free tier is labelled", labels.any { it == "Free" })
-        val rowHeights = (0 until (box as ViewGroup).childCount).map { box.getChildAt(it) }
-            .filter { it is ViewGroup && it.minimumHeight > 0 }
-        assertTrue("every tool row keeps a 48dp target", rowHeights.all {
-            it.minimumHeight >= SwStyle.dp(activity, 48f)
-        })
-
-        pro.findViewById<View>(R.id.v2rShowLess)!!.performClick()
-        assertFalse("the catalogue collapses again", box.isShown)
+        more.performClick()
+        assertEquals("the single See all link opens the Tools hub", 1, all[0])
     }
 
-    @Test
-    fun `Hindi catalogue uses the glossary tier words`() {
+    @Test(timeout = 30_000)
+    fun `Hindi keeps the single counted See all link`() {
         RuntimeEnvironment.setQualifiers("hi-rIN-w360dp-h800dp-xhdpi")
-        val (_, pro) = screen()
-        pro.findViewById<View>(R.id.v2rSeeAllTools)!!.performClick()
-        val box = pro.findViewById<View>(R.id.v2rAllTools)!!
-        val labels = texts(box).map { it.text.toString() }
-        assertTrue("Hindi free tier", labels.any { it == "मुफ़्त" })
-        assertTrue("Hindi soon label", labels.any { it.contains("जल्द") })
-        assertFalse("no loanword for free", labels.any { it == "फ्री" })
+        val (activity, pro, _) = screen()
+        val counted = activity.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+        assertEquals(1, texts(pro).count { it.text.toString() == counted })
+        assertNull(pro.findViewById<View>(R.id.v2rSeeAllTools))
+        assertNotNull(pro.findViewById<View>(R.id.swProMore))
     }
 }

@@ -4,6 +4,7 @@
     <item name="swProContinueFree" type="id" />
     <item name="swProRestoreAction" type="id" />
     <item name="swProPriceStatus" type="id" />
+    <item name="swProPriceRetry" type="id" />
 
     <item name="uxL5VaultRecoveryProof" type="id" />
 

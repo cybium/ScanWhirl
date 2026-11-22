@@ -12,13 +12,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnPreDraw
-import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
-import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
-import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
@@ -63,10 +60,13 @@ class ProScreen(
     private lateinit var restoreRow: TextView
     private lateinit var continueFree: TextView
     private lateinit var priceStatus: TextView
+    private lateinit var retryButton: TextView
     private lateinit var moreRow: TextView
-    private lateinit var seeAllRow: TextView
-    private var allTools: View? = null
     private var entrancePlayed = false
+
+    /** True only when Play has actually returned a price. Get Pro is purchasable only then. */
+    private var priceKnown = false
+    private var buying = false
 
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
     private var dockOverlap: (() -> Int)? = null
@@ -79,7 +79,10 @@ class ProScreen(
      * their size — nothing that is read shrinks, only the rings and the mark.
      */
     private val largeFont = context.resources.configuration.fontScale >= 1.6f
-    private val heroDp = if (largeFont) 72f else 150f
+    // PRO2 critic: the decorative ring hero ate too much of the first screen. Shrink the rings
+    // (the real brand mark stays) so the honest tool list starts higher. At 200% it gives up more
+    // height so the promise and the actions stay whole above the pinned offer (B2-M4).
+    private val heroDp = if (largeFont) 56f else 96f
 
     /** Test seam: the order in which the entrance phases actually ran. */
     internal val entranceSteps = mutableListOf<String>()
@@ -226,6 +229,30 @@ class ProScreen(
                 }
         )
 
+        // PRO2: the missing-price status is paired with an explicit retry that re-queries Play's
+        // product details. The buy path stays disabled until Play actually answers.
+        retryButton = SwStyle.text(
+            context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true
+        ).apply {
+            id = R.id.swProPriceRetry
+            text = context.getString(R.string.ux130_l5_pro_price_retry)
+            contentDescription = text
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 48f)
+            isClickable = true
+            isFocusable = true
+            SwStyle.asButton(this)
+            visibility = View.GONE
+            setOnClickListener { onRetryPrice() }
+        }
+        content.addView(
+            retryButton,
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)).apply {
+                val m = SwStyle.dp(context, 18f)
+                setMargins(m, SwStyle.dp(context, 2f), m, 0)
+            }
+        )
+
         val feat = LinearLayout(context).apply {
             orientation = VERTICAL
             setPadding(SwStyle.dp(context, 18f), SwStyle.dp(context, 16f), SwStyle.dp(context, 18f), 0)
@@ -284,24 +311,8 @@ class ProScreen(
                 setMargins(m, SwStyle.dp(context, 8f), m, 0)
             }
         )
-        // V2R (phone finding b): a separate control expands the honest catalogue in place.
-        seeAllRow = SwStyle.text(context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true).apply {
-            id = R.id.v2rSeeAllTools
-            text = context.getString(R.string.v2r_see_all_pro_tools)
-            contentDescription = text
-            gravity = Gravity.CENTER
-            minimumHeight = SwStyle.dp(context, 48f)
-            isClickable = true
-            SwStyle.asButton(this)
-            setOnClickListener { toggleAllTools() }
-        }
-        content.addView(
-            seeAllRow,
-            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)).apply {
-                val m = SwStyle.dp(context, 18f)
-                setMargins(m, SwStyle.dp(context, 6f), m, 0)
-            }
-        )
+        // PRO2: one "See all N Pro tools" link only. The counted [moreRow] above opens the Tools
+        // hub; the old duplicate un-counted in-place catalogue link was removed.
 
         val price = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -334,8 +345,6 @@ class ProScreen(
                 text = context.getString(R.string.ux130_l5_pro_once)
             }
         )
-        // Fail closed: no amount until Play answers, never a built-in number.
-        showPrice(null)
         price.addView(priceText, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         price.addView(
             ImageView(context).apply {
@@ -375,6 +384,9 @@ class ProScreen(
                 )
             )
         }
+        // Fail closed: no amount until Play answers, never a built-in number. Must run after the
+        // buy button exists — the status also drives its purchasable (enabled) state.
+        showPrice(null)
 
         if (!active) {
             // UX5-1: Restore is no longer buried below the feature grid. It and Continue free
@@ -404,16 +416,15 @@ class ProScreen(
             // minHeight 48dp is set by SwStyle.quietAction; the height wraps so a two-line label
             // at 200% or in Hindi can grow. ActionStack stacks them when they cannot fit side by side.
             val actions = ActionStack(context)
+            // PRO2: both exits share the same width and height so they read as one aligned pair
+            // (instead of the old unequally sized, vertically offset buttons).
             actions.addView(
                 continueFree,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = SwStyle.dp(context, 4f) }
             )
             actions.addView(
                 restoreRow,
-                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = SwStyle.dp(context, 8f)
-                    topMargin = SwStyle.dp(context, 8f)
-                }
+                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = SwStyle.dp(context, 4f) }
             )
             content.addView(
                 actions, 6,
@@ -496,9 +507,37 @@ class ProScreen(
     }
 
     /** Billing seams: L2 wires Play Billing here without touching the layout. */
-    private fun onUnlockPro() = callbacks.onBuy()
+    private fun onUnlockPro() {
+        // PRO2: fail closed. Without Play's real product details there is nothing to buy, so a
+        // tap (even a programmatic one) can never launch the billing flow.
+        if (!priceKnown || buying || active) return
+        callbacks.onBuy()
+    }
+
+    /** Re-query Play's product details after "Try again". Stale/null answers change nothing. */
+    private fun onRetryPrice() {
+        if (active) return
+        retryButton.isEnabled = false
+        retryButton.alpha = 0.6f
+        com.scanwhirl.app.util.ProBilling.price(context) { price ->
+            if (isAttachedToWindow) {
+                retryButton.isEnabled = true
+                retryButton.alpha = 1f
+                if (!price.isNullOrBlank()) setPrice(price)
+            }
+        }
+    }
 
     private fun onRestorePurchase() = callbacks.onRestore()
+
+    private fun refreshBuyAvailability() {
+        val canBuy = priceKnown && !buying && !active
+        buyButton.isEnabled = canBuy
+        buyButton.alpha = if (canBuy) 1f else 0.6f
+        buyButton.contentDescription = context.getString(
+            if (priceKnown) R.string.ux130_l5_pro_buy else R.string.ux130_l5_pro_price_unavailable
+        )
+    }
 
     /**
      * Price copy: PRC-001 — the amount is only ever Play's localized price. A null/blank answer
@@ -521,7 +560,11 @@ class ProScreen(
         // S2 item 9: a missing price is an honest status on the BUY screen, not a claim that
         // payment is unavailable. An already-owned (active) screen has no price/Unlock row at all,
         // so a missing Play price must not surface a purchase-price error there.
-        priceStatus.visibility = if (known || active) View.GONE else View.VISIBLE
+        priceKnown = known
+        val showError = !known && !active
+        priceStatus.visibility = if (showError) View.VISIBLE else View.GONE
+        retryButton.visibility = if (showError) View.VISIBLE else View.GONE
+        refreshBuyAvailability()
     }
 
     private fun playEntrance() {
@@ -587,8 +630,9 @@ class ProScreen(
      * terminal outcome (and a recreated screen starts disabled while the purchase is in flight).
      */
     fun setBuying(busy: Boolean) {
-        buyButton.isEnabled = !busy
-        buyButton.alpha = if (busy) 0.6f else 1f
+        buying = busy
+        // Get Pro needs BOTH a real price and an idle purchase slot (PRO2 fail-closed).
+        refreshBuyAvailability()
         // p2pro #3: Restore used to be a live tap during a Buy and ProBilling.restore() returned
         // silently (its Busy went to a no-op callback). Disable it with an honest accessible
         // state so the user cannot make a request that will be ignored.
@@ -662,81 +706,6 @@ class ProScreen(
     }
     internal fun featureCellsForTest(): List<View> = featureCells
 
-    /** Expands the full catalogue in place, with honest Free/Pro/Soon labels. */
-    private fun toggleAllTools() {
-        val box = allTools ?: buildAllTools().also { built ->
-            allTools = built
-            val index = (seeAllRow.parent as? ViewGroup)?.indexOfChild(seeAllRow) ?: -1
-            (seeAllRow.parent as? ViewGroup)?.addView(built, index + 1)
-        }
-        box.isVisible = !box.isVisible
-    }
-
-    private fun buildAllTools(): View {
-        val gold = SwStyle.color(context, R.color.gold_pro_primary)
-        val hi = SwStyle.color(context, R.color.text_hologram_hi)
-        val box = LinearLayout(context).apply {
-            id = R.id.v2rAllTools
-            orientation = LinearLayout.VERTICAL
-            setPadding(SwStyle.dp(context, 18f), SwStyle.dp(context, 8f),
-                SwStyle.dp(context, 18f), SwStyle.dp(context, 4f))
-            isVisible = false
-        }
-        fun heading(res: Int) {
-            box.addView(
-                SwStyle.text(context, 13.5f, gold, bold = true).apply {
-                    text = context.getString(res)
-                    setPadding(0, SwStyle.dp(context, 6f), 0, SwStyle.dp(context, 2f))
-                },
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-            )
-        }
-        fun row(tool: SwTool) {
-            val tier = context.getString(if (tool.pro) R.string.v2r_pro_label else R.string.v2r_free_label)
-            val status = if (tool.status == ToolStatus.SOON) " · " + context.getString(R.string.v2r_soon_label) else ""
-            box.addView(
-                LinearLayout(context).apply {
-                    orientation = HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    minimumHeight = SwStyle.dp(context, 48f)
-                    addView(
-                        SwStyle.text(context, 13.5f, hi, bold = true, metadata = true).apply {
-                            text = context.getString(tool.title)
-                            maxLines = 2
-                        },
-                        LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-                    )
-                    addView(
-                        SwStyle.text(context, 12f, gold, bold = true, metadata = true).apply {
-                            text = tier + status
-                        },
-                        LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-                    )
-                },
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-            )
-        }
-        heading(R.string.v2r_pro_tools_heading)
-        ToolRegistry.all.filter { it.pro }.forEach { row(it) }
-        heading(R.string.v2r_free_tools_heading)
-        ToolRegistry.all.filter { !it.pro }.forEach { row(it) }
-        box.addView(
-            SwStyle.text(context, 13.5f, gold, bold = true, metadata = true).apply {
-                id = R.id.v2rShowLess
-                text = context.getString(R.string.v2r_show_less)
-                gravity = Gravity.CENTER
-                minimumHeight = SwStyle.dp(context, 48f)
-                isClickable = true
-                isFocusable = true
-                SwStyle.asButton(this)
-                setOnClickListener { toggleAllTools() }
-            },
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = SwStyle.dp(context, 8f) }
-        )
-        return box
-    }
-
     private fun feature(icon: Int, label: Int): View {
         val cell = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -778,9 +747,12 @@ class ProScreen(
 /**
  * The free exit and Restore sit side by side only when both labels actually fit. A 200% or
  * Hindi "Restore purchase" needs two lines, so the row switches to a vertical stack before the
- * text can clip. The decision is measured, not guessed from locale or font scale.
+ * text can clip. The decision is measured, not guessed from locale or font scale. In either
+ * orientation the two actions are forced to the same width and height (PRO2 alignment).
  */
 private class ActionStack(context: Context) : LinearLayout(context) {
+
+    private var paramsApplied = -1
 
     init {
         orientation = HORIZONTAL
@@ -792,9 +764,27 @@ private class ActionStack(context: Context) : LinearLayout(context) {
             val needed = naturalWidth(0, available) + naturalWidth(1, available) +
                 SwStyle.dp(context, 8f)
             val wanted = if (needed > available) VERTICAL else HORIZONTAL
-            if (orientation != wanted) orientation = wanted
+            applyOrientation(wanted)
         }
         super.onMeasure(widthSpec, heightSpec)
+    }
+
+    private fun applyOrientation(wanted: Int) {
+        if (paramsApplied == wanted) return
+        orientation = wanted
+        paramsApplied = wanted
+        for (i in 0 until childCount) {
+            val lp = getChildAt(i).layoutParams as LayoutParams
+            if (wanted == HORIZONTAL) {
+                lp.width = 0
+                lp.weight = 1f
+                lp.height = LayoutParams.MATCH_PARENT
+            } else {
+                lp.width = LayoutParams.MATCH_PARENT
+                lp.weight = 0f
+                lp.height = LayoutParams.WRAP_CONTENT
+            }
+        }
     }
 
     /** Probes a child unwrapped, then restores its real layout params for the parent's pass. */
