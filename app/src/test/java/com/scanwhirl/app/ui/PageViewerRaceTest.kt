@@ -87,6 +87,28 @@ class PageViewerRaceTest {
         return ids!![0]
     }
 
+    /**
+     * The repository delete finishes on IO before deleteScope posts its final UI
+     * reload to the main looper. Observing draft size alone can see the PRE-delete
+     * filter choice for one frame. Wait until the deleted identity has also left
+     * the visible page list AND the choice map, then assert the neighbour's filter.
+     */
+    private fun deleteUiHasSettled(screen: PageViewerActivity, deletedIdentity: String): Boolean {
+        val idsField = PageViewerActivity::class.java.getDeclaredField("pageIds").apply {
+            isAccessible = true
+        }
+        val choicesField = PageViewerActivity::class.java.getDeclaredField("filterChoice").apply {
+            isAccessible = true
+        }
+        @Suppress("UNCHECKED_CAST")
+        val visibleIds = idsField.get(screen) as List<String>
+        @Suppress("UNCHECKED_CAST")
+        val choices = choicesField.get(screen) as Map<String, ScanFilter>
+        return visibleIds.size == 2 &&
+            deletedIdentity !in visibleIds &&
+            deletedIdentity !in choices
+    }
+
     private fun launch(id: String): ActivityController<PageViewerActivity> {
         val c = Robolectric.buildActivity(
             PageViewerActivity::class.java, PageViewerActivity.intent(app, id, 0)
@@ -151,7 +173,10 @@ class PageViewerRaceTest {
 
             // 3. Let the filter finish; both operations must settle in a consistent order.
             releaseAll(filterRelease)
-            waitFor("both page operations to settle") { runBlocking { repo.draftOf(id) }?.entries?.size == 2 }
+            waitFor("both page operations and UI projection to settle") {
+                runBlocking { repo.draftOf(id) }?.entries?.size == 2 &&
+                    deleteUiHasSettled(c.get(), identityZero)
+            }
             idle()
 
             assertCleanNeighbour(id, identityZero, c.get())
@@ -190,7 +215,10 @@ class PageViewerRaceTest {
 
             // 3. Release the delete; the late filter must be dropped, not applied to the neighbour.
             releaseAll(deleteRelease)
-            waitFor("the delete to settle") { runBlocking { repo.draftOf(id) }?.entries?.size == 2 }
+            waitFor("the delete and UI projection to settle") {
+                runBlocking { repo.draftOf(id) }?.entries?.size == 2 &&
+                    deleteUiHasSettled(c.get(), identityZero)
+            }
             idle()
 
             assertCleanNeighbour(id, identityZero, c.get())
