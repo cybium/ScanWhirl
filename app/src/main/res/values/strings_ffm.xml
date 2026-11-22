@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FF-M — Merge completeness and OCR retention. One helper line on the work screen. -->
+    <string name="ffm_merge_missing_page">A source page is missing. Nothing was merged.</string>
+    <string name="ffm_merge_source_changed">A source changed while merging. Nothing was merged.</string>
+    <string name="ffm_merge_order_title">Merge order</string>
+    <string name="ffm_merge_order_item">%1$d. %2$s</string>
+    <string name="ffm_merge_move_up">Move %1$s up</string>
+    <string name="ffm_merge_move_down">Move %1$s down</string>
+    <string name="ffm_merge_summary">%1$d pages · about %2$s</string>
+    <string name="ffm_merge_compress_hint">After merging, compress the copy if your form has a size limit.</string>
+</resources>

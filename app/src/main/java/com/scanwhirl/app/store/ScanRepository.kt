@@ -56,6 +56,7 @@ import kotlin.math.roundToInt
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -1673,24 +1674,161 @@ class ScanRepository(private val context: Context) {
         return if (first == last) "$name (page $first)" else "$name (pages $first–$last)"
     }
 
+    /** FF-M: one source's pages plus the hashes that must stay unchanged until publish. */
+    private data class MergeSource(
+        val doc: ScanDocument,
+        val pages: List<File>,
+        val hashes: List<String>
+    )
+
+    /**
+     * FF-M: reads the page count from a PDF's own page tree without validating its image streams.
+     * Imported PDFs rasterise at import, so their page files are not the bytes embedded in the PDF;
+     * only the count is a faithful witness of how many pages the source still has.
+     */
+    private fun pdfPageTreeCount(pdf: File): Int? {
+        if (!pdf.isFile) return null
+        return try {
+            val tailLen = minOf(4096L, pdf.length()).toInt()
+            RandomAccessFile(pdf, "r").use { raf ->
+                raf.seek(raf.length() - tailLen)
+                val tail = ByteArray(tailLen)
+                raf.readFully(tail)
+                val start = Regex("startxref\\n(\\d{1,15})\\n%%EOF\\n\\z")
+                    .find(String(tail, Charsets.ISO_8859_1))?.groupValues?.get(1)?.toLongOrNull()
+                    ?: return null
+                if (start <= 0 || start >= raf.length()) return null
+                raf.seek(start)
+                val head = ByteArray(minOf(64L, raf.length() - start).toInt())
+                raf.readFully(head)
+                val header = Regex("^xref\\n0 (\\d{1,9})\\n").find(String(head, Charsets.ISO_8859_1))
+                    ?: return null
+                val n = header.groupValues[1].toInt()
+                val entryPos = start + header.value.length + 20L * 2
+                if (n < 3 || entryPos + 20L > raf.length()) return null
+                raf.seek(entryPos)
+                val entry = ByteArray(20)
+                raf.readFully(entry)
+                val objOffset = Regex("^(\\d{10}) \\d{5} n ")
+                    .find(String(entry, Charsets.ISO_8859_1))?.groupValues?.get(1)?.toLongOrNull()
+                    ?: return null
+                if (objOffset <= 0 || objOffset >= raf.length()) return null
+                raf.seek(objOffset)
+                val body = ByteArray(minOf(1L shl 20, raf.length() - objOffset).toInt())
+                raf.readFully(body)
+                val tree = String(body, Charsets.ISO_8859_1).substringBefore("endobj")
+                if (!tree.contains("/Type /Pages")) return null
+                Regex("/Count (\\d+)").find(tree)?.groupValues?.get(1)?.toIntOrNull()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * FF-M: joins the chosen scans in the person's order. Every source page must still exist and be
+     * readable when the merge starts and when it finishes — a missing or changed page aborts the
+     * whole operation instead of silently producing a shorter PDF. The source OCR map is carried
+     * over with a correct source-page mapping, so the copy is searchable immediately.
+     *
+     * Lock order is PDF_LOCK -> OcrStore.locked for the snapshot; TRASH_LOCK is taken only later by
+     * [buildAndPublish], never while either of the first two is held.
+     */
     suspend fun mergeDocuments(
         sourceIds: List<String>,
         suggestedName: String?
     ): ScanDocument = withContext(Dispatchers.IO) {
         require(sourceIds.size >= 2) { "Need at least 2 scans to merge" }
 
-        val sources = sourceIds.map { id ->
-            val dir = File(docsDir, id)
-            loadDocument(dir) ?: throw IllegalStateException("Scan not found: $id")
+        val sources = synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                val docs = sourceIds.map { id ->
+                    val dir = File(docsDir, id)
+                    loadDocument(dir) ?: throw IllegalStateException("Scan not found: $id")
+                }
+                refuseLockedSources(docs)
+                docs.map { doc ->
+                    val pages = doc.pageFiles
+                    // FF-M: exact source page count. loadDocument already hides missing/empty page
+                    // files, so the contiguous page_%03d.jpg sequence and the PDF's own page tree
+                    // are the witnesses that a page went missing. Imported PDFs rasterise at import,
+                    // so compare the count only — never the embedded page bytes.
+                    val contiguous = pages.isEmpty() || pages.withIndex().any { (i, f) ->
+                        f.name != String.format(Locale.ROOT, PAGE_FORMAT, i)
+                    }
+                    val pdfCount = pdfPageTreeCount(doc.pdfFile)
+                    if (pages.isEmpty() || contiguous ||
+                        pages.any { !it.exists() || it.length() <= 0L } ||
+                        (pdfCount != null && pdfCount != pages.size)
+                    ) {
+                        throw IllegalStateException(context.getString(R.string.ffm_merge_missing_page))
+                    }
+                    MergeSource(doc, pages, pages.map { Sha256.of(it) })
+                }
+            }
         }
-        refuseLockedSources(sources)
 
-        val pages = sources.flatMap { d -> d.pageFiles.filter { it.exists() && it.length() > 0 } }
-        if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
+        val expectedBytes = sources.sumOf { src -> src.pages.sumOf { it.length() } }
         val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
-            ?: OutputNames.forTool(sources.first().name, "Merged", existingDocumentNames())
-        buildAndPublish(name, null, pages.sumOf { it.length() }) { staging ->
-            pages.forEachIndexed { i, p -> stagePageCopy(p, staging, i) }
+            ?: OutputNames.forTool(sources.first().doc.name, "Merged", existingDocumentNames())
+        buildAndPublish(name, null, expectedBytes) { staging ->
+            // FF-M: output page names are assigned in user order, not library sort.
+            val pageMaps = LinkedHashMap<String, MutableMap<String, String>>()
+            var outIndex = 0
+            sources.forEach { src ->
+                val pageMap = LinkedHashMap<String, String>()
+                src.pages.forEachIndexed { i, page ->
+                    currentCoroutineContext().ensureActive()
+                    // Re-check on the way in: a source replaced after the snapshot must abort.
+                    if (!page.exists() || page.length() <= 0L || Sha256.of(page) != src.hashes[i]) {
+                        throw IllegalStateException(context.getString(R.string.ffm_merge_source_changed))
+                    }
+                    val out = stagePageCopy(page, staging, outIndex)
+                    // The bytes we published are the bytes we verified, not a mid-copy mutation.
+                    if (Sha256.of(out) != src.hashes[i]) {
+                        throw IllegalStateException(context.getString(R.string.ffm_merge_source_changed))
+                    }
+                    pageMap[out.name] = page.name
+                    outIndex++
+                }
+                pageMaps[src.doc.id] = pageMap
+            }
+            // A change anywhere in the run, including after the last copy, aborts before publish.
+            sources.forEach { src ->
+                src.pages.forEachIndexed { i, page ->
+                    if (!page.exists() || page.length() <= 0L || Sha256.of(page) != src.hashes[i]) {
+                        throw IllegalStateException(context.getString(R.string.ffm_merge_source_changed))
+                    }
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            carryOcrFromSources(sources.map { it.doc.id to pageMaps.getValue(it.doc.id) }, staging)
+        }
+    }
+
+    /**
+     * FF-M: carries recognised text and geometry from several source documents into one staging
+     * write, mapping each source page to its output page name. Byte-identical page copies keep their
+     * original line boxes. Output names are unique across sources, so nothing can be overwritten.
+     */
+    private fun carryOcrFromSources(
+        entries: List<Pair<String, Map<String, String>>>,
+        staging: File
+    ) {
+        val outTexts = LinkedHashMap<String, String>()
+        val outGeo = LinkedHashMap<String, OcrPage>()
+        entries.forEach { (sourceId, pageMap) ->
+            val texts = ocrStore.readText(sourceId)
+            if (texts.isEmpty()) return@forEach
+            val geo = ocrStore.readGeo(sourceId)
+            for ((dst, src) in pageMap) {
+                val text = texts[src] ?: continue
+                outTexts[dst] = text
+                geo[src]?.let { outGeo[dst] = it }
+            }
+        }
+        if (outTexts.isNotEmpty()) {
+            OcrStore(OpStaging.root(context.filesDir)).putStagedAll(staging.name, outTexts, outGeo)
         }
     }
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FF-M — मिलाना और पहचाना हुआ पाठ बनाए रखना। -->
+    <string name="ffm_merge_missing_page">एक स्रोत पन्ना गायब है। कुछ भी नहीं मिलाया गया।</string>
+    <string name="ffm_merge_source_changed">मिलाते समय एक स्रोत बदल गया। कुछ भी नहीं मिलाया गया।</string>
+    <string name="ffm_merge_order_title">मिलाने का क्रम</string>
+    <string name="ffm_merge_order_item">%1$d. %2$s</string>
+    <string name="ffm_merge_move_up">%1$s को ऊपर ले जाएँ</string>
+    <string name="ffm_merge_move_down">%1$s को नीचे ले जाएँ</string>
+    <string name="ffm_merge_summary">%1$d पन्ने · लगभग %2$s</string>
+    <string name="ffm_merge_compress_hint">अगर आपके फ़ॉर्म में आकार की सीमा है, तो मिलाई हुई प्रति छोटी करें।</string>
+</resources>
