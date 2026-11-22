@@ -193,10 +193,9 @@ class DocumentActionsSheetTest {
         }
 
         val expected = listOf(
+            "export" to DocumentActionsSheet.Action.EXPORT,
             "compress" to DocumentActionsSheet.Action.COMPRESS,
             "sign" to DocumentActionsSheet.Action.SIGN,
-            "read_text" to DocumentActionsSheet.Action.READ_TEXT,
-            "share" to DocumentActionsSheet.Action.SHARE,
             "rename" to DocumentActionsSheet.Action.RENAME,
             "move" to DocumentActionsSheet.Action.MOVE,
             "duplicate" to DocumentActionsSheet.Action.DUPLICATE,
@@ -236,92 +235,34 @@ class DocumentActionsSheetTest {
         assertEquals("every row ran exactly once", expected.size, calls.size)
     }
 
-    // --- 3. Share / Read text are the existing document-bound routes -----------
+    // --- 3. V3: the sheet never repeats the four dock actions -----------------
 
     @Test
-    fun `Read text opens the OCR screen for the shown document`() {
+    fun `the sheet does not repeat the dock's OCR or Share actions`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Read me")
+        withActions(id) { _, sheet ->
+            val deco = sheet.window!!.decorView
+            assertEquals("OCR is the dock's cell, not a sheet row", null,
+                deco.findViewWithTag<View>("docActions:read_text"))
+            assertEquals("Share is a dock action, not a sheet row", null,
+                deco.findViewWithTag<View>("docActions:share"))
+        }
+    }
+
+    /** V3: the export row is the new home of the dock's old Save PDF route. */
+    @Test
+    fun `the export row runs the host's guarded save handler for the shown document`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "Save me")
         val opened = mutableListOf<String>()
         DocumentActionsSheet.interceptForTests = { action, doc ->
-            if (action == DocumentActionsSheet.Action.READ_TEXT) {
-                opened += doc.id
-                true
-            } else {
-                true
-            }
+            if (action == DocumentActionsSheet.Action.EXPORT) opened += doc.id
+            true
         }
         withActions(id) { _, sheet ->
-            tag(sheet, "read_text").performClick()
+            tag(sheet, "export").performClick()
             idle()
         }
-        assertEquals("Read text is bound to the shown document", listOf(id), opened)
-    }
-
-    @Test
-    fun `Share hands the shown document to the system chooser`() {
-        val id = DocFixtures.saved(repo, app, pages = 1, name = "Share me")
-        withActions(id) { activity, sheet ->
-            sheet.window!!.decorView.findViewWithTag<View>("docActions:share").performClick()
-            // W1: the bound dispatcher re-reads the id off the main thread before sharing.
-            assertTrue(
-                "Share must open the chooser, not die",
-                pollUntil { shadowOf(activity).peekNextStartedActivity() != null }
-            )
-            val chooser = shadowOf(activity).nextStartedActivity
-            assertNotNull("Share must open the chooser, not die", chooser)
-            assertEquals(
-                "Share is the system send sheet",
-                android.content.Intent.ACTION_CHOOSER,
-                chooser!!.action
-            )
-            val send = chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)
-            assertEquals(android.content.Intent.ACTION_SEND, send?.action)
-        }
-    }
-
-    /**
-     * W1: the sheet's Share is the same bound output. With an unsaved page edit it asks first;
-     * no chooser opens until the user picks "Use saved version".
-     */
-    @Test
-    fun `with an unsaved draft the sheet's Share asks before any chooser`() {
-        val id = DocFixtures.saved(repo, app, pages = 2, name = "Bill Oct - FAKE")
-        kotlinx.coroutines.runBlocking {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                repo.draftRotate(id, 0, true)
-            }
-        }
-        withActions(id) { activity, sheet ->
-            sheet.window!!.decorView.findViewWithTag<View>("docActions:share").performClick()
-            var question: android.app.Dialog? = null
-            assertTrue(
-                "the unsaved page-change question appears",
-                pollUntil {
-                    val dialog = ShadowDialog.getLatestDialog()
-                    val matches = dialog != null && dialog.isShowing &&
-                        dialog.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString() ==
-                        app.getString(R.string.w1_draft_action_title)
-                    if (matches) question = dialog
-                    matches
-                }
-            )
-            val answers = requireNotNull(
-                question!!.findViewById<ViewGroup>(R.id.swSheetItems)
-            ) { "the question lists its answers" }
-            assertEquals(
-                "Finish editing first · Use saved version · Cancel",
-                listOf(
-                    app.getString(R.string.w1_draft_finish_first),
-                    app.getString(R.string.w1_use_saved_version),
-                    app.getString(R.string.sheet_cancel)
-                ),
-                (0 until answers.childCount).map {
-                    ((answers.getChildAt(it) as ViewGroup).getChildAt(0) as TextView).text.toString()
-                }
-            )
-            assertNull("no chooser before the answer", shadowOf(activity).peekNextStartedActivity())
-            question!!.dismiss()
-        }
+        assertEquals("Save copy to Documents is bound to the shown document", listOf(id), opened)
     }
 
     // --- 4. Sign: Pro marker, Free gate, never the editor ----------------------
@@ -427,7 +368,7 @@ class DocumentActionsSheetTest {
             true
         }
         withActions(id) { activity, sheet ->
-            for (key in listOf("compress", "sign", "read_text")) {
+            for (key in listOf("compress", "sign")) {
                 val row = if (key == "compress") {
                     sheet.findViewById<View>(R.id.rowMoreCompress)
                 } else {
@@ -448,9 +389,11 @@ class DocumentActionsSheetTest {
                 row.performClick()
                 idle()
             }
+            assertEquals("Share is a dock action, not a sheet row", null,
+                sheet.window!!.decorView.findViewWithTag<View>("docActions:share"))
             assertTrue(
-                "Share stays available: the protection guard handles it",
-                tag(sheet, "share").isEnabled
+                "the dock's Share stays available: the protection guard handles it",
+                activity.findViewById<View>(R.id.btnShare).isEnabled
             )
             // The header never decodes a locked page (privacy rule of the Home thumbnails):
             // no loader request is left on the image, and the lock glyph says why.
@@ -485,7 +428,7 @@ class DocumentActionsSheetTest {
             true
         }
         withActions(id) { _, sheet ->
-            for (key in listOf("compress", "sign", "read_text")) {
+            for (key in listOf("compress", "sign")) {
                 val row = if (key == "compress") {
                     sheet.findViewById<View>(R.id.rowMoreCompress)
                 } else {

@@ -418,9 +418,8 @@ class Phase5ScreensTest {
         ActivityScenario.launch<DocumentViewerActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
                 label = activity.findViewById(R.id.docCategoryLabel)
-                // UI-B6: the workspace panel — seven labelled actions in the glass panel,
-                // 4 + 3 on a 360 dp phone (3 + 3 + 1 on a 320 dp one). The rows are children
-                // of actionGrid, so they are flattened out in reading order.
+                // V3: the dock is one compact row of four labelled actions in the glass
+                // panel. The rows are children of actionGrid, flattened in reading order.
                 val dock = activity.findViewById<ViewGroup>(R.id.bottomDock)
                 assertTrue("document viewer panel is bg_dock_glass",
                     sameDrawable(dock.background, R.drawable.bg_dock_glass))
@@ -436,19 +435,15 @@ class Phase5ScreensTest {
                     val row = grid.getChildAt(r) as ViewGroup
                     for (j in 0 until row.childCount) buttons.add(row.getChildAt(j))
                 }
-                assertEquals("the panel holds seven actions", 7, buttons.size)
+                assertEquals("the dock holds four actions", 4, buttons.size)
                 assertEquals(
-                    "panel order",
-                    listOf(
-                        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnCompress,
-                        R.id.btnSign, R.id.btnSavePdf, R.id.btnMore
-                    ),
+                    "dock order",
+                    listOf(R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore),
                     buttons.map { it.id }
                 )
                 val expectedLabels = listOf(
                     R.string.doc_action_edit_crop, R.string.dock_read_text, R.string.share_pdf,
-                    R.string.tool_compress, R.string.tool_sign, R.string.doc_action_save_pdf,
-                    R.string.more
+                    R.string.doc_actions
                 )
                 for (i in buttons.indices) {
                     val btn = buttons[i]
@@ -611,9 +606,9 @@ class Phase5ScreensTest {
                 val sheet = ShadowDialog.getLatestDialog()
                 assertNotNull("the More sheet must open", sheet)
 
-                // B2 (UI critique #3): the sheet is bound to this document and starts with the
-                // document-linked tools — Compress, Sign, Read text, Share — before file
-                // management, and puts the destructive row last.
+                // V3: the sheet is bound to this document and starts with the export and the
+                // document-linked tools — Save copy to Documents, Compress, Sign — before file
+                // management. It never repeats the four dock actions.
                 for (row in listOf(
                     R.id.rowMoreRename, R.id.rowMoreMove, R.id.rowMoreDuplicate,
                     R.id.rowMoreCompress, R.id.rowMoreLock,
@@ -623,12 +618,16 @@ class Phase5ScreensTest {
                     assertNotNull("header $hdr must exist", sheet!!.findViewById<View>(hdr))
                 }
                 val deco = sheet!!.window!!.decorView
-                for (key in listOf("sign", "read_text", "share")) {
+                for (key in listOf("export", "sign")) {
                     assertNotNull(
                         "the document-linked '$key' row must exist",
                         deco.findViewWithTag<View>("docActions:$key")
                     )
                 }
+                assertEquals("OCR is a dock action, not a sheet row", null,
+                    deco.findViewWithTag<View>("docActions:read_text"))
+                assertEquals("Share is a dock action, not a sheet row", null,
+                    deco.findViewWithTag<View>("docActions:share"))
                 val rows = requireNotNull(deco.findViewWithTag<android.view.ViewGroup>("docActions:rows"))
                 val order = (0 until rows.childCount)
                     .mapNotNull { rows.getChildAt(it).tag as? String }
@@ -636,21 +635,20 @@ class Phase5ScreensTest {
                     .map { it.removePrefix("docActions:") }
                     .filter { it != "header" && !it.startsWith("hdr:") }
                 assertEquals(
-                    "B2 order: tools first, file management next, destructive last",
+                    "V3 order: export and tools first, file management next, destructive last",
                     listOf(
-                        "compress", "sign", "read_text", "share",
+                        "export", "compress", "sign",
                         "rename", "move", "duplicate", "lock", "vault", "trash"
                     ),
                     order
                 )
 
-                // One home per action: no save row — the toolbar's download icon is the only
-                // export left (§4.5).
+                // V3: the one export route is the sheet's named "Save copy to Documents" row.
                 val labels = allViews(sheet.window!!.decorView)
                     .filterIsInstance<TextView>()
                     .map { it.text?.toString() }
-                assertFalse("no save row in the sheet (§4.5)",
-                    labels.contains(activity.getString(R.string.save_pdf_device)))
+                assertTrue("the sheet has the named export row",
+                    labels.contains(activity.getString(R.string.doc_action_save_pdf)))
                 assertEquals("no OCR button in the sheet (D-E)", 0,
                     activity.resources.getIdentifier("btnOcr", "id", activity.packageName))
 

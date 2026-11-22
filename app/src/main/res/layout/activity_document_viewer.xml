@@ -2,15 +2,17 @@
 <!--
   UI-B6 (GPT judgement 2026-11-19b, item 1 — "Make Document the workspace").
 
-  The saved-document screen is the place the document is worked on, so it carries the seven
-  named actions in one panel: Edit / crop (the only filled cyan button), Read text, Share,
-  Compress, Sign (+ the gold word Pro while the build is Free), Save PDF and More. The old
-  icon-only toolbar Save is gone: exactly one visible Save PDF route remains.
+  V3 (screenshot critique runs 5-6): the saved-document screen keeps ONE compact dock row of
+  four actions -- Edit &amp; crop (the only filled cyan button), OCR, Share and Actions.
+  Compress, Sign and "Save copy to Documents" moved into the Actions sheet, together with the
+  rest of the secondary list. The dock prints no heading and no save explanation, and the
+  header is short so the document dominates. Compress / Sign / Save keep their ids and
+  listeners in a GONE container so the existing behaviour tests still drive the same handlers.
 
-  Standard type keeps the panel pinned at the bottom in a 4 + 3 row (3 + 3 + 1 on a 320 dp
-  phone). From 160 % type the panel moves INTO the scroll flow above the pages as two growing
-  columns (DocumentViewerActivity.applyActionPanel / moveActionPanel): one scroll owner, no
-  clipped labels, no ellipsis. Page tiles keep their tap, selection and reorder behaviour.
+  Standard type keeps the panel pinned at the bottom in one row. From 160 % type it moves INTO
+  the scroll flow above the pages as two growing columns
+  (DocumentViewerActivity.applyActionPanel / moveActionPanel): one scroll owner, no clipped
+  labels, no ellipsis. Page tiles keep their tap, selection and reorder behaviour.
 -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -78,17 +80,17 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="4dp">
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
 
             <TextView
                 android:id="@+id/docName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/manrope"
-                android:lineSpacingMultiplier="1.1"
+                android:lineSpacingMultiplier="1.05"
                 android:textColor="@color/text_hologram_hi"
-                android:textSize="20sp"
+                android:textSize="18sp"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -194,7 +196,7 @@
                 android:id="@id/ux130_l4_select_pages"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:drawableStart="@drawable/ic_sym_check_circle"
@@ -514,6 +516,9 @@
             android:paddingTop="8dp"
             android:paddingBottom="6dp">
 
+            <!-- V3: the dock no longer prints its own heading. The sheet is the one
+                 named "Document actions" surface; kept as a view for the source/tests
+                 that still bind it, but never shown to the person. -->
             <TextView
                 android:id="@+id/actionPanelTitle"
                 android:layout_width="match_parent"
@@ -521,7 +526,8 @@
                 android:text="@string/doc_actions_header"
                 android:textColor="@color/text_hologram_mid"
                 android:textSize="13sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <!-- Shown only while the document cannot hand its pages to a tool (locked or
                  Vault): the same words the Actions sheet prints under the disabled rows. -->
@@ -552,7 +558,7 @@
                     android:text="@string/doc_action_edit_crop"
                     android:textColor="@color/sw_disc_ink"
                     app:backgroundTint="@color/cyan_primary"
-                    app:icon="@drawable/ic_edit"
+                    app:icon="@drawable/ic_sym_edit"
                     app:iconTint="@color/sw_disc_ink" />
 
                 <com.google.android.material.button.MaterialButton
@@ -565,7 +571,7 @@
                     android:paddingHorizontal="2dp"
                     android:text="@string/dock_read_text"
                     app:backgroundTint="@color/glass_surface_raised"
-                    app:icon="@drawable/ic_ocr" />
+                    app:icon="@drawable/ic_sym_ocr" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnShare"
@@ -577,7 +583,31 @@
                     android:paddingHorizontal="2dp"
                     android:text="@string/share_pdf"
                     app:backgroundTint="@color/glass_surface_raised"
-                    app:icon="@drawable/ic_share" />
+                    app:icon="@drawable/ic_sym_share" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMore"
+                    style="@style/Widget.ScanWhirl.Button.DockItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="none"
+                    android:maxLines="3"
+                    android:paddingHorizontal="2dp"
+                    android:text="@string/doc_actions"
+                    app:backgroundTint="@color/glass_surface_raised"
+                    app:icon="@drawable/ic_sym_more_horiz" />
+            </LinearLayout>
+
+            <!-- V3: these three actions moved INTO the document Actions sheet. Their
+                 ids and click listeners stay here (GONE) so the existing, unchanged
+                 behaviour tests still drive the same guarded handlers by id; the
+                 person reaches them through the sheet's named rows instead. -->
+            <LinearLayout
+                android:id="@+id/hiddenDockActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCompress"
@@ -614,18 +644,6 @@
                     android:text="@string/doc_action_save_pdf"
                     app:backgroundTint="@color/glass_surface_raised"
                     app:icon="@drawable/ic_sym_download" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMore"
-                    style="@style/Widget.ScanWhirl.Button.DockItem"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="none"
-                    android:maxLines="3"
-                    android:paddingHorizontal="2dp"
-                    android:text="@string/more"
-                    app:backgroundTint="@color/glass_surface_raised"
-                    app:icon="@drawable/ic_sym_more_horiz" />
             </LinearLayout>
 
             <TextView
@@ -635,7 +653,8 @@
                 android:layout_marginTop="6dp"
                 android:text="@string/doc_action_save_hint"
                 android:textColor="@color/text_hologram_mid"
-                android:textSize="@dimen/ux_uxg_viewer_meta" />
+                android:textSize="@dimen/ux_uxg_viewer_meta"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -19,11 +19,12 @@
          actions. Labels are short enough for a quarter-width cell at 360 dp; the panel
          reflows to two growing columns at 160 % type instead of shrinking them. -->
     <string name="doc_action_edit_crop">Edit &amp; crop</string>
-    <string name="doc_action_save_pdf">Save PDF</string>
-    <!-- Where Save PDF puts the copy: Documents, never replacing or moving the library file. -->
+    <!-- V3: the export row in the Actions sheet says plainly what it does and where it goes. -->
+    <string name="doc_action_save_pdf">Save copy to Documents</string>
+    <!-- Kept for source/tests only: the dock no longer prints this explanation line. -->
     <string name="doc_action_save_hint">Save PDF adds a copy in Documents.</string>
-    <!-- Spoken name for the overflow-style More action (the visible word stays "More"). -->
-    <string name="doc_action_more_desc">More document actions</string>
+    <!-- Spoken name of the fourth dock cell; its visible label is the sheet's "Actions". -->
+    <string name="doc_action_more_desc">Document actions</string>
     <!-- The gold word on Sign while the build is Free. Never a paywall claim by itself. -->
     <string name="doc_action_pro">Pro</string>
 </resources>

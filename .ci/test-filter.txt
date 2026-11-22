@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.V3DockAndActionsTest,com.scanwhirl.app.ui.DocumentViewerReaderUiTest,com.scanwhirl.app.ui.DocumentWorkspace*Test,com.scanwhirl.app.ui.DocumentActionsSheetTest,com.scanwhirl.app.ui.SheetFooter*Test,com.scanwhirl.app.ui.Phase5ScreensTest,com.scanwhirl.app.ui.ImportPdfFixFlowTest,com.scanwhirl.app.ui.shell.LibraryRowActionsTest

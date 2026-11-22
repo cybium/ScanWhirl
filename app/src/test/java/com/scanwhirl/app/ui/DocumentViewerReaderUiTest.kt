@@ -27,16 +27,15 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * v2 UI: 07_reader_dock → UI-B6 (GPT judgement 2026-11-19b, item 1): the saved-document
- * screen is the workspace. Seven NAMED actions — Edit / crop (the only filled cyan button),
- * Read text, Share, Compress, Sign (+ the gold word Pro while Free), Save PDF and More — read
- * 4 + 3 at 360 dp, and from 160 % type the panel moves into the scroll flow above the pages as
- * two growing columns. The folder/category pill is sentence-case metadata, the name wraps and
- * is never ellipsized, the meta line reads "3 pages · 544 KB", and a long document's grid
- * keeps a visible vertical scrollbar and legible page badges.
+ * V3 (screenshot critique runs 5-6): the saved-document screen keeps ONE compact dock row of
+ * four NAMED actions — Edit &amp; crop (the only filled cyan button), OCR, Share and Actions.
+ * Compress, Sign and Save-copy moved into the Actions sheet. From 160 % type the panel moves
+ * into the scroll flow above the pages as two growing columns. The category pill is
+ * sentence-case metadata, the name wraps and is never ellipsized, the meta line reads
+ * "3 pages · 544 KB", and a long document's grid keeps a visible vertical scrollbar and
+ * legible page badges.
  *
- * Red first: originally written against the pre-B2 screen (Edit · Text · More · Share, four
- * across at any font scale); updated for B6 where the four-item dock became this panel.
+ * Red first: written against the seven-action 4 + 3 panel; updated for the V3 four-cell dock.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -119,20 +118,21 @@ class DocumentViewerReaderUiTest {
         }
     }
 
+    // V3: the dock is one compact row of four. Compress, Sign and Save moved into the
+    // Actions sheet; their ids remain in a GONE container for behaviour tests only.
     private val actionIds = listOf(
-        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnCompress,
-        R.id.btnSign, R.id.btnSavePdf, R.id.btnMore
+        R.id.btnEdit, R.id.btnText, R.id.btnShare, R.id.btnMore
     )
 
     // --- 1. the panel's order and shape -------------------------------------
 
     @Test
-    fun `the workspace reads seven named actions in one order`() {
+    fun `the workspace reads four named actions in one order`() {
         open { activity ->
             val buttons = actionButtons(activity)
-            assertEquals("the panel keeps its seven actions", 7, buttons.size)
+            assertEquals("the dock keeps its four actions", 4, buttons.size)
             assertEquals(
-                "Edit / crop · Read text · Share · Compress · Sign · Save PDF · More",
+                "Edit & crop · OCR · Share · Actions",
                 actionIds,
                 buttons.map { it.id }
             )
@@ -140,10 +140,7 @@ class DocumentViewerReaderUiTest {
                 R.string.doc_action_edit_crop,
                 R.string.dock_read_text,
                 R.string.share_pdf,
-                R.string.tool_compress,
-                R.string.tool_sign,
-                R.string.doc_action_save_pdf,
-                R.string.more
+                R.string.doc_actions
             )
             buttons.forEachIndexed { index, label ->
                 assertTrue(
@@ -153,25 +150,24 @@ class DocumentViewerReaderUiTest {
                 )
             }
             assertEquals(
-                "the panel names itself",
-                activity.getString(R.string.doc_actions_header),
-                activity.findViewById<TextView>(R.id.actionPanelTitle).text.toString()
+                "the dock no longer prints a heading",
+                View.GONE,
+                activity.findViewById<View>(R.id.actionPanelTitle).visibility
             )
             assertEquals(
-                "the panel says where the copy goes",
-                activity.getString(R.string.doc_action_save_hint),
-                activity.findViewById<TextView>(R.id.actionPanelHint).text.toString()
+                "the dock no longer prints a save explanation",
+                View.GONE,
+                activity.findViewById<View>(R.id.actionPanelHint).visibility
             )
         }
     }
 
     @Test
-    fun `at 100 percent the actions read four then three`() {
+    fun `at 100 percent the actions read one compact row of four`() {
         open { activity ->
             val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
             val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
-            assertEquals("four actions in the first row, three in the second",
-                listOf(4, 3), rows.map { it.childCount })
+            assertEquals("one row of four", listOf(4), rows.map { it.childCount })
         }
     }
 
@@ -192,7 +188,7 @@ class DocumentViewerReaderUiTest {
 
                 val grid = activity.findViewById<ViewGroup>(R.id.actionGrid)
                 val rows = (0 until grid.childCount).map { grid.getChildAt(it) as ViewGroup }
-                assertEquals("two columns at 200 %", listOf(2, 2, 2, 1), rows.map { it.childCount })
+                assertEquals("two columns at 200 %", listOf(2, 2), rows.map { it.childCount })
                 for (row in rows) {
                     for (i in 0 until row.childCount) {
                         val item = row.getChildAt(i) as TextView
@@ -208,11 +204,6 @@ class DocumentViewerReaderUiTest {
                         )
                     }
                 }
-                assertEquals(
-                    "the last action uses the full width rather than one column",
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    rows.last().getChildAt(0).layoutParams.width
-                )
 
                 // The sheet is the same named destination from the grid too.
                 activity.findViewById<View>(R.id.btnMore).performClick()
@@ -281,9 +272,9 @@ class DocumentViewerReaderUiTest {
                 activity.getString(R.string.dock_read_text)
             )
             assertEquals(
-                "More is everyday Hindi, not a loanword",
-                "और",
-                activity.getString(R.string.more)
+                "the fourth dock cell is the decided Actions name in Hindi",
+                "कार्रवाई",
+                activity.getString(R.string.doc_actions)
             )
             assertActionLabelsFit(activity)
         }
