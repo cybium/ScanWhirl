@@ -5,6 +5,8 @@
     <string name="v2v_failure_unreadable">यह फ़ाइल नहीं पढ़ी जा सकी। दूसरी फ़ाइल या बिना पासवर्ड वाली प्रति चुनें।</string>
     <string name="v2v_failure_no_space">जगह कम है। जगह खाली करें और फिर कोशिश करें।</string>
     <string name="v2v_failure_generic">यह कार्रवाई पूरी नहीं हो सकी। कुछ नहीं बदला है। फिर कोशिश करें।</string>
+    <string name="v2v_failure_image_unreadable">यह तस्वीर नहीं पढ़ी जा सकी। दूसरी तस्वीर चुनें।</string>
+    <string name="v2v_failure_image_too_large">यह तस्वीर 32 MB से बड़ी है। छोटी तस्वीर चुनें।</string>
 
     <!-- V2 -->
     <string name="v2v_saved_copy_title">प्रति सहेजी गई</string>
@@ -18,11 +20,13 @@
     <string name="v2v_trash_original_done">मूल फ़ाइल हटाई गई फ़ाइलों में चली गई। छिपाई गई प्रति रखी गई है।</string>
 
     <string name="v2v_apply_signature">सहेजा हुआ हस्ताक्षर सभी पन्नों पर लगाएँ</string>
-    <string name="v2v_apply_signature_short">हस्ताक्षर लगाएँ</string>
+    <string name="v2v_apply_signature_short">सभी पन्नों पर लगाएँ</string>
     <string name="v2v_apply_signature_preview">आपका सहेजा हुआ हस्ताक्षर हर पन्ने पर उसी जगह लगेगा। इसे एक चरण में वापस लिया जा सकता है।</string>
     <string name="v2v_apply_signature_apply">सभी पन्नों पर लगाएँ</string>
     <string name="v2v_apply_signature_undo">हस्ताक्षर सभी पन्नों पर लगाया गया</string>
     <string name="v2v_no_saved_signature">पहले हस्ताक्षर सहेजें, फिर उसे सभी पन्नों पर लगाएँ।</string>
+
+    <string name="v2v_find_none_title">कोई निजी जानकारी नहीं मिली</string>
 
     <string name="v2v_protected_banner">साझा करने पर यह सुरक्षित रहेगा। यहाँ के पन्ने आपके निजी कागज़ात में रहते हैं।</string>
 </resources>

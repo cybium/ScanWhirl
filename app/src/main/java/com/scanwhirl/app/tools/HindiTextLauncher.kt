@@ -8,6 +8,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.OcrReindex
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
+import com.scanwhirl.app.ui.V2vFailureCopy
 import com.scanwhirl.app.util.OcrEngine
 import com.scanwhirl.app.util.OcrLanguage
 import kotlinx.coroutines.launch
@@ -52,7 +53,7 @@ object HindiTextLauncher {
                     if (OcrEngine.isUnavailable(e)) {
                         activity.getString(R.string.ocr_unavailable_toast)
                     } else {
-                        activity.getString(R.string.page_op_failed, e.message)
+                        activity.getString(R.string.page_op_failed, V2vFailureCopy.message(activity, e))
                     },
                     Toast.LENGTH_LONG
                 ).show()

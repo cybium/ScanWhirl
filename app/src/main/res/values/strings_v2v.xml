@@ -7,6 +7,8 @@
     <string name="v2v_failure_unreadable">Could not read this file. Choose another file or an unprotected copy.</string>
     <string name="v2v_failure_no_space">Not enough free storage. Free some space and try again.</string>
     <string name="v2v_failure_generic">Could not finish. Nothing was changed. Try again.</string>
+    <string name="v2v_failure_image_unreadable">Could not read this image. Choose a different image.</string>
+    <string name="v2v_failure_image_too_large">This image is larger than 32 MB. Choose a smaller image.</string>
 
     <!-- V2: persistent redaction receipt and Trash route -->
     <string name="v2v_saved_copy_title">Copy saved</string>
@@ -20,13 +22,16 @@
     <string name="v2v_trash_original_done">Original moved to Trash. The redacted copy is kept.</string>
 
     <!-- V2: apply a saved signature to every page -->
-    <string name="v2v_apply_signature">Apply signature to selected pages</string>
-    <string name="v2v_apply_signature_short">Apply signature</string>
+    <string name="v2v_apply_signature">Apply signature to all pages</string>
+    <string name="v2v_apply_signature_short">Sign all pages</string>
     <string name="v2v_apply_signature_preview">Place your saved signature on every page at the same spot. You can undo this in one step.</string>
     <string name="v2v_apply_signature_apply">Apply to all pages</string>
     <string name="v2v_apply_signature_undo">Signature placed on all pages</string>
     <string name="v2v_no_saved_signature">Save a signature first, then apply it to all pages.</string>
 
     <!-- Protected document honesty -->
+    <!-- Find private info: an honest, persistent empty outcome in the sheet -->
+    <string name="v2v_find_none_title">No private info found</string>
+
     <string name="v2v_protected_banner">Protected when shared. Pages here stay in your private library.</string>
 </resources>
