@@ -141,7 +141,7 @@ class FormF2ActivityTest {
                     }
                     // Council title, not the old long "Form-ready photo and signature".
                     assertEquals(
-                        if (lang == "en") "Form photo & signature" else "फ़ॉर्म फ़ोटो और हस्ताक्षर",
+                        if (lang == "en") "Form photo" else "फ़ॉर्म फ़ोटो",
                         textOf(a, R.id.formReadyTitle)
                     )
                 } finally {
@@ -319,7 +319,7 @@ class FormF2ActivityTest {
             a.findViewById<EditText>(R.id.formReadyMinKb).setText("12")
             a.findViewById<EditText>(R.id.formReadyMaxKb).setText("5")
             idle()
-            assertEquals(app.getString(R.string.form1_kb_invalid), error.text.toString())
+            assertEquals(app.getString(R.string.form1_kb_max_below_min, 12), error.text.toString())
             assertFalse(a.findViewById<View>(R.id.formReadyApply).isEnabled)
 
             a.findViewById<EditText>(R.id.formReadyMinKb).setText("20")
@@ -423,8 +423,10 @@ class FormF2ActivityTest {
                 src.recycle()
             }
             val good = a.buildNoteForTest(result, 140, 60, 200)
-            assertTrue(good, good.contains(app.getString(R.string.form1_result_pixels_ok, 140, 60)))
-            assertTrue(good, good.contains(app.getString(R.string.form1_result_dpi_ok, 200)))
+            assertTrue(good, good.contains("140 × 60"))
+            assertFalse(good, good.contains("Pixels:"))
+            assertTrue(good, good.contains("200 DPI"))
+            assertFalse(good, good.contains("DPI:"))
             assertTrue(good, good.contains("KB band") || good.contains("KB सीमा"))
             assertTrue(good, good.contains(app.getString(R.string.form1_result_ready)))
 

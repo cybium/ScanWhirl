@@ -2,6 +2,9 @@
 <resources>
     <!-- FORM1: views are built in code (like PassportActivity), so their ids live here. -->
     <item name="formReadyTitle" type="id" />
+    <item name="formReadyNotice" type="id" />
+    <item name="formReadyAboutToggle" type="id" />
+    <item name="formReadyAboutDetails" type="id" />
     <item name="formReadyPresetPhoto" type="id" />
     <item name="formReadyPresetSignature" type="id" />
     <item name="formReadyPresetThumb" type="id" />
@@ -30,6 +33,8 @@
     <item name="formReadyCleanup" type="id" />
     <item name="formReadySavePreset" type="id" />
     <item name="formReadyUsePreset" type="id" />
+    <item name="formReadyPresetStatus" type="id" />
+    <item name="formReadyApplyBar" type="id" />
     <item name="formReadyCleanupPreview" type="id" />
     <item name="formReadyPreviewOriginal" type="id" />
     <item name="formReadyPreviewCleaned" type="id" />

@@ -149,7 +149,7 @@ class FormReadyActivityTest {
         assertTrue("note missing measured size: $note", note.contains("bytes"))
         assertTrue("note missing pixels: $note", note.contains("140") && note.contains("60"))
         assertTrue("note missing DPI: $note", note.contains("DPI"))
-        assertTrue("note must say the original is untouched: $note", note.contains("original"))
+        assertTrue("note must say the original is kept: $note", note.contains("original", ignoreCase = true))
     }
 
     @Test
