@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -91,6 +92,16 @@ class CompareView @JvmOverloads constructor(
     private var afterBitmap: Bitmap? = null
     private var beforeCrop: Rect? = null
     private var afterCrop: Rect? = null
+    /** A page that decoded but carries no ink must not paint a white rectangle. */
+    private var blankBefore = false
+    private var blankAfter = false
+
+    /**
+     * Each image pane is capped from the available screen height (not a fixed 132dp): on a
+     * 360x640dp phone both panes and the pinned action bar coexist at rest; on a taller phone
+     * they grow up to 170dp. The two 48dp labels and the zoom caption stay out of this budget.
+     */
+    private val paneHeight: Int
 
     /** The one in-flight decode; cancelled on a new bind and on detach. */
     private var decodeJob: Job? = null
@@ -101,6 +112,8 @@ class CompareView @JvmOverloads constructor(
     internal var decodeProbe: ((String) -> Unit)? = null
     /** Test seam: called with the identical crop rectangle chosen for each pane. */
     internal var cropProbe: ((Rect) -> Unit)? = null
+    /** Test seam: the ONE normalized (0..1) content rect shared by both panes. */
+    internal var relativeCropProbe: ((RectF) -> Unit)? = null
     /** Test seam: called after both images (or honest empty states) are rendered. */
     internal var onDecodeComplete: (() -> Unit)? = null
     /** Test seam: the bitmaps this view freed (after the ImageViews were cleared). */
@@ -108,6 +121,7 @@ class CompareView @JvmOverloads constructor(
 
     init {
         orientation = VERTICAL
+        paneHeight = SwStyle.dp(context, paneHeightDp())
         background = SwStyle.rounded(
             context, canvasColor(), 16f,
             stroke = ContextCompat.getColor(context, R.color.sw_cc_boundary), strokeDp = 1f
@@ -131,7 +145,7 @@ class CompareView @JvmOverloads constructor(
         beforePageFrame = newPageFrame()
         val beforePair = newPage(beforeFrame, beforePageFrame, R.id.ccBeforeImage)
         beforeImage = beforePair.second
-        addView(beforeFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(context, 132f)).apply { topMargin = SwStyle.dp(context, 4f) })
+        addView(beforeFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, paneHeight).apply { topMargin = SwStyle.dp(context, 4f) })
 
         afterLabel = newLabel(R.string.rs_after_size_label, R.string.cc_show_after).apply { id = R.id.ccAfterTab }
         addView(afterLabel, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = SwStyle.dp(context, 8f) })
@@ -140,7 +154,7 @@ class CompareView @JvmOverloads constructor(
         afterPageFrame = newPageFrame()
         val afterPair = newPage(afterFrame, afterPageFrame, R.id.ccAfterImage)
         afterImage = afterPair.second
-        addView(afterFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(context, 132f)).apply { topMargin = SwStyle.dp(context, 4f) })
+        addView(afterFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, paneHeight).apply { topMargin = SwStyle.dp(context, 4f) })
 
         pageChip = SwStyle.text(
             context, 14f, ContextCompat.getColor(context, R.color.sw_text_primary),
@@ -231,16 +245,98 @@ class CompareView @JvmOverloads constructor(
         return page to image
     }
 
+    /** App bar + pinned dock + bars + hero/receipt + labels fit inside the screen budget. */
+    private fun paneHeightDp(): Float {
+        val dm = resources.displayMetrics
+        val screenDp = dm.heightPixels / dm.density.coerceAtLeast(0.01f)
+        val reservedDp = 56f + 176f + 24f + 132f + 138f
+        return ((screenDp - reservedDp) / 2f).coerceIn(52f, 170f)
+    }
+
+    /** The legacy fallback, used only when neither page has detectable ink. */
+    private fun fallbackRect(): RectF = RectF(0.06f, 0.08f, 0.46f, 0.42f)
+
+    private fun hasInk(px: Int): Boolean {
+        if (Color.alpha(px) < 200) return true
+        return Color.red(px) < 235 || Color.green(px) < 235 || Color.blue(px) < 235
+    }
+
     /**
-     * The same normalized top-left text-block region for both pages (40% of the width => ~2.5x
-     * zoom). Both panes use this exact rectangle and the same full-width display box.
+     * Content-aware page box in normalized (0..1) coordinates. Near-white margins, the white
+     * letterbox bars of a borders-mode resize, and a blank rendered page are ignored. Sampled on
+     * a grid so a full page render never blocks for long. Null means "essentially blank".
      */
-    internal fun zoomRect(width: Int, height: Int): Rect = Rect(
-        (width * 0.06f).toInt(),
-        (height * 0.08f).toInt(),
-        (width * 0.46f).toInt(),
-        (height * 0.42f).toInt()
-    )
+    internal fun contentBox(bitmap: Bitmap): RectF? {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w < 8 || h < 8) return null
+        val step = maxOf(1, minOf(w, h) / 100)
+        var minX = w
+        var minY = h
+        var maxX = -1
+        var maxY = -1
+        var ink = 0
+        var samples = 0
+        var y = 0
+        while (y < h) {
+            var x = 0
+            while (x < w) {
+                samples++
+                if (hasInk(bitmap.getPixel(x, y))) {
+                    ink++
+                    if (x < minX) minX = x
+                    if (y < minY) minY = y
+                    if (x > maxX) maxX = x
+                    if (y > maxY) maxY = y
+                }
+                x += step
+            }
+            y += step
+        }
+        if (ink < 4 || ink * 1000 < samples) return null
+        return RectF(
+            minX.toFloat() / w, minY.toFloat() / h,
+            (maxX + 1).toFloat() / w, (maxY + 1).toFloat() / h
+        )
+    }
+
+    /**
+     * ONE relative crop for both panes: the union of their content boxes (or the one side that
+     * has ink). Padding and a minimum size keep the zoom legible; letterbox bars never win.
+     */
+    internal fun sharedRect(before: RectF?, after: RectF?): RectF {
+        // No ink on either side: keep the legacy fixed zoom exactly (no padding, no drift).
+        if (before == null && after == null) return fallbackRect()
+        val base = when {
+            before != null && after != null -> RectF(
+                minOf(before.left, after.left), minOf(before.top, after.top),
+                maxOf(before.right, after.right), maxOf(before.bottom, after.bottom)
+            )
+            before != null -> RectF(before)
+            after != null -> RectF(after)
+            else -> fallbackRect()
+        }
+        val cx = (base.left + base.right) / 2f
+        val cy = (base.top + base.bottom) / 2f
+        val hw = ((base.right - base.left) / 2f + 0.03f).coerceIn(0.15f, 0.5f)
+        val hh = ((base.bottom - base.top) / 2f + 0.03f).coerceIn(0.11f, 0.5f)
+        var left = (cx - hw).coerceIn(0f, 1f - 2f * hw)
+        var top = (cy - hh).coerceIn(0f, 1f - 2f * hh)
+        if (left < 0f) left = 0f
+        if (top < 0f) top = 0f
+        return RectF(left, top, left + 2f * hw, top + 2f * hh)
+    }
+
+    internal fun rectFor(relative: RectF, width: Int, height: Int): Rect {
+        val l = (relative.left * width).toInt().coerceIn(0, (width - 1).coerceAtLeast(0))
+        val t = (relative.top * height).toInt().coerceIn(0, (height - 1).coerceAtLeast(0))
+        val r = (relative.right * width).toInt().coerceIn((l + 1).coerceAtMost(width), width)
+        val b = (relative.bottom * height).toInt().coerceIn((t + 1).coerceAtMost(height), height)
+        return Rect(l, t, r, b)
+    }
+
+    /** Kept for callers/tests that assert the old fixed fallback on an all-white page. */
+    internal fun zoomRect(width: Int, height: Int): Rect = rectFor(fallbackRect(), width, height)
 
     internal fun zoomRects(): Pair<Rect?, Rect?> = beforeCrop to afterCrop
 
@@ -260,6 +356,8 @@ class CompareView @JvmOverloads constructor(
         releaseBitmaps()
         beforeCrop = null
         afterCrop = null
+        blankBefore = false
+        blankAfter = false
 
         this.model = model
         outcomeView.text = model.outcome
@@ -319,14 +417,25 @@ class CompareView @JvmOverloads constructor(
         decodeJob = scope.launch {
             val before = decode(beforePath, canDecode)
             val after = decode(afterPath, canDecode)
-            // Crop both with the same rule, off Main, then free the full decoded pages.
-            val bc = before?.let { zoomRect(it.width, it.height) }
-            val ac = after?.let {
-                if (model.mode == CompareMode.AFTER_ONLY) Rect(0, 0, it.width, it.height)
-                else zoomRect(it.width, it.height)
+            val afterOnly = model.mode == CompareMode.AFTER_ONLY
+            // Ink boxes are measured off Main; one relative rect is then shared by BOTH pages,
+            // so a near-white margin or a resize letterbox never dominates the comparison.
+            val beforeBox = before?.let { contentBox(it) }
+            val afterBox = after?.let { contentBox(it) }
+            val blankB = before != null && beforeBox == null
+            val blankA = after != null && afterBox == null
+            val shared = if (afterOnly) null else sharedRect(beforeBox, afterBox)
+            shared?.let { relativeCropProbe?.invoke(it) }
+            val bc = if (before != null && !afterOnly) {
+                shared?.let { rectFor(it, before.width, before.height) }
+            } else null
+            val ac = when {
+                after == null -> null
+                afterOnly -> Rect(0, 0, after.width, after.height)
+                else -> shared?.let { rectFor(it, after.width, after.height) }
             }
-            val beforeCropBitmap = if (before != null && bc != null) crop(before, bc) else null
-            val afterCropBitmap = if (after != null && ac != null) crop(after, ac) else null
+            val beforeCropBitmap = if (!blankB && before != null && bc != null) crop(before, bc) else null
+            val afterCropBitmap = if (!blankA && after != null && ac != null) crop(after, ac) else null
             before?.recycle()
             if (after !== before) after?.recycle()
             withContext(mainDispatcher) {
@@ -339,6 +448,8 @@ class CompareView @JvmOverloads constructor(
                 afterBitmap = afterCropBitmap
                 beforeCrop = bc
                 afterCrop = ac
+                blankBefore = blankB || (beforePath != null && before == null)
+                blankAfter = blankA || (afterPath != null && after == null)
                 bc?.let { cropProbe?.invoke(it) }
                 ac?.let { cropProbe?.invoke(it) }
                 render()
@@ -348,15 +459,26 @@ class CompareView @JvmOverloads constructor(
     }
 
     private fun renderEmpty() {
+        val m = model ?: return
         val lines = mutableListOf<String>()
-        model?.let { m ->
-            if (m.mode == CompareMode.ZOOM_STACKED && m.before.imagePath == null) {
-                m.before.emptyText?.let { lines.add(it) }
+        if (m.mode == CompareMode.ZOOM_STACKED) {
+            when {
+                m.before.imagePath == null -> m.before.emptyText?.let { lines.add(it) }
+                blankBefore -> lines.add(
+                    context.getString(R.string.cc_blank_page_before, m.before.caption)
+                )
             }
-            if (m.after.imagePath == null) m.after.emptyText?.let { lines.add(it) }
+        }
+        when {
+            m.after.imagePath == null -> m.after.emptyText?.let { lines.add(it) }
+            blankAfter -> lines.add(context.getString(R.string.cc_blank_page_after, m.after.caption))
         }
         detail.text = lines.joinToString("\n")
         detail.visibility = if (lines.isEmpty()) GONE else VISIBLE
+        // A missing or blank side never keeps a white paper rectangle on screen. The honest
+        // text above sits on the dark canvas surface instead.
+        beforePageFrame.visibility = if (beforeBitmap == null) GONE else VISIBLE
+        afterPageFrame.visibility = if (afterBitmap == null) GONE else VISIBLE
     }
 
     private fun crop(source: Bitmap, rect: Rect): Bitmap? = try {
@@ -447,6 +569,9 @@ class CompareView @JvmOverloads constructor(
     internal fun beforeButton(): TextView = beforeLabel
     internal fun afterButton(): TextView = afterLabel
     internal fun beforeImageView(): ImageView = beforeImage
+    internal fun paneHeightPx(): Int = paneHeight
+    internal fun beforePageFrameView(): FrameLayout = beforePageFrame
+    internal fun blankFlags(): Pair<Boolean, Boolean> = blankBefore to blankAfter
     internal fun isShowingAfter(): Boolean = true
     internal fun showBefore() = Unit
     internal fun showAfter() = Unit

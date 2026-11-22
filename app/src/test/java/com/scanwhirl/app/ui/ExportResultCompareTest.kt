@@ -35,6 +35,12 @@ abstract class ExportResultCompareBase {
     private fun jpeg(name: String, w: Int, h: Int): File {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         bmp.eraseColor(Color.WHITE)
+        // Real page ink: a fully white fixture is now correctly hidden as a blank page.
+        for (y in (h * 0.1f).toInt() until (h * 0.5f).toInt()) {
+            for (x in (w * 0.15f).toInt() until (w * 0.7f).toInt()) {
+                if ((x + y) % 9 == 0) bmp.setPixel(x, y, Color.BLACK)
+            }
+        }
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, 90, out)
         bmp.recycle()
@@ -53,7 +59,8 @@ abstract class ExportResultCompareBase {
         previewPath = after?.path,
         mime = "image/jpeg",
         displayName = "photo.jpg",
-        beforeBytes = 290_000L,
+        // The measured source size is authority; a missing source keeps the legacy 290 KB sample.
+        beforeBytes = before?.length() ?: 290_000L,
         afterBytes = 113_000L,
         width = 900, height = 1200,
         title = "photo.jpg", warning = null,
@@ -201,6 +208,11 @@ class ExportResultCompareHiTest : ExportResultCompareBase() {
     private fun jpegH(name: String, w: Int, h: Int): File {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         bmp.eraseColor(Color.WHITE)
+        for (y in (h * 0.12f).toInt() until (h * 0.5f).toInt()) {
+            for (x in (w * 0.2f).toInt() until (w * 0.7f).toInt()) {
+                if ((x + y) % 9 == 0) bmp.setPixel(x, y, Color.BLACK)
+            }
+        }
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, 90, out)
         bmp.recycle()

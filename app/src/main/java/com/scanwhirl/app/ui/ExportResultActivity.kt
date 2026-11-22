@@ -73,8 +73,16 @@ class ExportResultActivity : BaseActivity() {
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         // SECURITY_JUDGE 1.3.0: resolve a protected document's policy before any preview.
         com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
-        beforeBytes = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)?.let { File(it) }
-            ?.takeIf { it.isFile }?.length() ?: intent.getLongExtra(EXTRA_BEFORE, 0L)
+        // By default the preview FILE is the size authority (a caller may not know the source
+        // size). Resize opts into its measured source bytes with EXTRA_BEFORE_AUTHORITATIVE:
+        // its preview is only a bounded cache copy, not the photo.
+        val previewBytes = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)?.let { File(it) }
+            ?.takeIf { it.isFile }?.length()
+        beforeBytes = if (intent.getBooleanExtra(EXTRA_BEFORE_AUTHORITATIVE, false)) {
+            intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0L } ?: previewBytes ?: 0L
+        } else {
+            previewBytes ?: intent.getLongExtra(EXTRA_BEFORE, 0L)
+        }
         afterBytes = outputPath?.let { File(it) }?.takeIf { it.isFile }?.length() ?: 0L
         isPdf = mime == "application/pdf"
 
@@ -389,6 +397,7 @@ class ExportResultActivity : BaseActivity() {
         private const val EXTRA_WIDTH = "width"
         private const val EXTRA_HEIGHT = "height"
         private const val EXTRA_BEFORE_PREVIEW = "before_preview_path"
+        private const val EXTRA_BEFORE_AUTHORITATIVE = "before_bytes_authoritative"
         private const val EXTRA_BEFORE_WIDTH = "before_width"
         private const val EXTRA_BEFORE_HEIGHT = "before_height"
         private const val EXTRA_TITLE = "title"
@@ -411,6 +420,7 @@ class ExportResultActivity : BaseActivity() {
             docId: String? = null,
             summary: String? = null,
             beforePreviewPath: String? = null,
+            beforeBytesAuthoritative: Boolean = false,
             beforeWidth: Int = 0,
             beforeHeight: Int = 0,
             outcome: String? = null,
@@ -429,6 +439,7 @@ class ExportResultActivity : BaseActivity() {
             .putExtra(EXTRA_DOC_ID, docId)
             .putExtra(EXTRA_SUMMARY, summary)
             .putExtra(EXTRA_BEFORE_PREVIEW, beforePreviewPath)
+            .putExtra(EXTRA_BEFORE_AUTHORITATIVE, beforeBytesAuthoritative)
             .putExtra(EXTRA_BEFORE_WIDTH, beforeWidth)
             .putExtra(EXTRA_BEFORE_HEIGHT, beforeHeight)
             .putExtra("compare_outcome", outcome)

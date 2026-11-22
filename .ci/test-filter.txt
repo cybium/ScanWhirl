@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.kit.*,com.scanwhirl.app.ui.ExportResultCompare*,com.scanwhirl.app.ui.CompareLifecycleTest,com.scanwhirl.app.ui.tools.ResizeBeforePreviewTest,com.scanwhirl.app.ui.tools.ResultPreviewLayoutTest,com.scanwhirl.app.ui.tools.RsReviewSafetyTest,com.scanwhirl.app.tools.*Resize*
