@@ -110,6 +110,11 @@ STAGING_PDFS = ("marksheet_scan_300dpi.pdf", "rent_agreement_5p.pdf",
 # The legacy `create_disc_desc` ("Scan or import a document") is NOT in the real
 # hierarchy, so it is deliberately never used as a fallback.
 SAF_ROOT_DESC = "Show roots"
+# The test DocumentsProvider (app/src/testHarness/AndroidManifest.xml:5-14) has no
+# android:label, so SAF lists it under the APPLICATION label. Only these bounded
+# root labels may ever be chosen; generic roots are explicitly excluded.
+SAF_FORBIDDEN_ROOTS = frozenset({"Downloads", "Download", "Recent", "Images", "Videos"})
+LEGACY_FIXTURE_ROOT = "ScanWhirl test fixtures"
 IMPORT_CONSENT_TEXT = "Import all"   # DevicePdfGate decision sheet (explicit consent)
 IMPORT_KEEP_TEXT = "Keep"            # import retention sheet
 PDF_MARKER = b"%PDF"
@@ -619,14 +624,61 @@ def prepare_library():
     return mapping
 
 
+def provider_root_labels():
+    """Bounded labels for the test-fixtures DocumentsProvider root.
+
+    The provider has no android:label (testHarness manifest), so DocumentsUI
+    lists it under the APPLICATION label. `strings("en")["app_name"]` reads that
+    shipped resource directly; no aapt/badging is needed inside the driver. The
+    legacy literal stays as a second bounded label. Nothing else is accepted.
+    """
+    return {strings("en")["app_name"], LEGACY_FIXTURE_ROOT}
+
+
+def select_provider_root():
+    """Tap the unique bounded provider root in the just-opened roots list.
+
+    Requires the 'Show roots' control, excludes generic roots by exact label, and
+    refuses ambiguity. Choosing a root never implies success: the file listing is
+    still validated by exact name/stem and the imported doc by name + %PDF.
+    """
+    root = hierarchy()
+    if not any(node_desc(n) == SAF_ROOT_DESC for n in root.iter("node")):
+        return False
+    labels = provider_root_labels()
+    hits = []
+    for node in root.iter("node"):
+        label = node_text(node) or node_desc(node)
+        if label in labels and label not in SAF_FORBIDDEN_ROOTS:
+            hits.append(node)
+    if len(hits) != 1:
+        note(f"SAF roots: {len(hits)} bounded provider-label matches; not selecting")
+        return False
+    tap_node(root, hits[0])
+    note(f"SAF: selected provider root {node_text(hits[0]) or node_desc(hits[0])!r}")
+    return True
+
+
+def fixture_row_matches(root, name):
+    """Exact filename OR exact stem only: receipt_aug never matches receipt_aug_2."""
+    wanted = {name, Path(name).stem}
+    return [node for node in root.iter("node") if node_text(node) in wanted]
+
+
 def await_fixture_row(name, timeout=12):
-    """Poll the live hierarchy for the EXACT fixture name; never a loose match."""
+    """Poll for exactly one fixture row; two matches fail closed, never guessed."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            return find(hierarchy(), text=name)
-        except AssertionError:
-            time.sleep(0.5)
+            rows = fixture_row_matches(hierarchy(), name)
+        except Exception:  # noqa: BLE001 - a failed dump is a retry, not a match
+            rows = []
+        if len(rows) == 1:
+            return rows[0]
+        if len(rows) > 1:
+            note(f"SAF: {len(rows)} ambiguous rows for {name}; refusing")
+            return None
+        time.sleep(0.5)
     return None
 
 
@@ -637,9 +689,8 @@ def choose_fixture_in_saf(name):
         soft_tap(desc=SAF_ROOT_DESC)
     except AssertionError:
         note("SAF 'Show roots' not found (picker may already list files)")
-    # The test APK ships a DocumentsProvider named exactly this; SAF lists it as a root.
-    if soft_tap(text="ScanWhirl test fixtures"):
-        note("SAF: using ScanWhirl test fixtures provider")
+    if select_provider_root():
+        note("SAF: using the test fixtures provider root")
     else:
         soft_tap(text=adb("shell", "getprop", "ro.product.model"))
         try:
@@ -653,18 +704,19 @@ def choose_fixture_in_saf(name):
         except AssertionError:
             note("SAF: could not reach a files root")
     shot("picker")
-    # SAF loads folder contents asynchronously: the dump right after tapping the
-    # ScanWhirlQA folder can still show the parent listing. Poll for the EXACT name,
-    # then dump and retry once, and only then tap it exactly once. No fuzzy match
-    # and no new entry/fallback selector.
-    if await_fixture_row(name) is None:
+    # SAF loads folder contents asynchronously; the dump after a folder tap can
+    # still show the parent. Poll for the exact filename/stem, dump and retry once,
+    # then tap the unique row exactly once. No loose matching or new entry fallback.
+    row = await_fixture_row(name)
+    if row is None:
         shot("picker_retry")
-        if await_fixture_row(name) is None:
-            note(f"SAF: fixture {name} not listed after bounded poll")
-            back()
-            return False
+        row = await_fixture_row(name)
+    if row is None:
+        note(f"SAF: fixture {name} not listed uniquely after bounded poll")
+        back()
+        return False
     try:
-        tap(text=name)              # fresh hierarchy, exact text, one tap
+        tap(text=node_text(row))    # fresh hierarchy, exact visible label, one tap
     except AssertionError:
         note(f"SAF: fixture {name} not tappable after poll")
         back()

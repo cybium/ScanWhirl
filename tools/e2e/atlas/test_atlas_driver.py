@@ -438,15 +438,63 @@ class AtlasImportEntryTests(unittest.TestCase):
             self.assertFalse(a.reach_pdf_picker())
         self.assertEqual(len(tapped), 1, "a stale screen must not be tapped twice")
 
+    def test_provider_root_selected_by_app_label(self):
+        # Provider has no android:label; SAF shows the shipped application label.
+        app_label = a.strings("en")["app_name"]
+        roots = self._hierarchy(texts=("Downloads", app_label), descs=(a.SAF_ROOT_DESC,))
+        tapped = []
+        with patch.object(a, "hierarchy", return_value=roots), \
+             patch.object(a, "tap_node",
+                          side_effect=lambda r, n: tapped.append(a.node_text(n))), \
+             patch.object(a, "note"):
+            self.assertTrue(a.select_provider_root())
+        self.assertEqual(tapped, [app_label])
+
+    def test_provider_root_ambiguity_and_generic_roots_refused(self):
+        app_label = a.strings("en")["app_name"]
+        roots = self._hierarchy(texts=("Downloads", "Recent", app_label, app_label),
+                                descs=(a.SAF_ROOT_DESC,))
+        with patch.object(a, "hierarchy", return_value=roots), \
+             patch.object(a, "tap_node") as do_tap, patch.object(a, "note"):
+            self.assertFalse(a.select_provider_root())
+        do_tap.assert_not_called()
+        # No 'Show roots' control means we are not in the roots list.
+        bare = self._hierarchy(texts=(app_label,))
+        with patch.object(a, "hierarchy", return_value=bare), \
+             patch.object(a, "tap_node") as do_tap, patch.object(a, "note"):
+            self.assertFalse(a.select_provider_root())
+        do_tap.assert_not_called()
+
+    def test_fixture_stem_match_grid(self):
+        grid = self._hierarchy(texts=("receipt_aug",))
+        rows = a.fixture_row_matches(grid, "receipt_aug.pdf")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(a.node_text(rows[0]), "receipt_aug")
+        with patch.object(a, "hierarchy", return_value=grid), \
+             patch.object(a, "note"), patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 0]):
+            self.assertEqual(a.node_text(a.await_fixture_row("receipt_aug.pdf")),
+                             "receipt_aug")
+
+    def test_fixture_stem_does_not_match_suffixed_name(self):
+        grid = self._hierarchy(texts=("receipt_aug_2", "receipt_aug_2.pdf"))
+        self.assertEqual(a.fixture_row_matches(grid, "receipt_aug.pdf"), [])
+
+    def test_fixture_ambiguity_fails_closed(self):
+        grid = self._hierarchy(texts=("receipt_aug.pdf", "receipt_aug"))
+        self.assertEqual(len(a.fixture_row_matches(grid, "receipt_aug.pdf")), 2)
+        with patch.object(a, "hierarchy", return_value=grid), \
+             patch.object(a, "note") as noted, patch.object(a.time, "sleep"):
+            self.assertIsNone(a.await_fixture_row("receipt_aug.pdf"))
+        self.assertTrue(any("ambiguous" in str(c) for c in noted.call_args_list))
+
     def test_choose_fixture_in_saf_taps_fixture_once(self):
+        row = list(self._hierarchy(texts=("receipt_sep.pdf",)).iter("node"))[0]
         fixture_taps = []
-
-        def fake_soft_tap(**want):
-            return want.get("text") == "ScanWhirl test fixtures"
-
         with patch.object(a, "wait"), \
-             patch.object(a, "soft_tap", side_effect=fake_soft_tap), \
-             patch.object(a, "await_fixture_row", return_value=object()), \
+             patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "select_provider_root", return_value=False), \
+             patch.object(a, "await_fixture_row", return_value=row), \
              patch.object(a, "tap", side_effect=lambda **w: fixture_taps.append(w)), \
              patch.object(a, "shot"), patch.object(a, "note"), \
              patch.object(a, "adb", return_value="Pixel"), \
@@ -465,6 +513,7 @@ class AtlasImportEntryTests(unittest.TestCase):
 
         with patch.object(a, "wait"), \
              patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "select_provider_root", return_value=False), \
              patch.object(a, "shot"), patch.object(a, "note"), \
              patch.object(a, "adb", return_value="Pixel"), \
              patch.object(a, "back") as do_back, \
@@ -478,9 +527,27 @@ class AtlasImportEntryTests(unittest.TestCase):
         self.assertEqual(fixture_taps, [{"text": "marksheet_scan_300dpi.pdf"}],
                          "the located fixture must be tapped exactly once")
 
+    def test_choose_fixture_in_saf_grid_stem_taps_once(self):
+        grid = self._hierarchy(texts=("receipt_aug",))
+        tapped = []
+        with patch.object(a, "wait"), \
+             patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "select_provider_root", return_value=True), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a, "adb", return_value="Pixel"), \
+             patch.object(a, "back") as do_back, \
+             patch.object(a, "hierarchy", return_value=grid), \
+             patch.object(a, "tap", side_effect=lambda **w: tapped.append(w)), \
+             patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 0]):
+            self.assertTrue(a.choose_fixture_in_saf("receipt_aug.pdf"))
+        self.assertEqual(tapped, [{"text": "receipt_aug"}])
+        do_back.assert_not_called()
+
     def test_choose_fixture_in_saf_missing_file_is_false(self):
         with patch.object(a, "wait"), \
              patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "select_provider_root", return_value=False), \
              patch.object(a, "await_fixture_row", return_value=None), \
              patch.object(a, "shot"), patch.object(a, "note"), \
              patch.object(a, "adb", return_value="Pixel"), \
