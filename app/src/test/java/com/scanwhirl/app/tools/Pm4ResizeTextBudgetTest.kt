@@ -117,6 +117,7 @@ class Pm4ResizeEnglishTextBudgetTest {
         val dp48 = SwStyle.dp(activity, 48f)
         assertEquals("width field touch target", dp48, b.editWidth.layoutParams.height)
         assertEquals("height field touch target", dp48, b.editHeight.layoutParams.height)
+        assertEquals("size limit field touch target", dp48, b.editMaxSize.layoutParams.height)
         assertEquals("info button touch target", dp48, b.btnResizeInfo.layoutParams.height)
         assertNotNull("info button needs a TalkBack label", b.btnResizeInfo.contentDescription)
         val detail = activity.getString(R.string.resize_info_detail)

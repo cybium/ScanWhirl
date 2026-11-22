@@ -262,17 +262,22 @@ class ResizeFlow(
      * system must fail fast, never spin or block the main thread. The parent is
      * created once; only a genuine name collision is retried, with a small bound.
      */
-    fun resizeOutputDir(cacheDir: File): File {
+    fun resizeOutputDir(cacheDir: File): File = resizeOutputDirNamed(cacheDir) {
+        "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
+    }
+
+    /** Deterministic candidate generator only for collision regression tests. */
+    internal fun resizeOutputDirNamed(cacheDir: File, nextName: () -> String): File {
         val root = File(cacheDir, "documents/resize")
         if (!root.isDirectory && !root.mkdirs() && !root.isDirectory) {
             throw IOException("Cannot create resize output folder: ${root.path}")
         }
         for (attempt in 0 until MAX_OUTPUT_DIR_ATTEMPTS) {
-            val candidate = File(
-                root, "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
-            )
+            val candidate = File(root, nextName())
             if (candidate.mkdir()) return candidate
-            if (candidate.isDirectory) return candidate // lost a race, still a valid folder
+            // A pre-existing folder belongs to another output. Never reuse it:
+            // its deterministic file name could otherwise be overwritten.
+            if (candidate.isDirectory) continue
             if (!candidate.exists()) {
                 // Not a collision: the file system refused the write (e.g. no space).
                 throw IOException("Cannot create resize output folder: ${candidate.path}")
@@ -299,16 +304,19 @@ class ResizeFlow(
                         )
                     )
                 }
-                val dir = withContext(Dispatchers.IO) { resizeOutputDir(activity.cacheDir) }
+                // Rejected (not-smaller) results have no output file. Don't reserve
+                // a folder for them: a full cache must not turn an honest rejection
+                // into a misleading storage failure.
+                val dir = if (rejected) null else withContext(Dispatchers.IO) { resizeOutputDir(activity.cacheDir) }
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val fileName = "${base}_${result.width}x${result.height}.jpg"
-                val file = File(dir, fileName)
+                val file = dir?.let { File(it, fileName) }
                 // Decide before writing even a cache result. Activity death cannot leave a grown copy.
-                if (!rejected) withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
+                if (!rejected) withContext(Dispatchers.IO) { requireNotNull(file).writeBytes(result.bytes) }
 
                 // Report from the saved file, decoded again, not from the request.
                 val saved = withContext(Dispatchers.IO) {
-                    val raw = if (rejected) result.bytes else file.readBytes()
+                    val raw = if (rejected) result.bytes else requireNotNull(file).readBytes()
                     val dims = ImageTools.imageSize(raw)
                     Triple(raw.size.toLong(), dims?.first, dims?.second)
                 }
@@ -322,8 +330,8 @@ class ResizeFlow(
                 activity.startActivity(
                     ExportResultActivity.intent(
                         activity,
-                        outputPath = if (rejected) "" else file.path,
-                        previewPath = if (rejected) null else file.path,
+                        outputPath = file?.path.orEmpty(),
+                        previewPath = file?.path,
                         mime = result.mime,
                         displayName = fileName,
                         beforeBytes = bytes.size.toLong(),
