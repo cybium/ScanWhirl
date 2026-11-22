@@ -1,4 +1,6 @@
 package com.scanwhirl.app.util
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.content.Context
 import android.net.Uri
@@ -28,6 +30,8 @@ import java.io.File
 @Config(sdk = [35])
 class OcrEditorTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
 

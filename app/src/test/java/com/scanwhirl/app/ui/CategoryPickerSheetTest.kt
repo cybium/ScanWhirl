@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Dialog
@@ -31,6 +33,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class CategoryPickerSheetTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     @Test
     fun `five rows when the current category is one of the five`() {
         withSheet(CategoryRules.STUDY) { _, rows, _ ->

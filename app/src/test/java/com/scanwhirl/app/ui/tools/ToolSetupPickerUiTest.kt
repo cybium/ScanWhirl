@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -45,6 +46,8 @@ import java.util.Locale
 class ToolSetupPickerUiTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.kit
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.drawable.InsetDrawable
@@ -41,6 +43,8 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class Kt1KitFixesTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 

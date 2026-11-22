@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Looper
@@ -44,6 +46,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 abstract class U4QuickToolsBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected val hi: Boolean get() = app.resources.configuration.locales[0].language == "hi"
 

@@ -1,4 +1,5 @@
 package com.scanwhirl.app.util
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -48,6 +49,8 @@ import java.io.File
 class DeleteExportsTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private lateinit var media: FakeMediaStore

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.v2r
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.app.Dialog
@@ -35,6 +37,8 @@ import java.io.File
 @Config(sdk = [35])
 class V2RVaultMoveBackTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var store: VaultStore
     private var controller: ActivityController<VaultActivity>? = null

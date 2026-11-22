@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -56,6 +57,8 @@ import java.io.File
 class HomeSlice2Test {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
 
@@ -586,6 +589,8 @@ class HomeSlice2Test {
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class HomeSlice2LargeTextTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     @Test(timeout = 60_000)
     fun `rows status and dock fit at 200 percent on 320dp`() {
         val app = ApplicationProvider.getApplicationContext<Application>()

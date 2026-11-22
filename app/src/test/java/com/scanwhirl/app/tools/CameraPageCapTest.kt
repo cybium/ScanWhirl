@@ -1,4 +1,5 @@
 package com.scanwhirl.app.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -48,6 +49,8 @@ import java.util.Locale
 class CameraPageCapTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
     private var n = 0

@@ -42,7 +42,13 @@ if ($Tests -and $Local -and $slotBusy -and -not $evalish -and -not $Apk) {
     Write-Output "gate: -Local ignored because the build slot is busy -> CLOUD (no waiting in line)"
     $Local = [switch]$false
 }
-$cloudTests = $Tests -and $slotBusy -and -not $evalish -and -not $Local -and -not $Apk
+# 2026-11-22: the PC has 7.5 GB RAM; targeted -Tests runs go to the CLOUD unless the lead explicitly
+# sets SW_LEAD_LOCAL=1 (evals on private files still run locally).
+if ($Tests -and $Local -and $env:SW_LEAD_LOCAL -ne '1' -and -not $evalish) {
+    Write-Output "gate: -Local ignored for lanes (PC memory) -> CLOUD"
+    $Local = [switch]$false
+}
+$cloudTests = $Tests -and -not $evalish -and -not $Local -and -not $Apk
 if ($Tests -and -not $cloudTests -and -not $Apk) { Write-Output ("tests: running locally (" + $(if ($evalish) { "eval on private files" } elseif ($Local) { "-Local" } else { "build slot free" }) + ")") }
 if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
     $gh = "C:\Program Files\GitHub CLI\gh.exe"

@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 
 import android.app.Activity
 import android.app.Application
@@ -56,6 +57,8 @@ import kotlin.math.abs
 abstract class W7CreateBase {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected lateinit var repo: ScanRepository
 
@@ -154,6 +157,7 @@ abstract class W7CreateBase {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class W7CreateImportRoutingTest : W7CreateBase() {
+
 
     private fun openCreate(activity: ShellActivity): Dialog {
         activity.findViewById<View>(R.id.swNavScan).performClick()
@@ -312,6 +316,7 @@ class W7CreateImportRoutingTest : W7CreateBase() {
 @Config(sdk = [35], qualifiers = "w360dp-h740dp-xhdpi")
 class W7ToolsExpansionTest : W7CreateBase() {
 
+
     private fun toolsTab(block: (ShellActivity, ViewGroup) -> Unit) {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -425,6 +430,7 @@ class W7ToolsExpansionTest : W7CreateBase() {
 @Config(sdk = [35], qualifiers = "w360dp-h740dp-xhdpi")
 class W7ToolsSearchVisibilityTest : W7CreateBase() {
 
+
     private fun toolsTab(block: (ShellActivity, ViewGroup) -> Unit) {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -507,6 +513,7 @@ class W7ToolsSearchVisibilityTest : W7CreateBase() {
 // ---------------------------------------------------------------------------
 
 abstract class W7ToolsStateBase : W7CreateBase() {
+
 
     protected fun toolsTab(block: (ShellActivity, ViewGroup) -> Unit) {
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
@@ -656,6 +663,7 @@ class W7ToolsStateTest : W7ToolsStateBase()
 @Config(sdk = [35], qualifiers = "hi-w360dp-h740dp-xhdpi")
 class W7ToolsStateHindiTest : W7ToolsStateBase() {
 
+
     @Test(timeout = 60_000)
     fun `the new states are written in Hindi, not English`() {
         ToolsHubScreen.catalogueSource = { emptyList() }
@@ -695,6 +703,7 @@ class W7ToolsStateHindiTest : W7ToolsStateBase() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class W7ToolsNarrowTest : W7CreateBase() {
+
 
     @Test(timeout = 60_000)
     fun `the whole catalogue is visible and Clear stays whole at 200 percent on 320dp`() {
@@ -771,6 +780,7 @@ class W7ToolsNarrowTest : W7CreateBase() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w320dp-h640dp-xhdpi")
 class W7CreateNarrowTest : W7CreateBase() {
+
 
     @Test(timeout = 60_000)
     fun `every Create entry label is whole at 200 percent on 320dp`() {

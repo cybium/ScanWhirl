@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.content.Context
 import android.content.Intent
@@ -25,6 +27,8 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class OcrEditorSaveFailureTest {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val repo = ScanRepository(context)
     private val id = "editor_failure_${System.nanoTime()}"

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.protect
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.app.Dialog
@@ -32,6 +34,8 @@ import org.robolectric.shadows.ShadowToast
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class R3PickerEmptyTest(private val language: String) {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")

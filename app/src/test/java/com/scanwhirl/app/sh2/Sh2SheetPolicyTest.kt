@@ -1,4 +1,6 @@
 package com.scanwhirl.app.sh2
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.res.ColorStateList
@@ -45,6 +47,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 abstract class Sh2SheetPolicyBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     protected lateinit var app: Application
     protected val hi: Boolean get() = app.resources.configuration.locales[0].language == "hi"
 

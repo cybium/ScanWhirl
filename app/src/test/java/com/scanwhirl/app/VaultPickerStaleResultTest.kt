@@ -1,4 +1,6 @@
 package com.scanwhirl.app
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -45,6 +47,8 @@ import java.io.File
 @Config(sdk = [35])
 class VaultPickerStaleResultTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var store: VaultStore
     private var controller: ActivityController<VaultActivity>? = null

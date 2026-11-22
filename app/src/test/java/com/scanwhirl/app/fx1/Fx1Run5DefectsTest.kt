@@ -1,4 +1,6 @@
 package com.scanwhirl.app.fx1
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -53,6 +55,8 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class Fx1Run5DefectsTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private val repo get() = ScanRepository(app)
 

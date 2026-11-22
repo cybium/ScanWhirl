@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.view.View
@@ -40,6 +42,8 @@ import org.robolectric.shadows.ShadowToast
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-xhdpi")
 class ToolEntryStatesTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.uxg
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Bundle
@@ -34,6 +36,8 @@ import java.lang.reflect.Field
 @Config(sdk = [35])
 class UxgG2RotationTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before
