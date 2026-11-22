@@ -237,7 +237,7 @@ object DocumentActionsSheet {
         ))
         rows.addView(row(
             activity = activity,
-            icon = R.drawable.ic_ocr,
+            icon = R.drawable.ic_sym_ocr,
             label = activity.getString(R.string.btn_ocr_text),
             key = "read_text",
             enabled = !protected,
@@ -311,7 +311,7 @@ object DocumentActionsSheet {
         rows.addView(groupHeader(activity, R.string.bar_tools, R.id.hdrTools, "tools"))
         rows.addView(row(
             activity = activity,
-            icon = R.drawable.ic_sym_encrypted,
+            icon = if (doc.isLocked) R.drawable.ic_sym_lock_open else R.drawable.ic_sym_lock,
             label = activity.getString(
                 if (doc.isLocked) R.string.btn_unlock_pdf else R.string.menu_protect_pdf
             ),
