@@ -220,7 +220,9 @@ class ScanReviewFocusArrangeTest {
                 val busySeen = java.util.concurrent.atomic.AtomicBoolean(false)
                 val watcher = Thread {
                     val end = System.nanoTime() + 5_000_000_000L
-                    while (!busySeen.get() && System.nanoTime() < end) {
+                    while (!busySeen.get() && !Thread.currentThread().isInterrupted &&
+                        System.nanoTime() < end
+                    ) {
                         if (a.pageOpBusy) busySeen.set(true) else Thread.yield()
                     }
                 }.apply { isDaemon = true }
