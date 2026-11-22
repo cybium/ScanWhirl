@@ -26,11 +26,15 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.store.V2tResultReceiptStore
+import com.scanwhirl.app.tools.HomeHost
+import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -73,6 +77,7 @@ class ToolResultActivity : BaseActivity() {
     private var mime = "application/pdf"
     private var undone = false
     private var undoChecking = false
+    private var chainChecking = false
     private lateinit var summary: TextView
     private lateinit var nameView: TextView
     private lateinit var errorView: TextView
@@ -144,6 +149,27 @@ class ToolResultActivity : BaseActivity() {
     private var receiptSourceId: String? = null
     private var sourceKept = false
 
+    /** V2T T1: durable result receipt and its accessible status line. */
+    private lateinit var receiptStore: V2tResultReceiptStore
+    private var v2tStatus: TextView? = null
+
+    /** V2T T1: the result owns its progress/status a11y when chaining into a flow. */
+    private val v2tHost = object : HomeHost {
+        override fun refreshList() = Unit
+        override fun showProgress(titleRes: Int): SwProgress {
+            val progress = SwProgress.show(this@ToolResultActivity, getString(titleRes))
+            progress.view.findViewById<View>(R.id.swProgressLabel)?.apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            }
+            return progress
+        }
+        override fun toast(res: Int, duration: Int) =
+            Toast.makeText(this@ToolResultActivity, res, duration).show()
+        override fun toast(message: CharSequence, duration: Int) =
+            Toast.makeText(this@ToolResultActivity, message, duration).show()
+    }
+
     /**
      * B2-H1 (phone, build 2 = 1485874c): the Documents/ScanWhirl copy this result created.
      * The confirmation bar's Undo removes it only while its six seconds are up; the screen's own
@@ -169,6 +195,29 @@ class ToolResultActivity : BaseActivity() {
         receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
         val legacyClaim = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
         sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: legacyClaim
+
+        // V2T T1: a durable receipt survives process death. A "Last result"
+        // reopen carries no output extras; everything comes from the store.
+        receiptStore = V2tResultReceiptStore(this)
+        if (intent.getBooleanExtra(EXTRA_USE_LAST_RECEIPT, false)) {
+            receiptStore.load()?.let { saved ->
+                toolId = saved.toolId
+                toolName = ToolRegistry.byId(toolId)?.let { t -> getString(t.title) }.orEmpty()
+                docIds = saved.docIds.toMutableList()
+                files = saved.files.map { File(it) }.toMutableList()
+                mime = saved.mime ?: defaultMime()
+                note = saved.note
+                targetBytes = saved.targetBytes
+                beforeBytes = saved.beforeBytes
+                outputIdentity = saved.outputIdentity
+                receiptSourceId = saved.receiptSourceId
+                chosenLocationName = saved.chosenLocationName
+                documentsExistingName = saved.documentsExistingName
+                undone = saved.undone
+                sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: saved.sourceKept
+            }
+        }
+        if (docIds.isNotEmpty() || files.isNotEmpty()) persistReceipt()
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -195,6 +244,27 @@ class ToolResultActivity : BaseActivity() {
         if (undone) showAlreadyUndone()
         // v2 UI: 74_motion — the one success moment call for every tool result.
         com.scanwhirl.app.ui.kit.SwMotion.success(this)
+    }
+
+    /** V2T T1: write the honest fact record after every verified state change. */
+    private fun persistReceipt() {
+        if (!::receiptStore.isInitialized) return
+        receiptStore.save(V2tResultReceiptStore.Receipt(
+            toolId = toolId,
+            docIds = docIds.toList(),
+            files = files.map { it.path },
+            mime = mime,
+            note = note,
+            targetBytes = targetBytes,
+            beforeBytes = beforeBytes,
+            outputIdentity = outputIdentity,
+            receiptSourceId = receiptSourceId,
+            sourceKept = sourceKept,
+            chosenLocationName = chosenLocationName,
+            documentsExistingName = documentsExistingName,
+            undone = undone,
+            savedAt = System.currentTimeMillis()
+        ))
     }
 
     /**
@@ -349,6 +419,17 @@ class ToolResultActivity : BaseActivity() {
         column.addView(nameView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+        // V2T T1: one accessible status line, derived from actual library state.
+        v2tStatus = SwStyle.text(this, 13f, SwStyle.color(this, R.color.rv_accent)).apply {
+            id = R.id.v2t_status
+            maxLines = Int.MAX_VALUE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            contentDescription = getString(R.string.v2t_status_label)
+        }
+        column.addView(v2tStatus, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
         column.addView(previewHost, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, if (isCompressResult) 140f else 200f)
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
@@ -441,6 +522,21 @@ class ToolResultActivity : BaseActivity() {
         )
         morePanel.addView(
             library,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+        )
+        // V2T T2: secondary actions on the verified OUTPUT copy. Open stays primary.
+        morePanel.addView(
+            button(getString(R.string.v2t_compress_this_copy), id = R.id.v2t_compress_copy,
+                icon = R.drawable.ic_sym_compress) { chainCompress() },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+        )
+        morePanel.addView(
+            button(getString(R.string.v2t_protect_this_copy), id = R.id.v2t_protect_copy,
+                icon = R.drawable.ic_sym_encrypted) { chainProtect() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
@@ -565,6 +661,63 @@ class ToolResultActivity : BaseActivity() {
             setOnClickListener { onClick() }
         }
 
+    // ---- V2T T2: verified-copy chaining ----------------------------------
+
+    /** Only a single live library output can be chained; never a foreign or stale id. */
+    private fun verifiedOutputDoc(): com.scanwhirl.app.model.ScanDocument? {
+        val id = docIds.singleOrNull() ?: return null
+        return runCatching { repo.getDocument(id) }.getOrNull()
+    }
+
+    /**
+     * V2T review fix: the SAME recorded identity check Undo uses. Runs on IO;
+     * never adopts the current identity at tap time, so a reopened receipt whose
+     * id was reused cannot authorize an action on somebody else's document.
+     */
+    private suspend fun identityStillMatches(): Boolean = withContext(Dispatchers.IO) {
+        val expected = outputIdentity
+        when {
+            expected == null -> docIds.isEmpty() && files.isEmpty()
+            expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
+                cheapIdentity(this@ToolResultActivity, docIds, files) == expected
+            else -> captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files) == expected
+        }
+    }
+
+    /** Chaining re-checks identity first, with both actions held disabled. */
+    private fun withVerifiedOutput(action: (com.scanwhirl.app.model.ScanDocument) -> Unit) {
+        if (chainChecking) return
+        chainChecking = true
+        val buttons = listOf(
+            findViewById<View>(R.id.v2t_compress_copy),
+            findViewById<View>(R.id.v2t_protect_copy)
+        )
+        buttons.forEach { it?.isEnabled = false }
+        lifecycleScope.launch {
+            val matches = try {
+                identityStillMatches()
+            } finally {
+                chainChecking = false
+                buttons.forEach { it?.isEnabled = true }
+            }
+            if (!matches) {
+                fail(getString(R.string.ux130_l3_copy_changed))
+                return@launch
+            }
+            val doc = verifiedOutputDoc()
+                ?: return@launch fail(getString(R.string.tools_result_nothing))
+            action(doc)
+        }
+    }
+
+    private fun chainCompress() = withVerifiedOutput { doc ->
+        startActivity(ToolSetupActivity.intent(this, "compress", selectedDocId = doc.id))
+    }
+
+    private fun chainProtect() = withVerifiedOutput { doc ->
+        LockFlow(this, repo, v2tHost, { listOf(doc) }, { _ -> }).protectDocument(doc)
+    }
+
     // ---- content ----------------------------------------------------------
 
     private fun render() {
@@ -616,6 +769,26 @@ class ToolResultActivity : BaseActivity() {
             applySummary(getString(R.string.tools_result_nothing))
         }
         refreshLocationLines()
+        renderV2tStatus()
+    }
+
+    /** V2T T1: the status is only a claim we can verify against the library. */
+    private fun renderV2tStatus() {
+        val view = v2tStatus ?: return
+        val source = receiptSourceId
+        when {
+            source == null -> view.isVisible = false
+            repo.getDocument(source) != null -> {
+                view.isVisible = true
+                view.text = getString(R.string.v2t_new_copy_original_kept)
+                view.contentDescription = view.text
+            }
+            else -> {
+                view.isVisible = true
+                view.text = getString(R.string.v2t_original_missing)
+                view.contentDescription = view.text
+            }
+        }
     }
 
     private fun applySummary(line: String) {
@@ -694,7 +867,16 @@ class ToolResultActivity : BaseActivity() {
                 getString(R.string.compress_result_before, StatusLine.formatBytes(it))
             )
         }
-        if (sourceKept) append("\n").append(getString(R.string.compress_result_source_kept))
+        if (sourceKept) {
+            // V2T T1: a sourced result uses the lane's consistent wording; the
+            // legacy boolean-only callers keep the old line (existing contract).
+            val line = if (receiptSourceId != null) {
+                getString(R.string.v2t_new_copy_original_kept)
+            } else {
+                getString(R.string.compress_result_source_kept)
+            }
+            append("\n").append(line)
+        }
         if (!note.isNullOrBlank()) append("\n").append(note)
     }
 
@@ -974,6 +1156,7 @@ class ToolResultActivity : BaseActivity() {
                     documentsExistingName = saved.name
                 }
                 refreshLocationLines()
+                persistReceipt()
                 SavedSnackbar.showExport(
                     this@ToolResultActivity, rootView, saved, R.string.result_saved_documents, docId
                 ) { result ->
@@ -983,6 +1166,7 @@ class ToolResultActivity : BaseActivity() {
                         savedCopy = null
                         documentsExistingName = null
                         refreshLocationLines()
+                        persistReceipt()
                     }
                 }
             } catch (e: CancellationException) {
@@ -1068,6 +1252,7 @@ class ToolResultActivity : BaseActivity() {
                 val created = withContext(Dispatchers.IO) { createdName(uri, suggested) }
                 chosenLocationName = created
                 refreshLocationLines()
+                persistReceipt()
                 Toast.makeText(
                     this@ToolResultActivity,
                     getString(R.string.tools_result_saved, created),
@@ -1178,17 +1363,7 @@ class ToolResultActivity : BaseActivity() {
             // L3-02 P1: the re-check hashes on IO, never on Main, while the
             // button is disabled so a second tap cannot race the first.
             val allowed = try {
-                withContext(Dispatchers.IO) {
-                    val expected = outputIdentity
-                    when {
-                        expected == null -> docIds.isEmpty() && files.isEmpty()
-                        expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
-                            cheapIdentity(this@ToolResultActivity, docIds, files) == expected
-                        else -> captureOutputIdentityBlocking(
-                            this@ToolResultActivity, docIds, files
-                        ) == expected
-                    }
-                }
+                identityStillMatches()
             } finally {
                 // P2: a cancelled re-check must never leave Undo disabled.
                 undoChecking = false
@@ -1199,6 +1374,7 @@ class ToolResultActivity : BaseActivity() {
                 return@launch
             }
             undone = true
+            persistReceipt()
             val outs = files.toList()
             // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
             // generated file is an export whose docIds are inputs, not copies. No tool legitimately
@@ -1371,6 +1547,9 @@ class ToolResultActivity : BaseActivity() {
         /** UI-B3 (#9): the compressed source is a library document and was left in place. */
         private const val EXTRA_SOURCE_KEPT = "source_kept"
 
+        /** V2T T1: reopen the durable last-result receipt after process death. */
+        private const val EXTRA_USE_LAST_RECEIPT = "v2t_use_last_receipt"
+
         /** CP1: the result did not reach the typed size, or the copy grew. The header says so. */
         private const val EXTRA_COMPRESS_MISSED = "compress_missed"
         private const val EXTRA_COMPRESS_GREW = "compress_grew"
@@ -1441,6 +1620,11 @@ class ToolResultActivity : BaseActivity() {
                 val identity = outputIdentity ?: cheapIdentity(context, docIds, files)
                 if (identity != null) putExtra(EXTRA_OUTPUT_IDENTITY, identity)
             }
+
+        /** V2T T1: reopen the last durable result after process death. */
+        fun intentLastResult(context: Context): Intent =
+            Intent(context, ToolResultActivity::class.java)
+                .putExtra(EXTRA_USE_LAST_RECEIPT, true)
 
         /**
          * Cheap identity: ordinary file stats only, no content hashing. Safe to

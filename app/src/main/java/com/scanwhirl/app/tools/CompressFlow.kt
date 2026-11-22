@@ -267,11 +267,32 @@ class CompressFlow(
         }
 
         dialogBinding.compressModeGroup.setOnCheckedChangeListener { _, _ -> applyMode() }
+        // V2T T2: free decimal-KB chips. A typed target always wins; the selected
+        // chip is exposed by Material's filter-chip checked state for TalkBack.
+        var suppressChip = false
+        CompressionPresentation.quickTargetKb.forEach { kb ->
+            val id = when (kb) {
+                20 -> R.id.v2t_quick_20
+                50 -> R.id.v2t_quick_50
+                100 -> R.id.v2t_quick_100
+                else -> R.id.v2t_quick_200
+            }
+            dialogBinding.root.findViewById<com.google.android.material.chip.Chip>(id)
+                ?.setOnClickListener {
+                    suppressChip = true
+                    dialogBinding.editCompressTarget.setText(
+                        activity.getString(CompressionPresentation.quickTargetLabel(kb))
+                    )
+                    suppressChip = false
+                }
+        }
         dialogBinding.editCompressTarget.addTextChangedListener(object :
             android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = clearError()
-            override fun afterTextChanged(s: android.text.Editable?) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!suppressChip) dialogBinding.v2tQuickGroup.clearCheck()
+            }
         })
         dialogBinding.editCompressTarget.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
