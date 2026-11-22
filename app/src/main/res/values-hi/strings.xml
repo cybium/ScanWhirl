@@ -346,6 +346,13 @@
     <string name="resize_times">×</string>
     <string name="resize_title">तस्वीर का आकार बदलें</string>
     <string name="resize_width">चौड़ाई</string>
+    <!-- FF-R: सटीक पिक्सेल; काटें या सफ़ेद किनारे — तस्वीर नहीं खींची जाती। -->
+    <string name="resize_mode_crop">फिट करने के लिए काटें</string>
+    <string name="resize_mode_borders">पूरी तस्वीर किनारों के साथ</string>
+    <string name="resize_crop_helper">रखने का हिस्सा चुनें। पिक्सेल %1$d × %2$d रहेंगे। अगर यह आकार नहीं बन सका, तो हम बता देंगे।</string>
+    <string name="resize_borders_helper">सफ़ेद पट्टियाँ जुड़ेंगी; तस्वीर नहीं खींची जाएगी। पिक्सेल %1$d × %2$d रहेंगे।</string>
+    <string name="resize_minmax">न्यूनतम और अधिकतम KB</string>
+    <string name="resize_target_missed">पिक्सेल %1$d × %2$d वैसे ही रखे गए, पर यह आकार %3$s तक नहीं पहुँच सका।</string>
     <string name="result_before_after">पहले %1$s  →  अब %2$s</string>
     <string name="result_dimensions">%1$d × %2$d px</string>
     <string name="result_save_documents">Documents में सहेजें</string>

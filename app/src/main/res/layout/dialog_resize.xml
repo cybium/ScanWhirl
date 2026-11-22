@@ -16,10 +16,52 @@
         android:textAppearance="?attr/textAppearanceBodySmall"
         android:textColor="@color/text_hologram_mid" />
 
+    <!-- FF-R: the two honest fits. There is deliberately no stretch option. -->
+    <RadioGroup
+        android:id="@+id/resizeModeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/resizeModeCrop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:minHeight="48dp"
+            android:text="@string/resize_mode_crop"
+            android:textColor="@color/text_hologram_hi"
+            app:buttonTint="@color/cyan_primary" />
+
+        <RadioButton
+            android:id="@+id/resizeModeBorders"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/resize_mode_borders"
+            android:textColor="@color/text_hologram_hi"
+            app:buttonTint="@color/cyan_primary" />
+    </RadioGroup>
+
+    <TextView
+        android:id="@+id/helperText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="@color/text_hologram_hi" />
+
+    <com.scanwhirl.app.ui.CropView
+        android:id="@+id/cropPreview"
+        android:layout_width="match_parent"
+        android:layout_height="180dp"
+        android:layout_marginTop="8dp" />
+
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
+        android:layout_marginTop="12dp"
         android:text="@string/resize_target_label"
         android:textAppearance="?attr/textAppearanceLabelLarge"
         android:textColor="@color/text_hologram_hi" />
@@ -31,7 +73,6 @@
         android:layout_marginTop="8dp"
         app:singleSelection="true">
 
-        <!-- V2T T2: the same free decimal-KB targets as Compress. -->
         <com.google.android.material.chip.Chip
             android:id="@+id/v2t_quick_20"
             style="@style/Widget.Material3.Chip.Filter"
@@ -76,94 +117,78 @@
         android:textColorHint="@color/text_hologram_dim"
         android:textSize="14sp" />
 
-    <CheckBox
-        android:id="@+id/checkAdvanced"
+    <TextView
+        android:id="@+id/btnMinMaxKb"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/resize_advanced"
-        android:textColor="@color/text_hologram_hi"
-        app:buttonTint="@color/cyan_primary" />
+        android:layout_marginTop="4dp"
+        android:background="?attr/selectableItemBackground"
+        android:minHeight="48dp"
+        android:paddingHorizontal="8dp"
+        android:text="@string/resize_minmax"
+        android:textAppearance="?attr/textAppearanceLabelLarge"
+        android:textColor="@color/cyan_primary" />
 
     <LinearLayout
-        android:id="@+id/advancedBox"
+        android:id="@+id/sizeBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="gone">
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:labelFor="@id/editWidth"
-                android:text="@string/resize_width"
-                android:textAppearance="?attr/textAppearanceLabelLarge"
-                android:textColor="@color/text_hologram_hi" />
-
-            <EditText
-                android:id="@+id/editWidth"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_search_bar"
-                android:hint="@string/resize_auto"
-                android:importantForAutofill="no"
-                android:inputType="number"
-                android:paddingHorizontal="10dp"
-                android:selectAllOnFocus="true"
-                android:textColor="@color/text_hologram_hi"
-                android:textColorHint="@color/text_hologram_dim"
-                android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:text="@string/resize_times"
-                android:textAppearance="?attr/textAppearanceTitleMedium"
-                android:textColor="@color/text_hologram_mid" />
-
-            <EditText
-                android:id="@+id/editHeight"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_search_bar"
-                android:hint="@string/resize_auto"
-                android:importantForAutofill="no"
-                android:inputType="number"
-                android:paddingHorizontal="10dp"
-                android:selectAllOnFocus="true"
-                android:textColor="@color/text_hologram_hi"
-                android:textColorHint="@color/text_hologram_dim"
-                android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="@string/resize_px"
-                android:textAppearance="?attr/textAppearanceLabelLarge"
-                android:textColor="@color/text_hologram_hi" />
-        </LinearLayout>
-
-        <CheckBox
-            android:id="@+id/checkRatio"
+        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:checked="true"
-            android:text="@string/resize_keep_ratio"
+            android:labelFor="@id/editWidth"
+            android:text="@string/resize_width"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:textColor="@color/text_hologram_hi" />
+
+        <EditText
+            android:id="@+id/editWidth"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_bar"
+            android:importantForAutofill="no"
+            android:inputType="number"
+            android:paddingHorizontal="10dp"
+            android:selectAllOnFocus="true"
             android:textColor="@color/text_hologram_hi"
-            app:buttonTint="@color/cyan_primary" />
+            android:textColorHint="@color/text_hologram_dim"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="4dp"
+            android:text="@string/resize_times"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="@color/text_hologram_mid" />
+
+        <EditText
+            android:id="@+id/editHeight"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_bar"
+            android:importantForAutofill="no"
+            android:inputType="number"
+            android:paddingHorizontal="10dp"
+            android:selectAllOnFocus="true"
+            android:textColor="@color/text_hologram_hi"
+            android:textColorHint="@color/text_hologram_dim"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="@string/resize_px"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:textColor="@color/text_hologram_hi" />
     </LinearLayout>
 
     <TextView
@@ -173,8 +198,8 @@
         android:layout_gravity="end"
         android:layout_marginTop="8dp"
         android:background="?attr/selectableItemBackground"
+        android:minHeight="48dp"
         android:paddingHorizontal="8dp"
-        android:paddingVertical="8dp"
         android:text="@string/resize_keep_original"
         android:textAppearance="?attr/textAppearanceLabelLarge"
         android:textColor="@color/cyan_primary" />
