@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.kit.ToolNamesCouncilParityTest,com.scanwhirl.app.ui.kit.ToolNamesCouncilRegistryTest,com.scanwhirl.app.ui.kit.ToolTileNameFitEn360Test,com.scanwhirl.app.ui.kit.ToolTileNameFitHi360Test,com.scanwhirl.app.ui.kit.ToolTileNameFitEn411Test,com.scanwhirl.app.ui.kit.ToolTileNameFitHi411Test
