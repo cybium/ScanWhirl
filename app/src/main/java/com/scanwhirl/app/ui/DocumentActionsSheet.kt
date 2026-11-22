@@ -83,11 +83,10 @@ object V2vFailureCopy {
  * Every row calls the EXISTING entry point for THAT document, with the source already pinned:
  * [CompressFlow.startWith] (no source chooser), the reader's own Sign route ([ProOffer] gate,
  * then [StampEditorActivity.intent] with this id â€” never StampToolLauncher's generic picker),
- * [OcrFlow.runOcrForScan] for this doc, and [ShareUtils] behind the protection guard.
  *
- * A password-locked or Vault document cannot hand its pages to Compress, Sign or Read text:
- * those rows stay visible but disabled with the reason, and no handler is reachable from them.
- * Share keeps working because [ProtectionDialogs.guardExport] already owns that decision.
+ * V3: the four dock actions (Edit and crop, OCR, Share, Actions) are never repeated here.
+ * A password-locked or Vault document cannot hand its pages to Compress or Sign: those rows
+ * stay visible but disabled with the reason, and no handler is reachable from them.
  *
  * The sheet never holds viewer state. The host may pass [onChange] (reload itself after a
  * rename/duplicate/protect/unlock/Vault change) and [onGone] (the host closes when the shown
@@ -96,7 +95,12 @@ object V2vFailureCopy {
 object DocumentActionsSheet {
 
     /** The one document-linked action a row runs (also the test seam's vocabulary). */
-    enum class Action { COMPRESS, SIGN, READ_TEXT, SHARE, RENAME, MOVE, DUPLICATE, PROTECT, UNLOCK, VAULT, TRASH }
+    // READ_TEXT and SHARE remain for the Library row sheet (no dock there); the viewer's
+    // sheet does not offer them.
+    enum class Action {
+        EXPORT, COMPRESS, SIGN, RENAME, MOVE, DUPLICATE, PROTECT, UNLOCK, VAULT, TRASH,
+        READ_TEXT, SHARE
+    }
 
     /**
      * Test seam: records (action, document) just before the real handler would run; returning
@@ -125,7 +129,17 @@ object DocumentActionsSheet {
          * W1: the user chose "Finish editing first". Null opens the document workspace so the
          * edits can be finished there; a host that already shows the document passes a no-op.
          */
-        onFinishEditing: (() -> Unit)? = null
+        onFinishEditing: (() -> Unit)? = null,
+        /**
+         * V3: "Save copy to Documents" moved here from the dock. Null (a Library row) hides the
+         * row: there is no shown document to export from a list.
+         */
+        onExport: (() -> Unit)? = null,
+        /**
+         * V3: the viewer already offers OCR and Share in its four-cell dock, so it passes false
+         * and the sheet never repeats them. A Library row has no dock, so it keeps both rows.
+         */
+        includeDockActions: Boolean = true
     ) {
         val repo = ScanWhirlApp.from(activity).repository
         val doc = repo.getDocument(docId)
@@ -133,7 +147,7 @@ object DocumentActionsSheet {
             Toast.makeText(activity, R.string.doc_actions_missing, Toast.LENGTH_SHORT).show()
             return
         }
-        show(activity, repo, doc, onChange, onGone, onUsed, onFinishEditing)
+        show(activity, repo, doc, onChange, onGone, onUsed, onFinishEditing, onExport, includeDockActions)
     }
 
     private fun show(
@@ -143,7 +157,9 @@ object DocumentActionsSheet {
         onChange: () -> Unit,
         onGone: (() -> Unit)?,
         onUsed: () -> Unit,
-        onFinishEditing: (() -> Unit)?
+        onFinishEditing: (() -> Unit)?,
+        onExport: (() -> Unit)?,
+        includeDockActions: Boolean
     ) {
         val finishEditing: () -> Unit = onFinishEditing ?: {
             activity.startActivity(DocumentViewerActivity.intent(activity, doc.id))
@@ -173,6 +189,19 @@ object DocumentActionsSheet {
             doc.isLocked -> activity.getString(R.string.locked_source_refused, doc.name)
             doc.isVaulted -> activity.getString(R.string.doc_actions_vault_reason)
             else -> null
+        }
+
+        // V3: "Save copy to Documents" moved here from the dock. The host that shows the
+        // document passes its own guarded save handler; a Library row has none, so the row
+        // is not offered there. OCR and Share stay in the dock and are NOT repeated here.
+        if (onExport != null) {
+            rows.addView(row(
+                activity = activity,
+                icon = R.drawable.ic_sym_download,
+                label = activity.getString(R.string.v3_save_copy),
+                key = "export",
+                onRun = { dismissThen(Action.EXPORT) { onExport() } }
+            ))
         }
         rows.addView(row(
             activity = activity,
@@ -235,45 +264,52 @@ object DocumentActionsSheet {
                 }
             }
         ))
-        rows.addView(row(
-            activity = activity,
-            icon = R.drawable.ic_sym_ocr,
-            label = activity.getString(R.string.btn_ocr_text),
-            key = "read_text",
-            enabled = !protected,
-            reason = reason,
-            onRun = {
-                dismissThen(Action.READ_TEXT) {
-                    OcrFlow(activity = activity, repo = repo, host = host).runOcrForScan(doc)
-                }
-            }
-        ))
-        rows.addView(row(
-            activity = activity,
-            icon = R.drawable.ic_sym_share,
-            label = activity.getString(R.string.share_pdf),
-            key = "share",
-            onRun = {
-                dismissThen(Action.SHARE) {
-                    ProtectionDialogs.guardExport(
-                        activity, repo, doc, onResolved = onChange
-                    ) {
-                        // W1: bound id + draft question; the saved version is what leaves.
-                        DocumentActionDispatcher.dispatch(
-                            activity = activity,
-                            repo = repo,
-                            docId = doc.id,
-                            action = DocumentActionDispatcher.Action.SHARE,
-                            onUsed = { _ -> onUsed() },
-                            onFinishEditing = { _ -> finishEditing() }
-                        ) { bound -> ShareUtils.share(activity, bound) }
+        // V3: the viewer's dock already offers OCR and Share, so its sheet does not repeat
+        // them. A Library row has no dock, so the shared sheet keeps both entry points.
+        if (includeDockActions) {
+            val ocrRow = row(
+                activity = activity,
+                icon = R.drawable.ic_sym_ocr,
+                label = activity.getString(R.string.v3_ocr),
+                key = "read_text",
+                enabled = !protected,
+                reason = reason,
+                onRun = {
+                    dismissThen(Action.READ_TEXT) {
+                        OcrFlow(activity = activity, repo = repo, host = host).runOcrForScan(doc)
                     }
                 }
-            }
-        ))
+            )
+            // V3: the visible word is short; TalkBack names the action and its OCR meaning.
+            ocrRow.contentDescription = activity.getString(R.string.v3_ocr_a11y) +
+                if (reason != null) ". $reason" else ""
+            rows.addView(ocrRow)
+            rows.addView(row(
+                activity = activity,
+                icon = R.drawable.ic_sym_share,
+                label = activity.getString(R.string.share_pdf),
+                key = "share",
+                onRun = {
+                    dismissThen(Action.SHARE) {
+                        ProtectionDialogs.guardExport(
+                            activity, repo, doc, onResolved = onChange
+                        ) {
+                            DocumentActionDispatcher.dispatch(
+                                activity = activity,
+                                repo = repo,
+                                docId = doc.id,
+                                action = DocumentActionDispatcher.Action.SHARE,
+                                onUsed = { _ -> onUsed() },
+                                onFinishEditing = { _ -> finishEditing() }
+                            ) { bound -> ShareUtils.share(activity, bound) }
+                        }
+                    }
+                }
+            ))
+        }
 
         // --- 2. file management ---------------------------------------------
-        rows.addView(groupHeader(activity, R.string.group_organize, R.id.hdrOrganize, "organize"))
+        rows.addView(groupHeader(activity, R.string.v3_organize, R.id.hdrOrganize, "organize"))
         rows.addView(row(
             activity = activity,
             icon = R.drawable.ic_sym_edit,
@@ -285,7 +321,7 @@ object DocumentActionsSheet {
         rows.addView(row(
             activity = activity,
             icon = R.drawable.ic_sym_folder_open,
-            label = activity.getString(R.string.move_to_category),
+            label = activity.getString(R.string.v3_set_category),
             key = "move",
             id = R.id.rowMoreMove,
             onRun = {
@@ -386,9 +422,9 @@ object DocumentActionsSheet {
             addView(rows)
         }
         val built = SwSheet.builder(activity)
-            .setTitle(R.string.doc_actions)
+            // V3: the one named "Document actions" header, and X-only dismissal.
+            .setTitle(R.string.v3_actions_title)
             .setContent(scroll)
-            .setSecondary(R.string.sheet_close)
             .build()
         sheet = built
         built.show()
@@ -454,8 +490,8 @@ object DocumentActionsSheet {
             text = activity.resources.getQuantityString(
                 R.plurals.viewer_meta, doc.pageCount, doc.pageCount, StatusLine.formatBytes(bytes)
             )
-            setTextColor(SwStyle.color(activity, R.color.text_hologram_mid))
-            textSize = 12f
+            setTextColor(SwStyle.color(activity, R.color.v3_text_primary))
+            textSize = 14f
             includeFontPadding = false
             setPadding(0, (2 * d).toInt(), 0, 0)
         })
@@ -475,13 +511,15 @@ object DocumentActionsSheet {
     ): TextView = TextView(activity).apply {
         if (id != null) this.id = id
         text = activity.getString(title)
-        isAllCaps = true
-        textSize = 12f
-        letterSpacing = 0.08f
+        // V3: section headings are sentence-case P16 semibold, never small tracked grey.
+        isAllCaps = false
+        textSize = 16f
+        letterSpacing = 0f
+        typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         setTextColor(
             SwStyle.color(
                 activity,
-                if (key == "danger") R.color.laser_danger else R.color.text_hologram_mid
+                if (key == "danger") R.color.laser_danger else R.color.v3_text_primary
             )
         )
         setPadding(SwStyle.dp(activity, 10f), SwStyle.dp(activity, if (after) 12f else 4f), 0, 0)
@@ -557,8 +595,8 @@ object DocumentActionsSheet {
         if (reason != null) {
             texts.addView(TextView(activity).apply {
                 text = reason
-                textSize = 12f
-                setTextColor(SwStyle.color(activity, R.color.text_hologram_mid))
+                textSize = 14f
+                setTextColor(SwStyle.color(activity, R.color.v3_text_secondary))
                 includeFontPadding = false
                 setPadding(0, dp(2f), 0, 0)
             })
@@ -569,7 +607,7 @@ object DocumentActionsSheet {
             row.addView(TextView(activity).apply {
                 tag = TAG_PREFIX + key + "_pro"
                 text = activity.getString(R.string.badge_pro)
-                textSize = 10f
+                textSize = 12f
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 setTextColor(SwStyle.color(activity, R.color.pro_gold))
                 setBackgroundResource(R.drawable.bg_lock_badge)

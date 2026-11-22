@@ -285,7 +285,7 @@ class PdfViewerActivity : BaseActivity() {
             val requested = intent.getIntExtra(EXTRA_START_PAGE, -1)
             val start = if (requested >= 0) {
                 startPage(requested, intent.getStringExtra(EXTRA_START_KEY), pageCount, docPageKeys).also {
-                    if (it == null) Toast.makeText(this, R.string.reader_start_changed, Toast.LENGTH_LONG).show()
+                    if (it == null) Toast.makeText(this, R.string.v3_reader_start_changed, Toast.LENGTH_LONG).show()
                 }
             } else {
                 null
@@ -688,7 +688,7 @@ class PdfViewerActivity : BaseActivity() {
             com.scanwhirl.app.ui.kit.SwSheet.note(
                 this,
                 getString(R.string.reader_dock_text),
-                getString(R.string.reader_text_unavailable)
+                getString(R.string.v3_reader_text_unavailable)
             ).show()
             return
         }
@@ -704,7 +704,7 @@ class PdfViewerActivity : BaseActivity() {
         // is in the toolbar, so it is not duplicated here; Go to page replaces it.
         val builder = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(title)
-            .setMessage(getString(R.string.reader_more_note, pageCount))
+            .setMessage(resources.getQuantityString(R.plurals.v3_reader_more_pages, pageCount, pageCount))
             .setPrimary(R.string.ux130_l4_go_to_page) { promptGoToPage() }
         if (vaultMode) {
             // The title is private and there is no Vault share path: secure the sheet's own
@@ -728,7 +728,7 @@ class PdfViewerActivity : BaseActivity() {
         lateinit var sheet: com.scanwhirl.app.ui.kit.SwSheet
         sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.ux130_l4_go_to_page)
-            .setMessage(getString(R.string.reader_more_note, pageCount))
+            .setMessage(resources.getQuantityString(R.plurals.v3_reader_more_pages, pageCount, pageCount))
             .setInput(
                 hint = getString(R.string.ux130_l4_go_to_page),
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER

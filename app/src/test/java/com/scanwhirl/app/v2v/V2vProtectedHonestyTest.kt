@@ -33,7 +33,7 @@ class V2vProtectedHonestyTest {
     private val repo get() = ScanRepository(app)
 
     private fun bannerText(): String {
-        val res = app.resources.getIdentifier("v2v_protected_banner", "string", app.packageName)
+        val res = app.resources.getIdentifier("v3_protected_banner", "string", app.packageName)
         return if (res == 0) "" else app.getString(res)
     }
 

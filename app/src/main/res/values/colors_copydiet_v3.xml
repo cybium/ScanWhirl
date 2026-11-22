@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V3 lane-local semantic roles (COPY_DIET.md section 1). CD-core owns the
+     global sw_text_* aliases; this file only serves V3-bound views so no other
+     lane's callers are brightened. -->
+<resources>
+    <color name="v3_text_primary">#FFFFFF</color>
+    <color name="v3_text_secondary">#B3BCC2</color>
+    <color name="v3_action_accent">#62E1F1</color>
+</resources>
