@@ -291,7 +291,7 @@ class FormReadyActivity : BaseActivity() {
 
         // FORMPIX: one compact Exam chooser instead of six always-visible chips, so the 40-word
         // screen budget is kept. The menu lists the NEET examples with notice KB bands.
-        examButton = modeChip(R.id.formReadyExam, R.string.form1_exam_label) { showExamMenu(it) }
+        examButton = modeChip(R.id.formReadyExam, R.string.form1_exam_label) { showExamMenu(examButton) }
         examButton.contentDescription = getString(R.string.form1_exam_choose)
         examButton.background = SwStyle.rounded(
             this, SwStyle.color(this, R.color.glass_surface), 12f
