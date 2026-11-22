@@ -77,6 +77,8 @@ class PageViewerFilterTest {
         val items = shownSheetItems()!!
         items.getChildAt(index).performClick()
         idle()
+        // A sheet left open here would satisfy the next waitFor with a stale dialog.
+        waitFor("the filter sheet to close") { shownSheetItems() == null }
     }
 
     /** Checked row index of the currently shown filter sheet, or -1 when no row is selected. */
@@ -128,7 +130,7 @@ class PageViewerFilterTest {
         return false
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `preview shows the saved file and does not apply the filter twice`() {
         val id = DocFixtures.saved(repo, context, pages = 1)
         currentScenario = launch(id)
@@ -140,11 +142,15 @@ class PageViewerFilterTest {
                 runBlocking { repo.draftPages(id) }.first().name.startsWith("r_")
             }
             val savedFile = runBlocking { repo.draftPages(id) }.first()
-            waitFor("the preview to re-render the saved file") {
-                pageImage()?.second?.contains(savedFile.name) == true && displayedBitmap() != null
-            }
-
             val asSaved = ImageTools.decodeSampled(savedFile.readBytes(), 2048)
+            // The pager sets its render tag BEFORE the background decode finishes, so waiting
+            // only for the tag and a non-null bitmap samples the previous page's pixels. Wait
+            // for the displayed bitmap to actually be the saved file; a real double-filter
+            // bug will time out here rather than produce a misleading assertion.
+            waitFor("the preview to re-render the saved file") {
+                pageImage()?.second?.contains(savedFile.name) == true &&
+                    displayedBitmap()?.let { !differs(it, asSaved) } == true
+            }
             val shown = displayedBitmap()!!
             assertFalse(
                 "the preview must be the file exactly as saved, not the filter applied again",
@@ -154,7 +160,7 @@ class PageViewerFilterTest {
         currentScenario = null
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a filter choice is dropped with the page it was set on`() {
         val id = DocFixtures.saved(repo, context, pages = 3)
         currentScenario = launch(id)
@@ -168,6 +174,11 @@ class PageViewerFilterTest {
             // before it reads the checked row, so indices must have been remapped already.
             scenario.onActivity { screen ->
                 screen.findViewById<View>(R.id.btnDelete).performClick()
+            }
+            // Wait for the page to be really gone from the draft before asking for the next
+            // sheet. Otherwise a late applyFilter can write its choice after the remap.
+            waitFor("the deleted page to leave the draft") {
+                runBlocking { repo.draftOf(id)?.entries?.size == 2 }
             }
             idle()
             scenario.onActivity { screen ->
@@ -185,7 +196,7 @@ class PageViewerFilterTest {
         currentScenario = null
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the selected filter survives a rotation that renames the page`() {
         val id = DocFixtures.saved(repo, context, pages = 1)
         currentScenario = launch(id)

@@ -206,38 +206,32 @@ class ScanReviewFocusArrangeTest {
 
     // ------------------------------------------------------------- reorder durability
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test(timeout = 30_000) fun `Later Earlier and Move to rename the staged files and the selection follows the page`() {
+        // TEST3: queue the activity's Main dispatcher for the busy window. reorderStaging sets
+        // pageOpBusy synchronously BEFORE launching its IO coroutine, so with the worker queued
+        // the busy state (and therefore Save's refusal) is deterministic on any runner speed.
+        val scheduler = kotlinx.coroutines.test.TestCoroutineScheduler()
+        val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(scheduler)
+        kotlinx.coroutines.Dispatchers.setMain(testDispatcher)
+        try {
         val dir = stage(5)
         launch(dir).use { scenario ->
             scenario.onActivity { a ->
                 a.showPage(1)
                 a.findViewById<View>(R.id.btnModeArrange).performClick()
-                // TEST3: the rename's IO work (a handful of tiny file renames) can finish before a
-                // single synchronous read of pageOpBusy on a fast or loaded runner. Watch the flag
-                // from the moment of the tap and assert it was observed. This checks the SAME
-                // property over a window - strictly stronger than one instantaneous sample - and
-                // the Save-refusal assertion below still proves the observable contract.
-                val busySeen = java.util.concurrent.atomic.AtomicBoolean(false)
-                val watcher = Thread {
-                    val end = System.nanoTime() + 5_000_000_000L
-                    while (!busySeen.get() && !Thread.currentThread().isInterrupted &&
-                        System.nanoTime() < end
-                    ) {
-                        if (a.pageOpBusy) busySeen.set(true) else Thread.yield()
-                    }
-                }.apply { isDaemon = true }
-                watcher.start()
-                try {
-                    a.findViewById<View>(R.id.btnArrLater).performClick()
-                    val seenBy = System.nanoTime() + 5_000_000_000L
-                    while (!busySeen.get() && System.nanoTime() < seenBy) Thread.sleep(1)
-                    assertTrue("the rename marks the page operation busy", busySeen.get())
-                    // While the rename pass runs, Save waits instead of reading half-renamed pages.
-                    a.findViewById<View>(R.id.btnSavePdf).performClick()
-                    assertEquals(app.getString(R.string.review_busy), ShadowToast.getTextOfLatestToast())
-                } finally {
-                    watcher.interrupt()
-                }
+                // TEST3: the rename's IO work can finish before a synchronous read of pageOpBusy.
+                // Hold the activity's Main dispatcher queued for this one window: the click sets
+                // pageOpBusy synchronously BEFORE launching the coroutine, so with the worker
+                // queued the busy state is deterministic. After the Save-refusal is proven we
+                // drain the queued work and the existing width assertions check the rename.
+                a.findViewById<View>(R.id.btnArrLater).performClick()
+                assertTrue(a.pageOpBusy)
+                // While the rename pass runs, Save waits instead of reading half-renamed pages.
+                a.findViewById<View>(R.id.btnSavePdf).performClick()
+                assertEquals(app.getString(R.string.review_busy), ShadowToast.getTextOfLatestToast())
+                // Now let the queued rename (and any launch-time decode) run to completion.
+                scheduler.advanceUntilIdle()
             }
             await { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
             assertEquals("nothing saved while busy", 0, repo.listDocuments().size)
@@ -265,6 +259,9 @@ class ScanReviewFocusArrangeTest {
                 val grid = a.findViewById<PageGridView>(R.id.pageGrid)
                 assertEquals(listOf(120, 122, 123, 124, 121), grid.pageOrder().map { width(it) })
             }
+        }
+        } finally {
+            kotlinx.coroutines.Dispatchers.resetMain()
         }
     }
 
