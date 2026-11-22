@@ -145,6 +145,19 @@ def portrait():
     return im
 
 
+def exam_photo(portrait_im):
+    """A fictional 'exam photo': the illustrated subject in a simple room."""
+    scene = Image.new("RGB", (1600, 1200), (224, 219, 205))
+    d = ImageDraw.Draw(scene)
+    d.rectangle((0, 0, 120, 1200), fill=(112, 78, 50))
+    d.rectangle((1380, 300, 1500, 500), fill=(238, 235, 226), outline=(188, 183, 168), width=4)
+    d.rectangle((300, 200, 760, 560), fill=(231, 226, 210), outline=(96, 66, 44), width=12)
+    person = portrait_im.resize((520, 600), Image.Resampling.LANCZOS)
+    scene.paste(person, (620, 480))
+    d.polygon([(0, 1120), (1600, 1090), (1600, 1200), (0, 1200)], fill=(90, 101, 108))
+    scene.save(HERE / "exam_photo.jpg", "JPEG", quality=82, subsampling=0)
+
+
 def signature():
     im = Image.new("RGB", (1100, 360), "white")
     d = ImageDraw.Draw(im)
@@ -267,6 +280,7 @@ def receipts():
 def main():
     REF.mkdir(exist_ok=True)
     portrait_im = portrait()
+    exam_photo(portrait_im)
     signature()
     card("front", portrait_im)
     card("back", portrait_im)

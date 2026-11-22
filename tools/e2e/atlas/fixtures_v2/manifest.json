@@ -2,7 +2,12 @@
   {
     "file": "electricity_bill_3p.pdf",
     "bytes": 333803,
-    "sha256": "204b1661499992e413fa7cd17ea7775b1cd8974a069b82abf0cd33979466c95c"
+    "sha256": "41d098b8404cfccf7bf6d73be9f38b57bbe638be5a8fa5372a57f818b9e0bec4"
+  },
+  {
+    "file": "exam_photo.jpg",
+    "bytes": 80072,
+    "sha256": "40183e73af89e59f1a8610e4b3b9a831619a915c25d3ce07f9f83f368a5b28e4"
   },
   {
     "file": "hindi_notice.jpg",
@@ -37,7 +42,7 @@
   {
     "file": "marksheet_scan_300dpi.pdf",
     "bytes": 276286,
-    "sha256": "c310613ae16d914f22cb1200146e569c4130a52aac2355bc6c99ea9263d92817"
+    "sha256": "0e30ac8f555b9125f9a8dba23f07b10bd9a89b510dada045f6c2805f3d28b8d1"
   },
   {
     "file": "prescription.jpg",
@@ -52,7 +57,7 @@
   {
     "file": "receipt_aug.pdf",
     "bytes": 84436,
-    "sha256": "6fbc072c387667c65d06742b06d44a12d0b26d7c6ed20268fbd3e56d94c2f4d6"
+    "sha256": "a3f75608b7eb13a6a9c3ed6f49438bdf09f0af35c1c577ac44570116e1f074c9"
   },
   {
     "file": "receipt_oct.jpg",
@@ -62,7 +67,7 @@
   {
     "file": "receipt_oct.pdf",
     "bytes": 98544,
-    "sha256": "4b1b99ebfdbfcb22860541f9c9ef4c3c980a811f62d96b6d400cb899c5b07fb6"
+    "sha256": "b6554a612123602e183a6dd0dee1b4e69f8d2937dc2eacd091e01062ce77418e"
   },
   {
     "file": "receipt_sep.jpg",
@@ -72,12 +77,12 @@
   {
     "file": "receipt_sep.pdf",
     "bytes": 91676,
-    "sha256": "4c04350fba34be9dfc3c7a2fc322b540680222e63dcce7002d1ee74f2e2918be"
+    "sha256": "418fe408b0eef0ab2ae584a6905eeeddf52d9e8f628eb2c3b80a3e5e37544977"
   },
   {
     "file": "rent_agreement_5p.pdf",
     "bytes": 590064,
-    "sha256": "40870ba23dd3a3ddb9fd6409fafc4dbe176cf89784dd68a4ac96db351692fdff"
+    "sha256": "033e98af7f32b54506961c9c29f5f40441432b17568b8e8a9e214c263fc56222"
   },
   {
     "file": "signature_on_paper.jpg",
