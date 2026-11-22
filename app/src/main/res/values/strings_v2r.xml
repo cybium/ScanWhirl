@@ -6,4 +6,23 @@
     <string name="v2r_restore_interrupted_title">Restore interrupted</string>
     <string name="v2r_restore_interrupted_body">Some documents may already have been restored. Check your Library before trying again.</string>
     <string name="v2r_try_again">Try again</string>
+
+    <!-- Vault removal: safe move-back first, permanent delete behind its own confirm. -->
+    <string name="v2r_vault_remove_choices_note">The library copy was removed when it was added. Choose what should happen to this encrypted copy.</string>
+    <string name="v2r_vault_move_back">Move back to Library</string>
+    <string name="v2r_vault_delete_forever">Delete permanently</string>
+    <string name="v2r_vault_delete_confirm_title">Delete %1$s permanently?</string>
+    <string name="v2r_vault_delete_confirm_body">Delete \"%1$s\" from the Vault? It will not be in your Library. This cannot be undone.</string>
+    <string name="v2r_vault_move_back_done">Moved %1$s back to your Library. Any PDF password remembered in the Vault is not carried over.</string>
+    <string name="v2r_vault_move_back_failed">Could not move %1$s back. The Vault copy is unchanged.</string>
+    <string name="v2r_vault_move_back_partial">The Library copy is ready, but the Vault copy is still here. Remove it from this menu.</string>
+
+    <!-- Pro paywall: expanding the full catalogue with honest tier labels. -->
+    <string name="v2r_see_all_pro_tools">See all Pro tools</string>
+    <string name="v2r_pro_tools_heading">Pro tools</string>
+    <string name="v2r_free_tools_heading">Free forever</string>
+    <string name="v2r_pro_label">Pro</string>
+    <string name="v2r_free_label">Free</string>
+    <string name="v2r_show_less">Show less</string>
+    <string name="v2r_soon_label">Soon</string>
 </resources>

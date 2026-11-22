@@ -1698,7 +1698,7 @@ class VaultActivity : BaseActivity() {
             isFocusable = true
             setOnClickListener {
                 sheet.dismiss()
-                confirmRemove(entry)
+                showRemovalChoices(entry)
             }
         }
         sheet.setContent(remove)
@@ -1708,19 +1708,92 @@ class VaultActivity : BaseActivity() {
         sheet.view.applySystemBarsPadding(top = false)
     }
 
-    private fun confirmRemove(entry: VaultStore.Entry) {
+    /**
+     * V2R R1 (phone finding a): removing a Vault entry used to be a one-tap permanent delete.
+     * The library copy was already removed when the file was added, so that lost the document.
+     * Move-back is now the primary safe action; permanent deletion is separate and names the file.
+     */
+    private fun showRemovalChoices(entry: VaultStore.Entry) {
+        val sheet = SwSheet.builder(this)
+            .setTitle(entry.name)
+            .setMessage(R.string.v2r_vault_remove_choices_note)
+            .setPrimary(R.string.v2r_vault_move_back) { moveBackToLibrary(entry) }
+            .setSecondary(R.string.sheet_cancel) { }
+            .build()
+        val delete = SwStyle.text(this, 14f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
+            id = R.id.v2rVaultDeleteRow
+            text = getString(R.string.v2r_vault_delete_forever)
+            contentDescription = text
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(this@VaultActivity, 48f)
+            isClickable = true
+            SwStyle.asButton(this)
+            setOnClickListener {
+                sheet.dismiss()
+                confirmDelete(entry)
+            }
+        }
+        sheet.setContent(delete)
+        sheet.secure().show()
+        sheet.view.applySystemBarsPadding(top = false)
+    }
+
+    private fun confirmDelete(entry: VaultStore.Entry) {
         SwSheet.builder(this)
-            .setTitle(getString(R.string.vault_remove))
-            .setMessage(getString(R.string.vault_remove_note))
-            .setPrimary(R.string.vault_remove) {
+            .setTitle(getString(R.string.v2r_vault_delete_confirm_title, entry.name))
+            .setMessage(getString(R.string.v2r_vault_delete_confirm_body, entry.name))
+            .setPrimary(R.string.v2r_vault_delete_forever) {
                 store.removeFromVault(entry.id)
                 render()
                 Toast.makeText(this, R.string.vault_removed, Toast.LENGTH_SHORT).show()
             }
-            .setSecondary(R.string.vault_cancel)
+            .setSecondary(R.string.sheet_cancel) { }
             .build()
             .secure()
             .show()
+    }
+
+    /**
+     * Decrypt through the existing store API, publish an ordinary library document, verify it,
+     * and only then remove the Vault entry. A failure never removes the encrypted source.
+     * No password or recovery code is stored or logged on this path.
+     */
+    private fun moveBackToLibrary(entry: VaultStore.Entry) {
+        lifecycleScope.launch {
+            val outcome = try {
+                withContext(Dispatchers.IO) {
+                    val opened = store.openDocument(entry.id)
+                    val pageBytes = opened.pageFiles.sortedBy { it.name }.map { it.readBytes() }
+                    val created = repo.createDocument(entry.name, pageBytes)
+                    val verified = repo.getDocument(created.id) != null
+                    var removed = false
+                    if (verified) {
+                        store.removeFromVault(entry.id)
+                        removed = true
+                    }
+                    Triple(created.name, verified, removed)
+                }
+            } catch (e: Exception) {
+                null
+            }
+            render()
+            val (title, body) = when {
+                outcome == null -> R.string.v2r_vault_move_back to getString(
+                    R.string.v2r_vault_move_back_failed, entry.name
+                )
+                outcome.second && outcome.third -> R.string.v2r_vault_move_back to getString(
+                    R.string.v2r_vault_move_back_done, outcome.first
+                )
+                else -> R.string.v2r_vault_move_back to getString(R.string.v2r_vault_move_back_partial)
+            }
+            SwSheet.builder(this@VaultActivity)
+                .setTitle(title)
+                .setMessage(body)
+                .setPrimary(android.R.string.ok) { }
+                .build()
+                .secure()
+                .show()
+        }
     }
 
     // ------------------------------------------------------------------

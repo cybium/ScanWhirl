@@ -12,10 +12,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnPreDraw
+import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.TrustPill
 
 /**
@@ -60,6 +63,9 @@ class ProScreen(
     private lateinit var restoreRow: TextView
     private lateinit var continueFree: TextView
     private lateinit var priceStatus: TextView
+    private lateinit var moreRow: TextView
+    private lateinit var seeAllRow: TextView
+    private var allTools: View? = null
     private var entrancePlayed = false
 
     /** How far the dock sits below the page bottom; the pinned bar stops above it. */
@@ -254,24 +260,46 @@ class ProScreen(
         }
         content.addView(feat)
 
+        moreRow = SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
+            id = R.id.swProMore
+            text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            SwStyle.asButton(this)
+            background = SwStyle.rounded(
+                context,
+                SwStyle.color(context, R.color.gold_tile_fill),
+                radiusDp = 16f,
+                stroke = SwStyle.color(context, R.color.gold_tile_border)
+            )
+            minimumHeight = SwStyle.dp(context, 48f)
+            // Preserved: ProCountTest and the shell rely on this row opening the Tools hub.
+            setOnClickListener { callbacks.onSeeAllProTools() }
+        }
         content.addView(
-            SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
-                id = R.id.swProMore
-                text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
-                gravity = Gravity.CENTER
-                isClickable = true
-                background = SwStyle.rounded(
-                    context,
-                    SwStyle.color(context, R.color.gold_tile_fill),
-                    radiusDp = 16f,
-                    stroke = SwStyle.color(context, R.color.gold_tile_border)
-                )
-                minimumHeight = SwStyle.dp(context, 48f)
-                setOnClickListener { callbacks.onSeeAllProTools() }
-            },
+            moreRow,
             LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)).apply {
                 val m = SwStyle.dp(context, 18f)
                 setMargins(m, SwStyle.dp(context, 8f), m, 0)
+            }
+        )
+        // V2R (phone finding b): a separate control expands the honest catalogue in place.
+        seeAllRow = SwStyle.text(context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true).apply {
+            id = R.id.v2rSeeAllTools
+            text = context.getString(R.string.v2r_see_all_pro_tools)
+            contentDescription = text
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(context, 48f)
+            isClickable = true
+            SwStyle.asButton(this)
+            setOnClickListener { toggleAllTools() }
+        }
+        content.addView(
+            seeAllRow,
+            LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 48f)).apply {
+                val m = SwStyle.dp(context, 18f)
+                setMargins(m, SwStyle.dp(context, 6f), m, 0)
             }
         )
 
@@ -599,7 +627,7 @@ class ProScreen(
     private fun stickyBar(): View {
         val bar = LinearLayout(context).apply {
             orientation = VERTICAL
-            setBackgroundColor(0xFF0E1316.toInt())
+            setBackgroundColor(SwStyle.color(context, R.color.rv_bg))
         }
         bar.addView(
             View(context).apply {
@@ -634,6 +662,80 @@ class ProScreen(
     }
     internal fun featureCellsForTest(): List<View> = featureCells
 
+    /** Expands the full catalogue in place, with honest Free/Pro/Soon labels. */
+    private fun toggleAllTools() {
+        val box = allTools ?: buildAllTools().also { built ->
+            allTools = built
+            val index = (seeAllRow.parent as? ViewGroup)?.indexOfChild(seeAllRow) ?: -1
+            (seeAllRow.parent as? ViewGroup)?.addView(built, index + 1)
+        }
+        box.isVisible = !box.isVisible
+    }
+
+    private fun buildAllTools(): View {
+        val gold = SwStyle.color(context, R.color.gold_pro_primary)
+        val hi = SwStyle.color(context, R.color.text_hologram_hi)
+        val box = LinearLayout(context).apply {
+            id = R.id.v2rAllTools
+            orientation = LinearLayout.VERTICAL
+            setPadding(SwStyle.dp(context, 18f), SwStyle.dp(context, 8f),
+                SwStyle.dp(context, 18f), SwStyle.dp(context, 4f))
+            isVisible = false
+        }
+        fun heading(res: Int) {
+            box.addView(
+                SwStyle.text(context, 13.5f, gold, bold = true).apply {
+                    text = context.getString(res)
+                    setPadding(0, SwStyle.dp(context, 6f), 0, SwStyle.dp(context, 2f))
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+        }
+        fun row(tool: SwTool) {
+            val tier = context.getString(if (tool.pro) R.string.v2r_pro_label else R.string.v2r_free_label)
+            val status = if (tool.status == ToolStatus.SOON) " · " + context.getString(R.string.v2r_soon_label) else ""
+            box.addView(
+                LinearLayout(context).apply {
+                    orientation = HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = SwStyle.dp(context, 48f)
+                    addView(
+                        SwStyle.text(context, 13.5f, hi, bold = true, metadata = true).apply {
+                            text = context.getString(tool.title)
+                            maxLines = 2
+                        },
+                        LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                    )
+                    addView(
+                        SwStyle.text(context, 12f, gold, bold = true, metadata = true).apply {
+                            text = tier + status
+                        },
+                        LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                    )
+                },
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            )
+        }
+        heading(R.string.v2r_pro_tools_heading)
+        ToolRegistry.all.filter { it.pro }.forEach { row(it) }
+        heading(R.string.v2r_free_tools_heading)
+        ToolRegistry.all.filter { !it.pro }.forEach { row(it) }
+        box.addView(
+            SwStyle.text(context, 13.5f, gold, bold = true, metadata = true).apply {
+                id = R.id.v2rShowLess
+                text = context.getString(R.string.v2r_show_less)
+                gravity = Gravity.CENTER
+                minimumHeight = SwStyle.dp(context, 48f)
+                isClickable = true
+                isFocusable = true
+                SwStyle.asButton(this)
+                setOnClickListener { toggleAllTools() }
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
+        return box
+    }
 
     private fun feature(icon: Int, label: Int): View {
         val cell = LinearLayout(context).apply {
