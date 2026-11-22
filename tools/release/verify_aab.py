@@ -13,7 +13,19 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ANDROID = "http://schemas.android.com/apk/res/android"
-FORBIDDEN = {"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"}
+# P lane: keep the AAB verifier aligned with the merged-manifest CI gate
+# (check_release_manifest.py). INTERNET/ACCESS_NETWORK_STATE are stripped in the
+# source manifest; the others are new-SDK risks that must fail closed too.
+FORBIDDEN = {
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.AD_ID",
+    "com.google.android.gms.permission.AD_ID",
+    "android.permission.QUERY_ALL_PACKAGES",
+}
+# Play Asset Delivery merges FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC.
+# Any permission in this family is forbidden until the owner approves it.
+FORBIDDEN_PREFIX = ("android.permission.FOREGROUND_SERVICE",)
 PAGE_SIZE_DOC = "https://developer.android.com/guide/practices/page-sizes"
 ABIS_64 = {"arm64-v8a", "x86_64"}
 ABIS_32 = {"armeabi-v7a", "x86"}
@@ -160,6 +172,9 @@ def check_manifest(facts, code, name, min_sdk=24, target_sdk=36):
             errors.append(f"{flag} must be absent or false")
     for permission in sorted(set(facts["permissions"]) & FORBIDDEN):
         errors.append(f"forbidden permission: {permission}")
+    for permission in sorted(facts["permissions"]):
+        if any(permission.startswith(prefix) for prefix in FORBIDDEN_PREFIX):
+            errors.append(f"forbidden permission family (foreground service): {permission}")
     return errors
 
 
