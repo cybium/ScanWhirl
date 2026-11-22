@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.PageViewerFilterTest,com.scanwhirl.app.ui.ScanReviewFocusArrangeTest
