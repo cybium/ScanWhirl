@@ -14,6 +14,18 @@
     <string name="form1_preset_custom">अपना</string>
     <string name="form1_example_label">उदाहरण प्रिसेट</string>
     <string name="form1_example">%1$d × %2$d px · %3$d से %4$d KB तक · JPG</string>
+    <!-- FORMPIX: परीक्षा के नाम वाले उदाहरण; पिक्सेल सुझावित, KB सीमा आधिकारिक। -->
+    <string name="form1_exam_label">NEET परीक्षा उदाहरण</string>
+    <string name="form1_exam_ug_photo">NEET UG फ़ोटो</string>
+    <string name="form1_exam_ug_signature">NEET UG हस्ताक्षर</string>
+    <string name="form1_exam_ug_thumb">NEET UG अँगूठा</string>
+    <string name="form1_exam_pg_photo">NEET PG फ़ोटो</string>
+    <string name="form1_exam_pg_signature">NEET PG हस्ताक्षर</string>
+    <string name="form1_exam_pg_thumb">NEET PG अँगूठा</string>
+    <string name="form1_example_exam">सुझावित %1$d × %2$d px · %3$d से %4$d KB तक · JPG</string>
+    <string name="form1_mode_fit">पूरी फ़ोटो फिट</string>
+    <string name="form1_mode_crop">छाँटें</string>
+    <string name="form1_mode_helper">फिट में पूरी फ़ोटो रहती है। छाँटने से किनारे हटते हैं।</string>
     <string name="form1_photo_cm_note">कुछ फ़ॉर्म लगभग 3.5 × 4.5 सेमी की फ़ोटो माँगते हैं।</string>
 
     <!-- Lane F: स्थायी लेबल (संकेत लिखते ही गायब हो जाते हैं)। -->

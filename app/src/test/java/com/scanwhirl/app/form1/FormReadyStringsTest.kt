@@ -48,6 +48,25 @@ class FormReadyStringsTest {
     }
 
     @Test
+    fun `fit crop and exam strings exist in both locales`() {
+        val required = listOf(
+            "form1_exam_label", "form1_exam_ug_photo", "form1_exam_ug_signature",
+            "form1_exam_ug_thumb", "form1_exam_pg_photo", "form1_exam_pg_signature",
+            "form1_exam_pg_thumb", "form1_example_exam", "form1_mode_fit",
+            "form1_mode_crop", "form1_mode_helper"
+        )
+        for (file in listOf(en, hi)) {
+            val present = keys(file)
+            for (key in required) assertTrue("missing $key in ${file.name}", key in present)
+        }
+        val hiText = texts(hi)
+        assertTrue("Hindi needs the whole-photo label", hiText.contains("पूरी फ़ोटो"))
+        assertTrue("Hindi needs the Crop action", hiText.contains("छाँटें"))
+        assertTrue("Hindi needs the suggested-pixels marker", hiText.contains("सुझावित"))
+        assertFalse("Hindi must not use the rejected crop loanword", hiText.contains("क्रॉप"))
+    }
+
+    @Test
     fun `no long dashes in user visible text`() {
         for (file in listOf(en, hi)) {
             val text = texts(file)

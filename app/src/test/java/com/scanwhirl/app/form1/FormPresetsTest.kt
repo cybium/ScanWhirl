@@ -51,6 +51,55 @@ class FormPresetsTest {
     }
 
     @Test
+    fun `exam presets carry the notice KB bands and suggested pixels`() {
+        // FORMPIX: the KB band comes from the public notice; pixels are third-party suggestions.
+        val ugPhoto = FormPresets.NEET_UG_PHOTO
+        assertEquals("neet_ug_photo", ugPhoto.id)
+        assertEquals(350, ugPhoto.widthPx)
+        assertEquals(450, ugPhoto.heightPx)
+        assertEquals(10, ugPhoto.minKb)
+        assertEquals(200, ugPhoto.maxKb)
+        assertEquals(10L * 1024, ugPhoto.minBytes)
+        assertEquals(200L * 1024, ugPhoto.maxBytes)
+
+        val ugSign = FormPresets.NEET_UG_SIGNATURE
+        assertEquals(400, ugSign.widthPx)
+        assertEquals(150, ugSign.heightPx)
+        assertEquals(4, ugSign.minKb)
+        assertEquals(30, ugSign.maxKb)
+        assertEquals(400, FormPresets.NEET_UG_THUMB.widthPx)
+        assertEquals(150, FormPresets.NEET_UG_THUMB.heightPx)
+        assertEquals(4, FormPresets.NEET_UG_THUMB.minKb)
+        assertEquals(30, FormPresets.NEET_UG_THUMB.maxKb)
+
+        val pgPhoto = FormPresets.NEET_PG_PHOTO
+        assertEquals(350, pgPhoto.widthPx)
+        assertEquals(450, pgPhoto.heightPx)
+        assertEquals(5, pgPhoto.minKb)
+        assertEquals(80, pgPhoto.maxKb)
+        assertEquals(276, FormPresets.NEET_PG_SIGNATURE.widthPx)
+        assertEquals(118, FormPresets.NEET_PG_SIGNATURE.heightPx)
+        assertEquals(20, FormPresets.NEET_PG_SIGNATURE.minKb)
+        assertEquals(80, FormPresets.NEET_PG_SIGNATURE.maxKb)
+        assertEquals(276, FormPresets.NEET_PG_THUMB.widthPx)
+        assertEquals(118, FormPresets.NEET_PG_THUMB.heightPx)
+        assertEquals(5, FormPresets.NEET_PG_THUMB.minKb)
+        assertEquals(80, FormPresets.NEET_PG_THUMB.maxKb)
+
+        assertEquals(6, FormPresets.EXAM.size)
+        for (spec in FormPresets.EXAM) {
+            assertTrue("exam preset must be sane: ${spec.id}", FormPresets.isSane(spec))
+            assertTrue("exam preset must be labelled exam: ${spec.id}", FormPresets.isExam(spec.id))
+            assertEquals(spec.id, FormPresets.byId(spec.id).id)
+            assertFalse("cleanup must never be auto-on: ${spec.id}", spec.signatureCleanup)
+        }
+        assertEquals("neet_ug_photo", FormPresets.outputRole(FormPresets.NEET_UG_PHOTO.id))
+        assertEquals("signature", FormPresets.outputRole(FormPresets.NEET_PG_SIGNATURE.id))
+        assertEquals("thumb", FormPresets.outputRole(FormPresets.NEET_UG_THUMB.id))
+        assertEquals("declaration", FormPresets.outputRole(FormPresets.DECLARATION.id))
+    }
+
+    @Test
     fun `physical units convert to pixels at 100 200 and 300 dpi`() {
         assertEquals(100, FormPresets.toPixels(1f, FormUnit.INCH, 100))
         assertEquals(200, FormPresets.toPixels(1f, FormUnit.INCH, 200))

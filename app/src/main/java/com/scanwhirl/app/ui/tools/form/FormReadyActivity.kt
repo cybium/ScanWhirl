@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
@@ -59,8 +60,12 @@ import java.util.UUID
  * A preset is an EDITABLE EXAMPLE, never a promise of portal acceptance: the screen leads with
  * "Check your form's exact rules" and the measured result says the true byte count, pixel size,
  * DPI and whether the file landed inside the requested KB band. The person picks a photo through
- * SAF (no new permission), confirms the aspect on the existing [CropView], then this screen makes
- * a fresh JPEG in its own cache. The picked original is never written to.
+ * SAF (no new permission), then this screen makes a fresh JPEG in its own cache. The picked
+ * original is never written to.
+ *
+ * FORMPIX: exam forms need PIXELS and a KB band, not a face-cutting crop. The default "Fit whole
+ * photo" mode feeds the entire EXIF-normalised source to [ExactKbEncoder], which scales it once
+ * and letterboxes in white. Crop is opt-in and uses the shared snap-to-aspect path.
  *
  * The lead wires the Tools entry later; this activity only exposes [intent] and [TOOL_ID].
  */
@@ -92,8 +97,16 @@ class FormReadyActivity : BaseActivity() {
     private lateinit var applyBar: FrameLayout
 
     private val presetChips = mutableMapOf<String, TextView>()
+    private val examChips = mutableMapOf<String, TextView>()
     private val dpiChips = mutableMapOf<Int, TextView>()
     private val unitChips = mutableMapOf<FormUnit, TextView>()
+    private lateinit var modeFitChip: TextView
+    private lateinit var modeCropChip: TextView
+    private lateinit var modeHelper: TextView
+
+    /** FORMPIX: Fit is the default for every preset; Crop is an explicit secondary action. */
+    private enum class FrameMode { FIT, CROP }
+    private var frameMode: FrameMode = FrameMode.FIT
 
     /** Lane F1: one durable id for this operation; the output name is derived from it. */
     private var opId: String = UUID.randomUUID().toString()
@@ -275,6 +288,74 @@ class FormReadyActivity : BaseActivity() {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, SwStyle.dp(this@FormReadyActivity, 10f))
         }
         column.addView(aboutDetails)
+
+        // FORMPIX: exam-named examples first. Six short chips in two rows of three; each applies
+        // an editable example with the notice's KB band and pixels marked as suggested.
+        val examLabel = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyExamLabel
+            text = getString(R.string.form1_exam_label)
+            maxLines = Int.MAX_VALUE
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
+        }
+        column.addView(examLabel)
+        val exams = listOf(
+            Triple(R.id.formReadyExamUgPhoto, FormPresets.NEET_UG_PHOTO, R.string.form1_exam_ug_photo),
+            Triple(R.id.formReadyExamUgSignature, FormPresets.NEET_UG_SIGNATURE, R.string.form1_exam_ug_signature),
+            Triple(R.id.formReadyExamUgThumb, FormPresets.NEET_UG_THUMB, R.string.form1_exam_ug_thumb),
+            Triple(R.id.formReadyExamPgPhoto, FormPresets.NEET_PG_PHOTO, R.string.form1_exam_pg_photo),
+            Triple(R.id.formReadyExamPgSignature, FormPresets.NEET_PG_SIGNATURE, R.string.form1_exam_pg_signature),
+            Triple(R.id.formReadyExamPgThumb, FormPresets.NEET_PG_THUMB, R.string.form1_exam_pg_thumb)
+        )
+        for ((rowId, defs) in listOf(
+            R.id.formReadyExamRow1 to exams.subList(0, 3),
+            R.id.formReadyExamRow2 to exams.subList(3, 6)
+        )) {
+            val row = LinearLayout(this).apply {
+                id = rowId
+                orientation = LinearLayout.HORIZONTAL
+            }
+            for ((id, spec, labelRes) in defs) {
+                val chip = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                    this.id = id
+                    text = getString(labelRes)
+                    gravity = Gravity.CENTER
+                    maxLines = Int.MAX_VALUE
+                    minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { selectPreset(spec) }
+                }
+                examChips[spec.id] = chip
+                chipA11y(chip)
+                row.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (id != defs.last().first) marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+                })
+            }
+            column.addView(row)
+        }
+
+        // FORMPIX: Fit whole photo is the default. Crop is a secondary action that only shows the
+        // frame editor when the person asks for it.
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
+        }
+        modeFitChip = modeChip(R.id.formReadyModeFit, R.string.form1_mode_fit) { setFrameMode(FrameMode.FIT) }
+        modeCropChip = modeChip(R.id.formReadyModeCrop, R.string.form1_mode_crop) { setFrameMode(FrameMode.CROP) }
+        for (chip in listOf(modeFitChip, modeCropChip)) {
+            chipA11y(chip)
+            modeRow.addView(chip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+            })
+        }
+        column.addView(modeRow)
+        modeHelper = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyModeHelper
+            text = getString(R.string.form1_mode_helper)
+            maxLines = Int.MAX_VALUE
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
+        }
+        column.addView(modeHelper)
 
         // Council §1: preset names stay in full; a two-column grid (not shorter words) fixes the
         // mid-word break at 100%. Five presets -> rows of 2 / 2 / 1.
@@ -647,6 +728,19 @@ class FormReadyActivity : BaseActivity() {
         })
     }
 
+    /** FORMPIX: a compact single-choice chip; [refresh] paints the active one. */
+    private fun modeChip(id: Int, labelRes: Int, onClick: () -> Unit): TextView =
+        SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+            this.id = id
+            text = getString(labelRes)
+            gravity = Gravity.CENTER
+            maxLines = Int.MAX_VALUE
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
+
     private fun action(text: String, id: Int, primary: Boolean, onClick: () -> Unit): TextView =
         SwStyle.asButton(SwStyle.text(this, 14f, SwStyle.color(
             this, if (primary) R.color.sw_disc_ink else R.color.f2_text_primary
@@ -695,10 +789,32 @@ class FormReadyActivity : BaseActivity() {
         )
     }
 
-    private fun isSignatureMode(): Boolean = spec.id == "signature"
+    private fun isSignatureMode(): Boolean = FormPresets.isSignatureLike(spec.id)
 
-    private fun showCrop(show: Boolean) {
-        cropView.isVisible = show
+    /** FORMPIX: the frame editor is only shown when Crop is chosen AND a source exists. */
+    private fun syncCropVisibility() {
+        cropView.isVisible = frameMode == FrameMode.CROP && hasImageForTest()
+    }
+
+    private fun setFrameMode(mode: FrameMode) {
+        if (frameMode == mode) return
+        frameMode = mode
+        // Going back to Fit hides the editor; its stale frame is ignored by export.
+        syncCropVisibility()
+        refresh()
+    }
+
+    /**
+     * FORMPIX: the exact source pixels this run uses. Fit keeps the whole EXIF-normalised source
+     * (the encoder letterboxes it uniformly); Crop uses the existing snapped-rect path.
+     */
+    private fun activeSourceRect(): Rect {
+        val source = bitmap?.takeIf { !it.isRecycled } ?: return Rect()
+        if (frameMode == FrameMode.FIT) return Rect(0, 0, source.width, source.height)
+        val rect = cropView.getCropRect()
+        if (rect.width() < 1f || rect.height() < 1f) return Rect()
+        val (w, h) = currentPixels()
+        return FormCrop.snapToAspect(rect, w.toFloat() / h.coerceAtLeast(1), source.width, source.height)
     }
 
     /** Each broken rule names itself; a decimal is not silently rounded into a zero KB limit. */
@@ -735,6 +851,7 @@ class FormReadyActivity : BaseActivity() {
         }
         if (max != 0 && max !in 1..10_000) return false
         spec = FormPresets.CUSTOM
+        frameMode = FrameMode.FIT
         unit = FormUnit.PX
         dpi = FormPresets.DPI_200
         widthValue = w.toFloat()
@@ -750,6 +867,8 @@ class FormReadyActivity : BaseActivity() {
 
     private fun selectPreset(preset: FormPresets.Spec) {
         spec = preset
+        // FORMPIX: every preset starts in Fit whole photo. Crop is a deliberate extra step.
+        frameMode = FrameMode.FIT
         unit = FormUnit.PX
         widthValue = preset.widthPx.toFloat()
         heightValue = preset.heightPx.toFloat()
@@ -764,6 +883,7 @@ class FormReadyActivity : BaseActivity() {
         val focus = if (isSignatureMode() && live != null) SignatureCleanup.inkBounds(live) else null
         cropView.setDefaultFocus(focus)
         if (live != null) cropView.setImage(live)
+        syncCropVisibility()
         refresh()
     }
 
@@ -837,6 +957,7 @@ class FormReadyActivity : BaseActivity() {
             return
         }
         presetStatusView.isVisible = false
+        frameMode = FrameMode.FIT
         unit = saved.unit
         dpi = saved.dpi
         minKb = saved.minKb
@@ -866,20 +987,16 @@ class FormReadyActivity : BaseActivity() {
         previewJob?.cancel()
         val generation = ++previewGeneration
         val source = bitmap
-        val rect = cropView.getCropRect()
+        // FORMPIX: preview and export share one source rect, so Fit previews the whole photo and
+        // Crop previews the snapped frame. It cannot disagree with what apply() saves.
+        val snapped = activeSourceRect()
         if (!cleanup || source == null || source.isRecycled || bitmapInUse ||
-            rect.width() < 1f || rect.height() < 1f
+            snapped.width() < 1 || snapped.height() < 1
         ) {
             releasePreviewBitmaps()
             cleanupPreview.isVisible = false
             return
         }
-        // P2 pre-review: the preview must show EXACTLY the region the encoder will save. Use the
-        // same exact-aspect snapping as apply(), never the raw float drag rectangle.
-        val (targetW, targetH) = currentPixels()
-        val snapped = FormCrop.snapToAspect(
-            rect, targetW.toFloat() / targetH, source.width, source.height
-        )
         lastPreviewRect = RectF(snapped)
         val left = snapped.left
         val top = snapped.top
@@ -938,7 +1055,12 @@ class FormReadyActivity : BaseActivity() {
         val (w, h) = currentPixels()
         val tooLarge = !FormPresets.fitsFormLimit(w, h)
         readout.text = getString(R.string.form1_readout, w, h)
-        example.text = getString(R.string.form1_example, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
+        // FORMPIX: exam pixels are a suggestion from guides; the official part is the KB band.
+        example.text = if (FormPresets.isExam(spec.id)) {
+            getString(R.string.form1_example_exam, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
+        } else {
+            getString(R.string.form1_example, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
+        }
         // An impossible target is refused before any bitmap is allocated.
         val sizeMessage = getString(R.string.form1_size_too_large)
         if (tooLarge) {
@@ -973,13 +1095,16 @@ class FormReadyActivity : BaseActivity() {
         val ink = SwStyle.color(this, R.color.sw_disc_ink)
         val cyan = SwStyle.color(this, R.color.cyan_primary)
         val surface = SwStyle.color(this, R.color.rv_surface_2)
-        for ((id, chip) in presetChips) {
-            val on = id == spec.id
+        fun paint(chip: TextView, on: Boolean) {
             chip.tag = on
             chip.isSelected = on
             chip.setTextColor(if (on) ink else hi)
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
+        for ((id, chip) in presetChips) paint(chip, id == spec.id)
+        for ((id, chip) in examChips) paint(chip, id == spec.id)
+        paint(modeFitChip, frameMode == FrameMode.FIT)
+        paint(modeCropChip, frameMode == FrameMode.CROP)
         for ((d, chip) in dpiChips) {
             val on = d == dpi
             chip.tag = on
@@ -1006,6 +1131,7 @@ class FormReadyActivity : BaseActivity() {
         outState.putInt(KEY_MAX, maxKb)
         outState.putInt(KEY_DPI, dpi)
         outState.putBoolean(KEY_CLEANUP, cleanup)
+        outState.putBoolean(KEY_MODE, frameMode == FrameMode.CROP)
         outState.putString(KEY_OP_ID, opId)
         outState.putString(KEY_SOURCE_NAME, sourceName)
         imagePath?.let { outState.putString(KEY_IMAGE, it) }
@@ -1024,6 +1150,7 @@ class FormReadyActivity : BaseActivity() {
         maxKb = state.getInt(KEY_MAX, spec.maxKb)
         dpi = state.getInt(KEY_DPI, spec.dpi)
         cleanup = state.getBoolean(KEY_CLEANUP, spec.signatureCleanup)
+        frameMode = if (state.getBoolean(KEY_MODE, false)) FrameMode.CROP else FrameMode.FIT
         opId = state.getString(KEY_OP_ID).takeUnless { it.isNullOrBlank() } ?: UUID.randomUUID().toString()
         sourceName = state.getString(KEY_SOURCE_NAME).takeUnless { it.isNullOrBlank() } ?: "photo"
         writeFields()
@@ -1064,7 +1191,7 @@ class FormReadyActivity : BaseActivity() {
             bitmap = decoded.first
             cropView.setDefaultFocus(decoded.second)
             cropView.setImage(decoded.first)
-            showCrop(true)
+            syncCropVisibility()
             if (rect != null && rect.size == 4) cropView.setCropRect(RectF(rect[0], rect[1], rect[2], rect[3]))
             refresh()
             pickButton.isVisible = false
@@ -1075,7 +1202,7 @@ class FormReadyActivity : BaseActivity() {
 
     private fun showPickPrompt() {
         setApplyEnabled(false)
-        showCrop(false)
+        syncCropVisibility()
         pickButton.isVisible = true
     }
 
@@ -1113,7 +1240,7 @@ class FormReadyActivity : BaseActivity() {
             bitmap = decoded
             cropView.setDefaultFocus(loaded.second)
             cropView.setImage(decoded)
-            showCrop(true)
+            syncCropVisibility()
             updateCropAspect()
             errorView.isVisible = false
             pickButton.isVisible = false
@@ -1139,14 +1266,12 @@ class FormReadyActivity : BaseActivity() {
     private fun apply() {
         if (busy) return
         val source = bitmap ?: return
-        val rect = cropView.getCropRect()
-        if (rect.width() < 1f || rect.height() < 1f) return
-        // FX2: snap the confirmed frame to the EXACT target aspect in EXIF-normalised source
-        // pixels. The encoder then uses one uniform scale; no independent x/y stretch is possible.
+        // FORMPIX: Fit exports the WHOLE source (the encoder scales once and letterboxes); only
+        // Crop uses the confirmed snapped frame. No mode adds a forced crop or a stretch.
+        val rect = activeSourceRect()
+        if (rect.width() < 1 || rect.height() < 1) return
+        lastExportRect = RectF(rect)
         val (targetW, targetH) = currentPixels()
-        val snapped = FormCrop.snapToAspect(rect, targetW.toFloat() / targetH, source.width, source.height)
-        lastExportRect = RectF(snapped)
-        if (snapped.width() < 1 || snapped.height() < 1) return
         if (!FormPresets.fitsFormLimit(targetW, targetH)) {
             errorView.text = getString(R.string.form1_size_too_large)
             errorView.isVisible = true
@@ -1168,7 +1293,7 @@ class FormReadyActivity : BaseActivity() {
             try {
                 val (result, file, identity) = withContext(Dispatchers.IO) {
                     val rawRegion = Bitmap.createBitmap(
-                        source, snapped.left, snapped.top, snapped.width(), snapped.height()
+                        source, rect.left, rect.top, rect.width(), rect.height()
                     )
                     // PM-2: crop == whole immutable source => rawRegion === source. Recycle only
                     // our own copy, never the bitmap CropView and Make file still display.
@@ -1219,9 +1344,9 @@ class FormReadyActivity : BaseActivity() {
                 // The phone cannot hold this rendition. Free the preview on every path and say
                 // so in the app's own words instead of letting the process die.
                 cropView.clearImage()
-                showCrop(false)
                 bitmap?.takeIf { !it.isRecycled }?.recycle()
                 bitmap = null
+                syncCropVisibility()
                 errorView.text = getString(R.string.form1_out_of_memory)
                 errorView.isVisible = true
                 refresh()
@@ -1249,13 +1374,7 @@ class FormReadyActivity : BaseActivity() {
             .ifBlank { "photo" }
             .replace(Regex("[\\\\/:*?\"<>|]"), "_")
             .take(60)
-        val role = when (spec.id) {
-            "signature" -> "signature"
-            "thumb" -> "thumb"
-            "declaration" -> "declaration"
-            else -> "photo"
-        }
-        val stem = "$base $role"
+        val stem = "$base ${FormPresets.outputRole(spec.id)}"
         var candidate = "$stem.jpg"
         var n = 2
         while (File(dir, candidate).exists()) {
@@ -1373,6 +1492,11 @@ class FormReadyActivity : BaseActivity() {
     internal fun outputNameForTest(): String = uniqueOutputName(File(cacheDir, "form1_out"))
 
     internal fun currentSpecIdForTest(): String = spec.id
+    /** FORMPIX: true only after the person opts into Crop; Fit is the default everywhere. */
+    internal fun cropModeForTest(): Boolean = frameMode == FrameMode.CROP
+    internal fun setCropModeForTest(crop: Boolean) =
+        setFrameMode(if (crop) FrameMode.CROP else FrameMode.FIT)
+    internal fun activeSourceRectForTest(): Rect = activeSourceRect()
     internal fun previewCropRectForTest(): RectF? = lastPreviewRect
     internal fun exportCropRectForTest(): RectF? = lastExportRect
     internal fun previewBitmapsForTest(): List<Bitmap> =
@@ -1387,7 +1511,7 @@ class FormReadyActivity : BaseActivity() {
         this.bitmap = bitmap
         cropView.setDefaultFocus(if (isSignatureMode()) SignatureCleanup.inkBounds(bitmap) else null)
         cropView.setImage(bitmap)
-        showCrop(true)
+        syncCropVisibility()
         updateCropAspect()
         refresh()
     }
@@ -1423,6 +1547,7 @@ class FormReadyActivity : BaseActivity() {
         private const val KEY_MAX = "form1_max"
         private const val KEY_DPI = "form1_dpi"
         private const val KEY_CLEANUP = "form1_cleanup"
+        private const val KEY_MODE = "form1_frame_mode"
         private const val KEY_OP_ID = "form1_op_id"
         private const val KEY_IMAGE = "form1_image"
         private const val KEY_RECT = "form1_rect"

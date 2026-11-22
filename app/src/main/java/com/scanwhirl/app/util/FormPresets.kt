@@ -137,9 +137,42 @@ object FormPresets {
     val DECLARATION = Spec("declaration", 800, 400, DPI_200, 50, 100)
     val CUSTOM = Spec("custom", 200, 230, DPI_200, 20, 50)
 
-    val ALL = listOf(PHOTO, SIGNATURE, THUMB, DECLARATION, CUSTOM)
+    /**
+     * FORMPIX: exam-named editable examples. The KB band is the band in the public notice; the
+     * pixel size is only a SUGGESTION from third-party guides, so the screen marks it as such and
+     * leaves both fields editable. Nothing here promises a portal will accept the file.
+     */
+    val NEET_UG_PHOTO = Spec("neet_ug_photo", 350, 450, DPI_200, 10, 200)
+    val NEET_UG_SIGNATURE = Spec("neet_ug_signature", 400, 150, DPI_200, 4, 30)
+    val NEET_UG_THUMB = Spec("neet_ug_thumb", 400, 150, DPI_200, 4, 30)
+    val NEET_PG_PHOTO = Spec("neet_pg_photo", 350, 450, DPI_200, 5, 80)
+    val NEET_PG_SIGNATURE = Spec("neet_pg_signature", 276, 118, DPI_200, 20, 80)
+    val NEET_PG_THUMB = Spec("neet_pg_thumb", 276, 118, DPI_200, 5, 80)
+
+    /** The compact exam row, in screen order. */
+    val EXAM = listOf(
+        NEET_UG_PHOTO, NEET_UG_SIGNATURE, NEET_UG_THUMB,
+        NEET_PG_PHOTO, NEET_PG_SIGNATURE, NEET_PG_THUMB
+    )
+
+    val ALL = listOf(PHOTO, SIGNATURE, THUMB, DECLARATION, CUSTOM) + EXAM
 
     fun byId(id: String): Spec = ALL.firstOrNull { it.id == id } ?: CUSTOM
+
+    /** Exam presets mark their pixels as suggested rather than mandatory. */
+    fun isExam(id: String): Boolean = id.startsWith("neet_")
+
+    /** Exam signatures behave like the generic signature: ink framing, cleanup stays opt-in. */
+    fun isSignatureLike(id: String): Boolean =
+        id in setOf("signature", "neet_ug_signature", "neet_pg_signature")
+
+    /** Human file-name role, shared by generic and exam presets. */
+    fun outputRole(id: String): String = when {
+        isSignatureLike(id) -> "signature"
+        id == "thumb" || id == "neet_ug_thumb" || id == "neet_pg_thumb" -> "thumb"
+        id == "declaration" -> "declaration"
+        else -> "photo"
+    }
 
     /**
      * Physical size to pixels at [dpi]. Pixel entry ignores DPI: the pixel count is the ground

@@ -171,6 +171,9 @@ class FormFx2PhoneEvidenceTest {
                 src.recycle()
             }
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() && a.cropReadyForTest() })
+            // FORMPIX old->new: the default is Fit whole photo; Crop must be opted into before a
+            // hand-set frame can affect export.
+            a.setCropModeForTest(true)
             // Deliberately off-aspect (3:2) while the preset asks for 200:230. The frame must be
             // snapped to the target aspect before extraction, never stretched during rasterising.
             a.setCropRectForTest(RectF(50f, 50f, 500f, 350f))
@@ -222,6 +225,8 @@ class FormFx2PhoneEvidenceTest {
                 rect.left <= face.left + 1f && rect.top <= face.top + 1f &&
                     rect.right >= face.right - 1f && rect.bottom >= face.bottom - 1f
             )
+            // FORMPIX old->new: zooming the frame is now the optional Crop mode, not the default.
+            a.setCropModeForTest(true)
             // The person zooms the frame onto the subject. This seam is the confirmed crop frame,
             // the same value the eight drag handles write when the user moves/zooms it.
             val fx = (face.left + face.right) / 2f
@@ -383,6 +388,8 @@ class FormFx2PhoneEvidenceTest {
             }
             a.acceptPickedBytes(fixture("signature_on_paper.jpg"), "signature_on_paper.jpg")
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() && a.cropReadyForTest() })
+            // FORMPIX old->new: this compares two confirmed frames, so both runs opt into Crop.
+            a.setCropModeForTest(true)
             return a to c
         }
         val plain = apply(false)
@@ -493,6 +500,8 @@ class FormFx2PhoneEvidenceTest {
             idle()
             a.acceptPickedBytes(jpegSolid(Color.WHITE, 600, 500), "signature.jpg")
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() && a.cropReadyForTest() })
+            // FORMPIX old->new: preview/export crop equality is a Crop-mode contract now.
+            a.setCropModeForTest(true)
             // Deliberately off-aspect: the unsnapped float rect would differ from the saved crop.
             a.setCropRectForTest(RectF(50f, 50f, 400f, 300f))
             a.findViewById<View>(R.id.formReadyCleanup).performClick()

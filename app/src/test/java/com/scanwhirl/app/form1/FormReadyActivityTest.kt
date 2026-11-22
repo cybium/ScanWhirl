@@ -224,6 +224,8 @@ class FormReadyActivityTest {
         a.acceptPickedBytes(jpeg(Color.WHITE))
         assertTrue("photo never loaded", waitUntil { a.hasImageForTest() })
         a.setCustomValuesForTest(2.5f, 1.2f, FormUnit.CM, 300, 12, 30)
+        // FORMPIX old->new: a hand-set frame belongs to the opt-in Crop mode.
+        a.setCropModeForTest(true)
         val rect = RectF(10f, 20f, 100f, 60f)
         a.setCropRectForTest(rect)
         idle()
@@ -239,6 +241,8 @@ class FormReadyActivityTest {
         assertEquals(12, restored.currentMinKbForTest())
         assertEquals(30, restored.currentMaxKbForTest())
         assertEquals(300, restored.currentDpiForTest())
+        assertTrue("Crop mode must survive rotation", restored.cropModeForTest())
+        assertTrue("Crop canvas must be shown after restore", restored.cropVisibleForTest())
         assertEquals("2.50", textOf(restored, R.id.formReadyWidth))
         assertEquals("1.20", textOf(restored, R.id.formReadyHeight))
         assertEquals(rect, restored.cropRectForTest())

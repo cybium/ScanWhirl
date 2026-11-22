@@ -104,7 +104,7 @@ class FormF2UiCritiqueTest {
     }
 
     @Test(timeout = 30_000)
-    fun `choose photo sits directly below the presets and the empty crop canvas stays hidden`() {
+    fun `choose photo sits directly below the presets and crop stays hidden until chosen`() {
         val c = controller()
         try {
             val a = c.get()
@@ -122,7 +122,11 @@ class FormF2UiCritiqueTest {
 
             a.acceptPickedBytes(jpeg())
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() })
-            assertEquals("preview appears only once a photo exists", View.VISIBLE, a.findViewById<View>(R.id.formReadyCrop).visibility)
+            // FORMPIX old->new: Fit is the default, so the frame editor stays hidden after a pick.
+            assertEquals("crop stays hidden in Fit mode", View.GONE, a.findViewById<View>(R.id.formReadyCrop).visibility)
+            a.setCropModeForTest(true)
+            idle()
+            assertEquals("crop appears only when chosen", View.VISIBLE, a.findViewById<View>(R.id.formReadyCrop).visibility)
         } finally {
             c.pause().stop().destroy()
         }
