@@ -158,7 +158,14 @@ def push_fixtures(names):
 
 # --------------------------------------------------------------- UI navigation
 def open_tool(title):
-    """Tools tab -> search -> tile. Works for every tool that has a catalogue tile."""
+    """Tools tab -> search -> tile. Always start from a clean Library.
+
+    A previous tool may leave a result sheet, stamp editor or SAF task on top;
+    relaunching the shell (app data preserved) is the only reliable way to make
+    one tool's failure independent of the next tool's evidence.
+    """
+    locale("en", "1.0")
+    launch()
     tap(desc="Tools")
     wait(rid="swToolsSearch")
     shot("tools_hub")
