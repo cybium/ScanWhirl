@@ -1745,17 +1745,21 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             requireEditable(dir)
-            OcrStore.locked {
-                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-                require(pageIndex in doc.pageFiles.indices) { "No such page" }
-                require(doc.pageFiles.size > 1) { "Can't delete the last page" }
-                val victim = doc.pageFiles[pageIndex]
-                origOf(victim).delete()
-                victim.delete()
-                renumberPages(dir)
-                ocrStore.afterDelete(id, pageIndex)
+            synchronized(PDF_LOCK) {
+                OcrStore.locked {
+                    val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                    require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                    require(doc.pageFiles.size > 1) { "Can't delete the last page" }
+                    val victim = doc.pageFiles[pageIndex]
+                    val sizes = sourcePageSizes(doc.pageFiles.filterIndexed { i, _ -> i != pageIndex })
+                    origOf(victim).delete()
+                    victim.delete()
+                    renumberPages(dir)
+                    writePageSizes(dir, sizes)
+                    ocrStore.afterDelete(id, pageIndex)
+                }
+                regeneratePdf(dir)
             }
-            regeneratePdf(dir)
 
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after delete")
         }
@@ -1764,17 +1768,21 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             requireEditable(dir)
-            OcrStore.locked {
-                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-                require(pageIndex in doc.pageFiles.indices) { "No such page" }
-                val file = doc.pageFiles[pageIndex]
-                // M08 P0: the page and its kept original turn together or not at all;
-                // a failure leaves both, and the committed PDF, byte-identical.
-                editPageAndOriginal(file) { target -> ImageTools.stageRotate90(target, clockwise) }
-                ocrStore.invalidate(id, file.name)
+            synchronized(PDF_LOCK) {
+                OcrStore.locked {
+                    val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                    require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                    val file = doc.pageFiles[pageIndex]
+                    val sizes = sourcePageSizes(doc.pageFiles).toMutableList()
+                    // M08 P0: the page and its kept original turn together or not at all;
+                    // a failure leaves both, and the committed PDF, byte-identical.
+                    editPageAndOriginal(file) { target -> ImageTools.stageRotate90(target, clockwise) }
+                    sizes[pageIndex] = sizes[pageIndex].let { it.second to it.first }
+                    writePageSizes(dir, sizes)
+                    ocrStore.invalidate(id, file.name)
+                }
+                regeneratePdf(dir)
             }
-
-            regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after rotate")
         }
 
@@ -1821,30 +1829,36 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             requireEditable(dir)
-            OcrStore.locked {
-                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-                require(fromIndex in doc.pageFiles.indices) { "No such page" }
-                require(toIndex in doc.pageFiles.indices) { "No such position" }
-                if (fromIndex != toIndex) {
-                    val reordered = doc.pageFiles.toMutableList().apply {
-                        add(toIndex, removeAt(fromIndex))
+            synchronized(PDF_LOCK) {
+                OcrStore.locked {
+                    val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                    require(fromIndex in doc.pageFiles.indices) { "No such page" }
+                    require(toIndex in doc.pageFiles.indices) { "No such position" }
+                    if (fromIndex != toIndex) {
+                        val sizes = sourcePageSizes(doc.pageFiles).toMutableList().apply {
+                            add(toIndex, removeAt(fromIndex))
+                        }
+                        val reordered = doc.pageFiles.toMutableList().apply {
+                            add(toIndex, removeAt(fromIndex))
+                        }
+                        val tmpNames = mutableListOf<File>()
+                        reordered.forEachIndexed { i, f ->
+                            val tmp = File(dir, String.format(Locale.ROOT, "tmp_%03d.jpg", i))
+                            f.renameTo(tmp)
+                            origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
+                            tmpNames.add(tmp)
+                        }
+                        tmpNames.forEachIndexed { i, tmp ->
+                            val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
+                            tmp.renameTo(target)
+                            origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
+                        }
+                        writePageSizes(dir, sizes)
+                        ocrStore.afterMove(id, fromIndex, toIndex)
                     }
-                    val tmpNames = mutableListOf<File>()
-                    reordered.forEachIndexed { i, f ->
-                        val tmp = File(dir, String.format(Locale.ROOT, "tmp_%03d.jpg", i))
-                        f.renameTo(tmp)
-                        origOf(f).takeIf { it.exists() }?.renameTo(origOf(tmp))
-                        tmpNames.add(tmp)
-                    }
-                    tmpNames.forEachIndexed { i, tmp ->
-                        val target = File(dir, String.format(Locale.ROOT, "page_%03d.jpg", i))
-                        tmp.renameTo(target)
-                        origOf(tmp).takeIf { it.exists() }?.renameTo(origOf(target))
-                    }
-                    ocrStore.afterMove(id, fromIndex, toIndex)
                 }
+                if (fromIndex != toIndex) regeneratePdf(dir)
             }
-            if (fromIndex != toIndex) regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after move")
         }
 
@@ -2088,6 +2102,7 @@ class ScanRepository(private val context: Context) {
         currentCoroutineContext().ensureActive()
         val out = File(staging, String.format(Locale.ROOT, PAGE_FORMAT, index))
         Durable.copyFile(src, out)
+        carryPageSize(src, out)
         OpFaults.at("op:page:$index")
         return out
     }
@@ -2247,7 +2262,7 @@ class ScanRepository(private val context: Context) {
     private val PAGE_FORMAT = "page_%03d.jpg"
 
     /**
-     * FF-G-lite: resampling tools write the SOURCE page box (points, one `WxH` line per page) into
+     * FF-G-lite: resampling tools write the SOURCE page box (points, keyed by page file name) into
      * their staged copy before publishing. [writePdfInto] reads it, so a later "Make searchable" or
      * any other PDF rebuild of that copy keeps the paper size too. Documents without the sidecar
      * (new scans, untouched imports) keep the historical pixel-derived sizing byte for byte.
@@ -2255,33 +2270,62 @@ class ScanRepository(private val context: Context) {
     private val PAGE_SIZES_FILE = "page_sizes.txt"
 
     private fun writePageSizes(dir: File, sizes: List<Pair<Int, Int>>) {
-        Durable.writeFile(
-            File(dir, PAGE_SIZES_FILE),
-            sizes.joinToString("\n") { "${it.first}x${it.second}" }.toByteArray(Charsets.US_ASCII)
-        )
+        val pages = pageFilesIn(dir)
+        require(pages.size == sizes.size)
+        writePageSizeMap(dir, pages.mapIndexed { i, page -> page.name to sizes[i] }.toMap())
     }
 
-    private fun readPageSizes(dir: File): List<Pair<Int, Int>>? {
+    private fun writePageSizeMap(dir: File, sizes: Map<String, Pair<Int, Int>>) {
+        Durable.atomicWriteText(File(dir, PAGE_SIZES_FILE), sizes.entries.joinToString("\n") {
+            "${it.key}=${it.value.first}x${it.value.second}"
+        })
+    }
+
+    private fun readPageSizes(dir: File): Map<String, Pair<Int, Int>>? {
         val file = File(dir, PAGE_SIZES_FILE)
         if (!file.isFile) return null
         return try {
-            file.readLines().map { line ->
-                val parts = line.split('x')
+            val lines = OcrStore.readBoundedLines(file, 1024L * 1024)
+            val keyed = lines.firstOrNull()?.contains('=') == true
+            val pages = if (keyed) emptyList() else pageFilesIn(dir)
+            require(keyed || lines.size == pages.size)
+            val result = LinkedHashMap<String, Pair<Int, Int>>()
+            lines.forEachIndexed { index, line ->
+                val name = if (keyed) line.substringBefore('=') else pages[index].name
+                require(Regex("(page_\\d+|r_\\d+)\\.jpg").matches(name))
+                val parts = (if (keyed) line.substringAfter('=') else line).split('x')
                 require(parts.size == 2) { "bad page size line" }
                 val w = parts[0].toInt()
                 val h = parts[1].toInt()
-                require(w > 0 && h > 0) { "bad page size" }
-                w to h
-            }.takeIf { it.isNotEmpty() }
+                require(w in 1..14400 && h in 1..14400) { "bad page size" }
+                require(result.put(name, w to h) == null) { "duplicate page size" }
+            }
+            result.takeIf { it.isNotEmpty() }
         } catch (_: Exception) {
             null // absent/corrupt geometry fails conservatively: derive the size from pixels
         }
     }
 
     /** Source page box in points, captured before a tool re-encodes/downsamples the page image. */
-    private fun sourcePageSizes(files: List<File>): List<Pair<Int, Int>> = files.map { file ->
+    private fun sourcePageSizes(files: List<File>): List<Pair<Int, Int>> {
+        val saved = files.map { requireNotNull(it.parentFile) }.distinct().associateWith { readPageSizes(it) }
+        return files.map { file ->
+            saved[file.parentFile]?.get(file.name) ?: derivedPageSize(file)
+        }
+    }
+
+    private fun derivedPageSize(file: File): Pair<Int, Int> {
         val info = PdfGenerator.readJpegInfo(file.readBytes())
-        PdfGenerator.sizeInPoints(info.width, info.height)
+        return PdfGenerator.sizeInPoints(info.width, info.height)
+    }
+
+    /** Size travels with the source file, including fresh draft replacement identities. */
+    private fun carryPageSize(src: File, out: File, rotate: Boolean = false, derive: Boolean = false) {
+        val size = if (derive) derivedPageSize(out) else sourcePageSizes(listOf(src)).single()
+        val dir = requireNotNull(out.parentFile)
+        val sizes = readPageSizes(dir).orEmpty().toMutableMap()
+        sizes[out.name] = if (rotate) size.second to size.first else size
+        writePageSizeMap(dir, sizes)
     }
 
     /** Long side of a page image embedded in an exported Word file. */
@@ -3988,9 +4032,9 @@ class ScanRepository(private val context: Context) {
             }
             // FF-G-lite: a compressed copy carries its source page box so any later rebuild
             // (Make searchable, stamp, rotate, …) cannot silently shrink the paper again.
-            // A wrong count is treated as absent, never applied to the wrong page.
+            // Legacy positional data needs an exact count; keyed data follows page identities.
             val sizes = readPageSizes(dir)
-            val pageSizes = sizes?.takeIf { it.size == pages.size }
+            val pageSizes = sizes?.let { saved -> pages.map { saved[it.name] } }
             PdfGenerator.imagesToPdf(pages, out, textLayers, pageSizes = pageSizes).isNotEmpty()
         }
     }
@@ -4711,6 +4755,7 @@ class ScanRepository(private val context: Context) {
             val jpg = File(dir, "r_$n.jpg")
             Durable.copyFile(entryFile(id, entry), jpg)
             PageReplace.commit(ImageTools.stageRotate90(jpg, clockwise))
+            carryPageSize(entryFile(id, entry), jpg, rotate = true)
             var origName: String? = null
             entryOrig(id, entry)?.let { orig ->
                 val outOrig = File(dir, "r_$n.orig")
@@ -4790,6 +4835,7 @@ class ScanRepository(private val context: Context) {
             pages.forEach { page ->
                 val jpgName = "r_$n.jpg"
                 Durable.copyFile(page, File(dir, jpgName))
+                carryPageSize(page, File(dir, jpgName))
                 var origName: String? = null
                 val orig = File(page.parentFile, page.nameWithoutExtension + ".orig")
                     .takeIf { it.isFile }
@@ -4830,6 +4876,7 @@ class ScanRepository(private val context: Context) {
             val jpg = File(dir, "r_$n.jpg")
             Durable.copyFile(entryFile(id, entry), jpg)
             PageReplace.commit(ImageTools.stageCrop(jpg, rect))
+            carryPageSize(entryFile(id, entry), jpg, derive = true)
             var origName: String? = null
             entryOrig(id, entry)?.let { orig ->
                 val outOrig = File(dir, "r_$n.orig")
@@ -4885,6 +4932,7 @@ class ScanRepository(private val context: Context) {
                 } else {
                     val n = draft.next
                     Durable.copyFile(unfiltered, File(dir, "r_$n.jpg"))
+                    carryPageSize(entryFile(id, entry), File(dir, "r_$n.jpg"))
                     OpFaults.at("draft:replacement_written")
                     newEntry = entry.copy(replacement = "r_$n.jpg", replacementOrig = null)
                     newNext = n + 1
@@ -4908,6 +4956,7 @@ class ScanRepository(private val context: Context) {
                     "r_$n.orig"
                 }
                 applyRefilter(source, File(dir, "r_$n.jpg"), filter)
+                carryPageSize(entryFile(id, entry), File(dir, "r_$n.jpg"))
                 OpFaults.at("draft:replacement_written")
                 storeDraft(
                     draft.copy(
@@ -5067,6 +5116,7 @@ class ScanRepository(private val context: Context) {
             currentCoroutineContext().ensureActive()
             val entry = draft.entries[index]
             val out = File(staging, String.format(Locale.ROOT, PAGE_FORMAT, i))
+            carryPageSize(entryFile(doc.id, entry), out)
             if (entry.replacement != null) {
                 Durable.copyFile(drafts.fileOf(doc.id, entry.replacement), out)
                 entry.replacementOrig?.let {

@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.OcrLine
 import com.scanwhirl.app.model.OcrPage
+import com.scanwhirl.app.store.backup.FullBackup
 import com.scanwhirl.app.util.ImportFixtures
+import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.PageReplace
 import com.scanwhirl.app.util.PdfGenerator
 import kotlinx.coroutines.runBlocking
@@ -54,6 +56,106 @@ class CompressPageGeometryTest {
             abs(actual.first - expected.first.toDouble()) <= tolerance &&
                 abs(actual.second - expected.second.toDouble()) <= tolerance
         )
+    }
+
+    @Test(timeout = 120_000)
+    fun `repeated compress and page operations preserve mixed paper identities`() = runBlocking {
+        val first = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 1000)
+        val second = repo.compressScan(first.id, 50, 600)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(second.pdfFile))
+        val targeted = repo.compressScanToTarget(second.id, 10_000L)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(targeted.pdfFile))
+        val moved = repo.movePage(second.id, 0, 1)
+        assertEquals(listOf(612 to 792, 595 to 842), boxes(moved.pdfFile))
+        val rotated = repo.rotatePage(second.id, 0)
+        assertEquals(listOf(792 to 612, 595 to 842), boxes(rotated.pdfFile))
+        val deleted = repo.deletePage(second.id, 1)
+        assertEquals(listOf(792 to 612), boxes(deleted.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `copies extraction split and merge carry compressed geometry`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        val duplicate = repo.duplicateDocument(source.id, "Duplicate")
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(duplicate.pdfFile))
+        val duplicateRebuilt = repo.compressScan(duplicate.id, 50, 400)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(duplicateRebuilt.pdfFile))
+        val extracted = repo.extractPages(source.id, listOf(1))
+        assertEquals(listOf(612 to 792), boxes(extracted.pdfFile))
+        val split = repo.splitByRange(source.id, listOf(PageRanges.Span(1, 1), PageRanges.Span(2, 2)))
+        assertEquals(listOf(listOf(595 to 842), listOf(612 to 792)), split.map { boxes(it.pdfFile) })
+        val merged = repo.mergeDocuments(listOf(extracted.id, duplicate.id), "Merged")
+        assertEquals(listOf(612 to 792, 595 to 842, 612 to 792), boxes(merged.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `draft geometry survives rotate insert move delete and both publish modes`() = runBlocking {
+        for (replace in listOf(false, true)) {
+            val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+            val insert = File(app.cacheDir, "insert_${UUID.randomUUID()}.jpg").apply {
+                writeBytes(ImportFixtures.image(width = 1000, height = 500))
+            }
+            repo.draftRotate(source.id, 0)
+            repo.draftInsertPages(source.id, listOf(insert, insert), 1)
+            repo.draftMove(source.id, 3, 0)
+            repo.draftDelete(source.id, 3)
+            // Reload through a new repository: metadata must be durable, not in-memory.
+            val reloaded = ScanRepository(app)
+            val result = if (replace) reloaded.replaceWithDraft(source.id).document
+                else reloaded.saveDraftAsNew(source.id, "Edited")
+            assertEquals(listOf(612 to 792, 842 to 595, 480 to 240), boxes(result.pdfFile))
+        }
+    }
+
+    @Test(timeout = 120_000)
+    fun `corrupt geometry safely falls back to actual pixels`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754), 60, 600)
+        val info = PdfGenerator.readJpegInfo(source.pageFiles.first().readBytes())
+        for (bad in listOf(
+            "page_000.jpg=2147483647x-1",
+            "page_000.jpg=999999x842",
+            "page_000.jpg=no-size",
+            "page_000.jpg=595x842\npage_000.jpg=612x792",
+            "595x842\n612x792", // legacy count mismatch must not be trusted
+            "page_999.jpg=595x842" // a valid size for a different identity is not this page's size
+        )) {
+            File(source.pageFiles.first().parentFile, "page_sizes.txt").writeText(bad)
+            val result = repo.compressScan(source.id, 50, 400)
+            assertEquals(bad, listOf(PdfGenerator.sizeInPoints(info.width, info.height)), boxes(result.pdfFile))
+        }
+    }
+
+    @Test(timeout = 120_000)
+    fun `backup restore retains sidecar and a subsequent rebuild keeps paper sizes`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        val dir = requireNotNull(source.pageFiles.first().parentFile)
+        val geometry = File(dir, "page_sizes.txt").readText()
+        val backup = FullBackup(app)
+        val archive = File(app.cacheDir, "geometry.swbackup")
+        backup.write(archive, "fictional-password", FullBackup.Wrap.PASSWORD)
+        dir.deleteRecursively()
+        backup.restore(archive, "fictional-password")
+        assertEquals(geometry, File(dir, "page_sizes.txt").readText())
+        val rebuilt = repo.compressScan(source.id, 50, 400)
+        assertEquals(listOf(595 to 842, 612 to 792), boxes(rebuilt.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `legacy index sidecar migrates when pages move`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        File(source.pageFiles.first().parentFile, "page_sizes.txt").writeText("595x842\n612x792")
+        val moved = repo.movePage(source.id, 0, 1)
+        assertEquals(listOf(612 to 792, 595 to 842), boxes(moved.pdfFile))
+    }
+
+    @Test(timeout = 120_000)
+    fun `inserting compressed pages and extracting a draft keep their own paper geometry`() = runBlocking {
+        val source = repo.compressScan(save(1240 to 1754, 1275 to 1650), 60, 600)
+        repo.draftInsertPages(source.id, source.pageFiles, 0)
+        val extracted = repo.saveDraftAsNew(source.id, "Draft extract", listOf(1, 2))
+        assertEquals(listOf(612 to 792, 595 to 842), boxes(extracted.pdfFile))
+        val all = repo.saveDraftAsNew(source.id, "Draft all")
+        assertEquals(listOf(595 to 842, 612 to 792, 595 to 842, 612 to 792), boxes(all.pdfFile))
     }
 
     @Test
