@@ -170,15 +170,17 @@ class PageViewerFilterTest {
             waitFor("the filter replacement to be written") {
                 runBlocking { repo.draftPages(id) }.first().name.startsWith("r_")
             }
+            // applyFilter writes filterChoice after the replacement file appears. Wait for that
+            // in-memory choice too, otherwise a late write can land after the delete's remap.
+            waitFor("the filter choice to be recorded") {
+                var chosen: ScanFilter? = null
+                scenario.onActivity { chosen = it.selectedFilter(0) }
+                chosen == ScanFilter.ENHANCE
+            }
             // Delete the filtered page. Opening the filter sheet commits the pending delete
             // before it reads the checked row, so indices must have been remapped already.
             scenario.onActivity { screen ->
                 screen.findViewById<View>(R.id.btnDelete).performClick()
-            }
-            // Wait for the page to be really gone from the draft before asking for the next
-            // sheet. Otherwise a late applyFilter can write its choice after the remap.
-            waitFor("the deleted page to leave the draft") {
-                runBlocking { repo.draftOf(id)?.entries?.size == 2 }
             }
             idle()
             scenario.onActivity { screen ->
