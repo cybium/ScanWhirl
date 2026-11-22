@@ -48,6 +48,25 @@ jobs:
           key: robolectric-m2-${{ hashFiles('gradle/libs.versions.toml', 'app/build.gradle.kts') }}
           restore-keys: robolectric-m2-
 
+      # Fetch the android-all jars up front with retry/backoff so a Maven 429 cannot fail 3,000 tests.
+      - name: Prefetch Robolectric android-all jars (retry)
+        run: |
+          set -euo pipefail
+          base=https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented
+          for v in 15-robolectric-12650502-i7 12.1-robolectric-8229987-i7 9-robolectric-4913185-2-i7 8.1.0-robolectric-4611349-i7; do
+            dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/$v"
+            mkdir -p "$dir"
+            for f in "android-all-instrumented-$v.pom" "android-all-instrumented-$v.pom.sha512" "android-all-instrumented-$v.jar.sha512" "android-all-instrumented-$v.jar"; do
+              if [ ! -s "$dir/$f" ]; then
+                curl -fsSL --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 30 -o "$dir/$f.part" "$base/$v/$f"
+                mv "$dir/$f.part" "$dir/$f"
+              fi
+            done
+            want=$(cut -c1-128 "$dir/android-all-instrumented-$v.jar.sha512")
+            got=$(sha512sum "$dir/android-all-instrumented-$v.jar" | cut -c1-128)
+            if [ "$want" != "$got" ]; then echo "::error::sha512 mismatch for $v"; rm -f "$dir/android-all-instrumented-$v.jar"; exit 1; fi
+          done
+
       # The verdict script must reject every known false-green case before it judges this run.
       - name: Verdict self-test (control cases)
         run: python3 tools/ci/test_gate_verdict.py
