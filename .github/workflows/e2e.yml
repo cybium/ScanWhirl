@@ -53,7 +53,8 @@ jobs:
 
       - name: Harness safety and selector tests (no device)
         run: |
-          bash -n tools/e2e/smoke.sh tools/e2e/flows.sh
+          bash -n tools/e2e/smoke.sh tools/e2e/flows.sh tools/e2e/uimap.sh
+          python3 -m py_compile tools/e2e/uimap_driver.py
           python3 -m unittest discover -s tools/e2e -p test_flow_driver.py -v
 
       - uses: gradle/actions/setup-gradle@v4
@@ -152,5 +153,65 @@ jobs:
         if: always()
         with:
           name: e2e-api${{ matrix.api-level }}
+          path: artifacts/
+          retention-days: 7
+
+  # Full current UI map for human inspection. Runs after BOTH smoke legs so it
+  # gets a fresh API 35 emulator and an empty Library; a genuinely unreachable
+  # product screen is reported BLOCKED and makes this job fail, never a green
+  # claim. API 35/36 smoke above is unchanged.
+  uimap:
+    needs: [build, e2e]
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-apk
+          path: test-apk
+
+      - name: Check the test APK
+        run: |
+          set -euo pipefail
+          test -s test-apk/app-debug.apk
+          sha256sum -c <(sed "s#app/build/outputs/apk/debug/app-debug.apk#test-apk/app-debug.apk#" test-apk/apk-sha256.txt)
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Current UI map (API 35)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: >-
+            -no-window -no-audio -no-boot-anim -no-snapshot
+            -gpu swiftshader_indirect -camera-back none -camera-front none
+          script: |
+            bash tools/e2e/uimap.sh
+        env:
+          API_LEVEL: 35
+          APK: ${{ github.workspace }}/test-apk/app-debug.apk
+          OUT: ${{ github.workspace }}/artifacts/uimap
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-uimap
           path: artifacts/
           retention-days: 7
