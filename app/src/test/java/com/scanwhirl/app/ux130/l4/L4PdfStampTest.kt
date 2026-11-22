@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.l4
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -48,6 +50,8 @@ import java.io.File
 @Config(sdk = [35])
 class L4PdfStampTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private val repo get() = ScanRepository(app)
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()

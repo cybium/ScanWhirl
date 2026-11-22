@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -38,6 +40,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class PageViewerFilterTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val context: Application
         get() = ApplicationProvider.getApplicationContext()
 

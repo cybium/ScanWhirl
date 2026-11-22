@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Activity
 import android.app.Application
@@ -56,6 +58,8 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "w360dp-h740dp-xhdpi")
 class ScanReviewFocusArrangeTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val repo by lazy { ScanRepository(app) }
     private val dirs = mutableListOf<File>()

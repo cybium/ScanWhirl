@@ -1,4 +1,6 @@
 package com.scanwhirl.app.v2c
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.os.Bundle
@@ -36,6 +38,8 @@ import java.io.File
 @Config(sdk = [35])
 class C2ReviewReceiptsTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val dirs = mutableListOf<File>()
 

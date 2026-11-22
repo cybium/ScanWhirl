@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -43,11 +44,15 @@ import java.io.File
 class OrganizeDraftUiTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private val repo get() = ScanRepository(app)
 
     /** A ToolHost for the registry launch, like the shell. */
     class Host : AppCompatActivity(), ToolHost {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
         override fun open(tool: SwTool) = Unit
         override fun comingSoon(tool: SwTool) = Unit
     }

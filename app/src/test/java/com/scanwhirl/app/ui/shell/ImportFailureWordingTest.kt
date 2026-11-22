@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.net.Uri
@@ -38,6 +40,8 @@ import java.io.File
 @Config(sdk = [35])
 class ImportFailureWordingTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before
@@ -162,6 +166,8 @@ class ImportFailureWordingTest {
 @Config(sdk = [35], qualifiers = "hi")
 class ImportFailureWordingHindiTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
 
     @Before

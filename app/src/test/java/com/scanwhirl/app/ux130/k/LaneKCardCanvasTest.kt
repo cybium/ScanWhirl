@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ux130.k
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -39,6 +41,8 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
 class LaneKCardCanvasTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
     private fun dp(value: Float) = (value * app.resources.displayMetrics.density).toInt()

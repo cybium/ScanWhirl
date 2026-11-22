@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.shell
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -35,6 +37,8 @@ import java.io.File
 @Config(sdk = [35])
 class S1StartupResumeTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
 
     @Before

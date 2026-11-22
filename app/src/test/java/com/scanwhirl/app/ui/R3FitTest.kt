@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.graphics.Rect
@@ -31,6 +33,8 @@ import org.robolectric.shadows.ShadowDialog
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class R3FitTest(private val language: String, private val widthDp: Int, private val scale: Float) {
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}, {1}dp, font {2}")

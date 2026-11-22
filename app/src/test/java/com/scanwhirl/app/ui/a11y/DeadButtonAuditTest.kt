@@ -1,4 +1,5 @@
 package com.scanwhirl.app.ui.a11y
+import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 import org.junit.rules.Timeout
 
@@ -67,6 +68,8 @@ import java.util.UUID
 class DeadButtonAuditTest {
 
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private val problems = mutableListOf<String>()

@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.stamp
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.view.MotionEvent
@@ -29,6 +31,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35])
 class SignatureSheetFixUiTest {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private val context: Application
         get() = ApplicationProvider.getApplicationContext()
 

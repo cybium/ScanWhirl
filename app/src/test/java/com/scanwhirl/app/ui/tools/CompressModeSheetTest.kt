@@ -1,4 +1,6 @@
 package com.scanwhirl.app.ui.tools
+import com.scanwhirl.app.util.ResetDialogShadowsRule
+import org.junit.Rule
 
 import android.app.Application
 import android.content.Intent
@@ -42,6 +44,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 abstract class CompressModeSheetBase {
 
+
+    @get:Rule val resetDialogShadows = ResetDialogShadowsRule()
     private lateinit var app: Application
     private lateinit var repo: ScanRepository
     private var sourceId = ""
