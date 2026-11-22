@@ -22,7 +22,7 @@
          Plain everyday Hindi, no rejected loanwords (अनुवाद की समीक्षा बाकी है). -->
     <string name="create_scan">दस्तावेज़ स्कैन करें</string>
     <string name="create_import_photos">फ़ोटो लाएँ</string>
-    <string name="create_disc_desc">बनाएँ: स्कैन करें या फ़ाइल लाएँ</string>
+    <string name="create_disc_desc">स्कैन करें या दस्तावेज़ आयात करें</string>
 
     <string name="home_search_hint">पन्नों के शब्द खोजें</string>
     <string name="home_create_id_card">पहचान पत्र</string>
@@ -33,38 +33,38 @@
     <string name="quick_compress">फ़ाइल छोटी करें</string>
     <string name="quick_sign">हस्ताक्षर करें</string>
     <string name="quick_protect">सुरक्षित करें</string>
-    <string name="quick_to_word">Word में बदलें</string>
-    <string name="quick_read_text">लिखा हुआ पढ़ें</string>
+    <string name="quick_to_word">Word</string>
+    <string name="quick_read_text">OCR</string>
     <string name="home_all_tools">सभी काम ›</string>
     <string name="home_recent">हाल के</string>
     <string name="home_newest">नए पहले ▾</string>
     <string name="home_chip_all">सभी %1$d</string>
     <string name="home_chip_category">%1$s %2$d</string>
-    <string name="home_empty_title">अपना पहला दस्तावेज़ स्कैन करें</string>
-    <string name="home_empty_body">आपके स्कैन इसी फ़ोन पर रहते हैं। खाता ज़रूरी नहीं; कागज़ात अपने-आप इंटरनेट पर नहीं भेजे जाते।</string>
-    <string name="home_no_match">आपकी खोज से कोई दस्तावेज़ नहीं मिला।</string>
+    <string name="home_empty_title">अभी कोई दस्तावेज़ नहीं</string>
+    <string name="home_empty_body">आपके स्कैन इसी फ़ोन पर रहते हैं। कोई खाता नहीं, फ़ाइलें बाहर नहीं जातीं।</string>
+    <string name="home_no_match">कोई नतीजा नहीं</string>
     <string name="home_page_count">%1$d पन्ने</string>
     <string name="home_protected">सुरक्षित</string>
 
     <string name="tools_title">काम</string>
-    <string name="tools_search_hint">काम खोजें, जैसे “हस्ताक्षर”</string>
-    <string name="tools_no_match">“%1$s” से कोई काम नहीं मिला।</string>
+    <string name="tools_search_hint">काम खोजें, जैसे "OCR"</string>
+    <string name="tools_no_match">“%1$s” के लिए कोई काम नहीं</string>
     <string name="tools_group_create">बनाएँ</string>
     <string name="tools_group_organize">व्यवस्थित करें</string>
     <string name="tools_group_optimize">छोटा करें</string>
     <string name="tools_group_convert">बदलें</string>
     <string name="tools_group_edit">बदलाव और हस्ताक्षर</string>
     <string name="tools_group_secure">सुरक्षा</string>
-    <string name="tools_group_text">लिखा हुआ</string>
+    <string name="tools_group_text">OCR</string>
 
     <!-- B4-TOOLS: सात काम (UI_PLAN §0b), पढ़ने के क्रम में -->
     <string name="tools_job_smaller">छोटा करें</string>
     <string name="tools_job_organise">जोड़ें और सजाएँ</string>
-    <string name="tools_job_markup">हस्ताक्षर और निशान लगाएँ</string>
-    <string name="tools_job_private">निजी रखें</string>
-    <string name="tools_job_text">लिखा हुआ निकालें</string>
+    <string name="tools_job_markup">हस्ताक्षर और निशान</string>
+    <string name="tools_job_private">निजता</string>
+    <string name="tools_job_text">OCR और खोजें</string>
     <string name="tools_job_format">फ़ॉर्मैट बदलें</string>
-    <string name="tools_job_new">कुछ नया शुरू करें</string>
+    <string name="tools_job_new">स्कैन और आयात</string>
     <string name="tools_job_all">सभी %1$d काम</string>
     <string name="tools_job_fewer">कम दिखाएँ</string>
     <string name="tools_search_results">नतीजे</string>
@@ -73,41 +73,41 @@
     <string name="tool_id_card">पहचान पत्र</string>
     <string name="tool_book_pages">किताब के पन्ने</string>
     <string name="tool_photos_pdf">फ़ोटो से PDF</string>
-    <string name="tool_import_pdf">PDF लाएँ</string>
+    <string name="tool_import_pdf">PDF आयात करें</string>
     <string name="tool_passport">पासपोर्ट</string>
     <string name="tool_qr_code">QR कोड</string>
     <string name="tool_business_card">नाम-पते वाला कागज़</string>
     <string name="tool_split">बाँटें</string>
     <string name="tool_extract">पन्ने निकालें</string>
-    <string name="tool_organize_pages">पन्नों का क्रम बदलें</string>
+    <string name="tool_organize_pages">क्रम बदलें</string>
     <string name="tool_insert_pages">पन्ने जोड़ें</string>
     <string name="tool_duplicate">दूसरी प्रति बनाएँ</string>
-    <string name="tool_folders">फ़ोल्डर और पहचान-चिह्न</string>
+    <string name="tool_folders">फ़ोल्डर</string>
     <string name="tool_batch_rename">एक साथ नाम बदलें</string>
     <string name="tool_enhance">साफ़ करें</string>
     <string name="tool_bw">काला और सफ़ेद</string>
-    <string name="tool_pdf_to_images">PDF से तस्वीरें बनाएँ</string>
+    <string name="tool_pdf_to_images">तस्वीरें</string>
     <string name="tool_long_image">लंबी तस्वीर बनाएँ</string>
-    <string name="tool_to_word">Word में बदलें</string>
-    <string name="tool_to_excel">Excel में बदलें</string>
-    <string name="tool_to_text">लिखे हुए शब्द निकालें</string>
-    <string name="tool_zip">ZIP में सहेजें</string>
-    <string name="tool_searchable_pdf">शब्द खोजने वाली PDF बनाएँ</string>
+    <string name="tool_to_word">Word</string>
+    <string name="tool_to_excel">Excel</string>
+    <string name="tool_to_text">.txt सहेजें</string>
+    <string name="tool_zip">ZIP</string>
+    <string name="tool_searchable_pdf">PDF खोजने लायक</string>
     <string name="tool_pdfa">PDF/A</string>
     <string name="tool_sign">हस्ताक्षर करें</string>
     <string name="tool_add_text">लिखें</string>
-    <string name="tool_draw">हाथ से लकीरें बनाएँ</string>
+    <string name="tool_draw">लकीरें बनाएँ</string>
     <string name="tool_highlight">रंग से उभारें</string>
-    <string name="tool_watermark">हल्की छाप लगाएँ</string>
-    <string name="tool_page_numbers">पन्नों पर नंबर डालें</string>
+    <string name="tool_watermark">छाप लगाएँ</string>
+    <string name="tool_page_numbers">पन्नों पर नंबर</string>
     <string name="tool_stamp">मोहर लगाएँ</string>
     <string name="tool_redact">निजी जानकारी छिपाएँ</string>
-    <string name="tool_protect">PDF सुरक्षित करें</string>
-    <string name="tool_unlock">PDF का ताला खोलें</string>
+    <string name="tool_protect">सुरक्षित करें</string>
+    <string name="tool_unlock">ताला खोलें</string>
     <string name="tool_vault">तिजोरी</string>
-    <string name="tool_remove_metadata">फ़ाइल की छिपी जानकारी हटाएँ</string>
-    <string name="tool_read_text">लिखा हुआ पढ़ें</string>
-    <string name="tool_hindi_text">हिंदी में लिखा हुआ</string>
+    <string name="tool_remove_metadata">मेटाडेटा हटाएँ</string>
+    <string name="tool_read_text">OCR</string>
+    <string name="tool_hindi_text">हिंदी</string>
 
     <string name="tool_coming_soon_title">जल्द आ रहा है</string>
     <string name="tool_soon_tag">जल्द</string>
@@ -132,7 +132,7 @@
     <string name="pro_price_note">एक बार भुगतान। कोई सदस्यता नहीं।</string>
     <string name="pro_unlock">Pro चालू करें</string>
     <string name="pro_restore">पहले की खरीद फिर चालू करें</string>
-    <string name="pro_see_all">Pro के सभी 18 काम देखें ›</string>
+    <string name="pro_see_all">Pro के सभी 15 काम ›</string>
     <string name="pro_buy_coming">भुगतान अभी चालू नहीं है। जाँच के लिए बने ऐप में Pro के सभी काम मुफ़्त रहते हैं।</string>
     <string name="pro_feat_sign">हस्ताक्षर और मोहर</string>
     <string name="pro_feat_word">Word और Excel</string>
@@ -145,9 +145,9 @@
 
     <string name="me_title">मैं</string>
     <string name="me_pro">ScanWhirl Pro</string>
-    <string name="me_pro_summary">सारे काम खोलें</string>
+    <string name="me_pro_summary">सभी Pro काम</string>
     <string name="me_settings">सेटिंग</string>
-    <string name="me_settings_summary">रंग-रूप, लिखाई और निजता</string>
+    <string name="me_settings_summary">रंग-रूप, भाषा, निजता</string>
     <string name="me_trash">हटाई गई फ़ाइलें</string>
     <string name="me_trash_summary">हटाए गए दस्तावेज़, 30 दिन</string>
     <string name="me_about">ScanWhirl के बारे में</string>
@@ -180,7 +180,7 @@
     <string name="shell_trash_note">इसे 30 दिनों तक वापस ला सकते हैं।</string>
     <string name="shell_moved_to_trash">हटाई गई फ़ाइलों में डाल दिया</string>
     <string name="reader_dock_pages">पन्ने</string>
-    <string name="reader_dock_text">लिखें</string>
+    <string name="reader_dock_text">OCR</string>
     <string name="reader_dock_sign">हस्ताक्षर</string>
     <string name="reader_dock_more">और</string>
     <string name="reader_text_unavailable">लिखा हुआ देखने के लिए ScanWhirl दस्तावेज़ चाहिए। यह PDF फ़ाइल से खुली है, इसलिए इसमें बदलने लायक लिखा हुआ नहीं है।</string>
@@ -191,7 +191,7 @@
     <string name="ocr_to_word_pro">Word में बदलें · Pro</string>
     <string name="ocr_foot_note">इसी फ़ोन पर पढ़ा गया। खोजा जा सकता है।</string>
     <string name="ocr_to_word_soon">Word में बदलना बन रहा है। यह इसी फ़ोन पर इस लिखे हुए से .docx बनाएगा।</string>
-    <string name="ocr_screen_title">लिखा हुआ</string>
+    <string name="ocr_screen_title">OCR</string>
     <string name="ocr_tidy_text">लिखा हुआ सुधारें</string>
     <string name="ocr_join_lines_desc">टूटी पंक्तियों को जोड़कर अनुच्छेद बनाएँ।</string>
     <string name="ocr_fix_spaces_desc">गायब और दोहरे खाली स्थान ठीक करें।</string>
@@ -274,7 +274,7 @@
 
     <string name="a11y_back">वापस</string>
     <string name="sel_batch">एक साथ</string>
-    <string name="settings_block_screenshots">फ़ोन पर दिख रहे पन्ने की तस्वीर न लेने दें</string>
+    <string name="settings_block_screenshots">दस्तावेज़ों की तस्वीर रोकें</string>
     <string name="settings_block_screenshots_note">सुरक्षित दस्तावेज़ों पर यह हमेशा लागू रहता है। साधारण स्कैन के लिए भी रोकने के लिए इसे चालू करें।</string>
     <string name="about_licences">लाइसेंस</string>
     <string name="about_licences_body">ScanWhirl इनके खुले स्रोत के लाइसेंस (Apache 2.0) के तहत AndroidX, Material Components, Google ML Kit, PdfBox-Android और kotlinx.coroutines का उपयोग करता है।</string>

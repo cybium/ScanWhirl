@@ -222,10 +222,10 @@ class ShellQaFixesTest {
         launch { activity ->
             activity.findViewById<View>(R.id.swNavTools).performClick()
             idle()
-            // fixui: tiles removed (owner F6/F7/F20) - Enhance is gone; To text opens the same
-            // document chooser, so the search sheet is still what this test covers.
+            // fixui removed Enhance; council lane N merged To text into OCR, so the OCR
+            // tile now opens the same document chooser this search-sheet test covers.
             ToolsHubScreen.tiles(activity.findViewById(R.id.swToolsBody))
-                .first { it.tool?.id == "to_text" }
+                .first { it.tool?.id == "read_text" }
                 .performClick()
             idle()
             val sheet = ShadowDialog.getLatestDialog()

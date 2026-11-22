@@ -241,11 +241,11 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_system">Follow system</string>
-    <string name="settings_font">Text &amp; font style</string>
+    <string name="settings_font">Text size</string>
     <string name="font_default">Default</string>
     <string name="font_serif">Serif</string>
     <string name="font_mono">Monospace</string>
-    <string name="settings_greeting">Status line</string>
+    <string name="settings_greeting">Home status line</string>
     <string name="settings_greeting_summary">Show the status line on the home screen</string>
     <!-- Status line (test26 T1.5): replaces the emoji greetings of Greeting.kt. -->
     <string name="status_morning">Good morning</string>
@@ -264,7 +264,7 @@
     <string name="settings_privacy_summary">Opens the policy in your browser</string>
     <string name="privacy_open_failed">No browser available</string>
     <string name="settings_pro">ScanWhirl Pro</string>
-    <string name="settings_pro_summary">Advanced extras. Pro is not available yet.</string>
+    <string name="settings_pro_summary">All Pro tools</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
     <string name="pro_panel_note">Scanning, text recognition, search, export, merge and compress are free and stay free.</string>
     <string name="pro_status_test">Unlocked in this test build</string>
@@ -281,9 +281,9 @@
     <string name="btn_change_pw">Password</string>
     <string name="btn_unlock_pdf">Unlock PDF</string>
     <string name="btn_lock_unlock">Lock / Unlock</string>
-    <string name="btn_ocr_text">Read text</string>
+    <string name="btn_ocr_text">OCR</string>
     <string name="btn_vault_hide">Hide in Vault</string>
-    <string name="btn_vault_unhide">Remove Vault</string>
+    <string name="btn_vault_unhide">Remove from Vault</string>
     <string name="badge_locked">Locked</string>
     <string name="badge_searchable">Searchable</string>
     <string name="doc_row_desc">%1$s, %2$d pages, %3$s</string>
@@ -330,10 +330,10 @@
     <string name="protection_unknown_msg">This PDF has a password ScanWhirl doesn’t know. Rebuild it from your pages without a password?</string>
     <string name="btn_rebuild_pdf">Rebuild PDF</string>
     <string name="protection_repaired">Protected again</string>
-    <string name="ocr_title">Extracted Text (OCR)</string>
+    <string name="ocr_title">Extract text (OCR)</string>
     <string name="ocr_running">Extracting text from pages…</string>
-    <string name="ocr_empty">No printed text detected on these pages.</string>
-    <string name="ocr_copy">Copy Text</string>
+    <string name="ocr_empty">No text found</string>
+    <string name="ocr_copy">Copy text</string>
     <string name="ocr_copied">Copied to clipboard</string>
     <string name="ocr_editor_title">Extracted text</string>
     <string name="ocr_page_label">Page %d</string>
@@ -356,16 +356,16 @@
     <string name="ocr_share_btn">Share text</string>
     <string name="ocr_copy_all">Copy all pages</string>
     <string name="ocr_share_all">Share all pages</string>
-    <string name="ocr_save_txt">Save as .txt</string>
+    <string name="ocr_save_txt">Save .txt</string>
     <string name="share_text">Share text</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
     <string name="signal_reading_text">Reading text on your scans</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Cleans up scans. Off keeps the photo as taken.</string>
-    <string name="settings_searchable_pdf">Make PDFs searchable</string>
+    <string name="settings_searchable_pdf">Searchable PDFs</string>
     <string name="settings_searchable_pdf_summary">Adds invisible text so other apps can search your PDFs.</string>
-    <string name="settings_auto_copy_to_documents">Also save a copy to Documents</string>
+    <string name="settings_auto_copy_to_documents">Save copy to Documents</string>
     <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
     <string name="settings_pro_message">ScanWhirl Pro is not available yet.</string>
     <string name="settings_language_section">Language</string>
@@ -721,4 +721,7 @@
     <string name="cap_scan_message">You reached the limit of %1$d pages in one scan. Add more pages to this document?</string>
     <string name="cap_scan_add_more">Add more</string>
     <string name="cap_scan_done">Done</string>
+    <!-- Council lane N: the tool tile name. The longer setup-screen header lives in
+         strings_form1.xml (lane F); the tile itself must be one or two whole words. -->
+    <string name="tool_form_ready_tile">Form photo</string>
 </resources>

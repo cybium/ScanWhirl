@@ -108,8 +108,8 @@ class LibraryRowActionsHindiTest {
             scenario.onActivity { activity ->
                 val sheet = openRowActions(activity, shown)
                 assertEquals(
-                    "the sheet speaks Hindi",
-                    "विकल्प",
+                    "the sheet speaks Hindi (council: कार्रवाई, not विकल्प)",
+                    "कार्रवाई",
                     sheet.findViewById<TextView>(R.id.swSheetTitle).text.toString()
                 )
                 val header = requireNotNull(

@@ -14,7 +14,7 @@
     <string name="ocr_w5_not_in_library">This text is not in a document, so there is no library text to save</string>
     <string name="ocr_w5_txt_failed_kept">The .txt file could not be written. Your text is still saved in this document.</string>
     <string name="ocr_w5_txt_failed_here">The .txt file could not be written. Your text is still here on this screen.</string>
-    <string name="ocr_w5_retry_txt">Retry</string>
+    <string name="ocr_w5_retry_txt">Try again</string>
     <string name="ocr_w5_reread_title">Read the text again?</string>
     <string name="ocr_w5_reread_msg">Reading again replaces the text on every page, including corrections you made. Save edits first if you want to keep them.</string>
     <string name="ocr_w5_reread_confirm">Read again</string>

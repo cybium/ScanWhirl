@@ -109,13 +109,13 @@ abstract class U4QuickToolsBase {
                 assertNotNull("the first row is on Home", activity.findViewById<View>(R.id.swQuickRow))
                 assertNull("at most two rows", activity.findViewById<View>(R.id.swQuickRow3))
                 assertEquals(
-                    "the six shipped defaults are visible",
+                    "the five council defaults are visible",
                     Prefs.DEFAULT_QUICK_TOOLS,
                     quickTiles(activity).map { it.tool!!.id }
                 )
                 val expected = listOf(
                     R.string.quick_merge, R.string.quick_compress, R.string.quick_sign,
-                    R.string.quick_protect, R.string.quick_to_word, R.string.quick_read_text
+                    R.string.quick_protect, R.string.quick_read_text
                 ).map { activity.getString(it) }
                 assertEquals("labels are the judged short EN/HI words", expected, quickTiles(activity).map { it.labelView.text.toString() })
             }

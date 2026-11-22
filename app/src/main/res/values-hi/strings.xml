@@ -26,7 +26,7 @@
     <string name="theme_light">हल्का</string>
     <string name="theme_dark">गहरा</string>
     <string name="theme_system">फ़ोन के अनुसार</string>
-    <string name="settings_font">लिखाई और अक्षरों का रूप</string>
+    <string name="settings_font">लिखाई का आकार</string>
     <string name="font_default">पहले से चुना हुआ</string>
     <string name="font_serif">सेरिफ़</string>
     <string name="font_mono">मोनोस्पेस</string>
@@ -128,9 +128,9 @@
     <string name="empty_import_button">फ़ोटो या एक PDF लाएँ</string>
     <string name="empty_no_match_hint">आपके स्कैन में नाम और लिखा हुआ खोजा गया।</string>
     <string name="list_count_category">%2$s में %1$d</string>
-    <string name="settings_greeting">स्थिति पंक्ति</string>
+    <string name="settings_greeting">मुख्य पन्ने की स्थिति-पंक्ति</string>
     <string name="settings_greeting_summary">मुख्य पन्ने पर हाल बताने वाली पंक्ति दिखाएँ</string>
-    <string name="settings_auto_copy_to_documents">Documents में एक प्रति भी सहेजें</string>
+    <string name="settings_auto_copy_to_documents">Documents में प्रति सहेजें</string>
     <string name="status_morning">सुप्रभात</string>
     <string name="status_afternoon">शुभ दोपहर</string>
     <string name="status_evening">शुभ संध्या</string>
@@ -168,7 +168,7 @@
     <string name="btn_list">सूची</string>
     <string name="btn_lock_pdf">PDF पर ताला लगाएँ</string>
     <string name="btn_lock_unlock">ताला लगाएँ / खोलें</string>
-    <string name="btn_ocr_text">लिखा हुआ पढ़ें</string>
+    <string name="btn_ocr_text">OCR</string>
     <string name="btn_settings">सेटिंग</string>
     <string name="btn_unlock_pdf">PDF का ताला खोलें</string>
     <string name="btn_vault_hide">तिजोरी में छिपाएँ</string>
@@ -262,12 +262,12 @@
     <string name="name_hint">दस्तावेज़ का नाम</string>
     <string name="nothing_to_share">भेजने के लिए कुछ नहीं</string>
     <string name="ocr_copied">नकल कर ली; अब दूसरी जगह चिपका सकते हैं</string>
-    <string name="ocr_copy">लिखे हुए की नकल करें</string>
+    <string name="ocr_copy">नकल करें</string>
     <string name="ocr_copy_all">सभी पन्नों की नकल करें</string>
     <string name="ocr_copy_btn">सबकी नकल करें</string>
     <string name="ocr_discard_btn">बदलाव न रखें</string>
     <string name="ocr_editor_title">पन्नों से निकाले गए शब्द</string>
-    <string name="ocr_empty">इन पन्नों पर कुछ छपा हुआ नहीं मिला।</string>
+    <string name="ocr_empty">कोई लिखा हुआ नहीं मिला</string>
     <string name="ocr_fix_spaces">खाली स्थान ठीक करें</string>
     <string name="ocr_join_lines">पंक्तियाँ जोड़ें</string>
     <string name="ocr_note">लिखे हुए की खोज छपे पन्नों पर सबसे अच्छी चलती है।</string>
@@ -276,12 +276,12 @@
     <string name="ocr_remove_gaps">खाली पंक्तियाँ हटाएँ</string>
     <string name="ocr_running">पन्नों से लिखा हुआ निकाला जा रहा है…</string>
     <string name="ocr_save_btn">.txt सहेजें</string>
-    <string name="ocr_save_txt">.txt के रूप में सहेजें</string>
+    <string name="ocr_save_txt">.txt सहेजें</string>
     <string name="ocr_saved">सहेजा गया</string>
     <string name="ocr_share_all">सभी पन्ने भेजें</string>
     <string name="ocr_share_btn">भेजें</string>
     <string name="ocr_share_text">लिखा हुआ भेजें</string>
-    <string name="ocr_title">पन्नों से निकाले गए शब्द</string>
+    <string name="ocr_title">लिखा हुआ निकालें (OCR)</string>
     <string name="ocr_undo">वापस लाएँ</string>
     <string name="ocr_redo">फिर से करें</string>
     <string name="ocr_undo_desc">वापस लाएँ</string>
@@ -391,13 +391,13 @@
     <string name="settings_auto_copy_to_documents_summary">सहेजी गई प्रतियाँ Documents/ScanWhirl में जाती हैं।</string>
     <string name="settings_auto_enhance">स्कैन अपने आप बेहतर करें</string>
     <string name="settings_auto_enhance_summary">स्कैन साफ़ हो जाते हैं। बंद रखने पर फ़ोटो वैसी ही रहती है जैसी खींची गई थी।</string>
-    <string name="settings_searchable_pdf">PDF में शब्द खोजने की सुविधा जोड़ें</string>
+    <string name="settings_searchable_pdf">खोजने लायक PDF</string>
     <string name="settings_searchable_pdf_summary">ऐसे शब्द जोड़ता है जो पन्ने पर दिखते नहीं, ताकि दूसरे ऐप भी आपकी PDF में शब्द खोज सकें।</string>
     <string name="settings_privacy">निजता नीति</string>
     <string name="settings_privacy_summary">निजता के नियम इंटरनेट के पन्ने खोलने वाले ऐप में खुलेंगे</string>
     <string name="settings_pro">ScanWhirl Pro</string>
     <string name="settings_pro_message">ScanWhirl Pro अभी उपलब्ध नहीं है।</string>
-    <string name="settings_pro_summary">ख़ास सुविधाएँ। Pro अभी उपलब्ध नहीं है।</string>
+    <string name="settings_pro_summary">सभी Pro काम</string>
     <string name="settings_pro_title">ScanWhirl Pro</string>
     <string name="settings_wallpaper">पीछे की तस्वीर</string>
     <string name="settings_wallpaper_summary">अपनी PDF के पीछे एक फ़ोटो लगाएँ</string>
@@ -676,4 +676,6 @@
     <string name="cap_scan_message">आप एक स्कैन में %1$d पन्नों की सीमा तक पहुँच गए हैं। इसी दस्तावेज़ में और पन्ने जोड़ें?</string>
     <string name="cap_scan_add_more">और जोड़ें</string>
     <string name="cap_scan_done">हो गया</string>
+    <!-- Council lane N: the tool tile name; the setup header stays in lane F's file. -->
+    <string name="tool_form_ready_tile">फ़ॉर्म फ़ोटो</string>
 </resources>
