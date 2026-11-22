@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane CR: Replace original, behind a flag that ships OFF. Lane-prefixed keys only. -->
+<resources>
+    <string name="cr_replace_title">Replace original?</string>
+    <string name="cr_replace_message">The original goes to Trash for 30 days. You can undo. The new copy stays.</string>
+    <string name="cr_replace_confirm">Replace original</string>
+    <string name="cr_replace_cancel">Keep both</string>
+    <string name="cr_replace_done">Original moved to Trash. Undo for 30 days.</string>
+    <string name="cr_replace_refused">This copy was already changed or removed. Nothing was replaced.</string>
+    <string name="cr_replace_undo">Undo replace</string>
+    <string name="cr_replace_busy">Replacing original…</string>
+</resources>

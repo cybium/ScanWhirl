@@ -23,7 +23,9 @@ import com.google.android.material.snackbar.Snackbar
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityTrashBinding
 import com.scanwhirl.app.databinding.ItemTrashBinding
+import com.scanwhirl.app.store.ReplaceCoordinator
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.util.ReplaceFeature
 import com.scanwhirl.app.ui.home.DocThumbBinder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -71,7 +73,12 @@ class TrashActivity : BaseActivity() {
         // window must drop expired entries and redraw the rest when it comes back. Expiry
         // stays in the repository; this screen only asks it to run before it reloads.
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { repo.recoverTrash() } }
+            withContext(Dispatchers.IO) {
+                // Lane CR: reconcile interrupted replaces BEFORE the 30-day expiry
+                // step so a pending original is never purged out from under us.
+                runCatching { ReplaceCoordinator(this@TrashActivity, repo).recoverBeforeExpiry() }
+                runCatching { repo.recoverTrash() }
+            }
             reload()
         }
     }
@@ -302,6 +309,34 @@ class TrashActivity : BaseActivity() {
             b.btnTrashDelete.setOnClickListener { confirmDeleteForever(item) }
             b.btnTrashRestore.contentDescription = getString(R.string.trash_restore_named, doc.name)
             b.btnTrashDelete.contentDescription = getString(R.string.trash_delete_forever_named, doc.name)
+
+            // Lane CR: a replaced original keeps a named Undo route in Trash.
+            b.trashActions.findViewWithTag<View>("cr_replace_undo")?.let {
+                b.trashActions.removeView(it)
+            }
+            if (ReplaceFeature.isEnabled() &&
+                ReplaceCoordinator(this@TrashActivity, repo).journalForTrashKey(item.key) != null
+            ) {
+                val undo = android.widget.TextView(this@TrashActivity).apply {
+                    tag = "cr_replace_undo"
+                    id = R.id.cr_trash_undo
+                    text = getString(R.string.cr_replace_undo)
+                    contentDescription = text
+                    minimumHeight = (48 * resources.displayMetrics.density).toInt()
+                    setPadding(24, 12, 24, 12)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        lifecycleScope.launch {
+                            withContext(Dispatchers.IO) {
+                                ReplaceCoordinator(this@TrashActivity, repo).undoByTrashKey(item.key)
+                            }
+                            reload()
+                        }
+                    }
+                }
+                b.trashActions.addView(undo)
+            }
 
             // At large text the two labelled actions stack instead of clipping.
             val stacked = resources.configuration.fontScale >= MainActivity.LARGE_TEXT_SCALE

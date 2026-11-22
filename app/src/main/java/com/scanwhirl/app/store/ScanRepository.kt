@@ -5252,4 +5252,140 @@ class ScanRepository(private val context: Context) {
             }
         }
     }
+
+    // ------------------------------------------------------------------
+    // LANE CR — Replace original storage hooks (COUNCIL §5).
+    //
+    // Additive only. This region does not edit recoverOperations, unlock,
+    // refilter, reservations or page ordering. Every hook takes locks in the
+    // established SEC2 order: PDF_LOCK -> OcrStore.locked -> TRASH_LOCK.
+    // The original is only ever moved to Trash; nothing here permanently
+    // deletes a document. Lane CR ships the feature flag OFF.
+    // ------------------------------------------------------------------
+
+    /** Full byte identity of a document directory; Trash bookkeeping is excluded. */
+    private fun replaceIdentityIn(dir: File): String? {
+        if (!dir.isDirectory) return null
+        val files = dir.walkTopDown().filter {
+            it.isFile && it.name != TRASH_MARKER && it.name != REPLACE_OP_MARKER
+        }.toList().sortedBy { it.relativeTo(dir).path }
+        if (files.isEmpty()) return null
+        val md = MessageDigest.getInstance("SHA-256")
+        for (file in files) {
+            md.update(file.relativeTo(dir).path.toByteArray(Charsets.UTF_8))
+            md.update(Sha256.of(file).toByteArray(Charsets.UTF_8))
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Identity of a live document, or null when it is gone. */
+    fun replaceDocIdentity(id: String): String? = replaceIdentityIn(File(docsDir, id))
+
+    private fun replaceTrashIdentity(key: String): String? =
+        replaceIdentityIn(File(trashDir, key))
+
+    /**
+     * A trashed original still matches the journal and carries `previous=opId`,
+     * which also keeps recoverTrash from expiring it. Called by journal recovery
+     * before the 30-day purge runs.
+     */
+    fun trashHasIdentity(key: String, expected: String, opId: String): Boolean {
+        val dir = File(trashDir, key)
+        if (!dir.isDirectory || replaceTrashIdentity(key) != expected) return false
+        return synchronized(TRASH_LOCK) {
+            val marker = File(dir, TRASH_MARKER)
+            val lines = runCatching { marker.readLines() }.getOrNull()?.toMutableList()
+                ?: mutableListOf("v1", dir.name, System.currentTimeMillis().toString())
+            val previous = "previous=$opId"
+            if (lines.none { it.startsWith("previous=") }) lines += previous
+            else lines.indices.forEach { i ->
+                if (lines[i].startsWith("previous=")) lines[i] = previous
+            }
+            Durable.atomicWriteText(marker, lines.joinToString("\n") + "\n")
+            Durable.atomicWriteText(File(dir, REPLACE_OP_MARKER), opId)
+            true
+        }
+    }
+
+    /** Finds a Trash entry this operation moved, even if the key was never journalled. */
+    fun replaceTrashKeyForOp(opId: String): String? = synchronized(TRASH_LOCK) {
+        trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
+            .orEmpty().firstOrNull { dir ->
+                runCatching { File(dir, REPLACE_OP_MARKER).readText().trim() }.getOrNull() == opId
+            }?.name
+    }
+
+    /** Only these transforms are in scope; every other tool keeps both files. */
+    fun replaceIsEligible(sourceId: String, outputId: String, operation: String): Boolean {
+        if (operation !in REPLACE_OPERATIONS) return false
+        if (sourceId == outputId) return false
+        val source = getDocument(sourceId) ?: return false
+        val output = getDocument(outputId) ?: return false
+        if (source.isLocked || source.isVaulted || output.isLocked || output.isVaulted) return false
+        return replaceDocIdentity(sourceId) != null && replaceDocIdentity(outputId) != null
+    }
+
+    /**
+     * Identity-gated move of the source whole into Trash. The check and the move
+     * share one critical section in the SEC2 lock order, so a concurrent edit
+     * cannot slip between "verify" and "move". Returns the Trash key.
+     */
+    fun replaceMoveSourceToTrash(sourceId: String, expected: String, opId: String): String {
+        var movedKey: String? = null
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    if (replaceDocIdentity(sourceId) != expected) {
+                        throw IOException("The source changed and was not replaced")
+                    }
+                    val doc = getDocument(sourceId)
+                        ?: throw IOException("The source is no longer in the library")
+                    if (doc.isLocked || doc.isVaulted) {
+                        throw IOException("A protected source cannot be replaced")
+                    }
+                    val key = moveToTrash(sourceId)
+                        ?: throw IOException("The source is no longer in the library")
+                    val marker = File(File(trashDir, key), TRASH_MARKER)
+                    val lines = runCatching { marker.readLines() }.getOrNull()?.toMutableList()
+                        ?: mutableListOf("v1", sourceId, System.currentTimeMillis().toString())
+                    val previous = "previous=$opId"
+                    if (lines.none { it.startsWith("previous=") }) lines += previous
+                    else lines.indices.forEach { i ->
+                        if (lines[i].startsWith("previous=")) lines[i] = previous
+                    }
+                    Durable.atomicWriteText(marker, lines.joinToString("\n") + "\n")
+                    Durable.atomicWriteText(File(File(trashDir, key), REPLACE_OP_MARKER), opId)
+                    movedKey = key
+                }
+            }
+        }
+        return movedKey ?: throw IOException("The source was not moved")
+    }
+
+    /**
+     * Collision-safe Undo: verifies the trashed bytes first, then uses the
+     * existing allocator. If the original id was taken, the document comes back
+     * under a new id with the same identity (never overwriting the occupant).
+     */
+    fun replaceRestoreOriginal(trashKey: String, expected: String): ScanDocument {
+        var restored: ScanDocument? = null
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    if (replaceTrashIdentity(trashKey) != expected) {
+                        throw IOException("The trashed original changed and was not restored")
+                    }
+                    restored = restoreFromTrash(trashKey)
+                }
+            }
+        }
+        return restored ?: throw IOException("The original could not be restored")
+    }
+
 }
+
+// Lane CR hook constants (top level, additive; the class already has its companion).
+private const val REPLACE_OP_MARKER = "replace_op.txt"
+private val REPLACE_OPERATIONS = setOf(
+    "compress", "resize", "protect", "unlock", "remove_metadata", "form_photo", "rename"
+)

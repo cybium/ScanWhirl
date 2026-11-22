@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="cr_replace_entry" type="id" />
+    <item name="cr_replace_sheet_title" type="id" />
+    <item name="cr_trash_undo" type="id" />
+</resources>

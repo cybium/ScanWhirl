@@ -27,11 +27,14 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.V2tResultReceiptStore
+import com.scanwhirl.app.store.ReplaceCoordinator
+import com.scanwhirl.app.util.ReplaceFeature
 import com.scanwhirl.app.tools.HomeHost
 import com.scanwhirl.app.tools.LockFlow
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
+import com.scanwhirl.app.ui.ReplaceSheet
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwProgress
@@ -533,6 +536,17 @@ class ToolResultActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        // Lane CR: the Replace entry point only. Dark by default; the sheet and
+        // the coordinator own the safety work when the flag is on.
+        if (replaceMayBeOffered()) {
+            morePanel.addView(
+                button(getString(R.string.cr_replace_confirm), id = R.id.cr_replace_entry,
+                    icon = R.drawable.ic_sw_arrange) { offerReplace() },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
+            )
+        }
         morePanel.addView(
             button(getString(R.string.tools_result_choose_location), R.id.toolResultSave) { save() },
             LinearLayout.LayoutParams(
@@ -679,6 +693,51 @@ class ToolResultActivity : BaseActivity() {
             }
             setOnClickListener { onClick() }
         }
+
+    // ---- Lane CR: Replace original entry point --------------------------
+
+    /** Dark by default; only one proven library input/output can offer Replace. */
+    private fun replaceMayBeOffered(): Boolean {
+        if (!ReplaceFeature.isEnabled() || idCardFlow) return false
+        val source = receiptSourceId ?: return false
+        val output = docIds.singleOrNull() ?: return false
+        return files.isEmpty() && repo.replaceIsEligible(source, output, toolId)
+    }
+
+    private fun offerReplace() {
+        val source = receiptSourceId ?: return
+        val output = docIds.singleOrNull() ?: return
+        val name = runCatching { repo.getDocument(source)?.name }.getOrNull().orEmpty()
+        ReplaceSheet.show(this) { performReplace(source, output, name) }
+    }
+
+    private fun performReplace(source: String, output: String, name: String) {
+        val entry: View? = findViewById(R.id.cr_replace_entry)
+        entry?.isEnabled = false
+        clearFail()
+        lifecycleScope.launch {
+            val key = withContext(Dispatchers.IO) {
+                ReplaceCoordinator(this@ToolResultActivity, repo).replace(source, output, toolId, name)
+            }
+            entry?.isEnabled = true
+            key.onFailure {
+                fail(getString(R.string.cr_replace_refused))
+            }.onSuccess { trashKey ->
+                Toast.makeText(this@ToolResultActivity,
+                    getString(R.string.cr_replace_done), Toast.LENGTH_LONG).show()
+                com.google.android.material.snackbar.Snackbar.make(
+                    rootView, R.string.cr_replace_undo,
+                    com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+                ).setAction(R.string.cr_replace_undo) {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            ReplaceCoordinator(this@ToolResultActivity, repo).undoByTrashKey(trashKey)
+                        }
+                    }
+                }.show()
+            }
+        }
+    }
 
     // ---- V2T T2: verified-copy chaining ----------------------------------
 

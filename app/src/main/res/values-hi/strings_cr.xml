@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane CR Hindi parity. Trash = हटाई गई फ़ाइलें, restore = वापस लाना, copy = प्रति. -->
+<resources>
+    <string name="cr_replace_title">मूल को बदलें?</string>
+    <string name="cr_replace_message">मूल 30 दिन तक हटाई गई फ़ाइलों में रहेगा। आप पहले जैसा कर सकते हैं। नई प्रति रहेगी।</string>
+    <string name="cr_replace_confirm">मूल को बदलें</string>
+    <string name="cr_replace_cancel">दोनों रखें</string>
+    <string name="cr_replace_done">मूल हटाई गई फ़ाइलों में है। 30 दिन तक पहले जैसा कर सकते हैं।</string>
+    <string name="cr_replace_refused">यह प्रति पहले ही बदली या हटा दी गई। कुछ नहीं बदला गया।</string>
+    <string name="cr_replace_undo">बदलाव वापस करें</string>
+    <string name="cr_replace_busy">मूल फ़ाइल बदली जा रही है…</string>
+</resources>
