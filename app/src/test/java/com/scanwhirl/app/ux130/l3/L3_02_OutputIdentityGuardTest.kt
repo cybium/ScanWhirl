@@ -82,11 +82,18 @@ class L3_02_OutputIdentityGuardTest {
 
     @Test
     fun `a cheap identity that still matches allows one tap removal`() {
-        // OLD: no identity was recorded when no producer supplied one, so Undo
-        // adopted the current identity and deleted. NEW: intent() records a
-        // stat-only identity at build time; an unchanged output still matches.
+        // OLD: Undo adopted the current identity and deleted. NEW: the producer's
+        // strong D2 identity is recorded at publish time; an unchanged output still
+        // matches and is removed with one tap, while a cheap C: receipt would refuse.
         val output = DocFixtures.saved(repo, app, pages = 1, name = "fresh output")
-        val intent = ToolResultActivity.intent(app, "compress", docIds = listOf(output))
+        // A real producer captures D2 on IO at publish time; do the same here at fixture
+        // creation with the public helper, never at Undo. The matching output is still removed.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(output), emptyList())
+        )
+        val intent = ToolResultActivity.intent(
+            app, "compress", docIds = listOf(output), outputIdentity = identity
+        )
         ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
             val deadline = System.currentTimeMillis() + 5000L
