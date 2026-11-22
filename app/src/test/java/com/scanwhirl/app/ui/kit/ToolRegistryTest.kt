@@ -44,18 +44,19 @@ class ToolRegistryTest {
             ToolRegistry.proCount()
         )
         assertEquals(
-            "folder creation and move are FREE (PRO_PLAN line 10-11): tags are still Pro,",
-            15,
+            "folder creation and move are FREE (PRO_PLAN line 10-11); LX adds link index Pro with one free use",
+            16,
             ToolRegistry.proCount()
         )
     }
 
     // fixui removed six dead tiles (43 - 6 = 37); FORM1 added form_ready (= 38); council
-    // lane N merged to_text into OCR, so 37 tools ship (36 READY, 1 Coming soon).
+    // lane N merged to_text into OCR (37), and LX added link_index: 38 tools ship
+    // (37 READY, 1 Coming soon). Old -> new: 37->38, 36->37.
     @Test
-    fun `catalogue holds all 37 tools, each id once`() {
-        assertEquals(37, ToolRegistry.all.size)
-        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
+    fun `catalogue holds every tool once`() {
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals(1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         assertEquals(
             "duplicate tool ids",
@@ -65,8 +66,9 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `sixteen tools are Pro`() {
-        assertEquals(16, ToolRegistry.all.count { it.pro })
+    fun `seventeen tools are Pro`() {
+        // Old -> new: 16 -> 17 (LX link_index).
+        assertEquals(17, ToolRegistry.all.count { it.pro })
     }
 
     @Test

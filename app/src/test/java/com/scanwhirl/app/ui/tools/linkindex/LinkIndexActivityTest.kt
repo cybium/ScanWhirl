@@ -4,6 +4,9 @@ import android.app.Application
 import android.view.View
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.kit.ToolJob
+import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.LinkIndexTrial
 import com.scanwhirl.app.util.ProGate
@@ -91,5 +94,15 @@ class LinkIndexActivityTest {
         )
         assertEquals("link_index", LinkIndexActivity.TOOL_ID)
         assertNotNull(LinkIndexActivity.intent(app))
+    }
+
+    @Test(timeout = 30_000)
+    fun `the tool is a ready Pro tile in the OCR job`() {
+        val tool = ToolRegistry.byId(LinkIndexActivity.TOOL_ID)
+        assertNotNull(tool)
+        assertTrue(tool!!.pro)
+        assertEquals(ToolStatus.READY, tool.status)
+        assertEquals(ToolJob.TEXT, ToolRegistry.jobOf(tool))
+        assertEquals("Link index", app.getString(tool.title))
     }
 }
