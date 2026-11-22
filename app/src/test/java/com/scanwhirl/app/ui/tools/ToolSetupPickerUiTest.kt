@@ -408,11 +408,19 @@ class ToolSetupPickerUiTest {
                     ancestors(bar).none { it.id == R.id.toolSetupScroll }
                 )
                 val scroll = requireNotNull(activity.findViewById<ScrollView>(R.id.toolSetupScroll))
-                val column = scroll.getChildAt(0)
+                val column = scroll.getChildAt(0) as ViewGroup
+                // The clearance is a scrollable spacer, not bottom padding: padding was not
+                // counted in the fillViewport scroll range, so the range field hid behind Continue.
+                val spacer = column.getChildAt(column.childCount - 1)
+                assertEquals(
+                    "the last child is the scrollable clearance",
+                    ToolSetupActivity.BOTTOM_SPACER_TAG,
+                    spacer.tag
+                )
                 assertTrue(
-                    "the list must keep room for the bar: padding ${column.paddingBottom}px, " +
+                    "the list must keep room for the bar: spacer ${spacer.height}px, " +
                         "bar ${bar.height}px",
-                    column.paddingBottom >= bar.height
+                    spacer.height >= bar.height
                 )
             }
         }

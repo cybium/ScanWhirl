@@ -324,6 +324,7 @@ class PerfHarnessTest {
         val pages = docPages(heavyId)
         // The old path returns every compressed page at once (a whole-book ByteArray list) and
         // hands that list to createDocument.
+        val before = repo.listDocuments().size
         val oldMs = time("target compress old (all pages in memory)", warmups = 0, runs = 1) {
             val compressed = com.scanwhirl.app.tools.SizeFit.compressPages(pages, 2_000_000L)
             runBlocking { repo.createDocument(repo.outputName("Target source", "Compressed"), compressed) }
@@ -334,9 +335,9 @@ class PerfHarnessTest {
         record("target compress peak pages in memory: old=$heavyPages new=1")
         assertTrue("streaming target compress too slow: ${newMs}ms", newMs < 180_000)
         assertEquals(
-            "both paths publish the same page count",
-            2,
-            repo.listDocuments().count { it.name.endsWith(" - Compressed") }
+            "both paths publish one new copy each, under the source stem",
+            before + 2,
+            repo.listDocuments().size
         )
         assertTrue("old path was measured", oldMs > 0)
     }
