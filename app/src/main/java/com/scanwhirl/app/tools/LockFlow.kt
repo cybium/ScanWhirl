@@ -8,6 +8,8 @@ import android.text.TextWatcher
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
@@ -27,12 +29,14 @@ import com.scanwhirl.app.ui.protect.VaultPasswordsFlow
 import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.PdfDecryptor
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.Sha256
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
@@ -474,104 +478,139 @@ class LockFlow(
         }
     }
 
-    /**
-     * Unlock a PDF file from storage. ScanWhirl recognises its own locks by a SHA-256 index of the
-     * protected file; any other PDF stays untouched with an honest explanation (we cannot break
-     * other people's passwords).
-     */
+    /** Known-password external PDF: never require a library hash and never rasterise its pages. */
     private fun unlockDevicePdf(uri: Uri, onRefusalDismiss: () -> Unit = {}) {
-        val progress = host.showProgress(R.string.unlock_pdf_title)
-        activity.lifecycleScope.launch {
-            try {
-                val hash = withContext(Dispatchers.IO) {
-                    activity.contentResolver.openInputStream(uri)?.use { Sha256.of(it) }
-                        ?: throw IllegalStateException("could not read the PDF")
-                }
-                val doc = withContext(Dispatchers.IO) { repo.findLockedDocumentByHash(hash) }
-                progress.dismiss()
-                if (doc == null) {
-                    SwDialog.card(activity)
-                        .setTitle(R.string.unlock_pdf_not_ours_title)
-                        .setMessage(R.string.unlock_pdf_not_ours_msg)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .showSw(isSheet = false)
-                        .setOnDismissListener { onRefusalDismiss() }
-                    return@launch
-                }
-                promptDeviceUnlock(doc, uri)
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.lock_op_failed),
-                    Toast.LENGTH_LONG
-                ).show()
+        val field = PasswordField(activity).apply {
+            showStrength = false
+            editText.id = R.id.unlockPassword
+            editText.hint = activity.getString(R.string.protect_password_hint)
+            editText.contentDescription = activity.getString(R.string.protect_label_password)
+        }
+        val sheet = SwSheet.builder(activity)
+            .setTitle(R.string.ffu_unlock_job)
+            .setMessage(R.string.ffu_original_protected)
+            .setContent(field)
+            .setPrimary(R.string.ffu_make_copy)
+            .build()
+        val cooldown = cooldownFor("external:$uri")
+        val handler = Handler(Looper.getMainLooper())
+        var job: Job? = null
+        var busy = false
+        var completed = false
+        fun clearSecret() {
+            handler.removeCallbacksAndMessages(null)
+            field.editText.setText("")
+            job?.cancel()
+        }
+        val observer = object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) = clearSecret()
+        }
+        activity.lifecycle.addObserver(observer)
+        sheet.setOnDismissListener {
+            clearSecret()
+            activity.lifecycle.removeObserver(observer)
+            if (!completed) onRefusalDismiss()
+        }
+        fun tickPause() {
+            if (!sheet.isShowing) return
+            if (cooldown.canTry()) {
+                sheet.primaryButton.isEnabled = !busy
+                field.setError(null)
+            } else {
+                sheet.primaryButton.isEnabled = false
+                field.setError(activity.getString(
+                    R.string.unlock_wrong_paused, ceil(cooldown.remainingPauseMs() / 1000.0).toInt()
+                ))
+                handler.postDelayed({ tickPause() }, 1000)
             }
         }
-    }
-
-    /** Mockup 09 for a file in storage: a right password exports a clean copy next to it. */
-    private fun promptDeviceUnlock(doc: ScanDocument, uri: Uri) {
-        val holder = GrantHolder()
-        UnlockSheet.show(
-            activity = activity,
-            documentName = doc.name,
-            verify = { candidate ->
-                repo.checkPdfPassword(doc.id, candidate).also { holder.value = it } != null
-            },
-            cooldown = cooldownFor(doc.id),
-            vaultAvailable = VaultPasswordsFlow.has(activity, doc.id),
-            onUnlocked = { if (!holder.consume(doc.id) { runUnlockDevicePdf(doc, uri, it) }) lostGrant() },
-            onRemoveProtection = { if (!holder.consume(doc.id) { runUnlockDevicePdf(doc, uri, it) }) lostGrant() },
-            onUseVault = { useVaultPassword(doc) { grant -> runUnlockDevicePdf(doc, uri, grant) } }
-        )
-    }
-
-    /** Exports a clean (password-free) copy of the locked scan's pages. */
-    private fun runUnlockDevicePdf(
-        doc: ScanDocument,
-        uri: Uri,
-        grant: ScanRepository.PdfPasswordGrant
-    ) {
-        val progress = host.showProgress()
-        activity.lifecycleScope.launch {
-            try {
-                // The sheet's grant is the authorization: no second derivation, and a password
-                // change made in between is refused by the repository's compare-and-swap.
-                val before = withContext(Dispatchers.IO) {
-                    activity.contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
-                }
-                val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id, grant) }
-                progress.dismiss()
-                activity.startActivity(
-                    ExportResultActivity.intent(
+        fun attempt() {
+            if (busy) return
+            if (!cooldown.canTry()) { tickPause(); return }
+            val password = field.text() // empty is submitted too, and cryptographically checked
+            field.editText.setText("")
+            field.setError(null)
+            busy = true
+            sheet.primaryButton.isEnabled = false
+            sheet.primaryButton.setText(R.string.unlock_checking)
+            job = activity.lifecycleScope.launch {
+                // Set inside IO, not from withContext's return: prompt cancellation can discard
+                // that return value. The finally still owns and removes the file in that case.
+                var output: ExternalPdfUnlock.Output? = null
+                var transferred = false
+                try {
+                    val name = withContext(Dispatchers.IO) { FlowUtil.devicePdfName(repo, uri) }
+                    withContext(Dispatchers.IO) {
+                        val context = coroutineContext
+                        val size = activity.contentResolver.openFileDescriptor(uri, "r")
+                            ?.use { it.statSize } ?: -1L
+                        activity.contentResolver.openInputStream(uri)?.use { input ->
+                            output = ExternalPdfUnlock(activity.cacheDir).unlock(
+                                input, size, password,
+                                verifyPages = { file ->
+                                    android.os.ParcelFileDescriptor.open(
+                                        file, android.os.ParcelFileDescriptor.MODE_READ_ONLY
+                                    ).use { PdfImport.pageCount(it) }
+                                },
+                                checkCancelled = { context.ensureActive() }
+                            )
+                        } ?: throw java.io.IOException("PDF unavailable")
+                    }
+                    coroutineContext.ensureActive()
+                    if (!sheet.isShowing) return@launch
+                    val result = checkNotNull(output)
+                    activity.startActivity(ExportResultActivity.intent(
                         activity,
-                        outputPath = clean.path,
-                        previewPath = doc.pageFiles.firstOrNull()?.path,
+                        outputPath = result.file.path,
+                        previewPath = null,
                         mime = "application/pdf",
-                        displayName = DownloadSaver.pdfNameFor("${doc.name} (unlocked)"),
-                        beforeBytes = before,
-                        afterBytes = clean.length(),
-                        width = 0,
-                        height = 0,
+                        displayName = DownloadSaver.pdfNameFor(name),
+                        beforeBytes = result.beforeBytes,
+                        afterBytes = result.file.length(),
+                        width = 0, height = 0,
                         title = activity.getString(R.string.unlock_pdf_title),
-                        warning = activity.getString(R.string.unlock_device_note),
-                        docId = doc.id // T4.8: record the saved copy on this document
-                    )
-                )
-            } catch (e: PdfProtection.WrongPassword) {
-                progress.dismiss()
-                Toast.makeText(activity, R.string.unlock_pdf_wrong, Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                progress.dismiss()
-                Toast.makeText(
-                    activity,
-                    activity.getString(R.string.lock_op_failed),
-                    Toast.LENGTH_LONG
-                ).show()
+                        warning = activity.getString(R.string.ffu_recipient_note),
+                        summary = activity.getString(R.string.ffu_original_protected)
+                    ))
+                    transferred = true
+                    completed = true
+                    cooldown.reset()
+                    // Do not cancel our successful launch from the dismiss listener.
+                    job = null
+                    sheet.dismiss()
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (_: PdfDecryptor.WrongPassword) {
+                    val pause = cooldown.registerFailure()
+                    if (pause > 0) tickPause() else field.setError(activity.getString(
+                        R.string.unlock_wrong_tries, cooldown.triesLeft, cooldown.nextPauseSeconds()
+                    ))
+                } catch (_: ExternalPdfUnlock.TooLarge) {
+                    field.setError(activity.getString(R.string.ffu_too_large))
+                } catch (_: PdfDecryptor.Damaged) {
+                    field.setError(activity.getString(R.string.ffu_damaged))
+                } catch (_: PdfDecryptor.Unsupported) {
+                    field.setError(activity.getString(R.string.ffu_unsupported))
+                } catch (_: Exception) {
+                    field.setError(activity.getString(R.string.ffu_failed))
+                } finally {
+                    if (!transferred) output?.file?.delete()
+                    busy = false
+                    sheet.primaryButton.setText(R.string.ffu_make_copy)
+                    sheet.primaryButton.isEnabled = cooldown.canTry()
+                }
             }
         }
+        sheet.primaryButton.setOnClickListener { attempt() }
+        field.editText.setOnEditorActionListener { _, action, _ ->
+            if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                attempt(); true
+            } else false
+        }
+        sheet.show()
+        sheet.secure()
+        if (!cooldown.canTry()) tickPause()
+        field.editText.requestFocus()
     }
 
     /**

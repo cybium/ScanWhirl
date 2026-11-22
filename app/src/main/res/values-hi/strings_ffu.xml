@@ -1,0 +1,11 @@
+<resources>
+    <string name="ffu_unlock_job">जिस पासवर्ड को जानते हैं, उसे हटाएँ</string>
+    <string name="ffu_original_protected">मूल फ़ाइल पासवर्ड से सुरक्षित रहेगी।</string>
+    <string name="ffu_recipient_note">बिना पासवर्ड वाली प्रति तभी दें जब पाने वाला माँगे।</string>
+    <string name="ffu_unsupported">इस PDF की बनावट अभी समर्थित नहीं है। मूल फ़ाइल नहीं बदली है। जारी करने वाले से बिना पासवर्ड वाली प्रति माँगें।</string>
+    <string name="ffu_protect_note">निजी तौर पर भेजने के लिए। कई फ़ॉर्म पासवर्ड वाली PDF स्वीकार नहीं करते।</string>
+    <string name="ffu_make_copy">बिना पासवर्ड प्रति बनाएँ</string>
+    <string name="ffu_too_large">इस फ़ोन पर सुरक्षित ढंग से पासवर्ड हटाने के लिए PDF बहुत बड़ी है। मूल फ़ाइल नहीं बदली है।</string>
+    <string name="ffu_failed">बिना पासवर्ड वाली प्रति नहीं बन सकी। मूल फ़ाइल नहीं बदली है।</string>
+    <string name="ffu_damaged">यह PDF ख़राब लगती है। मूल फ़ाइल नहीं बदली है।</string>
+</resources>
