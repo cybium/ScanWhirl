@@ -65,7 +65,7 @@ class V2RProToolsExpansionTest {
     @Test(timeout = 30_000)
     fun `the counted See all link is the only one and it opens the Tools hub`() {
         val (activity, pro, all) = screen()
-        val counted = activity.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+        val counted = activity.getString(R.string.copydiet_pro2_all_tools, ToolRegistry.proCount())
         val more = pro.findViewById<View>(R.id.swProMore) as TextView
         assertEquals("the counted label is preserved for ProCountTest", counted, more.text.toString())
         assertEquals(
@@ -87,7 +87,7 @@ class V2RProToolsExpansionTest {
     fun `Hindi keeps the single counted See all link`() {
         RuntimeEnvironment.setQualifiers("hi-rIN-w360dp-h800dp-xhdpi")
         val (activity, pro, _) = screen()
-        val counted = activity.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+        val counted = activity.getString(R.string.copydiet_pro2_all_tools, ToolRegistry.proCount())
         assertEquals(1, texts(pro).count { it.text.toString() == counted })
         assertNull(pro.findViewById<View>(R.id.v2rSeeAllTools))
         assertNotNull(pro.findViewById<View>(R.id.swProMore))

@@ -74,9 +74,10 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="14dp"
             android:gravity="center"
-            android:text="@string/pro_panel_note"
+            android:text="@string/copydiet_pro2_panel_note"
             android:textAppearance="@style/TextAppearance.SW.Meta"
-            android:textSize="12sp" />
+            android:textColor="@color/copydiet_pro2_secondary"
+            android:textSize="14sp" />
 
         <TextView
             android:layout_width="match_parent"

@@ -2,7 +2,7 @@
 <!-- lane/pro-fixes: Play Billing विफलता संदेश. -->
 <resources>
     <string name="pro_error_play">इस फ़ोन पर Google Play उपलब्ध नहीं है।</string>
-    <string name="pro_error_product">Pro अभी उपलब्ध नहीं है।</string>
+    <string name="pro_error_product">Google Play पर Pro उपलब्ध नहीं है</string>
     <string name="pro_error_purchase">खरीद पूरी नहीं हो सकी। फिर कोशिश करें।</string>
     <string name="pro_error_finish">खरीद पूरी नहीं हो सकी। “पहले की खरीद फिर चालू करें” आज़माएँ।</string>
 </resources>

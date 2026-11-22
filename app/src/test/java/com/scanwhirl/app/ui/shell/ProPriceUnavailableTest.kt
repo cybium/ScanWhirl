@@ -130,7 +130,7 @@ class ProPriceUnavailableTest {
         val (activity, pro) = screen()
         pro.setPrice(null)
         val status = byId(activity, pro, "swProPriceStatus") as TextView
-        assertEquals("Price unavailable.", status.text.toString())
+        assertEquals("Price unavailable", status.text.toString())
         assertEquals(View.VISIBLE, status.visibility)
         assertFalse("no Play price means Get Pro is not purchasable", pro.buyButton.isEnabled)
 
@@ -208,7 +208,7 @@ class ProPriceUnavailableTest {
     @Test(timeout = 30_000)
     fun `only one counted See all Pro tools link remains`() {
         val (activity, pro) = screen()
-        val counted = activity.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+        val counted = activity.getString(R.string.copydiet_pro2_all_tools, ToolRegistry.proCount())
         assertEquals("exactly one counted See all link", 1, texts(pro).count { it.text.toString() == counted })
         assertEquals(
             "no second un-counted See all link",
@@ -222,20 +222,20 @@ class ProPriceUnavailableTest {
         val (_, en) = screen(lang = "en")
         en.setPrice(null)
         val enLabels = texts(en).map { it.text.toString() }
-        assertTrue("English price unavailable", enLabels.any { it == "Price unavailable." })
+        assertTrue("English price unavailable", enLabels.any { it == "Price unavailable" })
         assertTrue("English Try again", enLabels.any { it == "Try again" })
 
         controller!!.pause()!!.stop()!!.destroy()
         val (_, hi) = screen(lang = "hi")
         hi.setPrice(null)
         val hiLabels = texts(hi).map { it.text.toString() }
-        assertTrue("Hindi price unavailable", hiLabels.any { it == "कीमत उपलब्ध नहीं।" })
+        assertTrue("Hindi price unavailable", hiLabels.any { it == "कीमत उपलब्ध नहीं है" })
         assertTrue("Hindi Try again", hiLabels.any { it == "फिर कोशिश करें" })
 
-        val hiL1 = File("src/main/res/values-hi/strings_l1.xml").readText()
-        val match = Regex("""<string name="pro_active_sub">([^<]*)</string>""").find(hiL1)
-        assertNotNull("Hindi pro_active_sub exists", match)
-        assertFalse("Hindi thank-you has no exclamation mark", match!!.groupValues[1].contains("!"))
-        assertTrue("Hindi thank-you keeps the reviewed sentence", match.groupValues[1].contains("धन्यवाद"))
+        val hiCopy = File("src/main/res/values-hi/strings_copydiet_pro2.xml").readText()
+        val match = Regex("""<string name="copydiet_pro2_active_sub">([^<]*)</string>""").find(hiCopy)
+        assertNotNull("Hindi owned status exists", match)
+        assertFalse("Hindi owned status has no exclamation mark", match!!.groupValues[1].contains("!"))
+        assertTrue("Hindi owned status keeps the reviewed words", match.groupValues[1].contains("खुले हैं"))
     }
 }
