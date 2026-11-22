@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.PageViewerFilterTest,com.scanwhirl.app.ui.OrganizeDraftUiTest,com.scanwhirl.app.form1.FormReadyActivityTest,com.scanwhirl.app.ui.ScanReviewFocusArrangeTest,com.scanwhirl.app.util.LongImageTest
