@@ -238,9 +238,12 @@ object Prefs {
 
     private const val KEY_QUICK_TOOLS = "quick_tools"
     const val MAX_QUICK_TOOLS = 12
-    val DEFAULT_QUICK_TOOLS = listOf("merge", "compress", "sign", "protect", "to_word", "read_text")
+    // Council §7: the newcomer-safe default row is five tiles — Merge, Compress, Sign,
+    // Protect and OCR (`read_text`). `to_word` is no longer a default; it stays reachable
+    // in the Tools hub and can be added back with Customize.
+    val DEFAULT_QUICK_TOOLS = listOf("merge", "compress", "sign", "protect", "read_text")
 
-    /** The tool ids on Home; defaults to the shipped six, capped at two rows. */
+    /** The tool ids on Home; defaults to the council's five, capped at two rows. */
     fun quickTools(c: Context): List<String> {
         val stored = sp(c).getString(KEY_QUICK_TOOLS, null)
             ?: return DEFAULT_QUICK_TOOLS

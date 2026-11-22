@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="doc_actions">विकल्प</string>
-    <string name="dock_read_text">पढ़ें</string>
-    <string name="doc_actions_header">इस दस्तावेज़ पर काम करें</string>
+    <string name="doc_actions">कार्रवाई</string>
+    <string name="dock_read_text">OCR</string>
+    <string name="doc_actions_header">दस्तावेज़ की कार्रवाई</string>
     <string name="doc_actions_vault_reason">पहले इस दस्तावेज़ को तिजोरी से बाहर निकालें।</string>
     <string name="doc_actions_missing">यह दस्तावेज़ अब आपके कागज़ात में नहीं है।</string>
-    <string name="doc_action_edit_crop">बदलें / काटें</string>
+    <string name="doc_action_edit_crop">बदलें और काटें</string>
     <string name="doc_action_save_pdf">PDF सहेजें</string>
     <string name="doc_action_save_hint">PDF सहेजने पर Documents में एक और प्रति बनती है।</string>
     <string name="doc_action_more_desc">और दस्तावेज़ कार्य</string>

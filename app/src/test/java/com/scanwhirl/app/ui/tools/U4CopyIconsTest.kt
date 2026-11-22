@@ -39,7 +39,7 @@ abstract class U4CopyIconsBase {
     }
 
     @Test fun resultHeaderIsReadyNotDone() {
-        assertEquals(if (hi) "तैयार" else "Ready", app.getString(R.string.tools_result_done))
+        assertEquals(if (hi) "हो गया" else "Done", app.getString(R.string.tools_result_done))
     }
 
     @Test fun restoreNotesRequestExistingSecrets() {

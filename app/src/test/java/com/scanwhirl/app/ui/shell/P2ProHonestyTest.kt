@@ -238,7 +238,7 @@ class P2ProHonestyTest {
         DocFixtures.locked(repo, app, pages = 1)
 
         launch { activity ->
-            val list = openToolPicker(activity, "to_text")
+            val list = openToolPicker(activity, "read_text")
             assertEquals("only the unlocked document is offered", 1, list.childCount)
             assertEquals("Open doc", (list.getChildAt(0) as DocCard).doc?.name)
         }

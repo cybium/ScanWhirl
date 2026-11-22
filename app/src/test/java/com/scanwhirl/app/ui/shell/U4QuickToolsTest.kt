@@ -156,10 +156,12 @@ abstract class U4QuickToolsBase {
                 assertNotNull("the first row is on Home", activity.findViewById<View>(R.id.swQuickRow))
                 assertNull("at most one row", activity.findViewById<View>(R.id.swQuickRow2))
                 assertEquals(
-                    "the saved defaults are visible",
+                    "the five council defaults are visible",
                     Prefs.DEFAULT_QUICK_TOOLS,
                     quickTiles(activity).map { it.tool!!.id }
                 )
+                // Lane B replaced the pencil with a Customize checkbox editor whose rows use
+                // the cb_quick_* labels; lane N keeps the council's five default tiles.
                 assertEquals(
                     "labels are the judged short EN/HI words",
                     Prefs.DEFAULT_QUICK_TOOLS.map { labelFor(activity, it) },
