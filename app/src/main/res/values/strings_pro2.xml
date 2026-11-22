@@ -2,7 +2,7 @@
 <!-- lane/pro-fixes — Play Billing failure copy (previously hard-coded English in Kotlin). -->
 <resources>
     <string name="pro_error_play">Google Play isn\'t available on this phone.</string>
-    <string name="pro_error_product">The Pro product is not available yet.</string>
+    <string name="pro_error_product">Pro unavailable in Google Play</string>
     <string name="pro_error_purchase">The purchase could not be completed. Try again.</string>
     <string name="pro_error_finish">Finishing the purchase failed. Try Restore purchase.</string>
 </resources>

@@ -105,6 +105,8 @@ class L5ProScreenTest {
         assertNotNull("Restore is in the action area (RED on base)", restore)
         assertEquals("Restore purchase", (restore as TextView).text.toString())
 
+        // PRO2: a buy needs a real Play price before it is purchasable.
+        pro.setPrice("₹299")
         free.performClick()
         restore.performClick()
         pro.buyButton.performClick()
@@ -130,19 +132,28 @@ class L5ProScreenTest {
     }
 
     @Test
-    fun `missing price is honest while the safe billing path stays enabled`() {
+    fun `missing price makes Get Pro non purchasable with a Try again action`() {
         val (activity, pro) = screen()
         pro.setPrice(null)
         val status = byId(activity, pro, "swProPriceStatus")
         assertNotNull("a named missing-price status (RED on base)", status)
         assertEquals(
-            "Price unavailable. Check Google Play and try again.",
+            // OLD: "Price unavailable. Check Google Play and try again." / "Price unavailable."
+            "Price unavailable",
             (status as TextView).text.toString()
         )
-        assertTrue("no price does not mean payment is disabled", pro.buyButton.isEnabled)
+        val retry = byId(activity, pro, "swProPriceRetry")
+        assertNotNull("Try again re-queries Play (RED on base)", retry)
+        assertFalse("no Play price means Get Pro cannot be bought", pro.buyButton.isEnabled)
+        pro.buyButton.performClick()
+        assertEquals("a disabled Get Pro starts no purchase", 0, counters(pro).buy)
+
         pro.setPrice("₹299")
         assertEquals(View.GONE, status.visibility)
-        assertTrue("the buy path is still live when Play answers", pro.buyButton.isEnabled)
+        assertEquals(View.GONE, retry!!.visibility)
+        assertTrue("the buy path is live when Play answers", pro.buyButton.isEnabled)
+        pro.buyButton.performClick()
+        assertEquals(1, counters(pro).buy)
     }
 
     @Test

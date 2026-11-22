@@ -6,7 +6,8 @@
     <string name="ux130_l5_pro_continue_free">मुफ़्त जारी रखें</string>
     <string name="ux130_l5_pro_restore">खरीद फिर चालू करें</string>
     <string name="ux130_l5_pro_once">एक बार। कोई सदस्यता नहीं।</string>
-    <string name="ux130_l5_pro_price_unavailable">कीमत उपलब्ध नहीं। Google Play देखकर फिर प्रयास करें।</string>
+    <string name="ux130_l5_pro_price_unavailable">कीमत उपलब्ध नहीं।</string>
+    <string name="ux130_l5_pro_price_retry">फिर कोशिश करें</string>
 
     <!-- L5-02 Vault recovery and overflow -->
     <string name="ux130_l5_vault_use_recovery">तिजोरी वापस खोलने का कोड डालें</string>

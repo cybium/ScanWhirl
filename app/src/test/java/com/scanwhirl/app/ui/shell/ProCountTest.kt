@@ -65,7 +65,7 @@ class ProCountTest {
                 val more = activity.findViewById<TextView>(R.id.swProMore)
                 assertEquals(
                     "the label is generated from the registry",
-                    activity.getString(R.string.pro_more_tools, expected),
+                    activity.getString(R.string.copydiet_pro2_all_tools, expected),
                     more.text.toString()
                 )
 

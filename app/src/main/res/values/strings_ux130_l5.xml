@@ -6,7 +6,8 @@
     <string name="ux130_l5_pro_continue_free">Continue free</string>
     <string name="ux130_l5_pro_restore">Restore purchase</string>
     <string name="ux130_l5_pro_once">Once. No subscription.</string>
-    <string name="ux130_l5_pro_price_unavailable">Price unavailable. Check Google Play and try again.</string>
+    <string name="ux130_l5_pro_price_unavailable">Price unavailable.</string>
+    <string name="ux130_l5_pro_price_retry">Try again</string>
 
     <!-- L5-02 Vault recovery and overflow -->
     <string name="ux130_l5_vault_use_recovery">Use recovery code</string>
