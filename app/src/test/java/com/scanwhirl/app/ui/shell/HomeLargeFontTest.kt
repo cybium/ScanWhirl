@@ -205,8 +205,13 @@ abstract class HomeLargeFontBase {
                 idle()
                 layoutRoot(activity)
                 val density = activity.resources.displayMetrics.density
-                val all = findText(activity.findViewById(R.id.swFolderRow), activity.getString(R.string.folder_all))
-                assertTrue("the All folder chip exists on Home", all != null)
+                // Council §7: OLD read a face chip rail. NEW reads the "All documents"
+                // row in the shared chooser behind "All folders ▾"; it is still 48dp.
+                activity.findViewById<View>(R.id.swAllFolders).performClick()
+                idle()
+                val folderRows = ShadowDialog.getLatestDialog()!!.findViewById<ViewGroup>(R.id.swFolderRow)
+                val all = findText(folderRows, activity.getString(R.string.folder_all))
+                assertTrue("the All folder row exists in the chooser", all != null)
                 assertTrue(
                     "the All chip is ${all!!.width}x${all.height}px, needs 48dp = ${(48 * density).toInt()}px",
                     all.width >= 48 * density - 1 && all.height >= 48 * density - 1
@@ -234,8 +239,13 @@ abstract class HomeLargeFontBase {
                 idle()
                 layoutRoot(activity)
                 val density = activity.resources.displayMetrics.density
-                val all = findText(activity.findViewById(R.id.swFolderRow), activity.getString(R.string.folder_all))
-                assertTrue("the All folder chip exists on Home", all != null)
+                // Council §7: OLD read a face chip rail. NEW reads the "All documents"
+                // row in the shared chooser behind "All folders ▾"; it is still 48dp.
+                activity.findViewById<View>(R.id.swAllFolders).performClick()
+                idle()
+                val folderRows = ShadowDialog.getLatestDialog()!!.findViewById<ViewGroup>(R.id.swFolderRow)
+                val all = findText(folderRows, activity.getString(R.string.folder_all))
+                assertTrue("the All folder row exists in the chooser", all != null)
                 assertTrue(
                     "the All chip is ${all!!.width}x${all.height}px at 100%, needs 48dp = ${(48 * density).toInt()}px (M8: it was 44dp)",
                     all.width >= 48 * density - 1 && all.height >= 48 * density - 1
