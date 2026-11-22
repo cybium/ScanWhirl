@@ -73,6 +73,11 @@ if ((-not $Tests -and -not $Apk -and -not $Local) -or $cloudTests) {
         git -C $root update-index --add --cacheinfo "100644,$blob,$rel"
     }
     $ciBranch = "ci/$Lane"
+    if (-not $cloudTests) {
+        # A full gate must never carry a leftover test filter (a stray .ci/test-filter.txt once turned
+        # a "full" gate into a 3-test run).
+        git -C $root update-index --force-remove ".ci/test-filter.txt" 2>$null | Out-Null
+    }
     if ($cloudTests) {
         # Single-test cloud run: the filter travels in the snapshot; a separate branch so it never cancels a full run.
         $fblob = $Tests | git -C $root hash-object -w --stdin
