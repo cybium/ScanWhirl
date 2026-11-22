@@ -767,7 +767,7 @@ class ResultAlsoSaveTest {
 
     /** A small Word result file. Its bytes matter; it is never opened as a real package. */
     private fun docxResult(): File =
-        File(app.cacheDir, "documents/Offer letter.docx").apply {
+        File(app.cacheDir, "documents/tools/also-save-fixture/Offer letter.docx").apply {
             parentFile?.mkdirs()
             writeBytes(ByteArray(512) { (it % 31 + 3).toByte() })
         }

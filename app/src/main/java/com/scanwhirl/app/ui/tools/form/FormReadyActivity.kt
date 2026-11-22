@@ -1179,7 +1179,12 @@ class FormReadyActivity : BaseActivity() {
                             cleaned ?: region, targetW, targetH, dpiNow, minBytes, maxBytes,
                             isCancelled = { encodeJob?.isCancelled == true || destroyed }
                         )
-                        val dir = File(cacheDir, "form1_out").apply { mkdirs() }
+                        // One run directory per capture. The former exists()-then-write name in
+                        // the shared form1_out root was not run-unique, so an old receipt could
+                        // name another run's output. Only the directory is new: the final file
+                        // name, photo bytes and encoder are unchanged.
+                        val dir = File(File(cacheDir, "form1_out"), UUID.randomUUID().toString())
+                            .apply { mkdirs() }
                         // UX_RULES_SCANNER §7: a human name derived from the picked file.
                         val out = File(dir, uniqueOutputName(dir))
                         Durable.writeFile(out, encoded.bytes)

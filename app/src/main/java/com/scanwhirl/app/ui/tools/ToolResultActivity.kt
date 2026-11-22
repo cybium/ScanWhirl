@@ -835,7 +835,10 @@ class ToolResultActivity : BaseActivity() {
         when {
             expected == null -> docIds.isEmpty() && files.isEmpty()
             expected.startsWith(CHEAP_IDENTITY_PREFIX) -> false
-            else -> captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files) == expected
+            // No ledger write here: a verification re-check must never extend producer authority.
+            else -> captureOutputIdentityBlocking(
+                this@ToolResultActivity, docIds, files, recordLedger = false
+            ) == expected
         }
     }
 
@@ -2093,12 +2096,15 @@ class ToolResultActivity : BaseActivity() {
         fun captureOutputIdentityBlocking(
             context: Context,
             docIds: List<String>,
-            files: List<File>
+            files: List<File>,
+            /** False only for a verification re-check, so a tap can never renew producer authority. */
+            recordLedger: Boolean = true
         ): String? {
             identityThreadProbe?.invoke(Thread.currentThread())
             return try {
                 if (files.isNotEmpty()) {
                     val parts = mutableListOf<String>()
+                    var allRegular = true
                     for (file in files.sortedBy { it.path }) {
                         if (!file.exists()) return null
                         // A result may name a directory (a failed export folder);
@@ -2107,10 +2113,19 @@ class ToolResultActivity : BaseActivity() {
                         parts += if (file.isFile) {
                             "${file.path}|${file.length()}|${Sha256.of(file)}"
                         } else {
+                            allRegular = false
                             "${file.path}|dir|${file.lastModified()}"
                         }
                     }
-                    "F:" + parts.joinToString(";")
+                    val identity = "F:" + parts.joinToString(";")
+                    // Producer-only issuance: on IO, immediately after the bytes were written.
+                    // A failed write is deliberately non-fatal; deletion then fails closed
+                    // because matches() also requires a live ledger entry for this identity.
+                    if (recordLedger && allRegular) {
+                        com.scanwhirl.app.store.resultauthority.ResultOutputAuthority
+                            .recordFileProducer(context, identity)
+                    }
+                    identity
                 } else if (docIds.isNotEmpty()) {
                     // D2 records every output byte in the document directory, not just scan.pdf.
                     // Producer calls run on IO. Old D:/C: receipts cannot authorize deletion.

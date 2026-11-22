@@ -16,6 +16,99 @@ import java.security.SecureRandom
  * writer locks, followed by mutation under those same locks.
  */
 internal object ResultOutputAuthority {
+    // Producer-only file ledger. No intent extra, cheapIdentity() or ordinary caller can
+    // create an entry: only captureOutputIdentityBlocking (the real producer's IO capture)
+    // calls recordFileProducer after the bytes are published.
+    private const val FILE_LEDGER_SUBDIR = "result_authority_v1/files"
+    private const val FILE_LEDGER_MAX_AGE_MS = 7L * 24L * 60L * 60L * 1000L
+    private const val FILE_LEDGER_MAX_ENTRIES = 512
+    private val UUID_RUN =
+        Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+    private fun fileLedgerDir(context: Context): File = File(context.noBackupFilesDir, FILE_LEDGER_SUBDIR)
+
+    /** Entry key = SHA-256 of the exact F: identity string, never of a caller-supplied path. */
+    private fun fileLedgerFile(context: Context, identity: String): File =
+        File(fileLedgerDir(context), Sha256.of(identity.toByteArray(Charsets.UTF_8)) + ".txt")
+
+    private fun ledgerCreated(file: File): Long? = try {
+        Regex("^created=(\\d+)$", RegexOption.MULTILINE)
+            .find(file.readText())?.groupValues?.get(1)?.toLongOrNull()
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * Producer-time issuance. Called only from captureOutputIdentityBlocking for file results.
+     * Returns false when the ledger cannot be written; the identity may still display, but
+     * destructive removal then fails closed because no entry exists.
+     */
+    fun recordFileProducer(context: Context, identity: String): Boolean {
+        if (!identity.startsWith("F:")) return false
+        return try {
+            val file = fileLedgerFile(context, identity)
+            val dir = file.parentFile ?: return false
+            if (!dir.isDirectory && !dir.mkdirs()) return false
+            val digest = Sha256.of(identity.toByteArray(Charsets.UTF_8))
+            Durable.atomicWriteText(
+                file,
+                "v1\ncreated=${System.currentTimeMillis()}\nlen=${identity.length}\nhash=$digest\n"
+            )
+            pruneFileLedger(context)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Bounded store: expire entries after seven days and cap the count at FILE_LEDGER_MAX_ENTRIES. */
+    private fun pruneFileLedger(context: Context) {
+        try {
+            val now = System.currentTimeMillis()
+            val keep = ArrayList<Pair<File, Long>>()
+            fileLedgerDir(context).listFiles().orEmpty().filter { it.isFile }.forEach { file ->
+                val created = ledgerCreated(file)
+                if (created == null || now - created > FILE_LEDGER_MAX_AGE_MS) file.delete()
+                else keep += file to created
+            }
+            if (keep.size > FILE_LEDGER_MAX_ENTRIES) {
+                keep.sortedBy { it.second }
+                    .take(keep.size - FILE_LEDGER_MAX_ENTRIES)
+                    .forEach { it.first.delete() }
+            }
+        } catch (_: Exception) {
+            // A failed sweep never grants authority; validity is checked independently below.
+        }
+    }
+
+    /** An entry is usable only when it is fresh and its length/hash match the exact identity. */
+    fun fileLedgerEntryValid(context: Context, identity: String): Boolean {
+        val file = fileLedgerFile(context, identity)
+        if (!file.isFile) return false
+        return try {
+            val text = file.readText()
+            val created = Regex("^created=(\\d+)$", RegexOption.MULTILINE).find(text)
+                ?.groupValues?.get(1)?.toLongOrNull() ?: return false
+            val len = Regex("^len=(\\d+)$", RegexOption.MULTILINE).find(text)
+                ?.groupValues?.get(1)?.toIntOrNull() ?: return false
+            val hash = Regex("^hash=([0-9a-f]{64})$", RegexOption.MULTILINE).find(text)
+                ?.groupValues?.get(1) ?: return false
+            if (len != identity.length ||
+                hash != Sha256.of(identity.toByteArray(Charsets.UTF_8))
+            ) return false
+            val age = System.currentTimeMillis() - created
+            age in 0L..FILE_LEDGER_MAX_AGE_MS
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** One-shot: consumed only after the whole verified batch was unlinked. */
+    fun consumeFileLedger(context: Context, identity: String) {
+        if (!identity.startsWith("F:")) return
+        runCatching { fileLedgerFile(context, identity).delete() }
+    }
+
     private fun revisionFile(context: Context, id: String): File =
         File(File(context.noBackupFilesDir, "result_authority_v1"),
             Sha256.of(id.toByteArray(Charsets.UTF_8)) + ".token")
@@ -110,13 +203,17 @@ internal object ResultOutputAuthority {
             if (files.isNotEmpty()) {
                 // Mixed doc IDs are input documents, never deletion candidates.
                 if (!expected.startsWith("F:")) return false
+                // Two independent gates: the receipt must be one a real producer issued, and
+                // every named path must still be a run-unique published output. A valid F:
+                // string alone (forged, legacy, or captured on an arbitrary cache file) has
+                // no ledger entry and is refused.
+                if (!fileLedgerEntryValid(context, expected)) return false
                 val candidates = files.sortedBy { it.path }
                 if (candidates.any { !safeTemporaryOutput(context, it) }) return false
-                // Known limitation (accepted, no lease/ledger): path prefix + SHA proves the
-                // bytes at check time only. An in-app cache writer that does NOT take the
-                // repository writer lock could still replace this file between this check and
-                // the later unlink. We keep the cache-path restriction and recheck; callers must
-                // not treat F: as immutable ownership of the path.
+                // Residual (bounded, NOT closed): another in-app writer that ignores the
+                // repository writer lock can still replace a file's bytes between this SHA
+                // recheck and the later unlink. Run-unique dirs and the one-shot ledger make
+                // this window narrow, but no lease/framework serializes such a writer here.
                 val actual = "F:" + candidates.joinToString(";") {
                     "${it.path}|${it.length()}|${Sha256.of(it)}"
                 }
@@ -134,19 +231,34 @@ internal object ResultOutputAuthority {
         }
     }
 
+    /**
+     * Only canonical, real (non-symlink) regular files inside a run-unique producer output
+     * directory. Files directly in the cache/documents root, the cache root, source/staging
+     * dirs, picker/Saf dirs and directories are all refused. The SHA recheck stays in matches().
+     */
     private fun safeTemporaryOutput(context: Context, f: File): Boolean {
-        // Foreign/source paths, symlinks, directories and picker staging fail closed.
         if (!f.isFile || f.length() <= 0L) return false
         val absolute = f.absoluteFile.path
         val canonical = f.canonicalFile.path
         if (absolute != canonical) return false
-        val bases = listOf(
-            File(context.cacheDir, "documents"),
-            File(context.cacheDir, "form1_out")
-        )
-        return bases.any { root ->
-            val prefix = root.canonicalPath + File.separator
-            canonical.startsWith(prefix)
+        val sep = File.separator
+        val docs = File(context.cacheDir, "documents").canonicalPath + sep
+        val form = File(context.cacheDir, "form1_out").canonicalPath + sep
+        val inDocs = canonical.startsWith(docs)
+        val inForm = !inDocs && canonical.startsWith(form)
+        if (!inDocs && !inForm) return false
+        val parts = (if (inDocs) canonical.removePrefix(docs) else canonical.removePrefix(form))
+            .split(sep)
+        // At least one run directory between the root and the file.
+        if (parts.size < 2) return false
+        return if (inDocs) {
+            // Published producers: documents/tools/<run>/<file> and documents/share/<run>/<file>.
+            // Source/staging trees (resize_input, resize, preview_*) are never deletion candidates.
+            parts.size >= 3 && (parts[0] == "tools" || parts[0] == "share")
+        } else {
+            // FormReady publishes into form1_out/<uuid>/<final name>.jpg, one dir per run,
+            // so an old receipt cannot delete another run's similarly named output.
+            parts.size == 2 && UUID_RUN.matches(parts[0])
         }
     }
 }

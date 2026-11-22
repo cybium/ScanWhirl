@@ -412,7 +412,7 @@ class ToolsUiTest {
 
     @Test(timeout = 60_000)
     fun `result screen acts on exported files too`() {
-        val jpeg = File(app.cacheDir, "documents/result_page.jpg").apply {
+        val jpeg = File(app.cacheDir, "documents/tools/ui-fixture/result_page.jpg").apply {
             parentFile?.mkdirs()
             writeBytes(com.scanwhirl.app.util.ImportFixtures.image(width = 120, height = 80))
         }

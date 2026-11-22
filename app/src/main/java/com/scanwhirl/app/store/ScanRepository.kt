@@ -1278,9 +1278,16 @@ class ScanRepository(private val context: Context) {
 
         val remainingDocs = candidates.filter { getDocument(it) != null }
         val remainingFiles = files.filter { it.exists() }.map { it.path }
+        val removed = !writeFailed && remainingDocs.isEmpty() && remainingFiles.isEmpty()
+        if (removed && files.isNotEmpty()) {
+            // One-shot: the exact producer entry is spent only after the whole verified
+            // batch was unlinked. A failed/partial removal keeps it for an honest retry.
+            com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.consumeFileLedger(
+                context, expectedIdentity ?: ""
+            )
+        }
         ResultDeleteResult(
-            if (!writeFailed && remainingDocs.isEmpty() && remainingFiles.isEmpty()) ResultDeleteState.REMOVED
-            else ResultDeleteState.PARTIAL,
+            if (removed) ResultDeleteState.REMOVED else ResultDeleteState.PARTIAL,
             remainingDocs, remainingFiles
         )
     }

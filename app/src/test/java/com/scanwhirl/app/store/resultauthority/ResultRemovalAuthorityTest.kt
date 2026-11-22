@@ -12,6 +12,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.nio.file.Files
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -250,5 +252,147 @@ class ResultRemovalAuthorityTest {
         )
         assertFalse(output.exists())
         assertArrayEquals(sourceHash, sourcePdf.readBytes())
+    }
+
+    // ---- F: producer ledger / run-unique path suite -----------------------
+
+    private fun produced(relative: String, bytes: ByteArray = byteArrayOf(1, 2, 3, 4)): File =
+        File(app.cacheDir, relative).apply {
+            parentFile?.mkdirs()
+            writeBytes(bytes)
+        }
+
+    private fun captured(file: File): String = requireNotNull(
+        ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(file))
+    )
+
+    /** The exact F: string a caller can fabricate WITHOUT a producer ledger entry. */
+    private fun fabricated(file: File): String =
+        "F:" + file.path + "|" + file.length() + "|" + com.scanwhirl.app.util.Sha256.of(file)
+
+    @Test(timeout = 30_000)
+    fun validFileIdentityWithoutProducerLedgerIsRefused() {
+        val file = produced("documents/tools/${UUID.randomUUID()}/adopt.jpg")
+        // Bytes and path are both acceptable; adoption still fails because no producer issued it.
+        // (Do NOT call captured() here — that would write the ledger and grant authority.)
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(file), fabricated(file), null).state
+        )
+        assertTrue(file.exists())
+    }
+
+    @Test(timeout = 30_000)
+    fun forgedAndLegacyFileReceiptsAreRefused() {
+        val file = produced("documents/tools/${UUID.randomUUID()}/forged.jpg")
+        val real = captured(file)
+        for (bad in listOf(null, "", "F:bad", "D:legacy", real + "x", "C:F:${file.path}|4|1")) {
+            assertEquals(
+                ScanRepository.ResultDeleteState.REFUSED,
+                repo.removeResultOutputsIfUnchanged(emptyList(), listOf(file), bad, null).state
+            )
+        }
+        assertTrue(file.exists())
+    }
+
+    @Test(timeout = 30_000)
+    fun producerLedgerAllowsExactlyOneRemovalThenRefusesReplay() {
+        val file = produced("documents/tools/${UUID.randomUUID()}/once.jpg")
+        val identity = captured(file)
+        assertEquals(
+            ScanRepository.ResultDeleteState.REMOVED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(file), identity, null).state
+        )
+        assertFalse(file.exists())
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(file), identity, null).state
+        )
+    }
+
+    @Test(timeout = 30_000)
+    fun bytesChangedAfterLedgerCaptureRefuseTheWholeBatch() {
+        val a = produced("documents/tools/${UUID.randomUUID()}/a.jpg")
+        val b = produced("documents/tools/${UUID.randomUUID()}/b.jpg")
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(a, b))
+        )
+        b.writeBytes(byteArrayOf(9, 9, 9, 9))
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(a, b), identity, null).state
+        )
+        assertTrue(a.exists())
+        assertTrue(b.exists())
+    }
+
+    @Test(timeout = 30_000)
+    fun fileDirectlyUnderDocumentsRootIsNeverARemovalCandidate() {
+        val file = produced("documents/root-level-result.jpg")
+        val identity = captured(file)
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(file), identity, null).state
+        )
+        assertTrue(file.exists())
+    }
+
+    @Test(timeout = 30_000)
+    fun sourceStagingDirectoryIsNeverARemovalCandidate() {
+        val staged = produced("documents/resize_input/${UUID.randomUUID()}.jpg")
+        val identity = captured(staged)
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(staged), identity, null).state
+        )
+        assertTrue(staged.exists())
+    }
+
+    @Test(timeout = 30_000)
+    fun symlinkAndDirectoryNeverBecomeRemovalCandidates() {
+        val target = produced("documents/tools/${UUID.randomUUID()}/target.jpg")
+        val runDir = File(app.cacheDir, "documents/tools/${UUID.randomUUID()}").apply { mkdirs() }
+        val link = File(runDir, "link.jpg")
+        val made = runCatching { Files.createSymbolicLink(link.toPath(), target.toPath()) }.isSuccess
+        if (made) {
+            val linkIdentity = captured(link)
+            assertEquals(
+                ScanRepository.ResultDeleteState.REFUSED,
+                repo.removeResultOutputsIfUnchanged(emptyList(), listOf(link), linkIdentity, null).state
+            )
+            assertTrue(target.exists())
+        }
+        val directory = File(runDir, "folder.jpg").apply { mkdirs() }
+        val dirIdentity = ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(directory))
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(directory), dirIdentity, null).state
+        )
+        assertTrue(directory.isDirectory)
+    }
+
+    @Test(timeout = 30_000)
+    fun formReadyRunUniqueOutputAllowsUntouchedRemovalOnceAndNotAcrossRuns() {
+        val first = produced("form1_out/${UUID.randomUUID()}/Aadhaar photo.jpg")
+        val firstIdentity = captured(first)
+        val second = produced(
+            "form1_out/${UUID.randomUUID()}/Aadhaar photo.jpg",
+            first.readBytes()
+        )
+        // Same name and same bytes in a different run cannot satisfy the first receipt.
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(second), firstIdentity, null).state
+        )
+        assertTrue(second.exists())
+        assertEquals(
+            ScanRepository.ResultDeleteState.REMOVED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(first), firstIdentity, null).state
+        )
+        assertFalse(first.exists())
+        assertEquals(
+            ScanRepository.ResultDeleteState.REFUSED,
+            repo.removeResultOutputsIfUnchanged(emptyList(), listOf(first), firstIdentity, null).state
+        )
     }
 }
