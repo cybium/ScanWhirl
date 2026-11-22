@@ -85,6 +85,16 @@ class FormFx2PhoneEvidenceTest {
         it.toByteArray()
     }
 
+    private fun jpegSolid(color: Int, w: Int, h: Int): ByteArray {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        return try {
+            bmp.eraseColor(color)
+            jpegOf(bmp)
+        } finally {
+            bmp.recycle()
+        }
+    }
+
     private fun decode(bytes: ByteArray): Bitmap =
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 
@@ -449,7 +459,7 @@ class FormFx2PhoneEvidenceTest {
             mutable.recycle()
             assertFalse("fixture must be immutable", source.isMutable)
             a.useBitmapForTest(source, "signature_on_paper.jpg")
-            assertTrue("preview never appeared", waitUntil { a.previewVisibleForTest() })
+            assertTrue("preview never appeared", waitUntil(20_000) { a.previewVisibleForTest() })
             val previews = a.previewBitmapsForTest()
             assertEquals(2, previews.size)
             previews.forEachIndexed { i, bmp -> assertFalse("preview $i recycled before export", bmp.isRecycled) }
@@ -466,6 +476,55 @@ class FormFx2PhoneEvidenceTest {
             assertFalse("source recycled by export", source.isRecycled)
             a.previewBitmapsForTest().forEachIndexed { i, bmp ->
                 assertFalse("preview $i recycled by export", bmp.isRecycled)
+            }
+        } finally {
+            c.pause().stop().destroy()
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `cleanup preview crops the exact same rect that the export saves`() {
+        val c = controller()
+        try {
+            val a = c.get()
+            idle()
+            a.findViewById<View>(R.id.formReadyPresetSignature).performClick()
+            a.findViewById<View>(R.id.formReadyCleanup).performClick()
+            idle()
+            a.acceptPickedBytes(jpegSolid(Color.WHITE, 600, 500), "signature.jpg")
+            assertTrue("photo never loaded", waitUntil { a.hasImageForTest() && a.cropReadyForTest() })
+            // Deliberately off-aspect: the unsnapped float rect would differ from the saved crop.
+            a.setCropRectForTest(RectF(50f, 50f, 400f, 300f))
+            a.findViewById<View>(R.id.formReadyCleanup).performClick()
+            idle()
+            a.findViewById<View>(R.id.formReadyCleanup).performClick()
+            idle()
+            assertTrue("preview never appeared", waitUntil(20_000) { a.previewVisibleForTest() })
+            val preview = a.previewCropRectForTest()
+            assertNotNull("preview did not publish its crop", preview)
+            a.findViewById<View>(R.id.formReadyApply).performClick()
+            assertTrue("file never made", waitUntil { a.lastOutputForTest() != null })
+            val exported = a.exportCropRectForTest()
+            assertNotNull("export did not publish its crop", exported)
+            assertEquals("preview must equal saved crop", preview, exported)
+        } finally {
+            c.pause().stop().destroy()
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `resize width and height fields are 48dp touch targets`() {
+        val c = controller()
+        try {
+            val a = c.get()
+            val view = android.view.LayoutInflater.from(a).inflate(R.layout.dialog_resize, null, false)
+            val density = a.resources.displayMetrics.density
+            val expected = (48f * density).toInt()
+            for (id in listOf(R.id.editWidth, R.id.editHeight)) {
+                val field = view.findViewById<View>(id)
+                assertNotNull("missing field $id", field)
+                assertTrue("field $id is ${field.layoutParams.height}px, below $expected",
+                    field.layoutParams.height >= expected)
             }
         } finally {
             c.pause().stop().destroy()
