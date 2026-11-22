@@ -145,15 +145,12 @@ android {
     // key exactly as it does today. (-PdemoBuild on its own still only changes the
     // applicationId above, as before.)
     if (project.hasProperty("demoBuild") && project.hasProperty("demoKeystore")) {
-        val demoStoreFile = file(project.property("demoKeystore").toString())
-        val demoStorePass = project.findProperty("demoStorePass")?.toString().orEmpty()
-        val demoKeyAlias = project.findProperty("demoKeyAlias")?.toString().orEmpty()
-        val demoKeyPass = project.findProperty("demoKeyPass")?.toString().orEmpty()
         val demoSigning = signingConfigs.create("demo") {
-            storeFile = demoStoreFile
-            storePassword = demoStorePass
-            keyAlias = demoKeyAlias
-            keyPassword = demoKeyPass
+            storeFile = file(project.property("demoKeystore").toString())
+            // Values are Gradle -P lookups supplied by CI from repo secrets, never literals.
+            storePassword = project.findProperty("demoStorePass")?.toString().orEmpty()
+            keyAlias = project.findProperty("demoKeyAlias")?.toString().orEmpty()
+            keyPassword = project.findProperty("demoKeyPass")?.toString().orEmpty()
         }
         buildTypes {
             getByName("debug") {

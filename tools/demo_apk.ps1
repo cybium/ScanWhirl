@@ -41,8 +41,11 @@ function Gh {
 $sha = (git rev-parse "$Ref^{commit}").Trim()
 if ($LASTEXITCODE -ne 0 -or -not $sha) { throw "Unknown ref $Ref" }
 $short = $sha.Substring(0, 8)
-git push -q -f origin "${sha}:refs/heads/apk/$short" 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "push to apk/$short failed" }
+$ErrorActionPreference = 'Continue'   # the pre-push guard writes to stderr; judge by exit code
+$pushOut = git push -q -f origin "${sha}:refs/heads/apk/$short" 2>&1
+$pushCode = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+if ($pushCode -ne 0) { $pushOut | Select-Object -Last 5 | Write-Output; throw "push to apk/$short failed" }
 
 $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
 $runId = $null
@@ -85,5 +88,7 @@ if (-not (Test-Path -LiteralPath $apk -PathType Leaf)) { throw 'app-debug.apk no
 $actual = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected.ToLowerInvariant()) { throw "SHA256 mismatch: expected $expected, got $actual" }
 
+$ErrorActionPreference = 'Continue'
 git push -q origin --delete "apk/$short" 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
 Write-Output "READY demo-apk commit=$short run=$runId sha256=$actual path=$apk"
