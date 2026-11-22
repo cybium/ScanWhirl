@@ -210,7 +210,7 @@ class ImportPdfFixFlowTest {
                             scenario.onActivity { shell ->
                                 layoutWindow(shell.window.decorView, w, h)
                                 fab = screenBounds(shell.findViewById(R.id.swNavScan))
-                                assertEquals("$case Create FAB width", (74 * density).toInt(), fab.width())
+                                assertEquals("$case Create FAB width", (84 * density).toInt(), fab.width())
                                 assertTrue("$case Create FAB must be in its bottom zone: $fab",
                                     fab.top >= h - (140 * density).toInt() && fab.bottom <= h)
                             }
