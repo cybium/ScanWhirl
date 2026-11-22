@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/lxRowRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_title_input"
+    android:gravity="center_vertical"
+    android:minHeight="72dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="4dp">
+
+    <CheckBox
+        android:id="@+id/lxRowCheck"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:minWidth="48dp"
+        android:minHeight="48dp" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <EditText
+            android:id="@+id/lxRowTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:hint="@string/lx_title_hint"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:maxLines="3"
+            android:minHeight="48dp"
+            android:textColor="@color/text_hologram_hi"
+            android:textColorHint="@color/text_hologram_dim"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/lxRowPage"
+                android:layout_width="96dp"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:hint="@string/lx_printed_page_hint"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:maxLines="1"
+                android:minHeight="48dp"
+                android:textColor="@color/text_hologram_hi"
+                android:textColorHint="@color/text_hologram_dim"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/lxRowConfidence"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_hologram_mid"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/lxRowLevel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:textColor="@color/text_hologram_dim"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/lxRowRemove"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/lx_add_entry"
+        android:src="@drawable/ic_sym_delete"
+        app:tint="@color/text_hologram_mid" />
+</LinearLayout>
