@@ -77,7 +77,7 @@ def guard():
         raise RuntimeError(f"{PKG} is not installed on this emulator")
     if not VERIFY.is_file():
         raise RuntimeError("verify/verify_result.py missing from atlas bundle")
-    missing = [p.name for p in REQUIRED_FIXTURES if not (FIX / p).is_file()]
+    missing = [p for p in REQUIRED_FIXTURES if not (FIX / p).is_file()]
     if missing:
         raise RuntimeError("fixtures missing: " + ", ".join(missing))
 
