@@ -204,6 +204,62 @@ class CR_SecurityReworkTest {
     }
 
     @Test
+    fun `output changed or removed at before-move refuses replacement`() = runBlocking {
+        for (remove in listOf(false, true)) {
+            val source = doc("seam-source-$remove"); val output = doc("seam-output-$remove")
+            val before = hashes(source)
+            val authId = authorize(source, output)
+            ReplaceFaults.hook = { step ->
+                if (step == "before-move") {
+                    if (remove) File(repo.docsDir, output).deleteRecursively()
+                    else repo.getDocument(output)!!.pdfFile.writeText("changed")
+                }
+            }
+            assertTrue(coordinator.replace(authId, source, output, "compress", source).isFailure)
+            ReplaceFaults.reset()
+            assertEquals(before, hashes(source))
+            assertTrue(repo.listTrash().none { it.originalId == source })
+        }
+    }
+
+    @Test
+    fun `recovery completes each Undo swap boundary including collision restore`() = runBlocking {
+        for (collision in listOf(false, true)) {
+            for (step in listOf("before-restore", "after-restore", "before-output-trash", "after-output-trash")) {
+                val source = doc("boundary-source-$collision-$step")
+                val output = doc("boundary-output-$collision-$step")
+                val before = hashes(source)
+                val key = replaceWith(source, output)
+                val op = requireNotNull(journal.findByTrashKey(key)?.opId)
+                if (collision) {
+                    val squatter = doc("occupant")
+                    File(repo.docsDir, squatter).copyRecursively(File(repo.docsDir, source))
+                }
+                ReplaceFaults.hook = { at -> if (at == step) throw SimulatedProcessDeath(at) }
+                assertTrue(coordinator.undo(op).isFailure)
+                ReplaceFaults.reset()
+                coordinator.recoverBeforeExpiry()
+                val restored = repo.listDocuments().firstOrNull { hashes(it.id) == before }
+                assertNotNull("original must actually be restored: $collision $step", restored)
+                assertNull("unchanged output must actually be trashed: $step", repo.getDocument(output))
+                assertTrue(repo.listTrash().any { it.originalId == output })
+                if (collision) assertEquals("occupant", repo.getDocument(source)?.name)
+            }
+        }
+    }
+
+    @Test
+    fun `Undo output expires normally after completed journal pruning`() = runBlocking {
+        val source = doc("expiry-source"); val output = doc("expiry-output")
+        val key = replaceWith(source, output)
+        coordinator.undo(requireNotNull(journal.findByTrashKey(key)?.opId)).getOrThrow()
+        coordinator.recoverBeforeExpiry()
+        repo.recoverTrash(System.currentTimeMillis() + 31L * 24 * 60 * 60 * 1000)
+        assertTrue(repo.listTrash().none { it.originalId == output })
+        assertNotNull(repo.getDocument(source))
+    }
+
+    @Test
     fun `release config ignores the mutable test override`() {
         assertFalse(ReplaceFeature.resolve(allowOverride = false, override = true))
         assertTrue(ReplaceFeature.resolve(allowOverride = true, override = true))
