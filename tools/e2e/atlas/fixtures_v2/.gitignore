@@ -1,0 +1,5 @@
+# Generated in CI by make_fixtures.py; never commit binary corpus files.
+*.jpg
+*.pdf
+references/*.png
+_selftest.json

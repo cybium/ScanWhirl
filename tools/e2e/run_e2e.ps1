@@ -19,28 +19,40 @@ Usage:
          ScanWhirl-HQ\current tree.
   -Name  ci branch suffix (default: the lane name) -> ci/e2e-<Name>.
   -NoWait push and print the URL without waiting for the result.
+  -Atlas run the Tool Atlas instead of the smoke/flows legs. Pushes to
+         atlas/<shortsha> (workflow_dispatch needs the workflow on the default
+         branch), waits, and downloads atlas-<sha> to
+         ScanWhirl-HQ\qa\emulator-atlas\<shortsha>\.
+  -Tools with -Atlas, 'all' (default) or a comma list, e.g. compress,merge,protect.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Lane,
     [string]$Name = "",
     [switch]$NoWait,
-    [int]$TimeoutMinutes = 45
+    [switch]$Atlas,
+    [string]$Tools = "all",
+    [int]$TimeoutMinutes = 100
 )
 $ErrorActionPreference = "Continue"
 $root = if ($Lane -eq "main") { "C:\Users\Cybium\Desktop\ScanWhirl-HQ\current" } else { "C:\Users\Cybium\Desktop\ScanWhirl-HQ\lanes\$Lane" }
 if (-not (Test-Path "$root\gradlew")) { Write-Output "E2E FAIL: no worktree at $root"; exit 2 }
 if (-not $Name) { $Name = $Lane }
 $ciBranch = "ci/e2e-$Name"
-if (-not $ciBranch.StartsWith("ci/e2e-")) { Write-Output "E2E FAIL: refusing branch $ciBranch"; exit 2 }
+if ($Atlas) { $ciBranch = "atlas/pending" }  # real name is atlas/<shortsha> after the snapshot
+if (-not ($ciBranch.StartsWith("ci/e2e-") -or $ciBranch.StartsWith("atlas/"))) { Write-Output "E2E FAIL: refusing branch $ciBranch"; exit 2 }
 
 # --- snapshot the worktree (never to integration) ---------------------------------
 $tmpIndex = Join-Path $env:TEMP ("sw-e2e-index-" + $Lane + "-" + $PID)
 $env:GIT_INDEX_FILE = $tmpIndex
 git -C $root read-tree HEAD
+# The push trigger has no workflow_dispatch inputs, so carry -Tools in the snapshot.
+$toolsFile = Join-Path $root "tools\e2e\atlas\selected_tools.txt"
+if ($Atlas) { Set-Content -LiteralPath $toolsFile -Value $Tools -NoNewline -Encoding ASCII }
 git -C $root add -A -- . ':!60_CORE_ENGINE_GUIDE.md' ':!LANE_BLOCKED.md' 2>$null
 # Snapshot the selected lane's harness as well as its app. Substituting scripts
 # from another checkout silently tests different code and blocks harness lanes.
 $tree = git -C $root write-tree
+if ($Atlas) { Remove-Item -LiteralPath $toolsFile -Force -ErrorAction SilentlyContinue }
 Remove-Item Env:GIT_INDEX_FILE; Remove-Item $tmpIndex -ErrorAction SilentlyContinue
 $parent = git -C $root rev-parse HEAD
 $commit = git -C $root commit-tree $tree -p $parent -m "e2e snapshot $Name $(Get-Date -Format o)"
@@ -52,9 +64,11 @@ if (-not (Test-Path $guardPy)) { Write-Output "E2E FAIL: pre-push guard missing 
 & python $guardPy --repo $root --commit $commit
 if ($LASTEXITCODE -ne 0) { Write-Output "E2E FAIL: pre-push guard blocked the snapshot; nothing pushed"; exit 2 }
 
+$short = $commit.Substring(0,8)
+if ($Atlas) { $ciBranch = "atlas/$short" }
 git -C $root push -q -f origin "${commit}:refs/heads/$ciBranch" 2>&1 |
     Where-Object { $_ -notmatch '^remote:\s*$|^remote: (Create|To create|\s+https)' }
-Write-Output "e2e: snapshot $($commit.Substring(0,8)) (from $Lane) pushed to $ciBranch"
+Write-Output "e2e: snapshot $short (from $Lane) pushed to $ciBranch"
 
 $gh = "C:\Program Files\GitHub CLI\gh.exe"
 if (-not (Test-Path $gh)) { $gh = "gh" }
@@ -92,6 +106,18 @@ if (-not $run -or $run.status -ne "completed") {
 # Per-leg breakdown straight from the run (the API level lives in the job name).
 & $gh run view $run.databaseId -R cybium/ScanWhirl --json jobs --jq '.jobs[] | "  \(.name) \(.conclusion)"' 2>$null |
     ForEach-Object { Write-Output $_ }
+if ($Atlas) {
+    $dest = "C:\Users\Cybium\Desktop\ScanWhirl-HQ\qa\emulator-atlas\$short"
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    & $gh run download $run.databaseId -R cybium/ScanWhirl --pattern "atlas-$commit" --dir $dest 2>$null | Out-Null
+    $report = Get-ChildItem -Recurse -File -Path $dest -Filter 'ATLAS_REPORT.md' | Select-Object -First 1
+    if ($report) {
+        Write-Output "ATLAS REPORT: $($report.FullName)"
+        Get-Content -LiteralPath $report.FullName -TotalCount 45 | ForEach-Object { Write-Output $_ }
+    } else {
+        Write-Output "E2E FAIL: no ATLAS_REPORT.md in the downloaded artifact"
+    }
+}
 Remove-Item Env:GH_TOKEN
 Write-Output "e2e: run finished in $minutes min, conclusion '$($run.conclusion)' $url"
 if ($run.conclusion -eq "success") { Write-Output "E2E PASS $Name"; exit 0 }

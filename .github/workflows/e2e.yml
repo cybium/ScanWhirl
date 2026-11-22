@@ -14,16 +14,25 @@
 # Triggers:
 #   * push to ci/e2e-*            - tools/e2e/run_e2e.ps1 pushes a worktree
 #                                   snapshot here and prints the run URL;
-#   * workflow_dispatch (input)   - run it for any branch/tag/SHA by hand.
+#   * push to atlas/*             - Tool Atlas proof (workflow_dispatch needs the
+#                                   workflow on the default branch, so the commit
+#                                   is pushed as atlas/<sha>, like apk/<sha>);
+#   * workflow_dispatch (input)   - run it for any branch/tag/SHA by hand. Set
+#                                   `tools` to run the Tool Atlas instead of the
+#                                   smoke/flows legs.
 name: e2e
 
 on:
   push:
-    branches: ["ci/e2e-*"]
+    branches: ["ci/e2e-*", "atlas/**"]
   workflow_dispatch:
     inputs:
       ref:
         description: "Branch, tag or SHA to test (empty = the commit that triggered the run)"
+        required: false
+        default: ""
+      tools:
+        description: "Tool Atlas: 'all' or a comma list (compress,merge,protect). Blank = smoke only"
         required: false
         default: ""
 
@@ -91,6 +100,7 @@ jobs:
   e2e:
     # API 35 = the current mainstream Android; API 36 = the newest system image
     # (the app compiles and targets 36, so it must also run there).
+    if: ${{ !(startsWith(github.ref, 'refs/heads/atlas/') || (github.event_name == 'workflow_dispatch' && inputs.tools != '')) }}
     needs: build
     strategy:
       fail-fast: false
@@ -154,3 +164,68 @@ jobs:
           name: e2e-api${{ matrix.api-level }}
           path: artifacts/
           retention-days: 7
+
+  atlas:
+    # Tool Atlas: a flow per tool on the same disposable emulator, with step
+    # screenshots and numeric verification. Runs only for an atlas/* push or a
+    # workflow_dispatch with `tools` set. A tool FAIL is reported, not fatal;
+    # harness errors (bad host/device, missing fixture, verifier crash) are fatal.
+    if: ${{ startsWith(github.ref, 'refs/heads/atlas/') || (github.event_name == 'workflow_dispatch' && inputs.tools != '') }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-apk
+          path: test-apk
+
+      - name: Check the test APK
+        run: |
+          set -euo pipefail
+          test -s test-apk/app-debug.apk
+          sha256sum -c <(sed "s#app/build/outputs/apk/debug/app-debug.apk#test-apk/app-debug.apk#" test-apk/apk-sha256.txt)
+
+      - name: Harness self-tests (no device)
+        run: |
+          python3 -m pip install --quiet numpy Pillow pypdf pypdfium2 reportlab
+          python3 -m unittest discover -s tools/e2e/atlas -p test_atlas_driver.py -v
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Tool Atlas (API 35)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: >-
+            -no-window -no-audio -no-boot-anim -no-snapshot
+            -gpu swiftshader_indirect -camera-back none -camera-front none
+          script: bash tools/e2e/atlas/run_atlas.sh
+        env:
+          API_LEVEL: "35"
+          APK: ${{ github.workspace }}/test-apk/app-debug.apk
+          ATLAS_OUT: ${{ github.workspace }}/artifacts/atlas
+          ATLAS_TOOLS: ${{ inputs.tools }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: atlas-${{ github.sha }}
+          path: artifacts/atlas/
+          retention-days: 14

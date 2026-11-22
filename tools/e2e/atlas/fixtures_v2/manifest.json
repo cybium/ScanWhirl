@@ -1,0 +1,87 @@
+[
+  {
+    "file": "electricity_bill_3p.pdf",
+    "bytes": 333803,
+    "sha256": "204b1661499992e413fa7cd17ea7775b1cd8974a069b82abf0cd33979466c95c"
+  },
+  {
+    "file": "hindi_notice.jpg",
+    "bytes": 109376,
+    "sha256": "9308446052f65de2ca14f12ffc8110cc53cedb295353cbc1d5723c28daad9c0d"
+  },
+  {
+    "file": "id_back.jpg",
+    "bytes": 116019,
+    "sha256": "43460e687b7bec2181b2554b5f1b1e6c4e651a60e13fa6a90b2b92932c794cb0"
+  },
+  {
+    "file": "id_front.jpg",
+    "bytes": 118631,
+    "sha256": "05a7258d7d7ee96b94f13f924c5683eb5c87abb808701055f027ffa53fd14a95"
+  },
+  {
+    "file": "left_thumb.jpg",
+    "bytes": 113444,
+    "sha256": "f52c651f7326b44cf9a7b93938c51107440a9a28c674b7df7390382c49ce2e16"
+  },
+  {
+    "file": "marksheet_p1.jpg",
+    "bytes": 116346,
+    "sha256": "b3deaf0c7b8133fe50a82947e88368bbb6a1a1eb5933cfb3853250f3b44e24b9"
+  },
+  {
+    "file": "marksheet_p2.jpg",
+    "bytes": 118317,
+    "sha256": "526f82c46975d481fe3972b1e6ea16554353db0812ae2049eefe7ac68dc20489"
+  },
+  {
+    "file": "marksheet_scan_300dpi.pdf",
+    "bytes": 276286,
+    "sha256": "c310613ae16d914f22cb1200146e569c4130a52aac2355bc6c99ea9263d92817"
+  },
+  {
+    "file": "prescription.jpg",
+    "bytes": 115426,
+    "sha256": "7fc54a96edb79df1a90eb43b44d06f327643c2e3bb0e185f32e377eda401fd66"
+  },
+  {
+    "file": "receipt_aug.jpg",
+    "bytes": 41015,
+    "sha256": "971cfc683fb2f88de96d24487f5924fa70240e555d119acbaaa0cb0261464174"
+  },
+  {
+    "file": "receipt_aug.pdf",
+    "bytes": 84436,
+    "sha256": "6fbc072c387667c65d06742b06d44a12d0b26d7c6ed20268fbd3e56d94c2f4d6"
+  },
+  {
+    "file": "receipt_oct.jpg",
+    "bytes": 47290,
+    "sha256": "ff344698d887ed8afca6dcfa78090149282d8b135f2a614815c7e83aa9934ce6"
+  },
+  {
+    "file": "receipt_oct.pdf",
+    "bytes": 98544,
+    "sha256": "4b1b99ebfdbfcb22860541f9c9ef4c3c980a811f62d96b6d400cb899c5b07fb6"
+  },
+  {
+    "file": "receipt_sep.jpg",
+    "bytes": 44172,
+    "sha256": "6ff1e89faf47edf41bdff591bfecc2f1aa99d96d943290da1b1ccfb6776eb517"
+  },
+  {
+    "file": "receipt_sep.pdf",
+    "bytes": 91676,
+    "sha256": "4c04350fba34be9dfc3c7a2fc322b540680222e63dcce7002d1ee74f2e2918be"
+  },
+  {
+    "file": "rent_agreement_5p.pdf",
+    "bytes": 590064,
+    "sha256": "40870ba23dd3a3ddb9fd6409fafc4dbe176cf89784dd68a4ac96db351692fdff"
+  },
+  {
+    "file": "signature_on_paper.jpg",
+    "bytes": 121253,
+    "sha256": "3d7f733a655a78c98f1085e19e59089b2457af635cadc95a9881f74dea98e70a"
+  }
+]
