@@ -29,7 +29,7 @@
         android:id="@+id/thumbFrame"
         android:layout_width="66dp"
         android:layout_height="88dp"
-        android:background="@color/sw_canvas"
+        android:background="@color/sw_cc_canvas"
         android:foreground="@drawable/bg_canvas_page_edge"
         android:importantForAccessibility="noHideDescendants">
 

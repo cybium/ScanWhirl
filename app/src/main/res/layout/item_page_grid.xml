@@ -28,7 +28,7 @@
         <com.scanwhirl.app.ui.pagegrid.AspectRatioLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/sw_canvas"
+            android:background="@color/sw_cc_canvas"
             android:foreground="@drawable/bg_canvas_page_edge"
             android:padding="8dp">
 

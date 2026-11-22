@@ -49,13 +49,13 @@ class VaultCard(context: Context) : LinearLayout(context) {
             // Council §4 / UI_100 §G1.7: sw_canvas with a 3dp inset and a 1dp
             // paper edge. The old near-white tile made a white sheet white-on-white.
             background = SwStyle.rounded(
-                context, SwStyle.color(context, R.color.sw_canvas), 4f,
-                stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                context, SwStyle.color(context, R.color.sw_cc_canvas), 4f,
+                stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
             )
             setForeground(
                 SwStyle.rounded(
                     context, Color.TRANSPARENT, 4f,
-                    stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                    stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
                 )
             )
             setPadding((3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt())

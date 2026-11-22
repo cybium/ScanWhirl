@@ -24,7 +24,7 @@
         <FrameLayout
             android:layout_width="48dp"
             android:layout_height="64dp"
-            android:background="@color/sw_canvas"
+            android:background="@color/sw_cc_canvas"
             android:foreground="@drawable/bg_canvas_page_edge"
             android:importantForAccessibility="noHideDescendants">
 

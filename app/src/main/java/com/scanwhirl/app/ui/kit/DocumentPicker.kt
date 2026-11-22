@@ -427,13 +427,13 @@ class DocumentPicker private constructor(
             // A protected/Vault document keeps the same canvas; its lock glyph below
             // is the only thing that changes.
             background = SwStyle.rounded(
-                context, SwStyle.color(context, R.color.sw_canvas), 4f,
-                stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                context, SwStyle.color(context, R.color.sw_cc_canvas), 4f,
+                stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
             )
             setForeground(
                 SwStyle.rounded(
                     context, Color.TRANSPARENT, 4f,
-                    stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                    stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
                 )
             )
             setPadding(

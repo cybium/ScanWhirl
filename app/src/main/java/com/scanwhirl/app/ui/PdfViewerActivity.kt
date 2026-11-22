@@ -765,8 +765,8 @@ class PdfViewerActivity : BaseActivity() {
             // shared sw_canvas with a 1dp edge, never a near-white tile.
             val outline = com.scanwhirl.app.ui.kit.SwStyle.rounded(
                 this,
-                ContextCompat.getColor(this, R.color.sw_canvas), 4f,
-                stroke = ContextCompat.getColor(this, R.color.sw_canvas_edge)
+                ContextCompat.getColor(this, R.color.sw_cc_canvas), 4f,
+                stroke = ContextCompat.getColor(this, R.color.sw_cc_page_edge)
             )
             val shown = minOf(pageCount, 40)
             for (index in 0 until shown) {

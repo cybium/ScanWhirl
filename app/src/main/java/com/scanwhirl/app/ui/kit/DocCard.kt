@@ -110,13 +110,13 @@ class DocCard(context: Context) : LinearLayout(context) {
             // Council §4: the page sits on sw_canvas with a 3dp inset and a 1dp
             // #FFFFFF@24% edge. The page's OWN white is kept; only its host changed.
             background = SwStyle.rounded(
-                context, SwStyle.color(context, R.color.sw_canvas), 6f,
-                stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                context, SwStyle.color(context, R.color.sw_cc_canvas), 6f,
+                stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
             )
             setForeground(
                 SwStyle.rounded(
                     context, Color.TRANSPARENT, 4f,
-                    stroke = SwStyle.color(context, R.color.sw_canvas_edge)
+                    stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
                 )
             )
             setPadding((3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt())

@@ -189,8 +189,14 @@ class LaneKCardCanvasTest {
     @Test(timeout = 30_000)
     fun `every owned page host uses sw_canvas and no white or paper background`() {
         fun src(path: String) = File("src/main/$path").readText()
-        val canvas = src("res/values/colors_canvas.xml")
-        assertTrue("sw_canvas is #1E252A", canvas.contains("sw_canvas") && canvas.contains("#1E252A"))
+        // One canvas token for the whole app: lane C already owns sw_cc_canvas, so
+        // lane K reuses it instead of adding a second #1E252A resource.
+        val canvas = src("res/values/colors_cc.xml")
+        assertTrue("sw_cc_canvas is #1E252A", canvas.contains("sw_cc_canvas") && canvas.contains("#1E252A"))
+        assertFalse(
+            "there is exactly one canvas color resource",
+            File("src/main/res/values/colors_canvas.xml").exists()
+        )
 
         for (path in listOf(
             "java/com/scanwhirl/app/ui/kit/DocCard.kt",
@@ -199,7 +205,7 @@ class LaneKCardCanvasTest {
             "java/com/scanwhirl/app/ui/PdfViewerActivity.kt"
         )) {
             val text = src(path)
-            assertTrue("$path hosts pages on sw_canvas", text.contains("R.color.sw_canvas"))
+            assertTrue("$path hosts pages on sw_canvas", text.contains("R.color.sw_cc_canvas"))
             assertFalse("$path must not use sw_paper_thumb behind a page", text.contains("sw_paper_thumb"))
         }
         for (path in listOf(
@@ -211,7 +217,7 @@ class LaneKCardCanvasTest {
             "res/drawable/bg_thumb_paper.xml"
         )) {
             val text = src(path)
-            assertTrue("$path hosts pages on sw_canvas", text.contains("@color/sw_canvas"))
+            assertTrue("$path hosts pages on sw_canvas", text.contains("@color/sw_cc_canvas"))
             // A white TINT on a small check icon is a ripple/glyph mask, not a page
             // host background — only a white BACKGROUND behind a page is forbidden.
             assertFalse(
