@@ -299,7 +299,14 @@ object ImageTools {
     internal var galleryOrientationOverride: Int? = null
 
     /** The fallback's EXIF orientation: same tag and same "unknown = normal" rule as normalizePage. */
-    private fun galleryOrientation(bytes: ByteArray): Int {
+    private fun galleryOrientation(bytes: ByteArray): Int = exifOrientation(bytes)
+
+    /**
+     * FX2: the single EXIF reader for form photos. The [galleryOrientationOverride] seam lets a
+     * deterministic test supply the fixture's documented orientation where Robolectric's
+     * ExifInterface cannot parse a real tag. Unknown/damaged tags are NORMAL, never a crash.
+     */
+    internal fun exifOrientation(bytes: ByteArray): Int {
         galleryOrientationOverride?.let { return it }
         return try {
             bytes.inputStream().use {
@@ -309,7 +316,41 @@ object ImageTools {
             }
         } catch (e: java.io.IOException) {
             ExifInterface.ORIENTATION_NORMAL
+        } catch (e: IllegalArgumentException) {
+            ExifInterface.ORIENTATION_NORMAL
         }
+    }
+
+    /**
+     * FX2: decode bytes downsampled and apply EXIF orientation explicitly. BitmapFactory does not
+     * apply EXIF on any API level, so relying on the container decoder made the crop rectangle
+     * land in rotated pixel space and lose the subject (phone J1 evidence).
+     */
+    internal fun decodeUpright(bytes: ByteArray, maxDim: Int, orientation: Int): Bitmap {
+        val decoded = decodeSampled(bytes, maxDim)
+        val matrix = orientationMatrix(orientation)
+        if (matrix.isIdentity) return decoded
+        val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        decoded.recycle()
+        return rotated
+    }
+
+    /**
+     * FX2: fail-closed form-photo import. Normalisation is attempted, but if it throws the RAW
+     * bytes are decoded with their original orientation explicitly applied instead of silently
+     * producing a sideways bitmap. Returns the bytes that were actually decoded so the caller
+     * caches exactly the upright pixels it cropped.
+     */
+    internal fun decodeFormSource(original: ByteArray, maxDim: Int): Pair<Bitmap, ByteArray> {
+        val originalOrientation = exifOrientation(original)
+        val normalized = runCatching { normalizeGalleryPhoto(original) }.getOrDefault(original)
+        val effective = if (normalized === original) {
+            originalOrientation
+        } else {
+            ExifInterface.ORIENTATION_NORMAL // normalizeGalleryPhoto already re-encoded upright
+        }
+        val bitmap = decodeUpright(normalized, maxDim, effective)
+        return bitmap to normalized
     }
 
     /** Bounded decode of a container [normalizePage] rejects (HEIC/HEIF, BMP, GIF, ...). */

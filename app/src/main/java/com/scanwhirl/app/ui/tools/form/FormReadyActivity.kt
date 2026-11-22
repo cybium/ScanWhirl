@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -32,15 +34,16 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.applySystemBarsPadding
+import com.scanwhirl.app.tools.ExactResize
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ExactKbEncoder
+import com.scanwhirl.app.util.FormCrop
 import com.scanwhirl.app.util.FormPresets
 import com.scanwhirl.app.util.FormUnit
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.SignatureCleanup
-import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,10 +121,15 @@ class FormReadyActivity : BaseActivity() {
 
     private var bitmap: Bitmap? = null
     private var imagePath: String? = null
+    /** UX_RULES_SCANNER §7: the human name the person picked, used to name the saved file. */
+    private var sourceName: String = "photo"
     private var busy = false
     private var settingFields = false
 
     private var lastOutput: File? = null
+    /** P2 pre-review: the exact source-pixel rectangles used by preview and export. */
+    private var lastPreviewRect: RectF? = null
+    private var lastExportRect: RectF? = null
 
     /**
      * SEC2 N3: once an output is handed to the result screen, that screen owns
@@ -152,6 +160,7 @@ class FormReadyActivity : BaseActivity() {
         } else {
             // Lane F1: never read gallery bytes on the main thread, and never read an unbounded
             // stream. The resolver call and the bounded read both happen on the worker.
+            val name = displayNameOf(uri) ?: "photo"
             showPreparing()
             lifecycleScope.launch {
                 val bytes = withContext(Dispatchers.IO) {
@@ -160,10 +169,18 @@ class FormReadyActivity : BaseActivity() {
                     }.getOrNull()
                 }
                 progress.isVisible = false
-                if (bytes == null) showPickFailure() else acceptPickedBytes(bytes)
+                if (bytes == null) showPickFailure() else acceptPickedBytes(bytes, name)
             }
         }
     }
+
+    /** SAF display name without a storage permission; a missing column falls back to "photo". */
+    private fun displayNameOf(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun showPreparing() {
         progress.isVisible = true
@@ -174,7 +191,9 @@ class FormReadyActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(buildRoot())
         if (savedInstanceState == null) {
-            selectPreset(FormPresets.PHOTO)
+            // PM-3: Resize can hand a true min/max band over to Form photo. Consume it once on a
+            // fresh launch; rotation below restores the exact fields from the saved state.
+            if (!applyIncomingFormExtras()) selectPreset(FormPresets.PHOTO)
         } else {
             // restoreState applies the aspect BEFORE the async image load. Setting it afterwards
             // races the decode: when the image arrived first, CropView's aspect setter re-fitted
@@ -700,6 +719,35 @@ class FormReadyActivity : BaseActivity() {
 
     // ---- state and live readout -------------------------------------------
 
+    /**
+     * PM-3: ExactResize.formPhotoIntent sends width/height and an optional max KB. Refuse anything
+     * that cannot be a real form photo instead of silently clipping it, and initialise Custom so
+     * the person sees exactly what was handed over. Returns false when nothing usable was sent.
+     */
+    private fun applyIncomingFormExtras(): Boolean {
+        val w = intent.getIntExtra(ExactResize.EXTRA_WIDTH, 0)
+        val h = intent.getIntExtra(ExactResize.EXTRA_HEIGHT, 0)
+        if (w <= 0 || h <= 0 || !FormPresets.fitsFormLimit(w, h)) return false
+        val max = if (intent.hasExtra(ExactResize.EXTRA_MAX_KB)) {
+            intent.getIntExtra(ExactResize.EXTRA_MAX_KB, 0)
+        } else {
+            0
+        }
+        if (max != 0 && max !in 1..10_000) return false
+        spec = FormPresets.CUSTOM
+        unit = FormUnit.PX
+        dpi = FormPresets.DPI_200
+        widthValue = w.toFloat()
+        heightValue = h.toFloat()
+        minKb = 1
+        maxKb = if (max > 0) max else FormPresets.CUSTOM.maxKb
+        cleanup = false
+        writeFields()
+        updateCropAspect()
+        refresh()
+        return true
+    }
+
     private fun selectPreset(preset: FormPresets.Spec) {
         spec = preset
         unit = FormUnit.PX
@@ -711,6 +759,11 @@ class FormReadyActivity : BaseActivity() {
         cleanup = preset.signatureCleanup
         writeFields()
         updateCropAspect()
+        // FX2: switching to Signature reframes the ink; switching back centres on the whole image.
+        val live = bitmap?.takeIf { !it.isRecycled }
+        val focus = if (isSignatureMode() && live != null) SignatureCleanup.inkBounds(live) else null
+        cropView.setDefaultFocus(focus)
+        if (live != null) cropView.setImage(live)
         refresh()
     }
 
@@ -796,6 +849,18 @@ class FormReadyActivity : BaseActivity() {
         refresh()
     }
 
+    /**
+     * PM-2: Bitmap.createBitmap/createScaledBitmap may return the INPUT bitmap itself when the
+     * rectangle already matches it. Never recycle or display an alias of the source or of a
+     * preview the ImageView owns; give each owner an independently mutable copy.
+     */
+    private fun ownedCopy(source: Bitmap, candidate: Bitmap): Bitmap =
+        if (candidate === source) {
+            source.copy(source.config ?: Bitmap.Config.ARGB_8888, true)
+        } else {
+            candidate
+        }
+
     /** F2: compute a small original/processed pair on a worker; apply never uses this copy. */
     private fun refreshCleanupPreview() {
         previewJob?.cancel()
@@ -809,24 +874,37 @@ class FormReadyActivity : BaseActivity() {
             cleanupPreview.isVisible = false
             return
         }
-        val left = rect.left.toInt().coerceIn(0, source.width - 1)
-        val top = rect.top.toInt().coerceIn(0, source.height - 1)
-        val width = rect.width().toInt().coerceIn(1, source.width - left)
-        val height = rect.height().toInt().coerceIn(1, source.height - top)
+        // P2 pre-review: the preview must show EXACTLY the region the encoder will save. Use the
+        // same exact-aspect snapping as apply(), never the raw float drag rectangle.
+        val (targetW, targetH) = currentPixels()
+        val snapped = FormCrop.snapToAspect(
+            rect, targetW.toFloat() / targetH, source.width, source.height
+        )
+        lastPreviewRect = RectF(snapped)
+        val left = snapped.left
+        val top = snapped.top
+        val width = snapped.width()
+        val height = snapped.height()
         // The copy is made on the caller's thread while the source is known live; the bounded
         // scaling and thresholding run on a worker.
-        val region = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
-        if (region == null) {
+        val rawRegion = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
+        if (rawRegion == null) {
             cleanupPreview.isVisible = false
             return
         }
+        // PM-2: an immutable source whose crop covers the whole image aliases rawRegion.
+        val region = ownedCopy(source, rawRegion)
         previewJob = lifecycleScope.launch {
             try {
                 val pair = withContext(Dispatchers.IO) {
                     val scale = (240f / maxOf(width, height).toFloat()).coerceAtMost(1f)
                     val pw = (width * scale).toInt().coerceAtLeast(1)
                     val ph = (height * scale).toInt().coerceAtLeast(1)
-                    val original = Bitmap.createScaledBitmap(region, pw, ph, true)
+                    val scaled = Bitmap.createScaledBitmap(region, pw, ph, true)
+                    // PM-2: when the region is already at preview size this returns the region
+                    // itself; the ImageView and the worker finally block must not own the same
+                    // pixels. SignatureCleanup always returns a fresh bitmap.
+                    val original = ownedCopy(region, scaled)
                     val cleaned = SignatureCleanup.clean(original)
                     original to cleaned
                 }
@@ -929,6 +1007,7 @@ class FormReadyActivity : BaseActivity() {
         outState.putInt(KEY_DPI, dpi)
         outState.putBoolean(KEY_CLEANUP, cleanup)
         outState.putString(KEY_OP_ID, opId)
+        outState.putString(KEY_SOURCE_NAME, sourceName)
         imagePath?.let { outState.putString(KEY_IMAGE, it) }
         val rect = cropView.getCropRect()
         if (rect.width() > 0f && rect.height() > 0f) {
@@ -946,6 +1025,7 @@ class FormReadyActivity : BaseActivity() {
         dpi = state.getInt(KEY_DPI, spec.dpi)
         cleanup = state.getBoolean(KEY_CLEANUP, spec.signatureCleanup)
         opId = state.getString(KEY_OP_ID).takeUnless { it.isNullOrBlank() } ?: UUID.randomUUID().toString()
+        sourceName = state.getString(KEY_SOURCE_NAME).takeUnless { it.isNullOrBlank() } ?: "photo"
         writeFields()
         refresh()
         // Apply the aspect while the crop view has no image: the setter cannot re-fit anything
@@ -961,19 +1041,29 @@ class FormReadyActivity : BaseActivity() {
         progress.isVisible = true
         lifecycleScope.launch {
             val decoded = withContext(Dispatchers.IO) {
-                runCatching {
+                val bytes = runCatching {
                     File(path).takeIf { it.isFile && it.length() in 1L..FormPresets.MAX_SOURCE_BYTES }
                         ?.inputStream()?.use { FormPresets.readBounded(it) }
                 }.getOrNull()
-                    ?.let { runCatching { ImageTools.decodeSampled(it, 2400) }.getOrNull() }
+                if (bytes == null) {
+                    null
+                } else {
+                    val (bmp, uprightBytes) = ImageTools.decodeFormSource(bytes, 2400)
+                    // The pick cache stores upright bytes; if this cache predates FX2 the decode
+                    // above still normalises them, so the rect is always in upright source space.
+                    runCatching { writePickCache(uprightBytes) }
+                    val focus = if (isSignatureMode()) SignatureCleanup.inkBounds(bmp) else null
+                    bmp to focus
+                }
             }
             progress.isVisible = false
             if (decoded == null) {
                 showPickFailure()
                 return@launch
             }
-            bitmap = decoded
-            cropView.setImage(decoded)
+            bitmap = decoded.first
+            cropView.setDefaultFocus(decoded.second)
+            cropView.setImage(decoded.first)
             showCrop(true)
             if (rect != null && rect.size == 4) cropView.setCropRect(RectF(rect[0], rect[1], rect[2], rect[3]))
             refresh()
@@ -996,27 +1086,32 @@ class FormReadyActivity : BaseActivity() {
     }
 
     /** Test seam for the SAF picker (which cannot run under Robolectric) and its real callback. */
-    internal fun acceptPickedBytes(bytes: ByteArray) {
+    internal fun acceptPickedBytes(bytes: ByteArray, name: String? = null) {
+        if (!name.isNullOrBlank()) sourceName = name
         showPreparing()
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
-                val upright = runCatching { ImageTools.normalizeGalleryPhoto(bytes) }.getOrDefault(bytes)
-                val path = writePickCache(upright)
+                val (decoded, uprightBytes) = ImageTools.decodeFormSource(bytes, 2400)
+                val path = writePickCache(uprightBytes)
                 if (path == null) {
-                    null to true
+                    decoded.recycle()
+                    null
                 } else {
                     imagePath = path
-                    runCatching { ImageTools.decodeSampled(upright, 2400) }.getOrNull() to false
+                    // FX2: only a signature frames its ink; a photo centres on the whole image.
+                    val focus = if (isSignatureMode()) SignatureCleanup.inkBounds(decoded) else null
+                    decoded to focus
                 }
             }
             progress.isVisible = false
-            val decoded = loaded.first
+            val decoded = loaded?.first
             if (decoded == null) {
                 showPickFailure()
                 return@launch
             }
             if (!bitmapInUse) bitmap?.takeIf { !it.isRecycled }?.recycle()
             bitmap = decoded
+            cropView.setDefaultFocus(loaded.second)
             cropView.setImage(decoded)
             showCrop(true)
             updateCropAspect()
@@ -1046,11 +1141,12 @@ class FormReadyActivity : BaseActivity() {
         val source = bitmap ?: return
         val rect = cropView.getCropRect()
         if (rect.width() < 1f || rect.height() < 1f) return
-        val left = rect.left.toInt().coerceIn(0, source.width - 1)
-        val top = rect.top.toInt().coerceIn(0, source.height - 1)
-        val width = rect.width().toInt().coerceIn(1, source.width - left)
-        val height = rect.height().toInt().coerceIn(1, source.height - top)
+        // FX2: snap the confirmed frame to the EXACT target aspect in EXIF-normalised source
+        // pixels. The encoder then uses one uniform scale; no independent x/y stretch is possible.
         val (targetW, targetH) = currentPixels()
+        val snapped = FormCrop.snapToAspect(rect, targetW.toFloat() / targetH, source.width, source.height)
+        lastExportRect = RectF(snapped)
+        if (snapped.width() < 1 || snapped.height() < 1) return
         if (!FormPresets.fitsFormLimit(targetW, targetH)) {
             errorView.text = getString(R.string.form1_size_too_large)
             errorView.isVisible = true
@@ -1058,8 +1154,10 @@ class FormReadyActivity : BaseActivity() {
             return
         }
         val dpiNow = dpi
-        val minBytes = minKb * SizeUnits.BYTES_PER_KB
-        val maxBytes = maxKb * SizeUnits.BYTES_PER_KB
+        val minNow = minKb
+        val maxNow = maxKb
+        val minBytes = minNow * FormPresets.BYTES_PER_KB
+        val maxBytes = maxNow * FormPresets.BYTES_PER_KB
         val doCleanup = cleanup && isSignatureMode()
 
         busy = true
@@ -1069,7 +1167,12 @@ class FormReadyActivity : BaseActivity() {
         encodeJob = lifecycleScope.launch {
             try {
                 val (result, file) = withContext(Dispatchers.IO) {
-                    val region = Bitmap.createBitmap(source, left, top, width, height)
+                    val rawRegion = Bitmap.createBitmap(
+                        source, snapped.left, snapped.top, snapped.width(), snapped.height()
+                    )
+                    // PM-2: crop == whole immutable source => rawRegion === source. Recycle only
+                    // our own copy, never the bitmap CropView and Make file still display.
+                    val region = ownedCopy(source, rawRegion)
                     val cleaned = if (doCleanup) SignatureCleanup.clean(region) else null
                     try {
                         val encoded = ExactKbEncoder.encode(
@@ -1077,9 +1180,8 @@ class FormReadyActivity : BaseActivity() {
                             isCancelled = { encodeJob?.isCancelled == true || destroyed }
                         )
                         val dir = File(cacheDir, "form1_out").apply { mkdirs() }
-                        // F1: a durable operation id, not wall-clock time, names the output. A
-                        // recreation keeps the same id and cannot produce a second random file.
-                        val out = File(dir, "form_ready_${opId}.jpg")
+                        // UX_RULES_SCANNER §7: a human name derived from the picked file.
+                        val out = File(dir, uniqueOutputName(dir))
                         Durable.writeFile(out, encoded.bytes)
                         encoded to out
                     } finally {
@@ -1090,7 +1192,8 @@ class FormReadyActivity : BaseActivity() {
                 progress.isVisible = false
                 busy = false
                 lastOutput = file
-                val note = buildNote(result, targetW, targetH, dpiNow)
+                // FX2: every number is measured from the bytes actually published.
+                val note = buildNote(file, targetW, targetH, dpiNow, minNow, maxNow)
                 lastNoteForTest = note
                 startActivity(ToolResultActivity.intent(
                     this@FormReadyActivity, TOOL_ID,
@@ -1129,64 +1232,69 @@ class FormReadyActivity : BaseActivity() {
         }
     }
 
+    /** UX_RULES_SCANNER §7: "<source> signature.jpg" / "<source> photo.jpg", collisions " (2)". */
+    private fun uniqueOutputName(dir: File): String {
+        val base = sourceName.substringBeforeLast('.').trim()
+            .ifBlank { "photo" }
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .take(60)
+        val role = when (spec.id) {
+            "signature" -> "signature"
+            "thumb" -> "thumb"
+            "declaration" -> "declaration"
+            else -> "photo"
+        }
+        val stem = "$base $role"
+        var candidate = "$stem.jpg"
+        var n = 2
+        while (File(dir, candidate).exists()) {
+            candidate = "$stem ($n).jpg"
+            n++
+        }
+        return candidate
+    }
+
     /**
-     * F1: pixel, DPI and KB band are three separate checks. Landing inside the KB band alone is
-     * NOT overall readiness: the requested pixels and the written DPI must match too.
+     * FX2 / UX_RULES_SCANNER: one hero line (measured pixels + measured KB from the SAVED file)
+     * and one status per failed check, each with numbers and an OK/X marker. No repeated receipt
+     * lines, no "kept" size that disagrees with the file. Below-minimum is always X, never "ready".
      */
     private fun buildNote(
-        result: ExactKbEncoder.Result,
+        file: File,
         requestedWidth: Int,
         requestedHeight: Int,
-        requestedDpi: Int
+        requestedDpi: Int,
+        min: Int,
+        max: Int
     ): String {
-        // COPY_DIET: one measured numeric row, exact bytes on its own detail line, no duplicate
-        // "as requested" sentences. The three checks still gate readiness independently.
-        val measured = getString(
-            R.string.form1_note_measured_short,
-            SizeUnits.format(result.sizeBytes), result.width, result.height, result.dpi
+        val savedBytes = file.length()
+        val raw = file.readBytes()
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        val dpiNow = ExactKbEncoder.readJfifDpi(raw)
+        val sizeText = FormPresets.formatKb(savedBytes)
+        val bandText = getString(R.string.form1_band_short, min, max)
+        val lines = mutableListOf(
+            getString(R.string.form1_result_hero, w, h, sizeText)
         )
-        val bytes = getString(R.string.form1_note_bytes, result.bytes.size)
-        val pixelCheck = if (result.width == requestedWidth && result.height == requestedHeight) {
-            null
-        } else {
-            getString(R.string.form1_result_pixels_changed, result.width, result.height)
+        var ready = true
+        if (w != requestedWidth || h != requestedHeight) {
+            ready = false
+            lines += getString(R.string.form1_result_px_bad, w, h, requestedWidth, requestedHeight)
         }
-        val writtenDpi = ExactKbEncoder.readJfifDpi(result.bytes)
-        val dpiCheck = if (writtenDpi == requestedDpi) {
-            null
-        } else {
-            getString(R.string.form1_result_dpi_changed, writtenDpi ?: 0, requestedDpi)
+        if (dpiNow != requestedDpi) {
+            ready = false
+            lines += getString(R.string.form1_result_dpi_bad, dpiNow ?: 0, requestedDpi)
         }
-        val bandCheck = when (result.outcome) {
-            ExactKbEncoder.Outcome.IN_BAND -> getString(
-                R.string.form1_note_in_band,
-                SizeUnits.format(minKb * SizeUnits.BYTES_PER_KB),
-                SizeUnits.format(maxKb * SizeUnits.BYTES_PER_KB)
-            )
-            ExactKbEncoder.Outcome.BELOW_MIN -> getString(
-                R.string.form1_min_miss, SizeUnits.format(minKb * SizeUnits.BYTES_PER_KB)
-            )
-            ExactKbEncoder.Outcome.ABOVE_MAX -> getString(R.string.form1_max_miss)
+        if (savedBytes !in (min * FormPresets.BYTES_PER_KB)..(max * FormPresets.BYTES_PER_KB)) {
+            ready = false
+            lines += getString(R.string.form1_result_band_bad, sizeText, bandText, dpiNow ?: 0)
         }
-        val bandLabel = getString(R.string.form1_band_label)
-        val problems = mutableListOf<String>()
-        pixelCheck?.let { problems += it }
-        dpiCheck?.let { problems += it }
-        if (result.outcome != ExactKbEncoder.Outcome.IN_BAND) problems += bandCheck
-        val overall = if (problems.isEmpty()) {
-            getString(R.string.form1_result_ready)
-        } else {
-            getString(R.string.form1_result_not_ready, problems.joinToString(" "))
+        if (ready) {
+            lines += getString(R.string.form1_result_ok, sizeText, requestedDpi)
         }
-        val lines = mutableListOf(measured, bytes)
-        pixelCheck?.let { lines += it }
-        dpiCheck?.let { lines += it }
-        lines += "$bandLabel $bandCheck"
-        if (result.outcome == ExactKbEncoder.Outcome.BELOW_MIN) {
-            lines += getString(R.string.form1_min_miss_constraint)
-        }
-        lines += overall
-        lines += getString(R.string.form1_source_kept)
         return lines.joinToString("\n")
     }
 
@@ -1219,6 +1327,8 @@ class FormReadyActivity : BaseActivity() {
 
     /** The decoded preview is present once the picked photo has been read. */
     internal fun hasImageForTest(): Boolean = bitmap?.takeIf { !it.isRecycled } != null
+    /** FX2: the EXIF-normalised source the crop frame lives in. */
+    internal fun sourceBitmapForTest(): Bitmap? = bitmap?.takeIf { !it.isRecycled }
     internal fun currentWidthPxForTest(): Int = currentPixels().first
     internal fun currentHeightPxForTest(): Int = currentPixels().second
     internal fun currentMinKbForTest(): Int = minKb
@@ -1238,7 +1348,38 @@ class FormReadyActivity : BaseActivity() {
 
     internal fun buildNoteForTest(
         result: ExactKbEncoder.Result, width: Int, height: Int, dpi: Int
-    ): String = buildNote(result, width, height, dpi)
+    ): String {
+        val file = File(cacheDir, "form1_note_test_${opId}.jpg")
+        Durable.writeFile(file, result.bytes)
+        return try {
+            buildNote(file, width, height, dpi, minKb, maxKb)
+        } finally {
+            runCatching { file.delete() }
+        }
+    }
+
+    /** FX2: the human output name, exposed for the numeric naming gate. */
+    internal fun outputNameForTest(): String = uniqueOutputName(File(cacheDir, "form1_out"))
+
+    internal fun currentSpecIdForTest(): String = spec.id
+    internal fun previewCropRectForTest(): RectF? = lastPreviewRect
+    internal fun exportCropRectForTest(): RectF? = lastExportRect
+    internal fun previewBitmapsForTest(): List<Bitmap> =
+        listOfNotNull(previewOriginalBitmap, previewCleanedBitmap)
+
+    /**
+     * PM-2: install a caller-owned (possibly immutable) bitmap exactly as a picked decode would,
+     * so a test can prove that cleanup/export never recycle or alias it.
+     */
+    internal fun useBitmapForTest(bitmap: Bitmap, name: String? = null) {
+        if (!name.isNullOrBlank()) sourceName = name
+        this.bitmap = bitmap
+        cropView.setDefaultFocus(if (isSignatureMode()) SignatureCleanup.inkBounds(bitmap) else null)
+        cropView.setImage(bitmap)
+        showCrop(true)
+        updateCropAspect()
+        refresh()
+    }
 
     /** Test seams for the confirmed crop frame (the view keeps it in image pixels). */
     internal fun setCropRectForTest(rect: RectF) = cropView.setCropRect(rect)
@@ -1274,6 +1415,7 @@ class FormReadyActivity : BaseActivity() {
         private const val KEY_OP_ID = "form1_op_id"
         private const val KEY_IMAGE = "form1_image"
         private const val KEY_RECT = "form1_rect"
+        private const val KEY_SOURCE_NAME = "form1_source_name"
 
         fun intent(context: Context): Intent = Intent(context, FormReadyActivity::class.java)
     }

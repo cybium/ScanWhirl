@@ -69,6 +69,14 @@
     <string name="form1_result_ready">आपकी सीमाओं के अनुसार</string>
     <string name="form1_result_not_ready">सीमाएँ जाँचें: %1$s</string>
 
+    <!-- FX2 / UX_RULES_SCANNER: एक मुख्य पंक्ति + अंकों सहित OK/X स्थिति, सहेजी फ़ाइल से मापी गई। -->
+    <string name="form1_band_short">%1$d से %2$d KB</string>
+    <string name="form1_result_hero">%1$d × %2$d पिक्सेल · %3$s</string>
+    <string name="form1_result_ok">OK %1$s · %2$d DPI</string>
+    <string name="form1_result_band_bad">X %1$s (%2$s चाहिए) · %3$d DPI</string>
+    <string name="form1_result_dpi_bad">X %1$d DPI (%2$d चाहिए)</string>
+    <string name="form1_result_px_bad">X %1$d × %2$d पिक्सेल (%3$d × %4$d चाहिए)</string>
+
     <string name="form1_source_kept">मूल फ़ोटो वैसी ही है</string>
     <string name="form1_size_too_large">यह आकार फ़ोटो के लिए बहुत बड़ा है। 4000 px तक लें।</string>
     <string name="form1_out_of_memory">फ़ोटो बहुत बड़ी है। छोटी फ़ोटो चुनें।</string>

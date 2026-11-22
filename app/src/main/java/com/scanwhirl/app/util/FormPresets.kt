@@ -3,6 +3,7 @@ package com.scanwhirl.app.util
 import android.content.Context
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** The four editable size units shown on the form-ready screen. */
@@ -17,9 +18,17 @@ enum class FormUnit {
  * check the current notification. The numbers come from the researched IBPS-style ranges; every
  * field is editable, including the pixel dimensions, DPI and the KB band.
  *
- * KB is decimal everywhere ([SizeUnits], 1000 bytes), so a 20 KB minimum means 20,000 bytes.
+ * FX2: form KB is BINARY (1024 bytes), the unit the phone portal verifier and exam notifications
+ * use. [SizeUnits] stays decimal for the rest of the app; only this tool's band and readout use
+ * [BYTES_PER_KB], so "20 KB" is never accepted at 20,000 bytes (19.5 KiB) again.
  */
 object FormPresets {
+
+    const val BYTES_PER_KB = 1_024L
+
+    /** The rounded KB shown to the person, always derived from the SAVED file's byte length. */
+    fun formatKb(bytes: Long): String =
+        String.format(Locale.ROOT, "%.0f KB", bytes / BYTES_PER_KB.toDouble())
 
     const val DPI_100 = 100
     const val DPI_200 = 200
@@ -115,13 +124,15 @@ object FormPresets {
         val maxKb: Int,
         val signatureCleanup: Boolean = false
     ) {
-        val minBytes: Long get() = minKb * SizeUnits.BYTES_PER_KB
-        val maxBytes: Long get() = maxKb * SizeUnits.BYTES_PER_KB
+        val minBytes: Long get() = minKb * BYTES_PER_KB
+        val maxBytes: Long get() = maxKb * BYTES_PER_KB
         val aspect: Float get() = widthPx.toFloat() / heightPx.coerceAtLeast(1)
     }
 
     val PHOTO = Spec("photo", 200, 230, DPI_200, 20, 50)
-    val SIGNATURE = Spec("signature", 140, 60, DPI_200, 10, 20, signatureCleanup = true)
+    // FX2: cleanup is opt-in. The threshold must never be the default, because a bad threshold
+    // destroyed the ink and painted paper shadow black on the owner's phone.
+    val SIGNATURE = Spec("signature", 140, 60, DPI_200, 10, 20, signatureCleanup = false)
     val THUMB = Spec("thumb", 240, 240, DPI_200, 20, 50)
     val DECLARATION = Spec("declaration", 800, 400, DPI_200, 50, 100)
     val CUSTOM = Spec("custom", 200, 230, DPI_200, 20, 50)
