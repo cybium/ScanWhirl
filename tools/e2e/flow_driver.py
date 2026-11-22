@@ -258,15 +258,28 @@ def f1():
     adb("push", fixture, f"/sdcard/Download/{NAME}.pdf")
     # Same bounded retry as smoke: the disc's first tap can be swallowed by
     # its first-frame ring animation. Require the sheet, never trust the tap.
+    # Empty Library now opens its "Import photos or a PDF" tile; a populated
+    # Library uses the nav Scan disc. Both lead to the same PDF import sheet.
+    # The sheet labels the PDF row differently depending on entry ("Import PDF"
+    # on Create, "PDF file" in the Import sheet), so accept the real rows only.
+    opened = False
     for attempt in range(2):
-        tap(desc=strings("en")["create_disc_desc"])
         try:
-            wait(timeout=7, text="Import PDF")
-            break
+            tap(rid="swEmptyImport")
         except AssertionError:
-            if attempt == 1:
-                raise
-    tap(text="Import PDF")
+            tap(desc=strings("en")["create_disc_desc"])
+        for want in ({"text": "Import PDF"}, {"text": "PDF file"}, {"rid": "importPdf"}):
+            try:
+                wait(timeout=6, **want)
+                tap(**want)
+                opened = True
+                break
+            except AssertionError:
+                continue
+        if opened:
+            break
+        if attempt == 1:
+            raise AssertionError("No confirmed PDF import row after opening the Create/Import sheet")
     # DocumentsUI, not am start with a URI: proves a real user can find Download.
     wait(desc="Show roots")
     tap(desc="Show roots")
@@ -337,7 +350,7 @@ def f3():
     tap(desc="Me")
     tap(text="Settings")
     wait(text="App language")
-    wait(text="Text reading language")
+    wait(text="OCR language")
     capture("F3_settings")
     back()
     tap(desc="Library")
@@ -485,7 +498,9 @@ def f7():
     capture("F7_receipt")  # secure screens may be black; XML is authoritative
     root = hierarchy()
     text = "\n".join(n.get("text", "") for n in root.iter("node"))
-    assert re.search(r"\b[1-9]\d*(?:[.,]\d+)?\s*(?:kB|KB|MB)\b", text), f"No nonzero KB/MB size: {text}"
+    # A clean library's encrypted backup is legitimately tiny (272 B in the
+    # 22 Nov run); any nonzero B/KB/MB size is a truthful receipt.
+    assert re.search(r"\b[1-9]\d*(?:[.,]\d+)?\s*(?:B|kB|KB|MB)\b", text), f"No nonzero B/KB/MB size: {text}"
     assert not re.search(r"\b0(?:[.,]0+)?\s*MB\b", text), text
     # The archive is already created in the app's folder; do not invoke Restore.
     paths = adb("shell", "run-as", PKG, "find", "cache/fullbackup", "-name", "*.swbackup")
