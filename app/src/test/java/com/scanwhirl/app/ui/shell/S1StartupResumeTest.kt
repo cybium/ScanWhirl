@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import org.robolectric.android.controller.ActivityController
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
@@ -95,52 +96,65 @@ class S1StartupResumeTest {
     @Test(timeout = 30_000)
     fun `the launcher offers a pending scan after recovery and never repeats it on rotation`() {
         val staged = stagePending()
-        ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
-            await { resumeOfferShown() }
-            assertTrue("the unfinished pages are still on disk while the offer is up", staged.isDirectory)
+        try {
+            ActivityScenario.launch<ShellActivity>(Intent(app, ShellActivity::class.java)).use { scenario ->
+                await { resumeOfferShown() }
+                assertTrue("the unfinished pages are still on disk while the offer is up", staged.isDirectory)
 
-            // Rotation: the sheet is recreated by the framework, but a *new* offer must not run.
-            scenario.recreate()
-            idle()
-            ShadowDialog.getLatestDialog()?.dismiss()
-            idle()
-            var repeated = false
-            for (i in 0 until 20) {
+                // Rotation: the sheet is recreated by the framework, but a *new* offer must not run.
+                scenario.recreate()
                 idle()
-                if (resumeOfferShown()) repeated = true
+                ShadowDialog.getLatestDialog()?.dismiss()
+                idle()
+                var repeated = false
+                for (i in 0 until 20) {
+                    idle()
+                    if (resumeOfferShown()) repeated = true
+                }
+                assertFalse("rotation must not offer the same scan a second time", repeated)
             }
-            assertFalse("rotation must not offer the same scan a second time", repeated)
+        } finally {
+            staged.deleteRecursively()
         }
     }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test(timeout = 30_000)
-    fun `rotation while recovery is still pending still shows the resume offer`() {
+    fun `rotation while the offer coroutine is queued still shows the resume offer`() {
         val staged = stagePending()
         // onCreate schedules the offer on lifecycleScope (Main). The old test only did create()
         // and *assumed* that coroutine had not run yet; on a loaded runner it could reach
         // show() and consume the once-per-process guard before rotation. Queue Main for this
         // window so the first instance is deterministically cancelled before it can show.
+        // This pins the cancel-before-show window, not a pending storage-recovery state.
         val scheduler = TestCoroutineScheduler()
         Dispatchers.setMain(StandardTestDispatcher(scheduler))
+        var first: ActivityController<ShellActivity>? = null
+        var recreated: ActivityController<ShellActivity>? = null
         try {
-            val first = Robolectric.buildActivity(ShellActivity::class.java).create()
+            val firstController = Robolectric.buildActivity(ShellActivity::class.java).create()
+            first = firstController
             val state = android.os.Bundle()
-            first.saveInstanceState(state)
-            first.destroy()
+            firstController.saveInstanceState(state)
+            // Cleared before the explicit destroy: if destroy itself throws, do not call it twice.
+            // Any earlier exception leaves `first` set so the finally still destroys it.
+            first = null
+            firstController.destroy()
             ShadowDialog.reset()
             val guardAfterA = ScanLauncher.coldStartOfferConsumedForTest()
             assertTrue("no offer was shown by the first instance before rotation", !guardAfterA)
-            // Drain the cancelled first-instance work, then clear the process-wide seams before
-            // the recreated launcher runs its own offer on the real main dispatcher.
+            // Drain the cancelled first-instance work; the recreated launcher then runs its own
+            // offer on the real main dispatcher. No offer-state reset between the two instances:
+            // the once-per-process cold-start guard must still be un-consumed after rotation.
             scheduler.advanceUntilIdle()
-            ScanLauncher.resetResumeOfferStateForTest()
             Dispatchers.resetMain()
-            Robolectric.buildActivity(ShellActivity::class.java).setup(state)
+            recreated = Robolectric.buildActivity(ShellActivity::class.java).setup(state)
             idle()
             await { resumeOfferShown() }
             assertTrue("the unfinished pages are kept until the owner chooses", staged.isDirectory)
         } finally {
+            first?.destroy()
+            recreated?.pause()?.stop()?.destroy()
             Dispatchers.resetMain()
             staged.deleteRecursively()
         }
