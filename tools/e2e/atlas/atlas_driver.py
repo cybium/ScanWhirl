@@ -619,6 +619,17 @@ def prepare_library():
     return mapping
 
 
+def await_fixture_row(name, timeout=12):
+    """Poll the live hierarchy for the EXACT fixture name; never a loose match."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            return find(hierarchy(), text=name)
+        except AssertionError:
+            time.sleep(0.5)
+    return None
+
+
 def choose_fixture_in_saf(name):
     """Find the fixture in the real DocumentsUI picker: provider root, then Download."""
     try:
@@ -642,8 +653,20 @@ def choose_fixture_in_saf(name):
         except AssertionError:
             note("SAF: could not reach a files root")
     shot("picker")
-    if not soft_tap(text=name):
-        note(f"SAF: fixture {name} not listed")
+    # SAF loads folder contents asynchronously: the dump right after tapping the
+    # ScanWhirlQA folder can still show the parent listing. Poll for the EXACT name,
+    # then dump and retry once, and only then tap it exactly once. No fuzzy match
+    # and no new entry/fallback selector.
+    if await_fixture_row(name) is None:
+        shot("picker_retry")
+        if await_fixture_row(name) is None:
+            note(f"SAF: fixture {name} not listed after bounded poll")
+            back()
+            return False
+    try:
+        tap(text=name)              # fresh hierarchy, exact text, one tap
+    except AssertionError:
+        note(f"SAF: fixture {name} not tappable after poll")
         back()
         return False
     return True

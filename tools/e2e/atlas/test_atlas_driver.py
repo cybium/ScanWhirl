@@ -439,21 +439,56 @@ class AtlasImportEntryTests(unittest.TestCase):
         self.assertEqual(len(tapped), 1, "a stale screen must not be tapped twice")
 
     def test_choose_fixture_in_saf_taps_fixture_once(self):
-        tapped = []
+        fixture_taps = []
 
         def fake_soft_tap(**want):
-            tapped.append(want)
-            return want.get("text") in ("ScanWhirl test fixtures", "receipt_sep.pdf")
+            return want.get("text") == "ScanWhirl test fixtures"
 
         with patch.object(a, "wait"), \
              patch.object(a, "soft_tap", side_effect=fake_soft_tap), \
+             patch.object(a, "await_fixture_row", return_value=object()), \
+             patch.object(a, "tap", side_effect=lambda **w: fixture_taps.append(w)), \
              patch.object(a, "shot"), patch.object(a, "note"), \
              patch.object(a, "adb", return_value="Pixel"), \
              patch.object(a, "back") as do_back:
             self.assertTrue(a.choose_fixture_in_saf("receipt_sep.pdf"))
-        self.assertEqual([w for w in tapped if w.get("text") == "receipt_sep.pdf"],
-                         [{"text": "receipt_sep.pdf"}])
+        self.assertEqual(fixture_taps, [{"text": "receipt_sep.pdf"}])
         do_back.assert_not_called()
+
+    def test_choose_fixture_in_saf_polls_until_file_then_taps_once(self):
+        # Real PILOT 45058426629 shape: the dump right after the ScanWhirlQA tap
+        # still shows the parent/folder row; the file only appears after a poll.
+        stale = self._hierarchy(texts=("ScanWhirlQA",))
+        fresh = self._hierarchy(texts=("marksheet_scan_300dpi.pdf",))
+        seq = [stale, stale, fresh]
+        fixture_taps = []
+
+        with patch.object(a, "wait"), \
+             patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a, "adb", return_value="Pixel"), \
+             patch.object(a, "back") as do_back, \
+             patch.object(a, "hierarchy",
+                          side_effect=lambda: seq.pop(0) if len(seq) > 1 else seq[0]), \
+             patch.object(a, "tap", side_effect=lambda **w: fixture_taps.append(w)), \
+             patch.object(a.time, "sleep"), \
+             patch.object(a.time, "monotonic", side_effect=[0, 0, 0.5, 1.0]):
+            self.assertTrue(a.choose_fixture_in_saf("marksheet_scan_300dpi.pdf"))
+        do_back.assert_not_called()
+        self.assertEqual(fixture_taps, [{"text": "marksheet_scan_300dpi.pdf"}],
+                         "the located fixture must be tapped exactly once")
+
+    def test_choose_fixture_in_saf_missing_file_is_false(self):
+        with patch.object(a, "wait"), \
+             patch.object(a, "soft_tap", return_value=False), \
+             patch.object(a, "await_fixture_row", return_value=None), \
+             patch.object(a, "shot"), patch.object(a, "note"), \
+             patch.object(a, "adb", return_value="Pixel"), \
+             patch.object(a, "back") as do_back, \
+             patch.object(a, "tap") as do_tap:
+            self.assertFalse(a.choose_fixture_in_saf("marksheet_scan_300dpi.pdf"))
+        do_tap.assert_not_called()
+        do_back.assert_called_once_with()
 
     # ---- explicit settled result ---------------------------------------------
 
