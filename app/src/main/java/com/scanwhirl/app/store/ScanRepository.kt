@@ -2246,6 +2246,44 @@ class ScanRepository(private val context: Context) {
     // Shared page-file naming (page_000.jpg, page_001.jpg, …).
     private val PAGE_FORMAT = "page_%03d.jpg"
 
+    /**
+     * FF-G-lite: resampling tools write the SOURCE page box (points, one `WxH` line per page) into
+     * their staged copy before publishing. [writePdfInto] reads it, so a later "Make searchable" or
+     * any other PDF rebuild of that copy keeps the paper size too. Documents without the sidecar
+     * (new scans, untouched imports) keep the historical pixel-derived sizing byte for byte.
+     */
+    private val PAGE_SIZES_FILE = "page_sizes.txt"
+
+    private fun writePageSizes(dir: File, sizes: List<Pair<Int, Int>>) {
+        Durable.writeFile(
+            File(dir, PAGE_SIZES_FILE),
+            sizes.joinToString("\n") { "${it.first}x${it.second}" }.toByteArray(Charsets.US_ASCII)
+        )
+    }
+
+    private fun readPageSizes(dir: File): List<Pair<Int, Int>>? {
+        val file = File(dir, PAGE_SIZES_FILE)
+        if (!file.isFile) return null
+        return try {
+            file.readLines().map { line ->
+                val parts = line.split('x')
+                require(parts.size == 2) { "bad page size line" }
+                val w = parts[0].toInt()
+                val h = parts[1].toInt()
+                require(w > 0 && h > 0) { "bad page size" }
+                w to h
+            }.takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
+            null // absent/corrupt geometry fails conservatively: derive the size from pixels
+        }
+    }
+
+    /** Source page box in points, captured before a tool re-encodes/downsamples the page image. */
+    private fun sourcePageSizes(files: List<File>): List<Pair<Int, Int>> = files.map { file ->
+        val info = PdfGenerator.readJpegInfo(file.readBytes())
+        PdfGenerator.sizeInPoints(info.width, info.height)
+    }
+
     /** Long side of a page image embedded in an exported Word file. */
     private val WORD_PICTURE_MAX_PX = 1600
 
@@ -2287,6 +2325,8 @@ class ScanRepository(private val context: Context) {
                     file.readBytes(), quality, maxDim, isCancelled = { !ctx.isActive }
                 )
             }
+            // FF-G-lite: pixels change, paper does not. Capture the source box before publish.
+            writePageSizes(staging, sourcePageSizes(doc.pageFiles))
         }
     }
 
@@ -2315,6 +2355,8 @@ class ScanRepository(private val context: Context) {
                     val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
                     SizeFit.fitToShare(file.readBytes(), share, isCancelled = { !ctx.isActive })
                 }
+                // FF-G-lite: the KB fitter downsamples again; the paper box still comes from the source.
+                writePageSizes(staging, sourcePageSizes(doc.pageFiles))
             }
         }
 
@@ -2692,6 +2734,9 @@ class ScanRepository(private val context: Context) {
                     done += pdf.indices.size
                 }
                 if (done == 0) throw IllegalStateException("No pages to compress")
+                // FF-G-lite: the rendered page box is the source geometry; capture it BEFORE the
+                // KB fitter resamples these pages (an external PDF's MediaBox is not stored here).
+                writePageSizes(staging, sourcePageSizes(pageFilesIn(staging)))
                 // CP1: the re-fit pass gets the same determinate progress as the render pass.
                 fitStagedPagesToTarget(staging, targetBytes, onPage = onPage)
             }
@@ -3941,7 +3986,12 @@ class ScanRepository(private val context: Context) {
             } else {
                 emptyMap()
             }
-            PdfGenerator.imagesToPdf(pages, out, textLayers).isNotEmpty()
+            // FF-G-lite: a compressed copy carries its source page box so any later rebuild
+            // (Make searchable, stamp, rotate, …) cannot silently shrink the paper again.
+            // A wrong count is treated as absent, never applied to the wrong page.
+            val sizes = readPageSizes(dir)
+            val pageSizes = sizes?.takeIf { it.size == pages.size }
+            PdfGenerator.imagesToPdf(pages, out, textLayers, pageSizes = pageSizes).isNotEmpty()
         }
     }
 

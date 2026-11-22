@@ -22,6 +22,15 @@ object PdfGenerator {
 
     data class JpegInfo(val width: Int, val height: Int, val components: Int)
 
+    /**
+     * The page size in points the writer has always derived from a raster page. Re-encoding a
+     * page changes its pixels but must not change the paper it is printed on, so resampling
+     * tools capture this BEFORE they downsample and pass it back as [imagesToPdf]'s `pageSizes`.
+     */
+    fun sizeInPoints(width: Int, height: Int): Pair<Int, Int> =
+        (width * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1) to
+            (height * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
+
     /** An OCR line box in page pixels, top-left origin. */
     data class PdfLinkRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
 
@@ -90,6 +99,12 @@ object PdfGenerator {
      * encrypted PDF would have to be encoded with the object key, which this writer does not do,
      * so links are refused for encrypted / PDF-A output. With no links the bytes are unchanged.
      *
+     * FF-G-lite: [pageSizes] carries each source page's size in points when the page image was
+     * re-encoded/downsampled. A null entry (or an absent list) falls back to the historical
+     * `pixels x 72/150` calculation, so every existing caller is byte-for-byte unchanged. The
+     * OCR text layer and link rectangles use these same points, so they keep their relative
+     * position when the raster is smaller than the page.
+     *
      * @throws java.io.IOException (incl. [Durable.SyncException], [PdfVerifier.InvalidPdfException])
      *   when the PDF cannot be written, synced or verified.
      */
@@ -99,9 +114,13 @@ object PdfGenerator {
         textLayers: Map<Int, OcrPage> = emptyMap(),
         encryption: PdfAes.Encryption? = null,
         pdfa: PdfA.Mode? = null,
-        links: List<PdfLink> = emptyList()
+        links: List<PdfLink> = emptyList(),
+        pageSizes: List<Pair<Int, Int>?>? = null
     ): Set<Int> {
         require(images.isNotEmpty()) { "No images to convert" }
+        require(pageSizes == null || pageSizes.size == images.size) {
+            "Page size count must match the page count"
+        }
         require(pdfa == null || encryption == null) {
             "A PDF/A copy is never password-protected"
         }
@@ -201,8 +220,9 @@ object PdfGenerator {
                     require(info.components == 1 || info.components == 3) {
                         "Page must be grayscale or RGB JPEG: ${imageFile.name}"
                     }
-                    val pageW = (info.width * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
-                    val pageH = (info.height * 72f / ASSUMED_DPI).roundToInt().coerceAtLeast(1)
+                    val (w, h) = pageSizes?.get(i) ?: sizeInPoints(info.width, info.height)
+                    val pageW = w.coerceAtLeast(1)
+                    val pageH = h.coerceAtLeast(1)
                     pagePixels[i] = info.width to info.height
                     pagePoints[i] = pageW to pageH
                     val pageObj = pageBase + i * 3
