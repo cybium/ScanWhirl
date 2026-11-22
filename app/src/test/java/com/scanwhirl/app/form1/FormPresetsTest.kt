@@ -93,7 +93,7 @@ class FormPresetsTest {
             assertEquals(spec.id, FormPresets.byId(spec.id).id)
             assertFalse("cleanup must never be auto-on: ${spec.id}", spec.signatureCleanup)
         }
-        assertEquals("neet_ug_photo", FormPresets.outputRole(FormPresets.NEET_UG_PHOTO.id))
+        assertEquals("photo", FormPresets.outputRole(FormPresets.NEET_UG_PHOTO.id))
         assertEquals("signature", FormPresets.outputRole(FormPresets.NEET_PG_SIGNATURE.id))
         assertEquals("thumb", FormPresets.outputRole(FormPresets.NEET_UG_THUMB.id))
         assertEquals("declaration", FormPresets.outputRole(FormPresets.DECLARATION.id))

@@ -1496,7 +1496,7 @@ class FormReadyActivity : BaseActivity() {
     internal fun cropModeForTest(): Boolean = frameMode == FrameMode.CROP
     internal fun setCropModeForTest(crop: Boolean) =
         setFrameMode(if (crop) FrameMode.CROP else FrameMode.FIT)
-    internal fun activeSourceRectForTest(): Rect = activeSourceRect()
+    internal fun activeSourceRectForTest(): RectF = RectF(activeSourceRect())
     internal fun previewCropRectForTest(): RectF? = lastPreviewRect
     internal fun exportCropRectForTest(): RectF? = lastExportRect
     internal fun previewBitmapsForTest(): List<Bitmap> =
