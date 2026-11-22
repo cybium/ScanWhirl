@@ -129,7 +129,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ic_sym_text_fields"
+                android:src="@drawable/ic_sym_ocr"
                 app:tint="@color/cyan_primary" />
 
             <TextView
