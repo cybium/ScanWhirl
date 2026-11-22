@@ -75,11 +75,24 @@ class CR_ReplaceSafetyTest {
 
     private fun sourceIdentity(id: String): String = requireNotNull(repo.replaceDocIdentity(id))
 
+    // Production no longer exposes a four-argument authorization bypass.
+    // Fixtures explicitly act as the producer before invoking the real commit path.
+    private suspend fun replaceProduced(source: String, output: String, tool: String, name: String): Result<String> {
+        val authId = java.util.UUID.randomUUID().toString()
+        val sourceFp = repo.replaceDocIdentity(source)
+            ?: return Result.failure(IOException("Source is gone"))
+        val outputFp = repo.replaceDocIdentity(output)
+            ?: return Result.failure(IOException("Output is gone"))
+        com.scanwhirl.app.store.ReplaceAuthorizationStore(app).issue(authId, source, output, tool,
+            sourceFp, outputFp)
+        return coordinator.replace(authId, source, output, tool, name)
+    }
+
     @Test
     fun `the feature flag ships off and entry is dark by default`() {
         ReplaceFeature.resetForTests()
         assertFalse(ReplaceFeature.isEnabled())
-        val result = runBlocking { coordinator.replace(doc("a"), doc("b"), "compress", "a") }
+        val result = runBlocking { replaceProduced(doc("a"), doc("b"), "compress", "a") }
         assertTrue(result.isFailure)
     }
 
@@ -98,7 +111,7 @@ class CR_ReplaceSafetyTest {
         val source = doc("original"); val output = doc("compressed"); val foreign = doc("foreign")
         val before = hashes(source); val foreignBefore = hashes(foreign)
         val id = sourceIdentity(source)
-        val key = coordinator.replace(source, output, "compress", "original").getOrThrow()
+        val key = replaceProduced(source, output, "compress", "original").getOrThrow()
         assertEquals(ReplaceJournal.STATE_DONE, journal.findBySource(source)?.state)
         assertNull(repo.getDocument(source))
         assertNotNull(repo.getDocument(output))
@@ -116,7 +129,7 @@ class CR_ReplaceSafetyTest {
     @Test
     fun `a protected pending original survives a 31 day purge`() = runTest {
         val source = doc("pending"); val output = doc("pending-out")
-        val key = coordinator.replace(source, output, "compress", "pending").getOrThrow()
+        val key = replaceProduced(source, output, "compress", "pending").getOrThrow()
         repo.recoverTrash(System.currentTimeMillis() + 31L * 24 * 60 * 60 * 1000)
         assertNotNull("pending original is not expired", repo.listTrash().firstOrNull { it.key == key })
     }
@@ -128,7 +141,7 @@ class CR_ReplaceSafetyTest {
             val before = hashes(source)
             val id = sourceIdentity(source)
             ReplaceFaults.hook = { at -> if (at == step) throw SimulatedProcessDeath(at) }
-            coordinator.replace(source, output, "compress", source)
+            replaceProduced(source, output, "compress", source)
             ReplaceFaults.reset()
             // Simulated restart: recovery runs before Trash expiry.
             coordinator.recoverBeforeExpiry()
@@ -154,7 +167,7 @@ class CR_ReplaceSafetyTest {
                 repo.getDocument(source)!!.pageFiles.first().writeBytes("tampered".toByteArray())
             }
         }
-        val result = coordinator.replace(source, output, "compress", source)
+        val result = replaceProduced(source, output, "compress", source)
         ReplaceFaults.reset()
         assertTrue("identity gate refused the changed source", result.isFailure)
         assertNull(key)
@@ -166,7 +179,7 @@ class CR_ReplaceSafetyTest {
     fun `a failed move leaves no journal that claims success`() = runTest {
         val source = doc("disk-full"); val output = doc("disk-full-out")
         ReplaceFaults.hook = { step -> if (step == "before-move") throw IOException("no space") }
-        val result = coordinator.replace(source, output, "compress", source)
+        val result = replaceProduced(source, output, "compress", source)
         ReplaceFaults.reset()
         assertTrue(result.isFailure)
         assertNotNull(repo.getDocument(source))
@@ -177,7 +190,7 @@ class CR_ReplaceSafetyTest {
     fun `a collision restore comes back under a new id with the same bytes`() = runTest {
         val source = doc("collide"); val output = doc("collide-out")
         val before = hashes(source)
-        val key = coordinator.replace(source, output, "compress", source).getOrThrow()
+        val key = replaceProduced(source, output, "compress", source).getOrThrow()
         val squatter = doc("squatter")
         File(repo.docsDir, squatter).copyRecursively(File(repo.docsDir, source))
         assertNotNull(repo.getDocument(source))
@@ -191,8 +204,8 @@ class CR_ReplaceSafetyTest {
     fun `two concurrent replaces of one source run single flight`() = runTest {
         val source = doc("race"); val a = doc("race-a"); val b = doc("race-b")
         val before = hashes(source)
-        val first = async { coordinator.replace(source, a, "compress", source) }
-        val second = async { coordinator.replace(source, b, "compress", source) }
+        val first = async { replaceProduced(source, a, "compress", source) }
+        val second = async { replaceProduced(source, b, "compress", source) }
         val results = listOf(first.await(), second.await())
         assertTrue("at least one succeeded", results.any { it.isSuccess })
         assertTrue("the other was refused", results.any { it.isFailure })

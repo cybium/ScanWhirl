@@ -1319,7 +1319,8 @@ class ScanRepository(private val context: Context) {
         val marker = File(src, TRASH_MARKER)
         try {
             Durable.atomicWriteText(marker, trashMarkerText(id, System.currentTimeMillis(), previousToken))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (previousToken != null) throw e // Replace must carry its recovery/expiry guard.
         }
         if (!src.renameTo(dest)) {
             marker.delete()
@@ -1936,6 +1937,7 @@ class ScanRepository(private val context: Context) {
         copyPdf: Boolean = false,
         seal: SealSpec? = null,
         forceTextLayers: Boolean = false,
+        replaceProduction: ReplaceProduction? = null,
         build: suspend (File) -> Unit
     ): ScanDocument {
         if (expectedBytes > 0 && usableSpace(docsDir) < expectedBytes * 2 + (16L shl 20)) {
@@ -1944,6 +1946,7 @@ class ScanRepository(private val context: Context) {
         val staging = OpStaging.create(context.filesDir)
         OpFaults.at("op:staged")
         var id: String
+        var replaceAuthorizationId: String? = null
         try {
             build(staging)
             currentCoroutineContext().ensureActive()
@@ -2058,15 +2061,22 @@ class ScanRepository(private val context: Context) {
                 OpStaging.forget(staging)
                 OpFaults.at("op:after_rename")
             } else {
-                id = synchronized(TRASH_LOCK) {
+                val publish = {
                     val newId = freeLibraryId()
                     OpFaults.at("op:before_rename")
                     resolveNameBeforePublish(staging)
                     if (!staging.renameTo(File(docsDir, newId))) {
                         throw IOException(context.getString(R.string.op_publish_failed))
                     }
+                    // The verified, newly published bytes cannot be edited/reused
+                    // between publication and permit capture: all write locks are held.
+                    replaceProduction?.let { production ->
+                        replaceAuthorizationId = authorizePublishedReplace(production, newId)
+                    }
                     newId
                 }
+                id = if (replaceProduction != null) withReplaceLock(publish)
+                    else synchronized(TRASH_LOCK, publish)
                 OpStaging.forget(staging)
                 OpFaults.at("op:after_rename")
             }
@@ -2082,8 +2092,9 @@ class ScanRepository(private val context: Context) {
         }
         Durable.syncDir(docsDir)
         Durable.syncDir(OpStaging.root(context.filesDir))
-        return loadDocument(File(docsDir, id))
-            ?: throw IllegalStateException("Published document could not be opened")
+        return (loadDocument(File(docsDir, id))
+            ?: throw IllegalStateException("Published document could not be opened"))
+            .copy(replaceAuthorizationId = replaceAuthorizationId)
     }
 
     /** Copies one source page into [staging] as `page_%03d.jpg`, fsynced, with a cancel check. */
@@ -2279,10 +2290,12 @@ class ScanRepository(private val context: Context) {
         quality: Int,
         maxDim: Int?
     ): ScanDocument = withContext(Dispatchers.IO) {
+        val production = replaceProduction(id, "compress")
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         val ctx = currentCoroutineContext()
-        buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }) { staging ->
+        buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() },
+            replaceProduction = production) { staging ->
             // H3-5: the words survive compression; text and rescaled geometry are carried to the
             // copy so it is searchable right away (CP1).
             stageCompressedPages(id, doc, staging) { _, file ->
@@ -2305,6 +2318,7 @@ class ScanRepository(private val context: Context) {
         onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument = withContext(Dispatchers.IO) {
             require(targetBytes > 0) { "Target size must be positive" }
+            val production = replaceProduction(id, "compress")
             val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
             val ctx = currentCoroutineContext()
@@ -2312,7 +2326,8 @@ class ScanRepository(private val context: Context) {
             val sum = sizes.sum().coerceAtLeast(1L)
             val budget = (targetBytes - (doc.pageFiles.size * 600L + 1000L)).coerceAtLeast(2048L)
             buildAndPublish(
-                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
+                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() },
+                replaceProduction = production
             ) { staging ->
                 stageCompressedPages(id, doc, staging, onPage = onPage) { i, file ->
                     val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
@@ -4473,6 +4488,7 @@ class ScanRepository(private val context: Context) {
      * untouched.
      */
     suspend fun removeMetadata(id: String): ScanDocument = withContext(Dispatchers.IO) {
+        val production = replaceProduction(id, "remove_metadata")
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
@@ -4483,7 +4499,8 @@ class ScanRepository(private val context: Context) {
             outputName(doc.name, "Clean"),
             doc.category,
             doc.pageFiles.sumOf { it.length() },
-            forceTextLayers = hadTextLayer || Prefs.makeSearchable(context)
+            forceTextLayers = hadTextLayer || Prefs.makeSearchable(context),
+            replaceProduction = production
         ) { staging ->
             doc.pageFiles.forEachIndexed { i, page ->
                 val bitmap = BitmapFactory.decodeFile(page.path)
@@ -5266,6 +5283,11 @@ class ScanRepository(private val context: Context) {
     // deletes a document. Lane CR ships the feature flag OFF.
     // ------------------------------------------------------------------
 
+    /** All Replace journal/repository decisions share the established lock order. */
+    internal fun <T> withReplaceLock(action: () -> T): T = synchronized(PDF_LOCK) {
+        OcrStore.locked { synchronized(TRASH_LOCK) { action() } }
+    }
+
     /** Full byte identity of a document directory; Trash bookkeeping is excluded. */
     private fun replaceIdentityIn(dir: File): String? {
         if (!dir.isDirectory) return null
@@ -5283,6 +5305,24 @@ class ScanRepository(private val context: Context) {
 
     /** Identity of a live document, or null when it is gone. */
     fun replaceDocIdentity(id: String): String? = replaceIdentityIn(File(docsDir, id))
+
+    private data class ReplaceProduction(val sourceId: String, val tool: String, val sourceFingerprint: String)
+
+    private fun replaceProduction(sourceId: String, tool: String): ReplaceProduction? = withReplaceLock {
+        if (!com.scanwhirl.app.util.ReplaceFeature.isEnabled()) null
+        else replaceDocIdentity(sourceId)?.let { ReplaceProduction(sourceId, tool, it) }
+    }
+
+    /** Called only inside the verified publication critical section. Failure keeps both copies. */
+    private fun authorizePublishedReplace(production: ReplaceProduction, outputId: String): String? = runCatching {
+        if (!replaceIsEligible(production.sourceId, outputId, production.tool) ||
+            replaceDocIdentity(production.sourceId) != production.sourceFingerprint
+        ) return@runCatching null
+        val id = UUID.randomUUID().toString()
+        ReplaceAuthorizationStore(context).issue(id, production.sourceId, outputId, production.tool,
+            production.sourceFingerprint, requireNotNull(replaceDocIdentity(outputId)))
+        id
+    }.getOrNull()
 
     private fun replaceTrashIdentity(key: String): String? =
         replaceIdentityIn(File(trashDir, key))
@@ -5314,14 +5354,18 @@ class ScanRepository(private val context: Context) {
      * After a DONE journal passes its Trash window, release the Replace-specific
      * expiry guard so the ordinary 30-day purge can finally reclaim the entry.
      */
-    fun replaceReleaseExpiryGuard(trashKey: String): Boolean = synchronized(TRASH_LOCK) {
+    fun replaceReleaseExpiryGuard(trashKey: String, opId: String): Boolean = synchronized(TRASH_LOCK) {
         val dir = File(trashDir, trashKey)
-        if (!dir.isDirectory) return@synchronized false
+        if (!dir.isDirectory) return@synchronized true
         val marker = File(dir, TRASH_MARKER)
-        val lines = runCatching { marker.readLines() }.getOrNull()
-            ?.filterNot { it.startsWith("previous=") } ?: return@synchronized false
+        val lines = runCatching { marker.readLines() }.getOrNull() ?: return@synchronized false
+        // Trash keys are reusable after restore. Never release a newer operation's guard.
+        if ("previous=$opId" !in lines) return@synchronized true
+        if (runCatching { File(dir, REPLACE_OP_MARKER).readText() }.getOrNull() != opId) {
+            return@synchronized false
+        }
         runCatching {
-            Durable.atomicWriteText(marker, lines.joinToString("\n") + "\n")
+            Durable.atomicWriteText(marker, lines.filterNot { it.startsWith("previous=") }.joinToString("\n") + "\n")
             File(dir, REPLACE_OP_MARKER).delete()
         }.isSuccess
     }
@@ -5339,31 +5383,43 @@ class ScanRepository(private val context: Context) {
      * provenance under the SEC2 lock order, then asks the caller to consume the
      * single-use authorization inside the same critical section.
      */
-    fun replaceCommitGuard(
-        sourceId: String, outputId: String, sourceFp: String, outputFp: String,
-        tool: String, authorize: () -> Boolean
-    ): Boolean {
-        var ok = false
+    internal fun replaceCommit(
+        entry: ReplaceJournal.Entry, journal: ReplaceJournal, authorize: () -> Boolean
+    ): String {
+        var key: String? = null
         synchronized(PDF_LOCK) {
             OcrStore.locked {
                 synchronized(TRASH_LOCK) {
-                    if (tool in REPLACE_OPERATIONS && sourceId != outputId &&
-                        replaceDocIdentity(sourceId) == sourceFp &&
-                        replaceDocIdentity(outputId) == outputFp
+                    // Write-ahead, then the last possible test seam. BOTH identities
+                    // and the one-use permit are checked without releasing any lock.
+                    journal.write(entry)
+                    ReplaceFaults.at("before-move")
+                    val source = getDocument(entry.sourceId)
+                    val output = getDocument(entry.outputId)
+                    if (entry.operation !in REPLACE_OPERATIONS || entry.sourceId == entry.outputId ||
+                        source == null || output == null ||
+                        source.isLocked || source.isVaulted || output.isLocked || output.isVaulted ||
+                        replaceDocIdentity(entry.sourceId) != entry.sourceIdentity ||
+                        replaceDocIdentity(entry.outputId) != entry.outputIdentity || !authorize()
                     ) {
-                        val source = getDocument(sourceId)
-                        val output = getDocument(outputId)
-                        if (source != null && output != null &&
-                            !source.isLocked && !source.isVaulted &&
-                            !output.isLocked && !output.isVaulted
-                        ) {
-                            ok = authorize()
-                        }
+                        journal.delete(entry.opId) // Refused before any move; no recovery obligation.
+                        throw IOException("The result no longer matches its authorization")
                     }
+                    val src = File(docsDir, entry.sourceId)
+                    Durable.atomicWriteText(File(src, REPLACE_OP_MARKER), entry.opId)
+                    key = trashUnderLocks(src, entry.sourceId, entry.opId)
+                    dropDerivedCaches(entry.sourceId)
+                    ReplaceFaults.at("after-move")
+                    val moved = entry.copy(state = ReplaceJournal.STATE_COMMITTING,
+                        trashKey = key, updatedAt = System.currentTimeMillis())
+                    journal.write(moved)
+                    ReplaceFaults.at("after-committing")
+                    journal.write(moved.copy(state = ReplaceJournal.STATE_DONE))
+                    ReplaceFaults.at("after-done")
                 }
             }
         }
-        return ok
+        return requireNotNull(key)
     }
 
     /** Cheap, non-hashing first gate for the result screen. */
@@ -5379,44 +5435,90 @@ class ScanRepository(private val context: Context) {
         return replaceDocIdentity(sourceId) != null && replaceDocIdentity(outputId) != null
     }
 
-    /**
-     * Identity-gated move of the source whole into Trash. The check and the move
-     * share one critical section in the SEC2 lock order, so a concurrent edit
-     * cannot slip between "verify" and "move". Returns the Trash key.
-     */
-    fun replaceMoveSourceToTrash(sourceId: String, expected: String, opId: String): String {
-        var movedKey: String? = null
+    /** Idempotent Undo/recovery: every swap boundary is durable and evidence-gated.
+     * The planned destination is recorded before restore, including collision ids. */
+    internal fun replaceUndo(opId: String, journal: ReplaceJournal): ReplaceUndoOutcome =
         synchronized(PDF_LOCK) {
             OcrStore.locked {
                 synchronized(TRASH_LOCK) {
-                    if (replaceDocIdentity(sourceId) != expected) {
-                        throw IOException("The source changed and was not replaced")
+                    var e = journal.load(opId) ?: throw IOException("No such replace")
+                    if (e.state == ReplaceJournal.STATE_UNDONE) {
+                        return@synchronized ReplaceUndoOutcome(requireNotNull(e.restoredId),
+                            e.undoOutputKey != null, e.undoOutputChanged, e.undoOutputKey)
                     }
-                    val doc = getDocument(sourceId)
-                        ?: throw IOException("The source is no longer in the library")
-                    if (doc.isLocked || doc.isVaulted) {
-                        throw IOException("A protected source cannot be replaced")
+                    if (e.state !in ReplaceJournal.UNDO_STATES && e.state != ReplaceJournal.STATE_DONE) {
+                        throw IOException("Replace is not ready for Undo")
                     }
-                    // Write the op marker INSIDE the source BEFORE the single
-                    // rename. A crash after the rename can no longer leave an
-                    // unidentifiable original for the 30-day expiry to purge.
-                    Durable.atomicWriteText(File(File(docsDir, sourceId), REPLACE_OP_MARKER), opId)
-                    // trashUnderLocks writes trashed.txt with previous=<token>
-                    // before the rename too: marker and op identity travel with
-                    // the directory in one atomic move.
-                    movedKey = trashUnderLocks(File(docsDir, sourceId), sourceId, opId)
-                    dropDerivedCaches(sourceId)
+                    fun save(next: ReplaceJournal.Entry) {
+                        val updated = next.copy(updatedAt = System.currentTimeMillis())
+                        journal.write(updated)
+                        e = updated
+                    }
+                    val key = e.trashKey ?: throw IOException("Nothing to undo")
+                    val originalTrash = File(trashDir, key)
+                    if (originalTrash.isDirectory) {
+                        if (replaceTrashIdentity(key) != e.sourceIdentity) {
+                            throw IOException("Original in Trash changed; Undo can be retried")
+                        }
+                        var id = e.restoredId ?: e.sourceId
+                        if (!isSafeId(id) || id in escrowReservedIds() || File(docsDir, id).exists()) {
+                            id = freeLibraryId()
+                        }
+                        // Persist the collision-safe destination BEFORE the rename.
+                        save(e.copy(state = ReplaceJournal.STATE_UNDO_INTENT, restoredId = id))
+                        ReplaceFaults.at("before-restore")
+                        val dest = File(docsDir, id)
+                        if (!originalTrash.renameTo(dest)) throw IOException("Could not restore original")
+                        Durable.syncDir(trashDir)
+                        Durable.syncDir(docsDir)
+                        ReplaceFaults.at("after-restore")
+                        File(dest, TRASH_MARKER).delete()
+                    }
+                    val restoredId = e.restoredId ?: throw IOException("No recorded restore destination")
+                    val restored = File(docsDir, restoredId)
+                    if (replaceDocIdentity(restoredId) != e.sourceIdentity ||
+                        runCatching { File(restored, REPLACE_OP_MARKER).readText() }.getOrNull() != e.opId
+                    ) throw IOException("Restored original not verified; Undo can be retried")
+                    if (e.state == ReplaceJournal.STATE_OUTPUT_KEPT ||
+                        e.state == ReplaceJournal.STATE_OUTPUT_TRASHED
+                    ) {
+                        if (e.state == ReplaceJournal.STATE_OUTPUT_TRASHED &&
+                            e.undoOutputKey?.let { replaceTrashIdentity(it) } != e.outputIdentity
+                        ) throw IOException("Output swap not verified; Undo can be retried")
+                        save(e.copy(state = ReplaceJournal.STATE_UNDONE))
+                        return@synchronized ReplaceUndoOutcome(restoredId,
+                            e.undoOutputKey != null, e.undoOutputChanged, e.undoOutputKey)
+                    }
+                    save(e.copy(state = ReplaceJournal.STATE_ORIGINAL_RESTORED))
+                    ReplaceFaults.at("after-original-journal")
+                    // The output's own token distinguishes its rename from the original's.
+                    val outputToken = "${e.opId}-output"
+                    var outputKey = replaceTrashKeyForOp(outputToken)
+                    if (outputKey != null && replaceTrashIdentity(outputKey) != e.outputIdentity) {
+                        throw IOException("Output in Trash changed; Undo can be retried")
+                    }
+                    if (outputKey == null && replaceDocIdentity(e.outputId) == e.outputIdentity) {
+                        ReplaceFaults.at("before-output-trash")
+                        // Recheck after the seam as well; never move changed bytes.
+                        outputKey = replaceMoveOutputToTrash(e.outputId, e.outputIdentity, outputToken)
+                        ReplaceFaults.at("after-output-trash")
+                    }
+                    save(e.copy(state = if (outputKey != null) ReplaceJournal.STATE_OUTPUT_TRASHED
+                        else ReplaceJournal.STATE_OUTPUT_KEPT,
+                        undoOutputKey = outputKey, undoOutputChanged = outputKey == null))
+                    ReplaceFaults.at("after-output-journal")
+                    save(e.copy(state = ReplaceJournal.STATE_UNDONE))
+                    ReplaceFaults.at("after-undone")
+                    ReplaceUndoOutcome(restoredId, outputKey != null, outputKey == null, outputKey)
                 }
             }
         }
-        return movedKey ?: throw IOException("The source was not moved")
-    }
 
     /**
      * Undo swap: move the (unchanged) output to Trash with its own op marker.
      * The caller checks identity first; a changed output is kept, never deleted.
      */
-    fun replaceMoveOutputToTrash(outputId: String, expected: String, opId: String): String? {
+    private fun replaceMoveOutputToTrash(outputId: String, expected: String, opId: String): String? {
         var movedKey: String? = null
         synchronized(PDF_LOCK) {
             OcrStore.locked {
@@ -5430,26 +5532,6 @@ class ScanRepository(private val context: Context) {
             }
         }
         return movedKey
-    }
-
-    /**
-     * Collision-safe Undo: verifies the trashed bytes first, then uses the
-     * existing allocator. If the original id was taken, the document comes back
-     * under a new id with the same identity (never overwriting the occupant).
-     */
-    fun replaceRestoreOriginal(trashKey: String, expected: String): ScanDocument {
-        var restored: ScanDocument? = null
-        synchronized(PDF_LOCK) {
-            OcrStore.locked {
-                synchronized(TRASH_LOCK) {
-                    if (replaceTrashIdentity(trashKey) != expected) {
-                        throw IOException("The trashed original changed and was not restored")
-                    }
-                    restored = restoreFromTrash(trashKey)
-                }
-            }
-        }
-        return restored ?: throw IOException("The original could not be restored")
     }
 
 }

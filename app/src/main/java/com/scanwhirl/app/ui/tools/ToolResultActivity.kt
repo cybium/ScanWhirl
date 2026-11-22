@@ -202,6 +202,7 @@ class ToolResultActivity : BaseActivity() {
         // L3-02 P1: the identity was captured when this intent was built, before
         // any later owner of the id could replace the output.
         outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
+        replaceAuthId = intent.getStringExtra(EXTRA_REPLACE_AUTH)
         // L3-02 P2: derive the original-kept receipt from the library right now.
         receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
         val legacyClaim = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
@@ -221,6 +222,7 @@ class ToolResultActivity : BaseActivity() {
                 targetBytes = saved.targetBytes
                 beforeBytes = saved.beforeBytes
                 outputIdentity = saved.outputIdentity
+                replaceAuthId = saved.replaceAuthId
                 receiptSourceId = saved.receiptSourceId
                 chosenLocationName = saved.chosenLocationName
                 documentsExistingName = saved.documentsExistingName
@@ -229,26 +231,8 @@ class ToolResultActivity : BaseActivity() {
             }
         }
         if (docIds.isNotEmpty() || files.isNotEmpty()) persistReceipt()
-        // Lane CR: bind both byte identities to THIS result off the main thread,
-        // before any Replace consent can be shown.
-        val authSource = receiptSourceId
-        val authOutput = docIds.singleOrNull()
-        if (ReplaceFeature.isEnabled() && !idCardFlow && authSource != null &&
-            authOutput != null && authOutput != authSource && files.isEmpty()
-        ) {
-            val source = authSource
-            val output = authOutput
-            if (source != null && output != null) {
-                replaceAuthId = "auth-$source-$output-$toolId"
-                lifecycleScope.launch(Dispatchers.IO) {
-                    runCatching {
-                        ReplaceCoordinator(this@ToolResultActivity, repo).authorizeResult(
-                            requireNotNull(replaceAuthId), source, output, toolId
-                        )
-                    }
-                }
-            }
-        }
+        // Reopening NEVER grants authority to the bytes currently using historical ids.
+        // Only a permit persisted by the producer can enable Replace.
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -294,6 +278,7 @@ class ToolResultActivity : BaseActivity() {
             chosenLocationName = chosenLocationName,
             documentsExistingName = documentsExistingName,
             undone = undone,
+            replaceAuthId = replaceAuthId,
             savedAt = System.currentTimeMillis()
         ))
     }
@@ -724,7 +709,11 @@ class ToolResultActivity : BaseActivity() {
         if (!ReplaceFeature.isEnabled() || idCardFlow) return false
         val source = receiptSourceId ?: return false
         val output = docIds.singleOrNull() ?: return false
-        return files.isEmpty() && repo.replaceToolAllowed(toolId)
+        val auth = replaceAuthId?.let {
+            com.scanwhirl.app.store.ReplaceAuthorizationStore(this).load(it)
+        } ?: return false
+        return !auth.consumed && auth.sourceId == source && auth.outputId == output &&
+            auth.toolId == toolId && files.isEmpty() && repo.replaceToolAllowed(toolId)
     }
 
     private fun offerReplace() {
@@ -1578,6 +1567,33 @@ class ToolResultActivity : BaseActivity() {
         val undoButton: View? = findViewById(R.id.toolResultUndo)
         undoButton?.isEnabled = false
         lifecycleScope.launch {
+            // After Replace, this is a journaled swap, NEVER the ordinary
+            // new-copy permanent removal path below (including after reopening).
+            val replacement = withContext(Dispatchers.IO) {
+                replaceAuthId?.let {
+                    ReplaceCoordinator(this@ToolResultActivity, repo).journalForAuthorization(it)
+                }
+            }
+            if (replacement != null) {
+                try {
+                    val swapped = withContext(Dispatchers.IO) {
+                        ReplaceCoordinator(this@ToolResultActivity, repo).undo(replacement.opId)
+                    }
+                    swapped.onFailure { fail(getString(R.string.cr_replace_refused)) }
+                        .onSuccess { outcome ->
+                            undone = true
+                            persistReceipt()
+                            showAlreadyUndone()
+                            Toast.makeText(this@ToolResultActivity, getString(
+                                if (outcome.outputKeptChanged) R.string.cr_undo_output_kept
+                                else R.string.cr_undo_done), Toast.LENGTH_LONG).show()
+                        }
+                } finally {
+                    undoChecking = false
+                    undoButton?.isEnabled = true
+                }
+                return@launch
+            }
             // L3-02 P1: the re-check hashes on IO, never on Main, while the
             // button is disabled so a second tap cannot race the first.
             val allowed = try {
@@ -1797,6 +1813,7 @@ class ToolResultActivity : BaseActivity() {
         private const val KEY_COPY_REQUESTED = "w3_copy_requested"
         private const val KEY_COPY_OUTCOME = "w3_copy_outcome"
         private const val KEY_COPY_FINGERPRINT = "w3_copy_fingerprint"
+        private const val EXTRA_REPLACE_AUTH = "replace_producer_authorization"
         private const val KEY_CHOSEN_NAME = "w3_chosen_name"
         private const val KEY_EXISTING_NAME = "w3_existing_name"
 
@@ -1838,13 +1855,16 @@ class ToolResultActivity : BaseActivity() {
             compareBeforeDetail: List<String>? = null,
             compareAfterDetail: List<String>? = null,
             comparePageLabel: String? = null,
-            compareShowToggle: Boolean = true
+            compareShowToggle: Boolean = true,
+            /** Persisted by the transform producer on IO, never by this screen. */
+            replaceAuthId: String? = null
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
             .putStringArrayListExtra(EXTRA_FILES, ArrayList(files.map { it.path }))
             .putExtra(EXTRA_MIME, mime)
             .putExtra(EXTRA_NOTE, note)
+            .putExtra(EXTRA_REPLACE_AUTH, replaceAuthId)
             .apply {
                 if (targetBytes != null && targetBytes > 0L) putExtra(EXTRA_TARGET, targetBytes)
                 if (beforeBytes != null && beforeBytes > 0L) putExtra(EXTRA_BEFORE, beforeBytes)

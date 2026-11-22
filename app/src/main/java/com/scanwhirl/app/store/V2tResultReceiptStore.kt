@@ -28,7 +28,8 @@ class V2tResultReceiptStore(private val context: Context) {
         val chosenLocationName: String?,
         val documentsExistingName: String?,
         val undone: Boolean,
-        val savedAt: Long
+        val savedAt: Long,
+        val replaceAuthId: String? = null
     )
 
     private fun file(): File = File(context.filesDir, "v2t_last_result.receipt")
@@ -50,6 +51,7 @@ class V2tResultReceiptStore(private val context: Context) {
             append("documentsExistingName=").append(enc(receipt.documentsExistingName)).append('\n')
             append("undone=").append(receipt.undone).append('\n')
             append("savedAt=").append(receipt.savedAt).append('\n')
+            append("replaceAuthId=").append(enc(receipt.replaceAuthId)).append('\n')
         })
     }
 
@@ -79,7 +81,8 @@ class V2tResultReceiptStore(private val context: Context) {
             chosenLocationName = dec(v["chosenLocationName"]),
             documentsExistingName = dec(v["documentsExistingName"]),
             undone = v["undone"]?.toBooleanStrictOrNull() ?: false,
-            savedAt = v["savedAt"]?.toLongOrNull() ?: 0L
+            savedAt = v["savedAt"]?.toLongOrNull() ?: 0L,
+            replaceAuthId = dec(v["replaceAuthId"])?.takeIf { it.isNotEmpty() }
         )
     }
 

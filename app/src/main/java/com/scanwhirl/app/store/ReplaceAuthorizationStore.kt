@@ -32,8 +32,6 @@ class ReplaceAuthorizationStore(private val context: Context) {
         return File(dir(), "$safe.auth")
     }
 
-    private val lock = Any()
-
     fun issue(
         id: String,
         sourceId: String,
@@ -42,8 +40,8 @@ class ReplaceAuthorizationStore(private val context: Context) {
         sourceFingerprint: String,
         outputFingerprint: String
     ): Authorization = synchronized(lock) {
-        val existing = load(id)
-        if (existing != null) return@synchronized existing
+        check(!fileFor(id).exists()) { "Authorization id already used" }
+        ReplaceFaults.at("before-authorization-write")
         val auth = Authorization(id, sourceId, outputId, toolId,
             sourceFingerprint, outputFingerprint, false, System.currentTimeMillis())
         write(auth)
@@ -67,9 +65,9 @@ class ReplaceAuthorizationStore(private val context: Context) {
             toolId = v["toolId"].orEmpty(),
             sourceFingerprint = v["sourceFingerprint"].orEmpty(),
             outputFingerprint = v["outputFingerprint"].orEmpty(),
-            consumed = v["consumed"]?.toBooleanStrictOrNull() ?: false,
+            consumed = v["consumed"]?.toBooleanStrictOrNull() ?: true,
             createdAt = v["createdAt"]?.toLongOrNull() ?: 0L
-        ).takeIf { it.id.isNotEmpty() }
+        ).takeIf { it.id == id && it.createdAt > System.currentTimeMillis() - MAX_AGE_MS }
     }
 
     /** Atomic in-process single-use: only the caller that flips this proceeds. */
@@ -82,6 +80,13 @@ class ReplaceAuthorizationStore(private val context: Context) {
 
     fun drop(id: String) {
         synchronized(lock) { fileFor(id).delete() }
+    }
+
+    fun prune() = synchronized(lock) {
+        dir().listFiles { f -> f.isFile && f.name.endsWith(".auth") }.orEmpty().forEach { file ->
+            val auth = load(file.name.removeSuffix(".auth"))
+            if (auth == null || auth.consumed) file.delete()
+        }
     }
 
     private fun write(auth: Authorization) {
@@ -100,5 +105,7 @@ class ReplaceAuthorizationStore(private val context: Context) {
 
     private companion object {
         const val HEADER = "scanwhirl-replace-auth-v1"
+        const val MAX_AGE_MS = 30L * 24 * 60 * 60 * 1000
+        val lock = Any()
     }
 }

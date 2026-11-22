@@ -5,7 +5,6 @@ import com.scanwhirl.app.util.Durable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Lane CR — write-ahead journal for "Replace original" (COUNCIL §5).
@@ -33,7 +32,8 @@ class ReplaceJournal(private val context: Context) {
         val updatedAt: Long,
         val authId: String? = null,
         val undoOutputKey: String? = null,
-        val undoOutputChanged: Boolean = false
+        val undoOutputChanged: Boolean = false,
+        val restoredId: String? = null
     )
 
     private fun dir(): File = File(context.filesDir, "replace").apply { mkdirs() }
@@ -62,6 +62,7 @@ class ReplaceJournal(private val context: Context) {
             append("authId=").append(enc(entry.authId)).append('\n')
             append("undoOutputKey=").append(enc(entry.undoOutputKey)).append('\n')
             append("undoOutputChanged=").append(entry.undoOutputChanged).append('\n')
+            append("restoredId=").append(enc(entry.restoredId)).append('\n')
         })
     }
 
@@ -102,7 +103,8 @@ class ReplaceJournal(private val context: Context) {
             updatedAt = v["updatedAt"]?.toLongOrNull() ?: 0L,
             authId = dec(v["authId"]),
             undoOutputKey = dec(v["undoOutputKey"]),
-            undoOutputChanged = v["undoOutputChanged"]?.toBooleanStrictOrNull() ?: false
+            undoOutputChanged = v["undoOutputChanged"]?.toBooleanStrictOrNull() ?: false,
+            restoredId = dec(v["restoredId"])?.takeIf { it.isNotEmpty() }
         )
     }
 
@@ -112,45 +114,41 @@ class ReplaceJournal(private val context: Context) {
      * is rolled back by dropping its journal; a completed move is only ever
      * confirmed, never repeated.
      */
-    fun recoverBeforeExpiry(repo: ScanRepository): Int {
+    fun recoverBeforeExpiry(repo: ScanRepository): Int = repo.withReplaceLock {
         var touched = 0
         for (entry in all()) {
             when (entry.state) {
                 STATE_INTENT -> {
-                    if (repo.getDocument(entry.sourceId) != null) {
+                    val moved = repo.replaceTrashKeyForOp(entry.opId)
+                    if (moved != null && repo.trashHasIdentity(moved, entry.sourceIdentity, entry.opId)) {
+                        write(entry.copy(state = STATE_DONE, trashKey = moved,
+                            updatedAt = System.currentTimeMillis()))
+                        touched++
+                    } else if (repo.getDocument(entry.sourceId) != null) {
                         // No move happened: nothing to roll back.
                         delete(entry.opId)
-                    } else {
-                        // Death after the move but before the key was journalled.
-                        val moved = repo.replaceTrashKeyForOp(entry.opId)
-                        if (moved != null && repo.trashHasIdentity(moved, entry.sourceIdentity, entry.opId)) {
-                            write(entry.copy(state = STATE_DONE, trashKey = moved,
-                                updatedAt = System.currentTimeMillis()))
-                            touched++
-                        }
                     }
                 }
                 STATE_COMMITTING -> {
                     val key = entry.trashKey
-                    if (key == null || repo.trashHasIdentity(key, entry.sourceIdentity, entry.opId)) {
-                        if (key != null) touched++
-                    } else if (repo.getDocument(entry.sourceId) != null) {
-                        delete(entry.opId) // move never happened
+                    if (key != null && repo.trashHasIdentity(key, entry.sourceIdentity, entry.opId)) {
+                        write(entry.copy(state = STATE_DONE, updatedAt = System.currentTimeMillis()))
+                        touched++
                     }
                 }
                 STATE_DONE -> if (repo.getDocument(entry.sourceId) != null && entry.trashKey == null) {
                     write(entry.copy(state = STATE_UNDO, updatedAt = System.currentTimeMillis()))
                 }
-                STATE_UNDOING, STATE_UNDO -> {
-                    // An interrupted Undo: the original is back, the output either
-                    // went to Trash or was kept because it had changed. Either way
-                    // both documents still exist, so only the journal needs finishing.
-                    write(entry.copy(state = STATE_UNDONE, updatedAt = System.currentTimeMillis()))
+                in UNDO_STATES -> {
+                    // Completion is earned by repository evidence, not a journal label.
+                    // Failure keeps the entry/Trash guard intact for a later retry.
+                    if (runCatching { repo.replaceUndo(entry.opId, this) }.isSuccess) touched++
                 }
             }
         }
         prune(repo)
-        return touched
+        ReplaceAuthorizationStore(context).prune()
+        touched
     }
 
     fun backdate(opId: String, time: Long) {
@@ -158,16 +156,22 @@ class ReplaceJournal(private val context: Context) {
     }
 
     /** Keep the journal bounded: done entries past the Trash window and undone entries go. */
-    fun prune(repo: ScanRepository) {
+    fun prune(repo: ScanRepository) = repo.withReplaceLock {
         val cutoff = System.currentTimeMillis() - TRASH_WINDOW_MS
         all().forEach { entry ->
             when (entry.state) {
-                STATE_UNDONE, STATE_UNDO -> delete(entry.opId)
-                STATE_DONE, STATE_COMMITTING -> if (entry.createdAt in 1 until cutoff) {
+                STATE_UNDONE -> {
+                    val released = entry.undoOutputKey?.let {
+                        repo.replaceReleaseExpiryGuard(it, "${entry.opId}-output")
+                    } ?: true
+                    if (released) delete(entry.opId)
+                }
+                STATE_DONE -> if (entry.createdAt in 1 until cutoff) {
                     // Let the normal Trash purge reclaim the old entry once the
                     // journal is no longer needed to protect it.
-                    entry.trashKey?.let { repo.replaceReleaseExpiryGuard(it) }
-                    delete(entry.opId)
+                    if (entry.trashKey?.let { repo.replaceReleaseExpiryGuard(it, entry.opId) } == true) {
+                        delete(entry.opId)
+                    }
                 }
             }
         }
@@ -180,6 +184,7 @@ class ReplaceJournal(private val context: Context) {
         ?.replace("%0A", "\n")
         ?.replace("%3D", "=")
         ?.replace("%25", "%")
+        ?.takeIf { it.isNotEmpty() }
 
     companion object {
         const val STATE_INTENT = "INTENT"
@@ -188,19 +193,22 @@ class ReplaceJournal(private val context: Context) {
         const val STATE_UNDO = "UNDO"
         const val STATE_UNDOING = "UNDOING"
         const val STATE_UNDONE = "UNDONE"
+        const val STATE_UNDO_INTENT = "UNDO_INTENT"
+        const val STATE_ORIGINAL_RESTORED = "ORIGINAL_RESTORED"
+        const val STATE_OUTPUT_TRASHED = "OUTPUT_TRASHED"
+        const val STATE_OUTPUT_KEPT = "OUTPUT_KEPT"
+        val UNDO_STATES = setOf(STATE_UNDO, STATE_UNDOING, STATE_UNDO_INTENT,
+            STATE_ORIGINAL_RESTORED, STATE_OUTPUT_TRASHED, STATE_OUTPUT_KEPT)
         const val TRASH_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         const val HEADER = "scanwhirl-replace-v1"
 
         /** Single-flight per source document: no two Replace ops can touch one id. */
-        private val flights = ConcurrentHashMap<String, Mutex>()
+        private val flights = Array(64) { Mutex() }
 
         suspend fun <T> singleFlight(sourceId: String, action: suspend () -> T): T {
-            val mutex = flights.getOrPut(sourceId) { Mutex() }
-            return try {
-                mutex.withLock { action() }
-            } finally {
-                flights.remove(sourceId, mutex)
-            }
+            val mutex = flights[(sourceId.hashCode() and Int.MAX_VALUE) % flights.size]
+            // Stable, bounded stripes cannot detach a mutex that already has waiters.
+            return mutex.withLock { action() }
         }
     }
 }

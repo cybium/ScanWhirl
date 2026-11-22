@@ -24,5 +24,7 @@ data class ScanDocument(
     /** Bytes of the PDF (or of all pages when there is no PDF): cached while listing. */
     val cachedSize: Long = 0L,
     /** Newest content modification time (the [revision]): cached while listing. */
-    val cachedModified: Long = 0L
+    val cachedModified: Long = 0L,
+    /** Transient producer permit, never reconstructed from a library id on reload. */
+    val replaceAuthorizationId: String? = null
 )

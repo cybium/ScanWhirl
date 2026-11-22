@@ -1337,21 +1337,21 @@ class ToolSetupActivity : BaseActivity() {
                 target = targetBytes
                 execute({
                     val out = if (targetBytes != null) {
-                        repo.compressScanToTarget(doc.id, targetBytes).id
+                        repo.compressScanToTarget(doc.id, targetBytes)
                     } else {
                         val (quality, maxDim) = compressLevel()
-                        repo.compressScan(doc.id, quality, maxDim).id
+                        repo.compressScan(doc.id, quality, maxDim)
                     }
-                    val ids = listOf(out)
+                    val ids = listOf(out.id)
                     // L3-02 P1: this block runs on Dispatchers.IO, so hashing here
                     // never blocks the main thread.
                     val identity = ToolResultActivity.captureOutputIdentityBlocking(
                         this@ToolSetupActivity, ids, emptyList()
                     )
-                    Pair(ids, identity)
-                }) { (ids, identity) ->
+                    Triple(ids, identity, out.replaceAuthorizationId)
+                }) { (ids, identity, authId) ->
                     openDocs(ids, targetBytes = targetBytes,
-                        receiptSourceId = doc.id, outputIdentity = identity)
+                        receiptSourceId = doc.id, outputIdentity = identity, replaceAuthId = authId)
                 }
             }
             "pdf_to_images" -> {
@@ -1459,9 +1459,11 @@ class ToolSetupActivity : BaseActivity() {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
-                    val out = listOf(repo.removeMetadata(doc.id).id)
-                    out to captureDocs(out)
-                }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
+                    val produced = repo.removeMetadata(doc.id)
+                    val out = listOf(produced.id)
+                    Triple(out, captureDocs(out), produced.replaceAuthorizationId)
+                }) { (out, identity, authId) -> openDocs(out, outputIdentity = identity,
+                    receiptSourceId = doc.id, replaceAuthId = authId) }
             }
             else -> fail(getString(R.string.tools_setup_nothing))
         }
@@ -1496,13 +1498,15 @@ class ToolSetupActivity : BaseActivity() {
         ids: List<String>,
         targetBytes: Long? = null,
         receiptSourceId: String? = null,
-        outputIdentity: String? = null
+        outputIdentity: String? = null,
+        replaceAuthId: String? = null
     ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
             ToolResultActivity.intent(
                 this, tool.id, docIds = ids, targetBytes = targetBytes,
-                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity
+                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity,
+                replaceAuthId = replaceAuthId
             )
         )
     }

@@ -26,6 +26,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlinx.coroutines.runBlocking
 
 /** Lane CR: consent sheet, dark-by-default entry point and EN/HI parity. */
 @RunWith(RobolectricTestRunner::class)
@@ -60,8 +61,8 @@ class CR_ReplaceUiTest {
         idle()
     }
 
-    private fun intentFor(source: String, output: String) = ToolResultActivity.intent(
-        app, "compress", docIds = listOf(output), receiptSourceId = source
+    private fun intentFor(source: String, output: String, authId: String? = null) = ToolResultActivity.intent(
+        app, "compress", docIds = listOf(output), receiptSourceId = source, replaceAuthId = authId
     )
 
     private fun read(path: String): Map<String, String> {
@@ -106,8 +107,10 @@ class CR_ReplaceUiTest {
     fun `the consent sheet states the consequence and confirm replaces with undo`() {
         ReplaceFeature.testOverride = true
         val source = DocFixtures.saved(repo, app, pages = 1, name = "sheet source")
-        val output = DocFixtures.saved(repo, app, pages = 1, name = "sheet output")
-        ActivityScenario.launch<ToolResultActivity>(intentFor(source, output)).use { scenario ->
+        // Only an actual producer can issue a permit; opening a result no longer does.
+        val output = runBlocking { repo.compressScan(source, 65, 2000) }
+        val authId = requireNotNull(output.replaceAuthorizationId)
+        ActivityScenario.launch<ToolResultActivity>(intentFor(source, output.id, authId)).use { scenario ->
             scenario.onActivity {
                 it.findViewById<View>(R.id.toolResultMore).performClick()
                 idle()

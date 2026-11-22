@@ -474,7 +474,8 @@ class CompressFlow(
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
                 host.refreshList()
                 showCompressResult(out, before, after, sourceKept = true,
-                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out),
+                    replaceAuthId = out.replaceAuthorizationId)
             } catch (e: CancellationException) {
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
@@ -509,7 +510,8 @@ class CompressFlow(
                 })
                 host.refreshList()
                 showCompressResult(out, before, out.pdfFile.length(), target, sourceKept = true,
-                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out))
+                    receiptSourceId = doc.id, outputIdentity = outputIdentity(out),
+                    replaceAuthId = out.replaceAuthorizationId)
             } catch (e: CancellationException) {
                 activity.runOnUiThread {
                     Toast.makeText(
@@ -555,7 +557,8 @@ class CompressFlow(
         /** L3-02 P2: library source used only to derive the "original kept" receipt from state. */
         receiptSourceId: String? = null,
         /** L3-02 P1: identity captured by the caller on Dispatchers.IO. */
-        outputIdentity: String? = null
+        outputIdentity: String? = null,
+        replaceAuthId: String? = null
     ) {
         val missed = target != null && after > target
         val grew = before > 0L && after > before
@@ -588,7 +591,8 @@ class CompressFlow(
                 compressTargetMissed = missed,
                 compressGrew = grew,
                 receiptSourceId = receiptSourceId,
-                outputIdentity = outputIdentity
+                outputIdentity = outputIdentity,
+                replaceAuthId = replaceAuthId
             )
         )
     }
