@@ -416,11 +416,8 @@
     <string name="tool_edit_sub">रंग-रूप बदलें, घुमाएँ और काटें</string>
     <string name="tool_merge_sub">PDF को एक में मिलाएँ</string>
     <string name="tool_resize_sub">तस्वीर का आकार बदलें (पिक्सेल यानी तस्वीर के छोटे बिंदु, या KB में फ़ाइल का आकार)</string>
-    <string name="unlock_device_note">ScanWhirl में रखा मूल स्कैन अब भी पासवर्ड से सुरक्षित है। केवल बाहर सहेजी गई नई प्रति खुली है। मूल का पासवर्ड हटाने के लिए ताला लगाएँ / खोलें में सहेजा स्कैन चुनें।</string>
     <string name="unlock_pdf_done">पासवर्ड हट गया। PDF खुली है</string>
     <string name="unlock_pdf_msg">\"%1$s\" का पासवर्ड डालें:</string>
-    <string name="unlock_pdf_not_ours_msg">ScanWhirl सिर्फ़ अपने पासवर्ड हटाता है। यह फ़ाइल नहीं बदली गई।</string>
-    <string name="unlock_pdf_not_ours_title">इस PDF पर ScanWhirl ने पासवर्ड नहीं लगाया है</string>
     <string name="unlock_pdf_open">खोलें</string>
     <string name="unlock_pdf_remove">हमेशा के लिए ताला खोलें</string>
     <string name="unlock_pdf_title">पासवर्ड से सुरक्षित PDF</string>

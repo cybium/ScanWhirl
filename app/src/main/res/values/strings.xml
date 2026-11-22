@@ -449,9 +449,6 @@
     <string name="lock_device_title">Lock a device PDF</string>
     <string name="lock_device_msg">ScanWhirl imports this PDF\'s pages as images first (the text stops being selectable), then protects the new PDF with your password. Save or share the locked file from the next screen.</string>
     <string name="lock_device_note">Pages were imported as images, so this PDF is picture-based. The copy you save is password-protected.</string>
-    <string name="unlock_pdf_not_ours_title">Not a ScanWhirl-locked PDF</string>
-    <string name="unlock_pdf_not_ours_msg">ScanWhirl only removes its own passwords. This file was not changed.</string>
-    <string name="unlock_device_note">Your scan in ScanWhirl keeps its password; this exported copy is open. Use Lock / Unlock → Saved scan to remove the password from the scan itself.</string>
 
     <!-- Hidden Vault: add via the FAB. -->
     <string name="vault_add_title">Add to Hidden Vault</string>

@@ -1,0 +1,11 @@
+<resources>
+    <string name="ffu_unlock_job">Remove a password you know</string>
+    <string name="ffu_original_protected">Your original stays protected.</string>
+    <string name="ffu_recipient_note">Use a password-free copy only if the recipient asks for one.</string>
+    <string name="ffu_unsupported">This PDF\'s structure isn\'t supported. The original is unchanged. Ask the issuer for an unprotected copy.</string>
+    <string name="ffu_protect_note">For private sharing. Many forms do not accept password-protected PDFs.</string>
+    <string name="ffu_make_copy">Make unlocked copy</string>
+    <string name="ffu_too_large">This PDF is too large to unlock safely on this phone. The original is unchanged.</string>
+    <string name="ffu_failed">Could not make an unlocked copy. The original is unchanged.</string>
+    <string name="ffu_damaged">This PDF looks damaged. The original is unchanged.</string>
+</resources>

@@ -86,6 +86,12 @@ class LockToolsActivity : BaseActivity(), HomeHost {
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         )
+        addView(SwStyle.text(
+            this@LockToolsActivity, 14f,
+            SwStyle.color(this@LockToolsActivity, R.color.text_hologram_hi)
+        ).apply {
+            setText(if (mode == MODE_PROTECT) R.string.ffu_protect_note else R.string.ffu_unlock_job)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // The chooser closes before it opens the next sheet or the Android file picker.
         // Returning here (for example after cancelling Protect) must leave a usable screen.
         val choose = MaterialButton(this@LockToolsActivity).apply {

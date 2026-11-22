@@ -134,7 +134,7 @@ class LockToolsWiringTest {
     }
 
     @Test
-    fun `dismissing a device PDF refusal finishes the tool activity`() {
+    fun `external device PDF asks for a known password and cancelling finishes without changing source`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Unprotected test PDF")
         val pdf = requireNotNull(repo.getDocument(id)).pdfFile
         val input = File(app.cacheDir, "r2lock-device-fixture.pdf")
@@ -149,17 +149,20 @@ class LockToolsWiringTest {
                 val shadow = shadowOf(activity)
                 val request = requireNotNull(shadow.nextStartedActivityForResult)
                 shadow.receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(input)))
-                assertTrue("refusal dialog opened", waitUntil {
+                // FF-U explicitly replaces the old hash-recognition refusal with a known-password
+                // route for any picked PDF. The sheet never modifies the picked bytes.
+                assertTrue("known-password sheet opened", waitUntil {
                     latestDialog()?.let { it !== chooser && it.isShowing &&
-                        it.findViewById<View>(android.R.id.button1) != null } == true
+                        it.findViewById<View>(R.id.unlockPassword) != null } == true
                 })
-                val refusal = latestDialog()!!
-                assertEquals(
-                    app.getString(R.string.unlock_pdf_not_ours_msg),
-                    refusal.findViewById<TextView>(android.R.id.message).text.toString()
+                val passwordSheet = latestDialog()!!
+                assertTrue(
+                    "passwords are entered only in a secure window",
+                    passwordSheet.window!!.attributes.flags and
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE != 0
                 )
                 assertTrue("the tool stays alive until the message is dismissed", !activity.isFinishing)
-                refusal.findViewById<View>(android.R.id.button1).performClick()
+                passwordSheet.dismiss()
                 idle()
                 assertTrue("the title-only tool should close and return to its caller", activity.isFinishing)
                 assertTrue("the refused file remains untouched", before.contentEquals(input.readBytes()))
