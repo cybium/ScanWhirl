@@ -348,7 +348,14 @@ class ToolsUiTest {
     @Test(timeout = 60_000)
     fun `result screen offers Open Share Save Show in library and Undo`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Result doc")
-        val intent = ToolResultActivity.intent(app, "split", docIds = listOf(id))
+        // A real producer captures the full D2 identity on IO at publish time. Capture it
+        // here at fixture creation with the SAME public helper the app uses; never at Undo.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+        )
+        val intent = ToolResultActivity.intent(
+            app, "split", docIds = listOf(id), outputIdentity = identity
+        )
 
         ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
@@ -409,8 +416,14 @@ class ToolsUiTest {
             parentFile?.mkdirs()
             writeBytes(com.scanwhirl.app.util.ImportFixtures.image(width = 120, height = 80))
         }
+        // The published file result's real producer captures an F: identity on IO at publish
+        // time; capture it now at fixture creation with the same public helper, never at Undo.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(jpeg))
+        )
         val intent = ToolResultActivity.intent(
-            app, "pdf_to_images", files = listOf(jpeg), mime = "image/jpeg"
+            app, "pdf_to_images", files = listOf(jpeg), mime = "image/jpeg",
+            outputIdentity = identity
         )
 
         ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
@@ -441,5 +454,27 @@ class ToolsUiTest {
             }
             assertTrue("Undo deletes the exported file", waitUntil { !jpeg.exists() })
         }
+    }
+
+    @Test(timeout = 60_000)
+    fun `a legacy result with no producer identity refuses Undo and keeps its output`() {
+        val id = DocFixtures.saved(repo, app, pages = 2, name = "Legacy result")
+        // Pre-authority producers supplied no strong identity; intent() falls back to a
+        // stat-only C: receipt. The removal authority must refuse it and keep the output.
+        val legacy = ToolResultActivity.cheapIdentity(app, listOf(id), emptyList())
+        val intent = ToolResultActivity.intent(
+            app, "split", docIds = listOf(id), outputIdentity = legacy
+        )
+        ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
+            scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
+            assertTrue("a refused Undo reports an honest failure", waitUntil {
+                var shown = false
+                scenario.onActivity {
+                    shown = it.findViewById<View>(R.id.toolResultError)?.isVisible == true
+                }
+                shown
+            })
+        }
+        assertNotNull("an unproven result must never be deleted", repo.getDocument(id))
     }
 }

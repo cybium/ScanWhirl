@@ -374,6 +374,11 @@ class IdCardFixFlowTest {
     @Test(timeout = 60_000)
     fun `Discard deletes exactly that card and nothing else`() {
         val id = runToResult()
+        // The real IdCardActivity captures its producer D2 identity on IO at publish time.
+        // Recompute that same identity here at fixture creation with the public helper.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+        )
         val staging = File(app.cacheDir, "fx_other").apply { mkdirs() }
         val other = File(staging, "p0.jpg").apply {
             writeBytes(com.scanwhirl.app.util.ImportFixtures.image(width = 120, height = 160))
@@ -382,7 +387,7 @@ class IdCardFixFlowTest {
             repo.saveScan(listOf(android.net.Uri.fromFile(other)), null, "Other doc").id
         }
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "id_card", docIds = listOf(id))
+            ToolResultActivity.intent(app, "id_card", docIds = listOf(id), outputIdentity = identity)
         ).use { scenario ->
             scenario.onActivity { activity ->
                 val discard = textsOf(activity.window!!.decorView)
@@ -399,8 +404,13 @@ class IdCardFixFlowTest {
     @Test(timeout = 60_000)
     fun `Back on the result screen asks before discarding`() {
         val id = runToResult()
+        // The real producer's D2 identity is required for the confirmed Discard to remove
+        // the card; recompute it at fixture creation with the public helper.
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
+        )
         ActivityScenario.launch<ToolResultActivity>(
-            ToolResultActivity.intent(app, "id_card", docIds = listOf(id))
+            ToolResultActivity.intent(app, "id_card", docIds = listOf(id), outputIdentity = identity)
         ).use { scenario ->
             scenario.onActivity { activity ->
                 activity.onBackPressedDispatcher.onBackPressed()
@@ -429,5 +439,29 @@ class IdCardFixFlowTest {
             }
             assertTrue("Discard deletes the card", waitUntil { repo.getDocument(id) == null })
         }
+    }
+
+    @Test(timeout = 60_000)
+    fun `Discard with no producer identity refuses and keeps the card`() {
+        val id = runToResult()
+        // A legacy stat-only C: receipt must fail closed: no deletion, honest error.
+        val legacy = ToolResultActivity.cheapIdentity(app, listOf(id), emptyList())
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(app, "id_card", docIds = listOf(id), outputIdentity = legacy)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                val discard = textsOf(activity.window!!.decorView)
+                    .first { it.tag == ToolResultActivity.TAG_DISCARD }
+                discard.performClick()
+            }
+            assertTrue("the refusal is shown", waitUntil {
+                var shown = false
+                scenario.onActivity {
+                    shown = it.findViewById<View>(R.id.toolResultError)?.visibility == View.VISIBLE
+                }
+                shown
+            })
+        }
+        assertNotNull("an unproven Discard must keep the card", repo.getDocument(id))
     }
 }

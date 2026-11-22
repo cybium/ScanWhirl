@@ -51,8 +51,17 @@ class PdfAUndoKeepsSourceTest {
         (f.get(null) as MutableMap<*, *>).clear()
     }
 
-    /** The extras the fixed PdfAFlow builds: the generated file only, no source document id. */
-    private fun resultIntent(pdfa: File): Intent = PdfAFlow.resultIntent(app, pdfa)
+    /**
+     * The extras the fixed PdfAFlow builds: the generated file only, no source document id.
+     * PdfAFlow.create captures the F: identity of the published file on IO at publish time;
+     * reproduce that here at fixture creation with the same public helper, never at Undo.
+     */
+    private fun resultIntent(pdfa: File): Intent {
+        val identity = requireNotNull(
+            ToolResultActivity.captureOutputIdentityBlocking(app, emptyList(), listOf(pdfa))
+        )
+        return PdfAFlow.resultIntent(app, pdfa, identity)
+    }
 
     /**
      * The pre-fix extras that caused the P0: the SOURCE document id plus the generated file.
@@ -97,14 +106,27 @@ class PdfAUndoKeepsSourceTest {
         val sourceId = DocFixtures.saved(repo, app, pages = 1, name = "Archive me")
         val pdfa = runBlocking { PdfAFlow.exportForResult(app, repo, sourceId) }
 
+        // This pre-fix mixed receipt (source id + file, no full F: proof for a file-only
+        // result) has no valid producer identity. The authority refuses the whole removal:
+        // neither the source document nor the generated file may be deleted.
         ActivityScenario.launch<ToolResultActivity>(legacyMisuseIntent(sourceId, pdfa)).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.toolResultUndo).performClick() }
-            assertTrue("Undo must still remove the generated file", waitUntil { !pdfa.exists() })
+            assertTrue("the refusal is shown", waitUntil {
+                var shown = false
+                scenario.onActivity {
+                    shown = it.findViewById<View>(R.id.toolResultError)?.visibility == View.VISIBLE
+                }
+                shown
+            })
         }
 
         assertNotNull(
             "P0 guard: undo must not purge a document that a mixed result names as its input",
             repo.getDocument(sourceId)
+        )
+        assertTrue(
+            "an unproven mixed receipt must not delete the generated file either",
+            pdfa.exists()
         )
     }
 

@@ -112,6 +112,11 @@ internal object ResultOutputAuthority {
                 if (!expected.startsWith("F:")) return false
                 val candidates = files.sortedBy { it.path }
                 if (candidates.any { !safeTemporaryOutput(context, it) }) return false
+                // Known limitation (accepted, no lease/ledger): path prefix + SHA proves the
+                // bytes at check time only. An in-app cache writer that does NOT take the
+                // repository writer lock could still replace this file between this check and
+                // the later unlink. We keep the cache-path restriction and recheck; callers must
+                // not treat F: as immutable ownership of the path.
                 val actual = "F:" + candidates.joinToString(";") {
                     "${it.path}|${it.length()}|${Sha256.of(it)}"
                 }
