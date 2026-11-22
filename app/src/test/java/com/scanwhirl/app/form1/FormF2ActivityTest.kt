@@ -141,7 +141,7 @@ class FormF2ActivityTest {
                     }
                     // Council title, not the old long "Form-ready photo and signature".
                     assertEquals(
-                        if (lang == "en") "Form photo" else "फ़ॉर्म की फ़ोटो",
+                        if (lang == "en") "Form photo" else "फ़ॉर्म फ़ोटो",
                         textOf(a, R.id.formReadyTitle)
                     )
                 } finally {

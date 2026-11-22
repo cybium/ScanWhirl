@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- FORM1 / lane F: COPY_DIET 1.3.0 फ़ॉर्म तालिका। हर EN कुंजी की हिंदी जोड़ी है। -->
-    <string name="form1_title">फ़ॉर्म की फ़ोटो</string>
+    <string name="form1_title">फ़ॉर्म फ़ोटो</string>
     <string name="form1_notice">अपने फ़ॉर्म की पिक्सेल, KB और DPI सीमाएँ जाँचें</string>
     <string name="form1_about_requirements">फ़ॉर्म की आवश्यकताओं के बारे में</string>
     <string name="form1_notice_details">ये उदाहरण मात्र हैं। कुछ पोर्टल लाइव फ़ोटो का चरण भी माँगते हैं, जो बिना इंटरनेट के संभव नहीं है।</string>
@@ -74,6 +74,6 @@
     <string name="form1_out_of_memory">फ़ोटो बहुत बड़ी है। छोटी फ़ोटो चुनें।</string>
     <string name="form1_selected">चुना गया</string>
     <string name="form1_not_selected">नहीं चुना गया</string>
-    <!-- Tools टाइल (मुफ़्त): फ़ॉर्म की फ़ोटो। शीर्षक और रजिस्ट्री एक ही नाम। -->
-    <string name="tool_form_ready">फ़ॉर्म की फ़ोटो</string>
+    <!-- Tools टाइल (मुफ़्त): फ़ॉर्म फ़ोटो। शीर्षक और रजिस्ट्री एक ही नाम। -->
+    <string name="tool_form_ready">फ़ॉर्म फ़ोटो</string>
 </resources>
