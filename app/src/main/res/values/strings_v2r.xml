@@ -16,6 +16,9 @@
     <string name="v2r_vault_move_back_done">Moved %1$s back to your Library. Any PDF password remembered in the Vault is not carried over.</string>
     <string name="v2r_vault_move_back_failed">Could not move %1$s back. The Vault copy is unchanged.</string>
     <string name="v2r_vault_move_back_partial">The Library copy is ready, but the Vault copy is still here. Remove it from this menu.</string>
+    <string name="v2r_vault_move_back_verify_failed">Could not verify the Library copy. It was moved to Trash; the Vault copy is unchanged.</string>
+    <string name="v2r_vault_move_back_cleanup_failed">The Library copy could not be removed. Check your Library and the Vault.</string>
+    <string name="v2r_vault_move_back_remove_failed">Moved back to Library, but the Vault copy could not be removed. Remove it from the Vault.</string>
 
     <!-- Pro paywall: expanding the full catalogue with honest tier labels. -->
     <string name="v2r_see_all_pro_tools">See all Pro tools</string>
