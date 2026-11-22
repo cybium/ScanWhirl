@@ -84,8 +84,11 @@ class OcrReindex(private val repo: ScanRepository) {
                         } catch (_: OutOfMemoryError) {
                             continue
                         }
-                        if (OcrStore.locked { Sha256.of(page) } != sourceHash) continue
-                        repo.ocrStore.putPage(docId, page.name, result.text, result.page)
+                        // SEC2 R3: identity re-check and publish happen under one
+                        // OCR lock; a refusal after a Vault move is quiet.
+                        if (!repo.ocrStore.putPage(
+                                docId, page.name, result.text, result.page, sourceHash
+                            )) continue
                         stored++
                     }
                     if (doc.pageFiles.all { repo.ocrStore.readText(docId).containsKey(it.name) }) {

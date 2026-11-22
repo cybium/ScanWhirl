@@ -1,0 +1,1 @@
+com.scanwhirl.app.store.Sec2RecognitionPublisherTest,com.scanwhirl.app.store.OcrStoreTest,com.scanwhirl.app.store.OcrReindexTest,com.scanwhirl.app.store.OcrPartialEditTest,com.scanwhirl.app.store.vault.VaultStoreTest,com.scanwhirl.app.store.vault.Sec2VaultRemovalPurgeTest,com.scanwhirl.app.store.vault.Sec2VaultOcrLockTest
