@@ -43,15 +43,23 @@
                 app:cardCornerRadius="14dp"
                 app:cardElevation="1dp">
 
+                <!-- Kept for existing callers/tests; the real comparison is ccCompare below. -->
                 <ImageView
                     android:id="@+id/resultPreview"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:adjustViewBounds="true"
-                    android:background="#FFFFFFFF"
+                    android:background="@null"
                     android:contentDescription="@null"
                     android:maxHeight="420dp"
-                    android:scaleType="fitCenter" />
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+
+                <com.scanwhirl.app.ui.kit.CompareView
+                    android:id="@+id/ccCompare"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="220dp" />
             </com.google.android.material.card.MaterialCardView>
 
             <TextView

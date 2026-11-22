@@ -71,11 +71,16 @@ class LibraryMetaOffMainTest {
     }
 
     private fun folderChip(activity: ShellActivity, name: String): TextView? {
-        val row = activity.findViewById<ViewGroup>(R.id.swFolderRow)
-        return (0 until row.childCount)
-            .map { row.getChildAt(it) }
-            .filterIsInstance<TextView>()
-            .firstOrNull { it.text.toString().startsWith("$name (") }
+        // Council §7: folder rows live in the shared chooser, not the face rail.
+        val sheet = ShadowDialog.getLatestDialog() ?: return null
+        val row = sheet.findViewById<ViewGroup>(R.id.swFolderRow) ?: return null
+        val out = mutableListOf<TextView>()
+        fun walk(v: View) {
+            if (v is TextView) out += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(row)
+        return out.firstOrNull { it.text.toString().startsWith("$name (") }
     }
 
     private fun <T : View> android.app.Dialog.need(id: Int): T =
@@ -94,6 +99,10 @@ class LibraryMetaOffMainTest {
         }
 
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.swAllFolders).performClick()
+                idle()
+            }
             val chip = await {
                 var found: TextView? = null
                 scenario.onActivity { found = folderChip(it, "Tax") }

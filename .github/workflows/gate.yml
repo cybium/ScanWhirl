@@ -25,7 +25,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 3,500+ Robolectric tests + lint + the merged-manifest privacy build exceed 20 minutes.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -108,6 +109,25 @@ jobs:
         if: github.ref == 'refs/heads/integration' || inputs.lint || (startsWith(github.ref, 'refs/heads/ci/') && !endsWith(github.ref, '-t'))
         continue-on-error: true
         run: ./gradlew :app:lintDebug -PtestBuild --no-daemon -q
+
+      - name: Merged release manifest privacy gate
+        # P lane, fail closed: build the RELEASE manifest and generated BuildConfig (no
+        # -PtestBuild), then reject INTERNET / ACCESS_NETWORK_STATE / FOREGROUND_SERVICE* /
+        # AD_ID / QUERY_ALL_PACKAGES and any test-build value. No signing key is used.
+        # Deliberately NOT continue-on-error: a failure must fail the whole run, which
+        # gate.ps1 turns into GATE FAIL even if the test Summary printed GATE PASS.
+        run: |
+          set -e
+          ./gradlew :app:processReleaseManifest :app:generateReleaseBuildConfig -PciUnsignedRelease --no-daemon --stacktrace > manifest-gate-build.log 2>&1 || {
+            tail -n 80 manifest-gate-build.log
+            exit 1
+          }
+          MANIFEST=$(find app/build/intermediates -type f -path '*release*processReleaseManifest*AndroidManifest.xml' | head -n1)
+          [ -n "$MANIFEST" ] || { echo "merged release manifest not found"; exit 1; }
+          BUILDCONFIG=$(find app/build/generated -type f -path '*release*com/scanwhirl/app/BuildConfig.java' | head -n1)
+          [ -n "$BUILDCONFIG" ] || { echo "release BuildConfig.java not found"; exit 1; }
+          python3 tools/release/check_release_manifest.py "$MANIFEST" --build-config "$BUILDCONFIG"
+          python3 -m unittest tools.release.tests.test_release -v
 
       - name: Summary
         if: always()

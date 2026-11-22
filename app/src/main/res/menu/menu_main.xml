@@ -8,14 +8,14 @@
     <!-- M07: Trash is one tap from Home. -->
     <item
         android:id="@+id/action_trash"
-        android:icon="@drawable/ic_sw_delete"
+        android:icon="@drawable/ic_sym_delete"
         app:iconTint="@color/rv_ink_2"
         android:title="@string/trash_title"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/action_settings"
-        android:icon="@drawable/ic_sw_settings"
+        android:icon="@drawable/ic_sym_settings"
         app:iconTint="@color/rv_ink_2"
         android:title="@string/settings_title"
         app:showAsAction="ifRoom" />

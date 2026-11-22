@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Council lane B: Library one-row band + newcomer-safe Quick tools editor (English). -->
+<resources>
+    <!-- The single library control row. -->
+    <string name="cb_all_folders_control">All folders ▾</string>
+    <string name="cb_folder_talkback">Folder: All folders</string>
+    <string name="cb_sort_talkback">Sort: %1$s</string>
+    <string name="cb_count_talkback">Documents</string>
+    <string name="cb_categories">Categories</string>
+
+    <!-- Council §7's helper becomes the field placeholder. At 2.0x the full guidance
+         cannot fit the field, so large text uses this short, honest form. -->
+    <string name="cb_search_hint_short">Names, tags, text</string>
+
+    <!-- Removable filter chip (Filter row only while a filter is active). -->
+    <string name="cb_remove_filter">Remove filter</string>
+    <string name="cb_filter_showing">Showing only: %1$s</string>
+    <string name="cb_filter_active">Filter: %1$s</string>
+
+    <!-- Quick tools: Customize button and the checkbox editor. -->
+    <string name="cb_customize">Customize</string>
+    <string name="cb_customize_desc">Customize quick tools</string>
+    <string name="cb_quick_editor_title">Customize quick tools</string>
+    <string name="cb_quick_editor_hint">Tap to add or remove</string>
+    <string name="cb_quick_max_reached">You can keep up to 6 quick tools.</string>
+    <string name="cb_move_up">Move %1$s up</string>
+    <string name="cb_move_down">Move %1$s down</string>
+    <string name="cb_more_actions">More actions</string>
+
+    <!-- Short quick-tile labels (OCR replaces the old Read text tile). -->
+    <string name="cb_quick_merge">Merge</string>
+    <string name="cb_quick_compress">Compress</string>
+    <string name="cb_quick_sign">Sign</string>
+    <string name="cb_quick_protect">Protect</string>
+    <string name="cb_quick_ocr">OCR</string>
+</resources>

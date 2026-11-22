@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- FORM1: form-ready photo and signature. Every entry has an EN + HI pair. -->
-    <string name="form1_title">Form-ready photo and signature</string>
+    <!-- FORM1 / lane F: form photo and signature. Every entry has an EN + HI pair. -->
+    <string name="form1_title">Form photo &amp; signature</string>
     <string name="form1_check_rules">Check your form\'s exact rules</string>
     <string name="form1_notice">Presets are examples only. Check the current notification for exact pixels, KB and DPI. Some portals also ask for a live photo step that cannot be done offline.</string>
     <string name="form1_preset_photo">Photo</string>
@@ -11,22 +11,60 @@
     <string name="form1_preset_custom">Custom</string>
     <string name="form1_example">Example: %1$d × %2$d px, %3$d to %4$d KB, JPG</string>
     <string name="form1_photo_cm_note">Some forms ask for about 3.5 × 4.5 cm instead.</string>
+
+    <!-- Lane F: persistent labels (hints vanish once a field has text). -->
+    <string name="form1_width_label">Width</string>
+    <string name="form1_height_label">Height</string>
+    <string name="form1_min_label">Min KB</string>
+    <string name="form1_max_label">Max KB</string>
+    <string name="form1_unit_label">Unit</string>
     <string name="form1_width_hint">Width</string>
     <string name="form1_height_hint">Height</string>
     <string name="form1_min_hint">Min KB</string>
     <string name="form1_max_hint">Max KB</string>
+    <string name="form1_unit_px_spoken">pixels</string>
+    <string name="form1_unit_cm_spoken">centimetres</string>
+    <string name="form1_unit_mm_spoken">millimetres</string>
+    <string name="form1_unit_inch_spoken">inches</string>
+
     <string name="form1_readout">Will make: %1$d × %2$d px</string>
-    <string name="form1_cleanup">Clean up signature (white paper, dark ink)</string>
-    <string name="form1_pick">Choose a photo</string>
+    <string name="form1_cleanup">Clean up signature</string>
+    <string name="form1_pick">Choose photo</string>
     <string name="form1_apply">Make file</string>
+
+    <!-- Lane F: inline, local validation of the KB band. -->
+    <string name="form1_kb_blank">Enter both KB limits.</string>
+    <string name="form1_kb_invalid">KB limits must be whole numbers: minimum at least 1, maximum not smaller than minimum.</string>
+
+    <!-- Lane F: local preset save / use (this phone only). -->
+    <string name="form1_save_preset">Save preset</string>
+    <string name="form1_use_preset">Use saved preset</string>
+    <string name="form1_preset_saved">Preset saved on this phone.</string>
+    <string name="form1_no_preset">No saved preset yet. Use Save preset first.</string>
+    <string name="form1_preset_original">Original</string>
+    <string name="form1_preset_cleaned">Cleaned</string>
+    <string name="form1_cleanup_preview">Cleanup preview</string>
+    <string name="form1_preparing">Preparing image…</string>
+
     <string name="form1_min_miss">Could not reach the minimum size without changing the picture. Kept the largest honest file: %1$s.</string>
-    <string name="form1_max_miss">Even the smallest honest file is above your maximum. Check the limits.</string>
+    <!-- Lane F: the requested pixels are never quietly shrunk. -->
+    <string name="form1_max_miss">Size limit not reached at these dimensions. Try a smaller size or a higher limit.</string>
     <string name="form1_pick_failed">Could not read that photo. Choose a JPG or PNG image.</string>
     <string name="form1_encode_failed">Could not make the file. Try another photo or different limits.</string>
     <string name="form1_note_measured">Measured: %1$s (%2$d bytes) · %3$d × %4$d px · %5$d DPI</string>
     <string name="form1_note_in_band">Inside your %1$s to %2$s band.</string>
     <string name="form1_note_below_min">Below your minimum. %1$s</string>
     <string name="form1_note_above_max">Above your maximum. %1$s</string>
+
+    <!-- Lane F: separate pixel / DPI / band checks; a band hit alone is not readiness. -->
+    <string name="form1_result_pixels_ok">Pixels: %1$d × %2$d as requested.</string>
+    <string name="form1_result_pixels_changed">Pixels: changed to %1$d × %2$d.</string>
+    <string name="form1_result_dpi_ok">DPI: %1$d as requested.</string>
+    <string name="form1_result_dpi_changed">DPI: written %1$d, requested %2$d.</string>
+    <string name="form1_band_label">KB band:</string>
+    <string name="form1_result_ready">Ready: pixels, DPI and KB band all match.</string>
+    <string name="form1_result_not_ready">Not ready: %1$s</string>
+
     <string name="form1_source_kept">Your original photo is untouched.</string>
     <string name="form1_size_too_large">This size is too large for a form photo. Use up to 4000 px.</string>
     <string name="form1_out_of_memory">This photo is too large for this phone. Try a smaller picture.</string>

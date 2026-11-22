@@ -1,10 +1,13 @@
 package com.scanwhirl.app.ui
 
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.TextSizePrefs
 
 /**
  * Base activity: applies font overlays before inflation and gives every screen the same
@@ -12,6 +15,28 @@ import com.scanwhirl.app.util.Prefs
  * document screen and the editors look like a different app).
  */
 abstract class BaseActivity : AppCompatActivity() {
+
+    /**
+     * Lane Z (council §8): apply the in-app text-size multiplier before the
+     * decor view is inflated, for every screen in the app (all activities extend
+     * this base — including ShellActivity). Default keeps the phone's own scale,
+     * so we pass the original context straight through and existing 200%
+     * breakpoints behave exactly as before.
+     *
+     * This is the only ShellActivity-side change lane Z makes: it lives here in
+     * the shared base and never touches ShellActivity.onCreate (lane fixsh owns it).
+     */
+    override fun attachBaseContext(newBase: Context) {
+        val effective = TextSizePrefs.effectiveFontScale(newBase)
+        val base = if (effective == TextSizePrefs.systemFontScale(newBase)) {
+            newBase
+        } else {
+            val config = Configuration(newBase.resources.configuration)
+            config.fontScale = effective
+            newBase.createConfigurationContext(config)
+        }
+        super.attachBaseContext(base)
+    }
 
     /**
      * v2 UI: 01_home_A — the one bridge for [com.scanwhirl.app.tools.launchGalleryCrop]:
