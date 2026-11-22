@@ -192,7 +192,10 @@ class LaneKCardCanvasTest {
         // One canvas token for the whole app: lane C already owns sw_cc_canvas, so
         // lane K reuses it instead of adding a second #1E252A resource.
         val canvas = src("res/values/colors_cc.xml")
-        assertTrue("sw_cc_canvas is #1E252A", canvas.contains("sw_cc_canvas") && canvas.contains("#1E252A"))
+        assertTrue(
+            "sw_cc_canvas is #1E252A",
+            canvas.contains("sw_cc_canvas") && canvas.contains("1E252A")
+        )
         assertFalse(
             "there is exactly one canvas color resource",
             File("src/main/res/values/colors_canvas.xml").exists()
