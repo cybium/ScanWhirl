@@ -122,7 +122,7 @@ class C2ReviewReceiptsTest {
             assertEquals(122, ImageTools.imageSize(File(dir, "page_002.jpg").readBytes())!!.first)
             assertEquals(
                 app.getString(R.string.v2c_receipt_retake),
-                V2cReceiptStore.latest(app, dir.name)!!.name
+                V2cReceiptStore.latestIn(dir)!!.name
             )
             val shown = activity.findViewById<TextView>(R.id.v2cReceipt).text.toString()
             assertTrue("named receipt shown: $shown", shown.contains(app.getString(R.string.v2c_receipt_retake)))
@@ -144,7 +144,7 @@ class C2ReviewReceiptsTest {
             ShadowDialog.getLatestDialog()!!.dismiss()
             idle()
             assertEquals(120, ImageTools.imageSize(File(dir, "page_000.jpg").readBytes())!!.first)
-            assertEquals(null, V2cReceiptStore.latest(app, dir.name))
+            assertEquals(null, V2cReceiptStore.latestIn(dir))
         } finally {
             controller?.close()
         }

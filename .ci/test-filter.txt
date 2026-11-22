@@ -1,0 +1,1 @@
+com.scanwhirl.app.v2c.V2cCleanupTest,com.scanwhirl.app.v2c.C2ReviewReceiptsTest,com.scanwhirl.app.v2c.C1CropPrecisionTest,com.scanwhirl.app.store.SaveTransactionTest
