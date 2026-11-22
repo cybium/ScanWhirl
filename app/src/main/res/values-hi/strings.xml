@@ -678,4 +678,6 @@
     <string name="cap_scan_done">हो गया</string>
     <!-- Council lane N: the tool tile name; the setup header stays in lane F's file. -->
     <string name="tool_form_ready_tile">फ़ॉर्म फ़ोटो</string>
+    <!-- Lead naming decision: the OCR PDF tile's plain-language description. -->
+    <string name="tool_searchable_pdf_sub">खोजने लायक PDF बनाएँ</string>
 </resources>

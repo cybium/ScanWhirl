@@ -724,4 +724,7 @@
     <!-- Council lane N: the tool tile name. The longer setup-screen header lives in
          strings_form1.xml (lane F); the tile itself must be one or two whole words. -->
     <string name="tool_form_ready_tile">Form photo</string>
+    <!-- Lead naming decision: "OCR PDF" is the tile name; the description keeps the
+         plain-language job. Lane O can use it as the setup-screen subtitle. -->
+    <string name="tool_searchable_pdf_sub">Searchable PDF</string>
 </resources>

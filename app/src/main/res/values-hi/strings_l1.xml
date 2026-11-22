@@ -86,13 +86,13 @@
     <string name="tool_batch_rename">एक साथ नाम बदलें</string>
     <string name="tool_enhance">साफ़ करें</string>
     <string name="tool_bw">काला और सफ़ेद</string>
-    <string name="tool_pdf_to_images">तस्वीरें</string>
+    <string name="tool_pdf_to_images">PDF से JPG</string>
     <string name="tool_long_image">लंबी तस्वीर बनाएँ</string>
     <string name="tool_to_word">Word</string>
     <string name="tool_to_excel">Excel</string>
     <string name="tool_to_text">.txt सहेजें</string>
     <string name="tool_zip">ZIP</string>
-    <string name="tool_searchable_pdf">PDF खोजने लायक</string>
+    <string name="tool_searchable_pdf">OCR PDF</string>
     <string name="tool_pdfa">PDF/A</string>
     <string name="tool_sign">हस्ताक्षर करें</string>
     <string name="tool_add_text">लिखें</string>

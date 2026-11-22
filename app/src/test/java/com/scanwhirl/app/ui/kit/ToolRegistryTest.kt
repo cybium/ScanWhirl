@@ -162,7 +162,7 @@ class ToolRegistryTest {
 
         assertEquals("a title starts-with wins", "read_text", ids("read").first())
         assertEquals("Sign is the Sign tool", "sign", ids("sign").first())
-        assertEquals("a PDF title starts-with wins (Images no longer starts with PDF)", "pdfa", ids("pdf").first())
+        assertEquals("a PDF title starts-with wins (PDF to JPG)", "pdf_to_images", ids("pdf").first())
         assertEquals("keyword 'smaller' finds Compress", "compress", ids("small").first())
         assertTrue("a keyword substring still matches", ids("scan").contains("scan"))
     }

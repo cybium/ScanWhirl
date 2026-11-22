@@ -91,13 +91,13 @@
     <string name="tool_batch_rename">Batch rename</string>
     <string name="tool_enhance">Enhance</string>
     <string name="tool_bw">Black &amp; white</string>
-    <string name="tool_pdf_to_images">Images</string>
+    <string name="tool_pdf_to_images">PDF to JPG</string>
     <string name="tool_long_image">Long image</string>
     <string name="tool_to_word">Word</string>
     <string name="tool_to_excel">Excel</string>
     <string name="tool_to_text">Save .txt</string>
     <string name="tool_zip">ZIP</string>
-    <string name="tool_searchable_pdf">Search PDF</string>
+    <string name="tool_searchable_pdf">OCR PDF</string>
     <string name="tool_pdfa">PDF/A</string>
     <string name="tool_sign">Sign</string>
     <string name="tool_add_text">Add text</string>

@@ -173,14 +173,16 @@ object ToolRegistry {
             launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Convert (8)
-        ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf pdf to images to jpg png images zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Lead decision: "PDF to JPG" replaces "Images". Old words stay as aliases.
+        ready("pdf_to_images", ToolGroup.CONVERT, R.string.tool_pdf_to_images, R.drawable.ic_sym_image, "pdf pdf to images to jpg png images pictures photos zip", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("long_image", ToolGroup.CONVERT, R.string.tool_long_image, R.drawable.ic_sym_view_day, "long image stitch pages", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_word", ToolGroup.CONVERT, R.string.tool_to_word, R.drawable.ic_sym_description, "to word word docx document text", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_powerpoint", ToolGroup.CONVERT, R.string.tools_tool_to_powerpoint, R.drawable.ic_sym_slideshow, "to powerpoint powerpoint pptx slides presentation deck", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("to_excel", ToolGroup.CONVERT, R.string.tool_to_excel, R.drawable.ic_sym_table_chart, "to excel excel xlsx table sheet", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         // Council §1: `to_text` is not a tile. .txt export is the Save .txt button inside OCR.
         ready("zip", ToolGroup.CONVERT, R.string.tool_zip, R.drawable.ic_sym_archive, "zip zip export archive batch", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "search search pdf searchable pdf searchable text layer ocr pdf"),
+        // Lead decision: "OCR PDF" replaces "Search PDF"; "searchable" stays as an alias.
+        ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "ocr ocr pdf searchable searchable pdf search search pdf text layer pdf"),
         SwTool(
             // Council §2: PDF/A owns `archive`; Stamp keeps `approval`.
             "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_archive,
