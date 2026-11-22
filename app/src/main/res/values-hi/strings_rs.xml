@@ -7,9 +7,9 @@
     <string name="rs_chip_ratio"> %1$d गुना छोटी</string>
 
     <string name="rs_saved_prefix">“</string>
-    <string name="rs_saved_suffix_kept">” के रूप में सहेजी गई · मूल फ़ाइल वैसी ही है</string>
-    <string name="rs_saved_suffix_no_source">” के रूप में सहेजी गई</string>
-    <string name="rs_saved_suffix_missing">” के रूप में सहेजी गई · मूल फ़ाइल नहीं मिली</string>
+    <string name="rs_saved_suffix_kept">” सहेजी गई · मूल फ़ाइल रखी गई</string>
+    <string name="rs_saved_suffix_no_source">” सहेजी गई</string>
+    <string name="rs_saved_suffix_missing">” सहेजी गई · मूल फ़ाइल नहीं मिली</string>
     <string name="rs_saved_line_a11y">%1$s के रूप में सहेजी गई। खोलने के लिए दबाएँ।</string>
 
     <string name="rs_hero_a11y_size">%1$s से %2$s तक छोटा किया गया, %3$s</string>

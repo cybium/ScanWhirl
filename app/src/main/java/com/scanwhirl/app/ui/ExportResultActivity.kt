@@ -73,13 +73,14 @@ class ExportResultActivity : BaseActivity() {
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         // SECURITY_JUDGE 1.3.0: resolve a protected document's policy before any preview.
         com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
-        beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
-        afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
+        beforeBytes = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)?.let { File(it) }
+            ?.takeIf { it.isFile }?.length() ?: intent.getLongExtra(EXTRA_BEFORE, 0L)
+        afterBytes = outputPath?.let { File(it) }?.takeIf { it.isFile }?.length() ?: 0L
         isPdf = mime == "application/pdf"
 
         val summary = intent.getStringExtra(EXTRA_SUMMARY)
-        alreadyCompact = summary.isNullOrBlank() && beforeBytes > 0L && afterBytes >= beforeBytes
-        if (alreadyCompact) discardGrownOutput()
+        // A display screen is never a deletion authority. Rejection is a producer outcome.
+        alreadyCompact = intent.getStringExtra("compare_outcome") == "NOT_SMALLER"
 
         binding.toolbar.title = toolName(summary)
 
@@ -101,7 +102,7 @@ class ExportResultActivity : BaseActivity() {
         )
         binding.btnSaveResult.setOnClickListener { saveResult() }
         binding.btnShareResult.setOnClickListener { shareResult() }
-        binding.btnOpenResult.setOnClickListener { openResult() }
+        binding.btnOpenResult.setOnClickListener { if (alreadyCompact) finish() else openResult() }
         binding.btnMoreResult.setOnClickListener {
             val opening = binding.rsExportMorePanel.visibility != View.VISIBLE
             binding.rsExportMorePanel.visibility = if (opening) View.VISIBLE else View.GONE
@@ -129,17 +130,8 @@ class ExportResultActivity : BaseActivity() {
         binding.rsChipExport.visibility = View.GONE
         binding.ccCompare.visibility = View.GONE
         binding.btnOpenResult.setText(R.string.tools_result_done)
-        binding.btnOpenResult.setOnClickListener { finish() }
         binding.btnShareResult.visibility = View.GONE
         binding.btnMoreResult.visibility = View.GONE
-    }
-
-    /** A fresh output that did not get smaller is our own file: remove it, keep the source. */
-    private fun discardGrownOutput() {
-        val path = outputPath ?: return
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { File(path).delete() } }
-        }
     }
 
     /** The legacy preview id is kept for callers/tests, but it is never a white host. */
@@ -236,7 +228,10 @@ class ExportResultActivity : BaseActivity() {
         val view: CompareView = binding.ccCompare
         val mode = when {
             alreadyCompact || !summary.isNullOrBlank() -> CompareMode.NONE
-            else -> CompareMode.ZOOM_STACKED
+            intent.getStringExtra(EXTRA_TOOL_ID) in setOf("resize", "compress") ||
+                (intent.getStringExtra(EXTRA_TOOL_ID) == null && mime.startsWith("image/") && beforeBytes > 0) ->
+                CompareMode.ZOOM_STACKED
+            else -> CompareMode.NONE
         }
         if (mode == CompareMode.NONE) {
             view.visibility = View.GONE
@@ -270,7 +265,12 @@ class ExportResultActivity : BaseActivity() {
                 ),
                 mode = mode
             ),
-            lifecycleScope
+            lifecycleScope,
+            canDecode = {
+                docId?.let { id ->
+                    ScanRepository(this).getDocument(id)?.let { !it.isLocked && !it.isVaulted }
+                } ?: (docId == null)
+            }
         )
     }
 

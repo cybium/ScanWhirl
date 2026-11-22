@@ -217,15 +217,17 @@ class ToolResultActivity : BaseActivity() {
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
-        // Lane RS: classify the outcome BEFORE anything is published. A fresh size result that did
-        // not get smaller is discarded below; its class is also persisted for a truthful reopen.
+        outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
+        receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
+        // New producers reject inside staging; legacy receipts may still need guarded cleanup.
         outcomeClass = intent.getStringExtra(EXTRA_OUTCOME_CLASS)
             ?.let { runCatching { OutcomeClass.valueOf(it) }.getOrNull() }
         noStrongerPreset = intent.getBooleanExtra(EXTRA_NO_STRONGER_PRESET, false)
         if (isCompressResult) {
             val grew = intent.getBooleanExtra(EXTRA_COMPRESS_GREW, false)
             val measured = measuredOutputBytes()
-            alreadyCompact = grew || (beforeBytes?.let { measured >= it } == true)
+            alreadyCompact = outcomeClass == OutcomeClass.NOT_SMALLER ||
+                grew || (beforeBytes?.let { measured >= it } == true)
             if (alreadyCompact) outcomeClass = OutcomeClass.NOT_SMALLER
             else if (outcomeClass == null) {
                 outcomeClass = if (
@@ -245,11 +247,7 @@ class ToolResultActivity : BaseActivity() {
             files.clear()
             discardGrownOutput()
         }
-        // L3-02 P1: the identity was captured when this intent was built, before
-        // any later owner of the id could replace the output.
-        outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
         // L3-02 P2: derive the original-kept receipt from the library right now.
-        receiptSourceId = intent.getStringExtra(EXTRA_RECEIPT_SOURCE_ID)
         val legacyClaim = intent.getBooleanExtra(EXTRA_SOURCE_KEPT, false)
         sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: legacyClaim
 
@@ -272,6 +270,11 @@ class ToolResultActivity : BaseActivity() {
                 documentsExistingName = saved.documentsExistingName
                 undone = saved.undone
                 sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: saved.sourceKept
+                if (toolId == "resize" && saved.outcomeClass == "NOT_SMALLER") {
+                    outcomeClass = OutcomeClass.NOT_SMALLER
+                    alreadyCompact = true
+                    noStrongerPreset = true
+                }
                 // Lane RS: an older receipt has no class. Derive it from real bytes so a grown
                 // output can never reopen titled "Compressed".
                 if (toolId == "compress") {
@@ -363,18 +366,19 @@ class ToolResultActivity : BaseActivity() {
         val ids = grownOutputIds
         val outs = grownOutputFiles
         if (ids.isEmpty() && outs.isEmpty()) return
-        val expected = outputIdentity
+        val expected = outputIdentity ?: return
         lifecycleScope.launch {
-            val matches = withContext(Dispatchers.IO) {
-                val current = captureOutputIdentityBlocking(this@ToolResultActivity, ids, outs)
-                expected == null || current == expected
-            }
-            if (!matches) return@launch
             withContext(Dispatchers.IO) {
-                ids.forEach { id ->
-                    if (id != receiptSourceId) runCatching { repo.deleteDocument(id) }
+                synchronized(ScanRepository.PDF_LOCK) {
+                    com.scanwhirl.app.store.OcrStore.locked {
+                        val current = captureOutputIdentityBlocking(this@ToolResultActivity, ids, outs)
+                        if (current == null || current != expected) return@locked
+                        ids.filter { it != receiptSourceId }.forEach { id ->
+                            runCatching { repo.deleteDocument(id) }
+                        }
+                        // Legacy arbitrary file extras do not grant ownership for deletion.
+                    }
                 }
-                outs.forEach { runCatching { it.delete() } }
             }
         }
     }
@@ -685,6 +689,8 @@ class ToolResultActivity : BaseActivity() {
             SwStyle.text(this, 13f, mid).apply {
                 id = R.id.rsRemoveNote
                 text = getString(R.string.rs_remove_copy_note)
+                // The saved row already carries this fact; keep the explanation non-visual.
+                visibility = View.GONE
             },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -714,8 +720,16 @@ class ToolResultActivity : BaseActivity() {
             primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
         val share = button(getString(R.string.tools_result_share), R.id.toolResultShare,
             icon = R.drawable.ic_sym_share) { share() }
+        var proofWasVisible = false
         val more = button(getString(R.string.rs_more), R.id.toolResultMore) {
             val opening = morePanel.visibility != View.VISIBLE
+            // Options replace the proof surface instead of stacking another screenful of facts.
+            if (opening) {
+                proofWasVisible = compareView?.visibility == View.VISIBLE
+                compareView?.visibility = View.GONE
+            } else if (proofWasVisible) {
+                compareView?.visibility = View.VISIBLE
+            }
             morePanel.visibility = if (opening) View.VISIBLE else View.GONE
             findViewById<TextView>(R.id.toolResultMore)?.text = getString(
                 if (opening) R.string.tools_result_fewer_options else R.string.rs_more
@@ -968,7 +982,8 @@ class ToolResultActivity : BaseActivity() {
             } ?: savedCopy?.let { copy ->
                 getString(R.string.rs_where_documents) + " · " + copy.name
             } ?: when {
-                docIds.isNotEmpty() -> getString(R.string.rs_where_library)
+                // The saved row plus Show in library already establish this copy's location.
+                docIds.isNotEmpty() -> null
                 files.isNotEmpty() -> getString(R.string.rs_unsaved_output)
                 else -> null
             }
@@ -1112,9 +1127,9 @@ class ToolResultActivity : BaseActivity() {
             explicit != null && toolId in noVisualTools ->
                 CompareModel(explicit, ComparePane(caption = ""), ComparePane(caption = ""),
                     mode = CompareMode.NONE)
-            !explicit.isNullOrBlank() -> explicitCompareModel(explicit)
             isCompressResult -> compressCompareModel()
             toolId in markTools -> markCompareModel()
+            !explicit.isNullOrBlank() -> explicitCompareModel(explicit)
             else -> null
         }
         if (model == null) {
@@ -1122,20 +1137,33 @@ class ToolResultActivity : BaseActivity() {
             return
         }
         view.visibility = View.VISIBLE
-        view.bind(model, lifecycleScope)
+        view.bind(model, lifecycleScope, canDecode = { path ->
+            // Re-resolve ownership and protection on IO immediately before each decode.
+            (docIds + listOfNotNull(receiptSourceId)).any { id ->
+                repo.getDocument(id)?.let { doc ->
+                    !doc.isLocked && !doc.isVaulted &&
+                        doc.pageFiles.any { it.canonicalPath == File(path).canonicalPath }
+                } == true
+            }
+        })
     }
 
     private fun compareModeForTool(): CompareMode = when {
         toolId in noVisualTools || !intent.getBooleanExtra(EXTRA_COMPARE_SHOW_TOGGLE, true) ->
             CompareMode.NONE
         toolId in markTools -> CompareMode.AFTER_ONLY
-        else -> CompareMode.ZOOM_STACKED
+        toolId == "compress" || toolId == "resize" -> CompareMode.ZOOM_STACKED
+        else -> CompareMode.NONE
     }
 
     /** Measured proof supplied by a producer (OCR words, removed fields, page counts, ...). */
     private fun explicitCompareModel(outcome: String): CompareModel {
         fun pane(captionKey: String, imageKey: String, detailKey: String, missing: Int): ComparePane {
-            val path = intent.getStringExtra(imageKey)?.takeIf { it.isNotBlank() }
+            // Explicit image extras are not authority to bypass a source/output's protection.
+            val protected = (docIds + listOfNotNull(receiptSourceId)).any { id ->
+                repo.getDocument(id)?.let { it.isLocked || it.isVaulted } != false
+            }
+            val path = intent.getStringExtra(imageKey)?.takeIf { it.isNotBlank() && !protected }
             return ComparePane(
                 imagePath = path,
                 caption = intent.getStringExtra(captionKey)?.takeIf { it.isNotBlank() }

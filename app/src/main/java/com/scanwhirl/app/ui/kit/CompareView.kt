@@ -251,7 +251,8 @@ class CompareView @JvmOverloads constructor(
     fun bind(
         model: CompareModel,
         scope: CoroutineScope,
-        mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+        mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
+        canDecode: (String) -> Boolean = { true }
     ) {
         decodeGeneration++
         decodeJob?.cancel()
@@ -290,12 +291,12 @@ class CompareView @JvmOverloads constructor(
         }
 
         beforeLabel.text = if (model.mode == CompareMode.ZOOM_STACKED) {
-            context.getString(R.string.rs_before_size_label, model.before.caption)
+            context.getString(R.string.cc_before)
         } else {
             model.before.caption
         }
         afterLabel.text = if (model.mode == CompareMode.ZOOM_STACKED) {
-            context.getString(R.string.rs_after_size_label, model.after.caption)
+            context.getString(R.string.rs_after_label)
         } else {
             model.after.caption.ifBlank { context.getString(R.string.rs_after_label) }
         }
@@ -308,18 +309,22 @@ class CompareView @JvmOverloads constructor(
 
         val beforePath = model.before.imagePath?.takeIf { it.isNotBlank() }
         val afterPath = model.after.imagePath?.takeIf { it.isNotBlank() }
+        // Missing-source facts are known now, not after asynchronous image decoding.
+        renderEmpty()
         if (beforePath == null && afterPath == null) {
-            renderEmpty()
             onDecodeComplete?.invoke()
             return
         }
         val generation = decodeGeneration
         decodeJob = scope.launch {
-            val before = decode(beforePath)
-            val after = decode(afterPath)
+            val before = decode(beforePath, canDecode)
+            val after = decode(afterPath, canDecode)
             // Crop both with the same rule, off Main, then free the full decoded pages.
             val bc = before?.let { zoomRect(it.width, it.height) }
-            val ac = after?.let { zoomRect(it.width, it.height) }
+            val ac = after?.let {
+                if (model.mode == CompareMode.AFTER_ONLY) Rect(0, 0, it.width, it.height)
+                else zoomRect(it.width, it.height)
+            }
             val beforeCropBitmap = if (before != null && bc != null) crop(before, bc) else null
             val afterCropBitmap = if (after != null && ac != null) crop(after, ac) else null
             before?.recycle()
@@ -345,7 +350,9 @@ class CompareView @JvmOverloads constructor(
     private fun renderEmpty() {
         val lines = mutableListOf<String>()
         model?.let { m ->
-            if (m.before.imagePath == null) m.before.emptyText?.let { lines.add(it) }
+            if (m.mode == CompareMode.ZOOM_STACKED && m.before.imagePath == null) {
+                m.before.emptyText?.let { lines.add(it) }
+            }
             if (m.after.imagePath == null) m.after.emptyText?.let { lines.add(it) }
         }
         detail.text = lines.joinToString("\n")
@@ -388,10 +395,11 @@ class CompareView @JvmOverloads constructor(
         if (after != null && !after.isRecycled && after !== before) after.recycle()
     }
 
-    private suspend fun decode(path: String?): Bitmap? = withContext(Dispatchers.IO) {
+    private suspend fun decode(path: String?, canDecode: (String) -> Boolean): Bitmap? = withContext(Dispatchers.IO) {
         if (path == null) return@withContext null
-        decodeProbe?.invoke(path)
         try {
+            if (!canDecode(path)) return@withContext null
+            decodeProbe?.invoke(path)
             val file = File(path)
             if (!file.isFile || file.length() == 0L) return@withContext null
             ImageTools.decodeSampledFile(file, 1200)

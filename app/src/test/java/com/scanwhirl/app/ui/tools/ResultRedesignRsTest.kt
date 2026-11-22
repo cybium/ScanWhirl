@@ -188,7 +188,8 @@ abstract class ResultRedesignRsBase {
                 ToolResultActivity::class.java,
                 ToolResultActivity.intent(
                     app, "compress", docIds = listOf(out), beforeBytes = 100L,
-                    receiptSourceId = source, compressGrew = true
+                    receiptSourceId = source, compressGrew = true,
+                    outputIdentity = ToolResultActivity.captureOutputIdentityBlocking(app, listOf(out), emptyList())
                 )
             )
             controller.setup()

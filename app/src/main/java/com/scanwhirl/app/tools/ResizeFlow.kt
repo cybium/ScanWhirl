@@ -219,19 +219,33 @@ class ResizeFlow(
         activity.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { ImageTools.resize(bytes, opts) }
+                val rejected = result.bytes.size >= bytes.size
+                if (rejected) withContext(Dispatchers.IO) {
+                    com.scanwhirl.app.store.V2tResultReceiptStore(activity).save(
+                        com.scanwhirl.app.store.V2tResultReceiptStore.Receipt(
+                            toolId = "resize", docIds = emptyList(), files = emptyList(),
+                            mime = "image/jpeg", note = null, targetBytes = null,
+                            beforeBytes = bytes.size.toLong(), outputIdentity = null,
+                            receiptSourceId = null, sourceKept = true, chosenLocationName = null,
+                            documentsExistingName = null, undone = false,
+                            savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
+                        )
+                    )
+                }
                 val dir = resizeOutputDir(activity.cacheDir)
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val ext = if (result.isPng) "png" else "jpg"
                 val fileName = "${base}_${result.width}x${result.height}.$ext"
                 val file = File(dir, fileName)
-                withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
+                // Decide before writing even a cache result. Activity death cannot leave a grown copy.
+                if (!rejected) withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
 
                 // Show the real result (preview + before/after) instead of a toast.
                 activity.startActivity(
                     ExportResultActivity.intent(
                         activity,
-                        outputPath = file.path,
-                        previewPath = file.path,
+                        outputPath = if (rejected) "" else file.path,
+                        previewPath = if (rejected) null else file.path,
                         mime = if (result.isPng) "image/png" else "image/jpeg",
                         displayName = fileName,
                         beforeBytes = bytes.size.toLong(),
@@ -239,7 +253,9 @@ class ResizeFlow(
                         width = result.width,
                         height = result.height,
                         title = name,
-                        warning = null
+                        warning = null,
+                        outcome = if (rejected) "NOT_SMALLER" else null,
+                        toolId = "resize"
                     )
                 )
             } catch (e: CancellationException) {

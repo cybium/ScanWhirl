@@ -86,10 +86,8 @@ abstract class CompareViewBase {
         bindAndWait(view, model())
         assertEquals(View.VISIBLE, view.beforeButton().visibility)
         assertEquals(View.VISIBLE, view.afterButton().visibility)
-        assertTrue("before caption: ${view.beforeCaptionText()}",
-            view.beforeCaptionText().contains("290 KB"))
-        assertTrue("after caption: ${view.captionText()}",
-            view.captionText().contains("113 KB"))
+        assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
+        assertEquals(app.getString(R.string.rs_after_label), view.captionText())
         assertEquals("Compressed · 113 KB", view.outcomeText())
         val zoom = view.findViewById<View>(R.id.rsZoomCaption)
         assertEquals(View.VISIBLE, zoom.visibility)
@@ -224,8 +222,8 @@ abstract class CompareViewBase {
             try {
                 val view = CompareView(app)
                 bindAndWait(view, model())
-                assertTrue("before label at $scale", view.beforeCaptionText().contains("290 KB"))
-                assertTrue("after label at $scale", view.captionText().contains("113 KB"))
+                assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
+                assertEquals(app.getString(R.string.rs_after_label), view.captionText())
                 assertTrue("48dp targets survive $scale", view.beforeButton().minimumHeight >=
                     48f * app.resources.displayMetrics.density - 1)
                 assertTrue("outcome still present at $scale", view.outcomeText().isNotBlank())
@@ -233,6 +231,39 @@ abstract class CompareViewBase {
                 RuntimeEnvironment.setFontScale(1.0f)
             }
         }
+    }
+
+    @Test(timeout = 30_000)
+    fun `mark preview includes the full page and bottom right mark`() {
+        val bmp = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.WHITE)
+        for (y in 270 until 300) for (x in 170 until 200) bmp.setPixel(x, y, Color.BLACK)
+        val file = File(app.cacheDir, "rs_mark.jpg")
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+        bmp.recycle()
+        val view = CompareView(app)
+        try {
+            bindAndWait(view, model(afterPath = file.path, mode = CompareMode.AFTER_ONLY))
+            assertEquals(Rect(0, 0, 200, 300), view.zoomRects().second)
+            val shown = requireNotNull(view.displayedBitmap())
+            assertTrue(Color.red(shown.getPixel(190, 290)) < 30)
+        } finally { view.onDetachedFromWindow() }
+    }
+
+    @Test(timeout = 30_000)
+    fun `protection is checked immediately before each decode`() {
+        val file = jpeg("denied", 200, 300)
+        val view = CompareView(app)
+        val done = CountDownLatch(1)
+        var decoded = 0
+        view.decodeProbe = { decoded++ }
+        view.onDecodeComplete = { done.countDown() }
+        view.bind(model(afterPath = file.path),
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            mainDispatcher = Dispatchers.Unconfined, canDecode = { false })
+        assertTrue(done.await(20, TimeUnit.SECONDS))
+        assertEquals(0, decoded)
+        assertNull(view.displayedBitmap())
     }
 
     @Test(timeout = 30_000)
@@ -281,7 +312,7 @@ class CompareViewHiTest : CompareViewBase() {
         assertEquals("मूल पन्ना उपलब्ध नहीं है।", app.getString(R.string.cc_no_before_image))
         val view = CompareView(app)
         bindAndWait(view, model())
-        assertTrue("Hindi before label", view.beforeCaptionText().startsWith("पहले ·"))
-        assertTrue("Hindi after label", view.captionText().startsWith("बाद में ·"))
+        assertEquals("पहले", view.beforeCaptionText())
+        assertEquals("बाद में", view.captionText())
     }
 }

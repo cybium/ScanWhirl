@@ -93,14 +93,15 @@ abstract class CompressCp1HonestyBase {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a copy that grew is discarded and reopened as Couldn't make it smaller`() {
         val id = docId()
         val bytes = requireNotNull(repo.getDocument(id)).pdfFile.length()
         val intent = ToolResultActivity.intent(
             app, "compress", docIds = listOf(id),
             targetBytes = bytes + 100_000, beforeBytes = 1L,
-            note = app.getString(R.string.compress_grew_warning), compressGrew = true
+            note = app.getString(R.string.compress_grew_warning), compressGrew = true,
+            outputIdentity = ToolResultActivity.captureOutputIdentityBlocking(app, listOf(id), emptyList())
         )
         ActivityScenario.launch<ToolResultActivity>(intent).use { scenario ->
             scenario.onActivity { activity ->
@@ -111,6 +112,11 @@ abstract class CompressCp1HonestyBase {
                     shown.contains(app.getString(R.string.compress_result_header)))
                 assertEquals(app.getString(R.string.rs_already_compact_title),
                     activity.findViewById<TextView>(R.id.toolResultSummary).text.toString())
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (repo.getDocument(id) != null && System.nanoTime() < deadline) {
+                    idle()
+                    Thread.sleep(10)
+                }
                 assertTrue("our own grown output is not kept", repo.getDocument(id) == null)
             }
         }

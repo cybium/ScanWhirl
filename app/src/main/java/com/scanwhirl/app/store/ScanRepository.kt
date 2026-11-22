@@ -1933,6 +1933,7 @@ class ScanRepository(private val context: Context) {
         copyPdf: Boolean = false,
         seal: SealSpec? = null,
         forceTextLayers: Boolean = false,
+        validateOutput: (File) -> Unit = {},
         build: suspend (File) -> Unit
     ): ScanDocument {
         if (expectedBytes > 0 && usableSpace(docsDir) < expectedBytes * 2 + (16L shl 20)) {
@@ -1965,6 +1966,7 @@ class ScanRepository(private val context: Context) {
                         PdfVerifier.verify(pdf, expectedPages = pages.size)
                     }
                 }
+                validateOutput(File(staging, "scan.pdf"))
                 OpFaults.at("op:pdf")
             } else {
                 if (pages.isEmpty()) throw IOException("No pages to publish")
@@ -1978,6 +1980,7 @@ class ScanRepository(private val context: Context) {
                 if (layered && pages.all { geo.containsKey(it.name) }) {
                     Durable.writeFile(File(staging, "text_layer.flag"), ByteArray(0))
                 }
+                validateOutput(File(staging, "scan.pdf"))
                 OpFaults.at("op:pdf")
             }
 
@@ -2274,12 +2277,14 @@ class ScanRepository(private val context: Context) {
     suspend fun compressScan(
         id: String,
         quality: Int,
-        maxDim: Int?
+        maxDim: Int?,
+        rejectNotSmaller: Boolean = false
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         val ctx = currentCoroutineContext()
-        buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }) { staging ->
+        buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() },
+            validateOutput = { if (rejectNotSmaller) rejectGrownStagedPdf(doc, it, null) }) { staging ->
             // H3-5: the words survive compression; text and rescaled geometry are carried to the
             // copy so it is searchable right away (CP1).
             stageCompressedPages(id, doc, staging) { _, file ->
@@ -2299,6 +2304,7 @@ class ScanRepository(private val context: Context) {
     suspend fun compressScanToTarget(
         id: String,
         targetBytes: Long,
+        rejectNotSmaller: Boolean = false,
         onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument = withContext(Dispatchers.IO) {
             require(targetBytes > 0) { "Target size must be positive" }
@@ -2309,7 +2315,8 @@ class ScanRepository(private val context: Context) {
             val sum = sizes.sum().coerceAtLeast(1L)
             val budget = (targetBytes - (doc.pageFiles.size * 600L + 1000L)).coerceAtLeast(2048L)
             buildAndPublish(
-                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() }
+                outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() },
+                validateOutput = { if (rejectNotSmaller) rejectGrownStagedPdf(doc, it, targetBytes) }
             ) { staging ->
                 stageCompressedPages(id, doc, staging, onPage = onPage) { i, file ->
                     val share = (budget * sizes[i] / sum).coerceAtLeast(1024L)
@@ -2317,6 +2324,36 @@ class ScanRepository(private val context: Context) {
                 }
             }
         }
+
+    /** Result producers use these paths: a rejected file never becomes a library document. */
+    suspend fun compressScanForResult(id: String, quality: Int, maxDim: Int?): ScanDocument? =
+        try { compressScan(id, quality, maxDim, rejectNotSmaller = true) }
+        catch (_: NotSmaller) { null }
+
+    suspend fun compressScanToTargetForResult(
+        id: String,
+        targetBytes: Long,
+        onPage: (Int, Int) -> Unit = { _, _ -> }
+    ): ScanDocument? = try {
+        compressScanToTarget(id, targetBytes, rejectNotSmaller = true, onPage = onPage)
+    } catch (_: NotSmaller) { null }
+
+    private class NotSmaller : IOException()
+
+    private fun rejectGrownStagedPdf(source: ScanDocument, stagedPdf: File, target: Long?) {
+        val before = source.pdfFile.length()
+        if (before <= 0L || stagedPdf.length() < before) return
+        // Persist BEFORE returning to the Activity, and before any atomic publish or recovery seal.
+        V2tResultReceiptStore(context).save(V2tResultReceiptStore.Receipt(
+            toolId = "compress", docIds = emptyList(), files = emptyList(),
+            mime = "application/pdf", note = null, targetBytes = target, beforeBytes = before,
+            outputIdentity = null, receiptSourceId = source.id, sourceKept = true,
+            chosenLocationName = null, documentsExistingName = null, undone = false,
+            savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
+        ))
+        OpFaults.at("compress:rejected")
+        throw NotSmaller()
+    }
 
     /**
      * Imports a password-protected PDF by decrypting a temporary copy first: the source file is

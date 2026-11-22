@@ -63,10 +63,10 @@ abstract class ToolResultCompareBase {
                 assertTrue(view.pageChipText().contains(app.getString(R.string.cc_page, 1)))
                 val beforeShown = com.scanwhirl.app.util.StatusLine.formatBytes(sourceBytes + 100_000L)
                 val afterShown = com.scanwhirl.app.util.StatusLine.formatBytes(outBytes)
-                assertTrue("before size on its pane: ${view.beforeCaptionText()}",
-                    view.beforeCaptionText().contains(beforeShown))
-                assertTrue("after size on its pane: ${view.captionText()}",
-                    view.captionText().contains(afterShown))
+                val hero = activity.findViewById<android.widget.TextView>(R.id.toolResultSummary).text.toString()
+                assertTrue(hero.contains(beforeShown) && hero.contains(afterShown))
+                assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
+                assertEquals(app.getString(R.string.rs_after_label), view.captionText())
                 assertNotNull("identity-guarded Undo still present", activity.findViewById<View>(R.id.toolResultUndo))
             }
         }

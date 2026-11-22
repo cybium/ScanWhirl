@@ -73,13 +73,13 @@ abstract class ExportResultCompareBase {
             scenario.onActivity { activity ->
                 idle()
                 val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
-                assertTrue("one hero line: $hero", hero.contains("290 KB") && hero.contains("113 KB"))
+                assertTrue("one measured hero line: $hero",
+                    hero.contains(com.scanwhirl.app.util.SizeUnits.format(before.length())) &&
+                        hero.contains(com.scanwhirl.app.util.SizeUnits.format(after.length())))
                 val view = compareView(activity)
                 assertEquals(View.VISIBLE, view.visibility)
-                assertTrue("after caption has the after size", view.captionText().contains("113 KB"))
-                assertTrue("after caption has the after pixels", view.captionText().contains("900 × 1200"))
-                assertTrue("before caption has the before size", view.beforeCaptionText().contains("290 KB"))
-                assertTrue("before caption has the before pixels", view.beforeCaptionText().contains("1600 × 2100"))
+                assertEquals(app.getString(R.string.rs_after_label), view.captionText())
+                assertEquals(app.getString(R.string.cc_before), view.beforeCaptionText())
                 assertEquals(app.getString(R.string.tool_resize),
                     activity.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar).title.toString())
             }
@@ -99,7 +99,8 @@ abstract class ExportResultCompareBase {
                 assertEquals(View.GONE, view.beforeImageView().visibility)
                 val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
                 assertTrue("before size still in hero: $hero", hero.contains("290 KB"))
-                assertTrue("after size still in hero: $hero", hero.contains("113 KB"))
+                assertTrue("measured after size still in hero: $hero",
+                    hero.contains(com.scanwhirl.app.util.SizeUnits.format(after.length())))
                 assertNotNull("legacy preview id still exists", activity.findViewById<View>(R.id.resultPreview))
             }
         }
