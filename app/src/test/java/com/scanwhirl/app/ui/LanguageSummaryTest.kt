@@ -75,7 +75,7 @@ class LanguageSummaryTest {
                 val appRow = activity.findViewById<android.view.View>(R.id.rowLanguage)
                 val ocrRow = activity.findViewById<android.view.View>(R.id.rowOcrLanguage)
                 val appName = activity.getString(R.string.settings_language)
-                val ocrName = activity.getString(R.string.settings_ocr_language)
+                val ocrName = activity.getString(R.string.cdf1_ocr_language)
                 assertNotNull("the text reading language row exists", ocrRow)
                 assertTrue("the two rows must not share a name", appName != ocrName)
                 assertTrue(
@@ -111,8 +111,8 @@ class LanguageSummaryTest {
         val hi = strings("hi")
         assertEquals("App language", en.getString(R.string.settings_language))
         assertEquals("ऐप की भाषा", hi.getString(R.string.settings_language))
-        assertEquals("Text reading language", en.getString(R.string.settings_ocr_language))
-        assertEquals("लिखावट पढ़ने की भाषा", hi.getString(R.string.settings_ocr_language))
+        assertEquals("OCR language", en.getString(R.string.cdf1_ocr_language))
+        assertEquals("लिखावट पढ़ने की भाषा", hi.getString(R.string.cdf1_ocr_language))
     }
 
     /**
@@ -125,7 +125,7 @@ class LanguageSummaryTest {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 text = activity.findViewById<TextView>(R.id.subLanguage).text.toString()
-                expected = activity.getString(R.string.settings_language_summary, appLabel(activity))
+                expected = activity.getString(R.string.cdf1_language_summary, appLabel(activity))
             }
         }
         assertEquals(expected, text)

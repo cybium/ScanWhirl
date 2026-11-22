@@ -406,7 +406,12 @@ class StampEditorActivity : BaseActivity() {
         tile(R.id.v2vApplySignature, R.string.v2v_apply_signature_short, R.drawable.ic_sym_signature) {
             promptApplySignature()
         }.apply {
-            contentDescription = getString(R.string.v2v_apply_signature)
+            // FX1 critic: the selected-mark action names the real page count, not a fixed
+            // slogan. The count makes the label longer than a standard tile, so this one tile
+            // is wider; otherwise the first line clips at 1.3x (AccessibilityAuditTest).
+            labelView.text = getString(R.string.v2v_apply_to_all_count, editor.pageCount)
+            layoutParams.width = dp(100f)
+            contentDescription = getString(R.string.cdf1_apply_signature)
             row.addView(this)
         }
         add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
@@ -470,18 +475,52 @@ class StampEditorActivity : BaseActivity() {
             return
         }
         SwSheet.builder(this)
-            .setTitle(R.string.v2v_apply_signature)
+            .setTitle(R.string.cdf1_apply_signature)
             .setMessage(R.string.v2v_apply_signature_preview)
-            .setPrimary(R.string.v2v_apply_signature_apply) { applySignatureToAllForTest(file) }
+            .setPrimary(R.string.cdf1_apply_signature_apply) { applySignatureToAllForTest(file) }
             .setSecondary(R.string.stamp_keep_editing) { }
             .build()
             .show()
     }
 
+    /**
+     * FX1 critic: the receipt is emitted ONLY when a signature mark really is on every page.
+     * It counts the pages from the editor state, never from the intent, so a partial batch can
+     * never produce a "added to N pages" lie.
+     */
+    internal fun signatureReceipt(): String? {
+        val pages = editor.pageCount
+        val complete = (0 until pages).all { page ->
+            editor.marks(page).any { it is PageStamp.Mark.Picture || it is PageStamp.Mark.Signature }
+        }
+        if (!complete) return null
+        // COPY_DIET: "Signed N pages" is the deciding receipt; Undo is a separate action.
+        return resources.getQuantityString(R.plurals.cdf1_signed_pages, pages, pages)
+    }
+
     /** Test seam: place a saved signature on every page via the editor's undoable batch. */
     internal fun applySignatureToAllForTest(file: java.io.File) {
         addMarkToAll(PageStamp.Mark.Picture(file, signatureBox()))
-        note(getString(R.string.v2v_apply_signature_undo))
+        // FX1: the old toast named no number and vanished before the person reached page 2,
+        // so the mark looked as if it had gone missing. Keep a countable receipt ON the screen
+        // and announce it politely only when the batch really covered every page.
+        val receipt = signatureReceipt()
+        if (receipt == null) {
+            note(getString(R.string.stamp_no_marks))
+            return
+        }
+        binding.hint.text = receipt
+        binding.hint.contentDescription = receipt
+        binding.hint.accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
+        binding.hint.visibility = View.VISIBLE
+        noteWithUndo(receipt)
+    }
+
+    /** COPY_DIET: the receipt and Undo are two distinct controls, not one sentence. */
+    private fun noteWithUndo(message: String) {
+        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG)
+            .setAction(R.string.cdf1_undo) { if (editor.undo()) refresh() }
+            .show()
     }
 
     private fun promptText() {
@@ -625,7 +664,7 @@ class StampEditorActivity : BaseActivity() {
         }
         val suggestions = PageStamp.suggestRedactions(geometry)
         if (suggestions.isEmpty()) {
-            note(getString(R.string.stamp_no_suggestions))
+            note(getString(R.string.cdf1_stamp_no_suggestions))
             return
         }
         val before = editor.marks().size
@@ -688,7 +727,7 @@ class StampEditorActivity : BaseActivity() {
             )
         }
         val explanation = TextView(this).apply {
-            text = getString(R.string.find_explanation)
+            text = getString(R.string.cdf1_find_explanation)
             setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_mid))
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
             setLineSpacing(0f, 1.2f)
@@ -732,6 +771,12 @@ class StampEditorActivity : BaseActivity() {
         SensitiveScan.Kind.SSN -> R.string.find_choice_other
     }
 
+    /** Test seam: run Find with a deterministic scanner and no dialog in the way. */
+    internal fun runFindForTest(
+        kinds: Set<SensitiveScan.Kind> = setOf(SensitiveScan.Kind.PHONE),
+        keepLast4: Boolean = false
+    ) = runFind(kinds, keepLast4)
+
     private fun runFind(kinds: Set<SensitiveScan.Kind>, keepLast4: Boolean) {
         if (findRunning) return
         findRunning = true
@@ -754,11 +799,13 @@ class StampEditorActivity : BaseActivity() {
                     // Text was read on every page and nothing matched. The snackbar
                     // keeps the existing contract; the sheet makes the honest empty
                     // outcome persistent and visible where the person was looking.
-                    note(getString(R.string.find_none_clean))
+                    note(getString(R.string.cdf1_find_none_body))
                     SwSheet.builder(this@StampEditorActivity)
-                        .setTitle(R.string.v2v_find_none_title)
-                        .setMessage(R.string.find_none_clean)
-                        .setPrimary(android.R.string.ok) { }
+                        .setTitle(R.string.cdf1_find_none_title)
+                        .setMessage(R.string.cdf1_find_none_body)
+                        .setPrimary(R.string.cdf1_find_review_page) {
+                            arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
+                        }
                         .build()
                         .show()
                 } else {
@@ -778,7 +825,7 @@ class StampEditorActivity : BaseActivity() {
         SwSheet.builder(this)
             .setTitle(R.string.find_title)
             .setMessage(unreadableMessage(pages))
-            .setPrimary(R.string.find_draw_box) {
+            .setPrimary(R.string.cdf1_find_draw_box) {
                 arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
             }
             .setSecondary(R.string.sheet_got_it)
@@ -789,7 +836,7 @@ class StampEditorActivity : BaseActivity() {
     /** "this page" for one failure, the page count for several. */
     private fun unreadableMessage(pages: List<Int>): String =
         if (pages.size == 1) {
-            getString(R.string.find_unreadable_one)
+            getString(R.string.cdf1_find_unreadable_one)
         } else {
             resources.getQuantityString(R.plurals.find_unreadable_pages, pages.size, pages.size)
         }
@@ -948,7 +995,7 @@ class StampEditorActivity : BaseActivity() {
         binding.deleteMark.alpha = if (editor.selected != null) 1f else DISABLED_ALPHA
         binding.saveCopy.alpha = if (!editor.isEmpty() && !saving) 1f else DISABLED_ALPHA
         binding.selectionHint.setText(
-            if (editor.selected != null) R.string.stamp_hint_select else R.string.stamp_no_selection
+            if (editor.selected != null) R.string.cdf1_stamp_hint_select else R.string.stamp_no_selection
         )
     }
 
@@ -1020,10 +1067,7 @@ class StampEditorActivity : BaseActivity() {
     private fun showPersistentReceipt(copy: ScanDocument) {
         SwSheet.builder(this)
             .setTitle(R.string.v2v_redact_receipt_title)
-            .setMessage(
-                getString(R.string.v2v_redact_receipt_body, copy.name) + "\n" +
-                    getString(R.string.v2v_redact_original_kept)
-            )
+            .setMessage(getString(R.string.cdf1_redact_receipt_body, copy.name))
             // P2: the safe, reversible choice is primary; Trash is the secondary.
             .setPrimary(R.string.v2v_keep_original) { }
             .setSecondary(R.string.v2v_move_original_to_trash) {
@@ -1103,7 +1147,7 @@ class StampEditorActivity : BaseActivity() {
                 // C1: a bounded wait. The write keeps running in the process-scoped runner and
                 // its receipt is reported by deliverSave (app-context Toast), so leaving here
                 // cannot lose the copy or its receipt.
-                note(getString(R.string.c1_saving_timed_out))
+                note(getString(R.string.cdf1_saving_timed_out))
                 finish()
             } else {
                 note(getString(R.string.stamp_saving_wait))
@@ -1410,7 +1454,7 @@ internal data class SaveMeta(
 
 /** The same honest receipt on the live screen and in the app-context fallback. */
 private fun savedReceiptRes(labelRes: Int): Int =
-    if (labelRes == R.string.private_info_label) R.string.private_info_saved else R.string.c1_redacted_saved
+    R.string.cdf1_redact_receipt_body
 
 /**
  * H5-1 / C1: one Save, shared by every instance of the Stamp editor.

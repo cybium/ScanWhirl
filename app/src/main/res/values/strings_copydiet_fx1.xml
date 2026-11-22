@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FX1 copy diet (qa/audit-1.3.0/uiux/COPY_DIET.md §2, rows routed to fx1).
+     Lane-prefixed keys; existing keys stay intact for other callers. -->
+<resources>
+    <!-- Annotation / FX1 -->
+    <string name="cdf1_stamp_hint_select">Move mark; drag corners to resize</string>
+    <string name="cdf1_find_explanation">Choose details to find</string>
+    <string name="cdf1_find_none_title">No matches detected</string>
+    <string name="cdf1_find_none_body">Automatic detection can miss details. Review before sharing.</string>
+    <string name="cdf1_find_review_page">Review page</string>
+    <string name="cdf1_stamp_no_suggestions">No matches detected. Review before sharing.</string>
+    <string name="cdf1_find_unreadable_one">Text unread. Cover private details by hand.</string>
+    <string name="cdf1_find_draw_box">Draw box</string>
+    <string name="cdf1_redact_receipt_body">%1$s saved. Original still has private details.</string>
+    <string name="cdf1_apply_signature">Sign all pages</string>
+    <string name="cdf1_apply_signature_apply">Apply signature</string>
+    <plurals name="cdf1_signed_pages">
+        <item quantity="one">Signed %1$d page</item>
+        <item quantity="other">Signed %1$d pages</item>
+    </plurals>
+    <string name="cdf1_undo">Undo</string>
+    <string name="cdf1_saving_timed_out">Still saving. You can go back.</string>
+
+    <!-- Setup / FX1 -->
+    <string name="cdf1_setup_target_hint">100 KB</string>
+    <string name="cdf1_setup_merge_note">Select 2+ documents in merge order</string>
+    <string name="cdf1_setup_images_note">Multiple pages save as ZIP</string>
+    <string name="cdf1_setup_word_note">One paragraph per recognised line; page break between pages</string>
+    <string name="cdf1_setup_word_pictures_note">Page pictures above text</string>
+    <string name="cdf1_setup_pptx_note">Picture slides with text in speaker notes</string>
+    <string name="cdf1_setup_excel_note">Check table columns before using the file</string>
+    <string name="cdf1_setup_no_text">Reading text first…</string>
+    <string name="cdf1_setup_metadata_note">New copy without EXIF or thumbnails</string>
+    <string name="cdf1_batch_hint">Choose documents and an action</string>
+    <string name="cdf1_batch_action_note">One document at a time; other files continue after a failure</string>
+
+    <!-- Settings / FX1 and FX1→W2 -->
+    <string name="cdf1_text_size_default">Follow phone</string>
+    <string name="cdf1_text_size_preview">%1$d%% of phone text size</string>
+    <string name="cdf1_language_summary">%1$s</string>
+    <string name="cdf1_ocr_language_summary">%1$s</string>
+    <string name="cdf1_ocr_language">OCR language</string>
+    <string name="cdf1_auto_enhance_summary">Improve scanned photos automatically</string>
+    <string name="cdf1_auto_copy_summary">Documents/ScanWhirl</string>
+    <string name="cdf1_searchable_pdf_summary">Search PDF text in other apps</string>
+    <string name="cdf1_block_screenshots_note">Also block screenshots of ordinary scans</string>
+    <string name="cdf1_storage_library">Library</string>
+    <string name="cdf1_storage_temporary">Temporary files</string>
+    <string name="cdf1_storage_clear">Clear temporary</string>
+    <string name="cdf1_storage_cleared">Freed %1$s. Library and Vault kept.</string>
+    <string name="cdf1_storage_nothing">No removable temporary files</string>
+</resources>

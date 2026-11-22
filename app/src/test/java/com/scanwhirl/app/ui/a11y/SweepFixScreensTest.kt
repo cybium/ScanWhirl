@@ -365,7 +365,7 @@ class SweepFixScreensTest {
                 )
                 assertTrue(
                     "the name is the row's own label, got \"$name\"",
-                    name.contains(a.getString(R.string.settings_ocr_language), ignoreCase = true)
+                    name.contains(a.getString(R.string.cdf1_ocr_language), ignoreCase = true)
                 )
             }
         }

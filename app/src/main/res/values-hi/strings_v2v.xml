@@ -24,9 +24,18 @@
     <string name="v2v_apply_signature_preview">आपका सहेजा हुआ हस्ताक्षर हर पन्ने पर उसी जगह लगेगा। इसे एक चरण में वापस लिया जा सकता है।</string>
     <string name="v2v_apply_signature_apply">सभी पन्नों पर लगाएँ</string>
     <string name="v2v_apply_signature_undo">हस्ताक्षर सभी पन्नों पर लगाया गया</string>
+    <!-- FX1: गिनती के साथ पुष्टि; glossary: पन्ना / पन्ने. -->
+    <plurals name="v2v_signature_added_pages">
+        <item quantity="one">%1$d पन्ने पर हस्ताक्षर लगाया गया। वापस लें</item>
+        <item quantity="other">%1$d पन्नों पर हस्ताक्षर लगाया गया। वापस लें</item>
+    </plurals>
+    <string name="v2v_apply_to_all_count">सभी %1$d पन्नों पर लगाएँ</string>
     <string name="v2v_no_saved_signature">पहले हस्ताक्षर सहेजें, फिर उसे सभी पन्नों पर लगाएँ।</string>
 
-    <string name="v2v_find_none_title">कोई निजी जानकारी नहीं मिली</string>
+    <!-- FX1 critic: ईमानदार और उपयोगी खाली परिणाम; glossary: पन्ना, निजी जानकारी, छिपाएँ -->
+    <string name="v2v_find_none_title">कोई मिलान नहीं मिला</string>
+    <string name="v2v_find_none_body">स्वतः पहचान में निजी जानकारी छूट सकती है। साझा करने से पहले इस पन्ने को खुद जाँचें और कोई भी संवेदनशील जानकारी छिपाएँ।</string>
+    <string name="v2v_find_review_page">पन्ने की जाँच करें</string>
 
     <string name="v2v_protected_banner">साझा करने पर यह सुरक्षित रहेगा। यहाँ के पन्ने आपके निजी कागज़ात में रहते हैं।</string>
 </resources>

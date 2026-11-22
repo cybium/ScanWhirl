@@ -176,7 +176,7 @@ class SensitiveFindUiTest {
         val snackbar = screen.findViewById<TextView>(
             com.google.android.material.R.id.snackbar_text
         )
-        assertEquals(app.getString(R.string.find_none_clean), snackbar?.text?.toString())
+        assertEquals(app.getString(R.string.cdf1_find_none_body), snackbar?.text?.toString())
     }
 
     @Test

@@ -452,7 +452,7 @@ class ToolSetupActivity : BaseActivity() {
      * label shouted "SOURCE"/"OPTIONS" in capitals, which the owner read as developer chrome.
      */
     private fun sectionLabel(text: String): TextView =
-        SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+        SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
             id = R.id.toolSetupSection
             this.text = text
             setPadding(0, SwStyle.dp(this@ToolSetupActivity, 20f), 0, SwStyle.dp(this@ToolSetupActivity, 8f))
@@ -494,6 +494,19 @@ class ToolSetupActivity : BaseActivity() {
      * loader and cache, sampled off the main thread), name and "3 pages · 544 KB", a lock badge
      * for a protected file, and a check on the tinted row when it is selected. Rows are 76 dp.
      */
+    /**
+     * FX1: the page image keeps its own white; the surface BEHIND it is the one shared dark
+     * canvas (lane C's sw_cc_canvas) with the same 1dp #3DFFFFFF page edge as CompareView.
+     * Lane K's bg_canvas_page_edge.xml is not in this base, so the edge is applied inline here.
+     */
+    private fun pageThumbBackground() = SwStyle.rounded(
+        this,
+        SwStyle.color(this, R.color.sw_cc_canvas),
+        radiusDp = 8f,
+        stroke = Color.parseColor("#3DFFFFFF"),
+        strokeDp = 1f
+    )
+
     private fun documentRow(doc: ScanDocument): LinearLayout {
         val selectedHere = doc.id in selected
         val row = LinearLayout(this).apply {
@@ -540,11 +553,7 @@ class ToolSetupActivity : BaseActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         val thumbFrame = FrameLayout(this).apply {
-            background = SwStyle.rounded(
-                this@ToolSetupActivity,
-                SwStyle.color(this@ToolSetupActivity, R.color.sw_paper_thumb),
-                radiusDp = 8f
-            )
+            background = pageThumbBackground()
             clipToOutline = true
             addView(thumb, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
@@ -567,7 +576,7 @@ class ToolSetupActivity : BaseActivity() {
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
         })
         info.addView(
-            SwStyle.text(this, 12.5f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi)).apply {
                 id = R.id.toolSetupDocMeta
                 text = resources.getQuantityString(
                     R.plurals.tools_setup_doc_meta, doc.pageCount, doc.pageCount,
@@ -612,9 +621,13 @@ class ToolSetupActivity : BaseActivity() {
             )
         } else {
             thumb.setImageDrawable(null)
-            thumbFrame.setBackgroundColor(
-                SwStyle.color(this, if (doc.isLocked) R.color.sw_thumb_locked else R.color.sw_paper_thumb)
-            )
+            // Never replace the rounded drawable with a flat fill: that would drop both the
+            // shared canvas token and its 1dp page edge. A locked source only tints the inner
+            // image slot; the frame stays the same honest empty page surface.
+            thumbFrame.background = pageThumbBackground()
+            if (doc.isLocked) {
+                thumb.setBackgroundColor(SwStyle.color(this, R.color.sw_thumb_locked))
+            }
         }
 
         row.setOnClickListener {
@@ -644,7 +657,7 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildRangesOption() {
         optionsHost.addView(field(R.string.tools_setup_ranges_hint, R.id.toolSetupRanges, rangesText) { rangesText = it })
-        val preview = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+        val preview = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi)).apply {
             id = R.id.toolSetupRangePreview
             setLineSpacing(0f, 1.2f)
         }
@@ -745,7 +758,7 @@ class ToolSetupActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
-        optionsHost.addView(note(getString(R.string.tools_setup_images_note)))
+        optionsHost.addView(note(getString(R.string.cdf1_setup_images_note)))
     }
 
     private fun buildCompressOptions() {
@@ -788,7 +801,7 @@ class ToolSetupActivity : BaseActivity() {
                 maxLines = Int.MAX_VALUE
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val size = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            val size = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_hi)).apply {
                 id = R.id.toolSetupLevelSize
                 maxLines = 1
                 gravity = Gravity.CENTER_VERTICAL or Gravity.END
@@ -846,7 +859,7 @@ class ToolSetupActivity : BaseActivity() {
         // L3-03: an explicit aim label; the field's own judged hint stays unchanged so
         // existing parity and fit checks still describe the same field.
         optionsHost.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
                 text = getString(CompressionPresentation.aimForSize)
                 maxLines = Int.MAX_VALUE
             },
@@ -900,7 +913,6 @@ class ToolSetupActivity : BaseActivity() {
         // A re-render (selection change, onResume) rebuilds the size labels: show the estimates
         // that are already known instead of waiting for a job that is skipped.
         updateEstimateLines()
-        optionsHost.addView(note(getString(R.string.tools_setup_compress_note)))
     }
 
     private data class CompressLevel(val titleRes: Int, val index: Int, val id: Int)
@@ -999,7 +1011,7 @@ class ToolSetupActivity : BaseActivity() {
 
     private fun buildNameOption() {
         optionsHost.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
                 text = getString(R.string.co_save_as_new_copy)
                 maxLines = Int.MAX_VALUE
             },
@@ -1014,7 +1026,7 @@ class ToolSetupActivity : BaseActivity() {
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         )
         row.addView(
-            SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi)).apply {
                 text = getString(R.string.co_name_extension)
                 gravity = Gravity.CENTER_VERTICAL
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -1039,7 +1051,7 @@ class ToolSetupActivity : BaseActivity() {
             ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
         )
         optionsHost.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+            SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
                 tag = RECEIPT_TAG
                 text = getString(R.string.co_new_copy_receipt)
                 contentDescription = text
@@ -1053,12 +1065,11 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     private fun buildMergeOptions() {
-        optionsHost.addView(note(getString(R.string.tools_setup_merge_note)))
+        optionsHost.addView(note(getString(R.string.cdf1_setup_merge_note)))
         buildNameOption()
     }
 
     private fun buildZipOptions() {
-        optionsHost.addView(note(getString(R.string.tools_setup_zip_note)))
     }
 
     private fun buildLongImageOption() {
@@ -1084,8 +1095,8 @@ class ToolSetupActivity : BaseActivity() {
         val doc = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } }
         val hasText = doc != null && runCatching { repo.hasOcr(doc.id) }.getOrDefault(false)
         optionsHost.addView(note(
-            if (hasText) getString(R.string.tools_setup_word_note)
-            else getString(R.string.tools_setup_no_text)
+            if (hasText) getString(R.string.cdf1_setup_word_note)
+            else getString(R.string.cdf1_setup_no_text)
         ))
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1129,11 +1140,11 @@ class ToolSetupActivity : BaseActivity() {
         optionsHost.addView(row, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
         ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
-        if (wordPictures) optionsHost.addView(note(getString(R.string.tools_setup_word_pictures_note)))
+        if (wordPictures) optionsHost.addView(note(getString(R.string.cdf1_setup_word_pictures_note)))
     }
 
     private fun buildPptxOption() {
-        optionsHost.addView(note(getString(R.string.tools_setup_pptx_note)))
+        optionsHost.addView(note(getString(R.string.cdf1_setup_pptx_note)))
     }
 
     private fun buildExcelOptions() {
@@ -1162,15 +1173,15 @@ class ToolSetupActivity : BaseActivity() {
         ))
         optionsHost.addView(stack)
         paint()
-        optionsHost.addView(note(getString(R.string.tools_setup_excel_note)))
+        optionsHost.addView(note(getString(R.string.cdf1_setup_excel_note)))
     }
 
     private fun buildCleanOption() {
-        optionsHost.addView(note(getString(R.string.tools_setup_metadata_note)))
+        optionsHost.addView(note(getString(R.string.cdf1_setup_metadata_note)))
     }
 
     private fun note(text: String): TextView =
-        SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
             this.text = text
             setLineSpacing(0f, 1.25f)
             setPadding(0, SwStyle.dp(this@ToolSetupActivity, 8f), 0, SwStyle.dp(this@ToolSetupActivity, 4f))

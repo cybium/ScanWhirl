@@ -149,7 +149,7 @@ class C1SaveTimeoutTest {
             idle()
             assertEquals(
                 "an honest message replaces 'please wait' once the bounded wait expires",
-                app.getString(R.string.c1_saving_timed_out),
+                app.getString(R.string.cdf1_saving_timed_out),
                 snackbar(screen)
             )
             assertTrue("Back now leaves the screen", screen.isFinishing)
@@ -168,7 +168,7 @@ class C1SaveTimeoutTest {
             assertEquals("exactly one copy", before + 1, repo.listDocuments(includeVaulted = true).size)
             assertEquals("exactly one receipt toast", 1, ShadowToast.shownToastCount())
             val receipt = ShadowToast.getTextOfLatestToast()!!
-            assertTrue("the redacted receipt: $receipt", receipt.startsWith("Saved a redacted copy:"))
+            assertTrue("the redacted receipt: $receipt", receipt.contains("Original still has private details"))
             assertFalse("no generic saved-copy toast", receipt.startsWith("Saved as a new copy:"))
         } finally {
             gate.complete(Unit)

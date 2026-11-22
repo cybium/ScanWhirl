@@ -1649,6 +1649,11 @@ class LibraryScreen(
             )
             isClickable = true
             isFocusable = true
+            // FX1: git log -S shows the handler was added in 017f771c and never removed by a
+            // merge; a real-tap hit-test (Fx1Run5DefectsTest) confirms it still opens the sheet.
+            // Kit button semantics make the tap target speak as a Button to TalkBack, so a
+            // reader knows the visible chip is actionable instead of a decorative label.
+            SwStyle.asButton(this)
             setOnClickListener { pickLanguage() }
         }
 

@@ -19,7 +19,9 @@
     <string name="cz_storage_temporary">अस्थायी फ़ाइलों का आकार</string>
     <string name="cz_storage_clear">अस्थायी फ़ाइलें हटाएँ</string>
     <string name="cz_storage_cleared">अस्थायी फ़ाइलों से %1$s जगह मिली। कागज़ात और तिजोरी वैसे ही हैं।</string>
-    <string name="cz_storage_nothing">हटाने के लिए कुछ नहीं है। अस्थायी फ़ाइलें पहले से खाली हैं।</string>
+    <!-- FX1 critic: कुल और हटाने योग्य अलग-अलग; शून्य के साथ "पहले से खाली" नहीं कहें। -->
+    <string name="cz_storage_removable">अभी हटाने योग्य: %1$s</string>
+    <string name="cz_storage_nothing">हटाने योग्य कोई अस्थायी फ़ाइल नहीं है। इस्तेमाल में या पिछले 24 घंटे की फ़ाइलें रखी जाती हैं।</string>
 
     <!-- Item 2: Rate and feedback -->
     <string name="cz_support_section">सहायता</string>
