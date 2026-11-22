@@ -21,6 +21,8 @@
     <!-- Honest empty states. -->
     <string name="cc_no_before_image">Original page not available</string>
     <string name="cc_no_after_image">Result page not available</string>
+    <string name="cc_blank_page_before">Before page is blank. %1$s</string>
+    <string name="cc_blank_page_after">After page is blank. %1$s</string>
     <string name="cc_before_image_a11y">Before image. %1$s</string>
     <string name="cc_after_image_a11y">After image. %1$s</string>
 

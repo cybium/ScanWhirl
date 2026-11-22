@@ -80,6 +80,25 @@ abstract class CompareViewBase {
         }
     }
 
+    /** A page render with real ink, so it is not hidden by the blank-page rule. */
+    protected fun inkedJpeg(name: String, w: Int, h: Int): File {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.WHITE)
+        val x0 = (w * 0.12f).toInt()
+        val x1 = (w * 0.72f).toInt()
+        val y0 = (h * 0.10f).toInt()
+        val y1 = (h * 0.55f).toInt()
+        for (y in y0 until y1) for (x in x0 until x1) {
+            if ((x + y) % 7 == 0) bmp.setPixel(x, y, Color.BLACK)
+        }
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
+        bmp.recycle()
+        return File(app.cacheDir, "cc_ink_${name}_${System.nanoTime()}.jpg").apply {
+            writeBytes(out.toByteArray())
+        }
+    }
+
     @Test
     fun `before and after are both visible as full width stacked labels`() {
         val view = CompareView(app)
@@ -114,7 +133,7 @@ abstract class CompareViewBase {
     @Test
     fun `a missing original is an honest text state, not a blank white page`() {
         val view = CompareView(app)
-        bindAndWait(view, model(afterPath = jpeg("after", 100, 140).path))
+        bindAndWait(view, model(afterPath = inkedJpeg("after", 100, 140).path))
         assertEquals(app.getString(R.string.cc_no_before_image), view.emptyLabel().text.toString())
         assertEquals(View.GONE, view.beforeImageView().visibility)
         assertEquals(View.VISIBLE, view.pageImageView().visibility)
@@ -155,8 +174,8 @@ abstract class CompareViewBase {
     fun `rebinding recycles the bitmaps the previous bind decoded`() {
         val view = CompareView(app)
         bindAndWait(view, model(
-            beforePath = jpeg("rb-b1", 200, 300).path,
-            afterPath = jpeg("rb-a1", 160, 240).path
+            beforePath = inkedJpeg("rb-b1", 200, 300).path,
+            afterPath = inkedJpeg("rb-a1", 160, 240).path
         ))
         val (firstBefore, firstAfter) = view.heldBitmaps()
         assertNotNull("first before decoded", firstBefore)
@@ -164,8 +183,8 @@ abstract class CompareViewBase {
         assertFalse("first pages still live", firstBefore!!.isRecycled || firstAfter!!.isRecycled)
 
         bindAndWait(view, model(
-            beforePath = jpeg("rb-b2", 220, 320).path,
-            afterPath = jpeg("rb-a2", 180, 260).path
+            beforePath = inkedJpeg("rb-b2", 220, 320).path,
+            afterPath = inkedJpeg("rb-a2", 180, 260).path
         ))
         assertTrue("previous before freed", firstBefore!!.isRecycled)
         assertTrue("previous after freed", firstAfter!!.isRecycled)
@@ -179,8 +198,8 @@ abstract class CompareViewBase {
     fun `detaching recycles both decoded bitmaps and cancels the job`() {
         val view = CompareView(app)
         bindAndWait(view, model(
-            beforePath = jpeg("dt-b", 200, 300).path,
-            afterPath = jpeg("dt-a", 160, 240).path
+            beforePath = inkedJpeg("dt-b", 200, 300).path,
+            afterPath = inkedJpeg("dt-a", 160, 240).path
         ))
         val (before, after) = view.heldBitmaps()
         val generation = view.decodeGeneration()
@@ -196,13 +215,13 @@ abstract class CompareViewBase {
     fun `no recycled bitmap is drawn after a rebind`() {
         val view = CompareView(app)
         bindAndWait(view, model(
-            beforePath = jpeg("nr-b1", 200, 300).path,
-            afterPath = jpeg("nr-a1", 160, 240).path
+            beforePath = inkedJpeg("nr-b1", 200, 300).path,
+            afterPath = inkedJpeg("nr-a1", 160, 240).path
         ))
         val (oldBefore, oldAfter) = view.heldBitmaps()
         bindAndWait(view, model(
-            beforePath = jpeg("nr-b2", 220, 320).path,
-            afterPath = jpeg("nr-a2", 180, 260).path
+            beforePath = inkedJpeg("nr-b2", 220, 320).path,
+            afterPath = inkedJpeg("nr-a2", 180, 260).path
         ))
         val recycled = setOf(oldBefore, oldAfter)
         val shownAfter = view.displayedBitmap()

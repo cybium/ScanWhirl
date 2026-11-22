@@ -1,5 +1,6 @@
 package com.scanwhirl.app.tools
 
+import android.graphics.Bitmap
 import android.graphics.RectF
 import android.net.Uri
 import android.text.Editable
@@ -24,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 
@@ -67,7 +69,17 @@ class ResizeFlow(
                     failWith(R.string.f8_reason_not_image)
                     return@launch
                 }
-                showResizeDialog(bytes, size.first, size.second, name)
+                // The result screen needs a real Before image. Decode the source once (EXIF
+                // normalised and bounded), write it to a run-unique private cache file, and pass
+                // that path with the source dimensions into the export result. The saved output
+                // stays the After. Nothing new is published or persisted outside cacheDir.
+                val preview = withContext(Dispatchers.IO) {
+                    ExactResize.decodeNormalized(bytes, PREVIEW_MAX_DIM)
+                }
+                val beforePath = withContext(Dispatchers.IO) {
+                    writeBeforePreview(activity.cacheDir, preview)
+                }
+                showResizeDialog(bytes, size.first, size.second, name, preview, beforePath)
             } catch (e: BoundedCopy.Refused) {
                 val reason = if (e.result == BoundedCopy.Result.TOO_LARGE ||
                     e.result == BoundedCopy.Result.NO_SPACE
@@ -93,7 +105,14 @@ class ResizeFlow(
         ).show()
     }
 
-    private suspend fun showResizeDialog(bytes: ByteArray, origW: Int, origH: Int, name: String) {
+    private suspend fun showResizeDialog(
+        bytes: ByteArray,
+        origW: Int,
+        origH: Int,
+        name: String,
+        preview: Bitmap,
+        beforePreviewPath: String? = null
+    ) {
         val b = DialogResizeBinding.inflate(activity.layoutInflater)
         b.fileInfo.text = activity.getString(
             R.string.resize_file_info, name, SizeUnits.format(bytes.size.toLong()), origW, origH
@@ -101,11 +120,8 @@ class ResizeFlow(
         b.editWidth.setText(FlowUtil.intText(origW))
         b.editHeight.setText(FlowUtil.intText(origH))
 
-        // A bounded, EXIF-normalised display copy: CropView works in these pixels
-        // and its rect is scaled back to the full source when the work starts.
-        val preview = withContext(Dispatchers.IO) {
-            ExactResize.decodeNormalized(bytes, 900)
-        }
+        // The bounded, EXIF-normalised display copy comes from start(): CropView works in these
+        // pixels and its rect is scaled back to the full source when the work starts.
         b.cropPreview.setImage(preview)
 
         fun currentSize(): Pair<Int, Int> {
@@ -240,7 +256,9 @@ class ResizeFlow(
             sheet.dismiss()
             doResize(
                 bytes, name,
-                ExactResize.Options(
+                beforePreviewPath = beforePreviewPath,
+                beforeWidth = origW, beforeHeight = origH,
+                opts = ExactResize.Options(
                     width = w,
                     height = h,
                     mode = if (b.resizeModeCrop.isChecked) ExactResize.Mode.CROP
@@ -256,6 +274,27 @@ class ResizeFlow(
     companion object {
         /** A handful of tries is enough for a genuine same-millisecond name collision. */
         private const val MAX_OUTPUT_DIR_ATTEMPTS = 8
+
+        /** The same bound the crop dialog already used for its display copy. */
+        private const val PREVIEW_MAX_DIM = 900
+
+        /**
+         * Writes the EXIF-normalised source copy that the result screen shows as Before.
+         * Run-unique so two resizes can never overwrite each other's proof; a failed write
+         * simply leaves the result with no Before (never a white host). Call off Main.
+         */
+        internal fun writeBeforePreview(cacheDir: File, bitmap: Bitmap): String? = try {
+            val dir = File(cacheDir, "documents/resize_preview")
+            if (!dir.isDirectory && !dir.mkdirs() && !dir.isDirectory) null else {
+                val file = File(
+                    dir, "before_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}.jpg"
+                )
+                FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                file.path.takeIf { File(it).length() > 0L }
+            }
+        } catch (_: Exception) {
+            null
+        }
 
         /**
          * Re-fit the movable frame to a new target aspect. CropView's aspect setter only
@@ -310,7 +349,14 @@ class ResizeFlow(
         throw IOException("Could not reserve a unique resize output folder")
     }
 
-    internal fun doResize(bytes: ByteArray, name: String, opts: ExactResize.Options): Job {
+    internal fun doResize(
+        bytes: ByteArray,
+        name: String,
+        opts: ExactResize.Options,
+        beforePreviewPath: String? = null,
+        beforeWidth: Int = 0,
+        beforeHeight: Int = 0
+    ): Job {
         val progress = host.showProgress()
         return activity.lifecycleScope.launch {
             try {
@@ -353,7 +399,11 @@ class ResizeFlow(
                         warning = warning,
                         // No no-gain outcome from Resize: the exact requested image exists.
                         outcome = null,
-                        toolId = "resize"
+                        toolId = "resize",
+                        beforePreviewPath = beforePreviewPath,
+                        beforeBytesAuthoritative = true,
+                        beforeWidth = beforeWidth,
+                        beforeHeight = beforeHeight
                     )
                 )
             } catch (e: CancellationException) {
