@@ -582,7 +582,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // G6: cells wrap their labels; the bar (and dock) grows with them at 200 %.
         bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, 86f), 1))
+        // V2L device reflow: at 200 % a 86dp disc gap starves "Library" and "Tools" into
+        // mid-word breaks on a 393-411dp phone. Reclaim most of it for the four cells.
+        val discGap = if (resources.configuration.fontScale >= 1.6f) 36f else 86f
+        bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, discGap), 1))
         bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         navItems = items
