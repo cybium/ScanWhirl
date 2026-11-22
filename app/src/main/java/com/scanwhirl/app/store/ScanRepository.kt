@@ -1238,18 +1238,66 @@ class ScanRepository(private val context: Context) {
      * crash mid-delete can never leave a half-deleted document visible in Home;
      * [recoverTrash] finishes the removal on the next start.
      */
+    /**
+     * Task04: destructive result action. Provenance is checked and deletion happens during
+     * ONE repository writer transaction; a changed or missing member rejects the entire batch.
+     * A mixed docIds+files result may remove only verified generated files, NEVER its input docs.
+     */
+    enum class ResultDeleteState { REMOVED, REFUSED, PARTIAL }
+
+    data class ResultDeleteResult(
+        val state: ResultDeleteState,
+        val remainingDocIds: List<String> = emptyList(),
+        val remainingFiles: List<String> = emptyList()
+    )
+
+    fun removeResultOutputsIfUnchanged(
+        docIds: List<String>,
+        files: List<File>,
+        expectedIdentity: String?,
+        sourceId: String?
+    ): ResultDeleteResult = withImportDiscardLock {
+        if (!com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.matches(
+                context, this, docIds, files, expectedIdentity, sourceId
+            )
+        ) {
+            return@withImportDiscardLock ResultDeleteResult(ResultDeleteState.REFUSED)
+        }
+        // The deterministic race barrier is deliberately INSIDE the same PDF/OCR/Trash/Draft
+        // writer locks used by deletion and the PDF editing paths.
+        com.scanwhirl.app.store.resultauthority.ResultRemovalFaults.afterVerified?.invoke()
+
+        val candidates = if (files.isEmpty()) docIds else emptyList()
+        var writeFailed = false
+        candidates.forEach { id ->
+            if (runCatching { deleteDocument(id) }.isFailure) writeFailed = true
+        }
+        files.forEach { file ->
+            if (runCatching { file.delete() }.getOrDefault(false).not()) writeFailed = true
+        }
+
+        val remainingDocs = candidates.filter { getDocument(it) != null }
+        val remainingFiles = files.filter { it.exists() }.map { it.path }
+        ResultDeleteResult(
+            if (!writeFailed && remainingDocs.isEmpty() && remainingFiles.isEmpty()) ResultDeleteState.REMOVED
+            else ResultDeleteState.PARTIAL,
+            remainingDocs, remainingFiles
+        )
+    }
+
     fun deleteDocument(id: String) {
         val dir = File(docsDir, id)
         synchronized(PDF_LOCK) {
             OcrStore.locked {
                 synchronized(TRASH_LOCK) {
                     if (!dir.exists()) return@synchronized
+                    com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
                     val hidden = File(trashDir, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
                     if (dir.renameTo(hidden)) {
                         trashFault(TrashStage.PURGE_HIDDEN)
-                        hidden.deleteRecursively()
+                        if (!hidden.deleteRecursively()) throw IOException("Could not finish removing the copy")
                     } else {
-                        dir.deleteRecursively()
+                        if (!dir.deleteRecursively()) throw IOException("Could not finish removing the copy")
                     }
                 }
             }
@@ -1334,6 +1382,7 @@ class ScanRepository(private val context: Context) {
             Durable.atomicWriteText(marker, trashMarkerText(id, System.currentTimeMillis(), previousToken))
         } catch (_: Exception) {
         }
+        com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
         if (!src.renameTo(dest)) {
             marker.delete()
             throw IOException("Could not move \"$name\" to Trash")
@@ -1407,6 +1456,10 @@ class ScanRepository(private val context: Context) {
             }
             trashFault(TrashStage.BEFORE_RESTORE)
             val dest = File(docsDir, id)
+            com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, trashed.originalId)
+            if (id != trashed.originalId) {
+                com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
+            }
             resolveNameBeforePublish(src)
             if (!src.renameTo(dest)) throw IOException("Could not restore \"${trashed.document.name}\"")
             trashFault(TrashStage.RESTORED)
@@ -1819,15 +1872,19 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             requireEditable(dir)
-            OcrStore.locked {
-                val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
-                require(pageIndex in doc.pageFiles.indices) { "No such page" }
-                val file = doc.pageFiles[pageIndex]
-                editPageAndOriginal(file) { target -> ImageTools.stageCrop(target, rect) }
-                ocrStore.invalidate(id, file.name)
+            // Result Undo holds PDF_LOCK during byte verification and purge. Crop must
+            // use the same writer lock for the *entire* image and PDF replacement.
+            synchronized(PDF_LOCK) {
+                OcrStore.locked {
+                    val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
+                    require(pageIndex in doc.pageFiles.indices) { "No such page" }
+                    val file = doc.pageFiles[pageIndex]
+                    editPageAndOriginal(file) { target -> ImageTools.stageCrop(target, rect) }
+                    ocrStore.invalidate(id, file.name)
+                }
+                regeneratePdf(dir)
+                loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
             }
-            regeneratePdf(dir)
-            loadDocument(dir) ?: throw IllegalStateException("Scan vanished after crop")
         }
 
     /**
@@ -1939,6 +1996,7 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(docsDir, id)
             requireEditable(dir)
+            synchronized(PDF_LOCK) {
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             val sizes = sourcePageSizes(doc.pageFiles)
             require(pageIndex in doc.pageFiles.indices) { "No such page" }
@@ -1959,6 +2017,7 @@ class ScanRepository(private val context: Context) {
             writePageSizes(dir, sizes)
             regeneratePdf(dir)
             loadDocument(dir) ?: throw IllegalStateException("Scan vanished after filter")
+            }
         }
 
     /** PM-2.2b: what a draft publish promises (see [buildAndPublish]). */

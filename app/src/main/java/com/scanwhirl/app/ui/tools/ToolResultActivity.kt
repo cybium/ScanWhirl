@@ -371,12 +371,10 @@ class ToolResultActivity : BaseActivity() {
             withContext(Dispatchers.IO) {
                 synchronized(ScanRepository.PDF_LOCK) {
                     com.scanwhirl.app.store.OcrStore.locked {
-                        val current = captureOutputIdentityBlocking(this@ToolResultActivity, ids, outs)
-                        if (current == null || current != expected) return@locked
-                        ids.filter { it != receiptSourceId }.forEach { id ->
-                            runCatching { repo.deleteDocument(id) }
-                        }
-                        // Legacy arbitrary file extras do not grant ownership for deletion.
+                        val removal = repo.removeResultOutputsIfUnchanged(ids, outs, expected, receiptSourceId)
+                        if (removal.state != ScanRepository.ResultDeleteState.REMOVED) return@locked
+
+                        // The repository already checked and removed the exact output.
                     }
                 }
             }
@@ -836,8 +834,7 @@ class ToolResultActivity : BaseActivity() {
         val expected = outputIdentity
         when {
             expected == null -> docIds.isEmpty() && files.isEmpty()
-            expected.startsWith(CHEAP_IDENTITY_PREFIX) ->
-                cheapIdentity(this@ToolResultActivity, docIds, files) == expected
+            expected.startsWith(CHEAP_IDENTITY_PREFIX) -> false
             else -> captureOutputIdentityBlocking(this@ToolResultActivity, docIds, files) == expected
         }
     }
@@ -1732,90 +1729,80 @@ class ToolResultActivity : BaseActivity() {
         val undoButton: View? = findViewById(R.id.toolResultUndo)
         undoButton?.isEnabled = false
         lifecycleScope.launch {
-            // L3-02 P1: the re-check hashes on IO, never on Main, while the
-            // button is disabled so a second tap cannot race the first.
-            val allowed = try {
-                identityStillMatches()
-            } finally {
-                // P2: a cancelled re-check must never leave Undo disabled.
-                undoChecking = false
-                undoButton?.isEnabled = true
-            }
-            if (!allowed) {
-                fail(getString(R.string.ux130_l3_copy_changed))
-                return@launch
-            }
-            undone = true
-            persistReceipt()
-            val outs = files.toList()
-            // T10-FIX-PDFA-UNDO data-safety guard: a result carrying BOTH a library document and a
-            // generated file is an export whose docIds are inputs, not copies. No tool legitimately
-            // creates that shape — document copies pass docIds only, exports pass files only — and
-            // deleteDocument permanently purges (no Trash). Undo therefore removes the generated
-            // files and keeps the document: the safe direction for an unknown caller.
-            val docs = if (outs.isEmpty()) docIds.toList() else emptyList()
-            val recordDoc = docIds.singleOrNull()
-            // B2-H1: the Documents copy this run saved is part of the run, so the screen's Undo
-            // removes it too — the confirmation bar is no longer the only way, and pressing Undo
-            // after that bar has gone no longer leaves the copy behind. Only the copy this run
-            // created is a candidate, and only while it still holds exactly the bytes it wrote.
-            val copy = savedCopy
-            savedCopy = null
-            documentsExistingName = null
-            docIds.clear()
-            files.clear()
-            locationLines.clear()
-            val copyUndo = copy?.let { saved ->
-                withContext(Dispatchers.IO) {
-                    val result = try {
-                        DownloadSaver.undoSave(this@ToolResultActivity, saved)
-                    } catch (_: Exception) {
-                        DownloadSaver.UndoResult.FAILED
+            try {
+                val initialDocs = docIds.toList()
+                val initialFiles = files.toList()
+                // No Activity-level hash/check-then-purge gap: the repository verifies and
+                // removes under one writer transaction, using producer-provided SHA bytes.
+                val removal = withContext(Dispatchers.IO) {
+                    repo.removeResultOutputsIfUnchanged(
+                        initialDocs, initialFiles, outputIdentity, receiptSourceId
+                    )
+                }
+                when (removal.state) {
+                    ScanRepository.ResultDeleteState.REFUSED -> {
+                        fail(getString(R.string.ux130_l3_copy_changed))
+                        return@launch
                     }
-                    if (result == DownloadSaver.UndoResult.REMOVED && recordDoc != null && docs.isEmpty()) {
+                    ScanRepository.ResultDeleteState.PARTIAL -> {
+                        // Keep only the real survivors, never claim that all were undone.
+                        docIds = removal.remainingDocIds.toMutableList()
+                        files = removal.remainingFiles.map(::File).toMutableList()
+                        persistReceipt()
+                        fail(getString(R.string.w3_undo_not_removed))
+                        return@launch
+                    }
+                    ScanRepository.ResultDeleteState.REMOVED -> Unit
+                }
+                docIds.clear()
+                files.clear()
+                locationLines.clear()
+
+                // External Documents copies have their own fingerprint/created-only guard.
+                // A failed or altered copy is KEPT and must never be reported as removed.
+                val copy = savedCopy
+                val copyUndo = copy?.let { saved ->
+                    withContext(Dispatchers.IO) {
                         try {
-                            repo.removeExport(recordDoc, saved.uri)
+                            DownloadSaver.undoSave(this@ToolResultActivity, saved)
                         } catch (_: Exception) {
-                            // A stale record is harmless: delete-with-document re-checks the file.
+                            DownloadSaver.UndoResult.FAILED
                         }
                     }
-                    result
                 }
+                if (copy != null && copyUndo != DownloadSaver.UndoResult.REMOVED) {
+                    persistReceipt()
+                    fail(
+                        when (copyUndo) {
+                            DownloadSaver.UndoResult.KEPT_CHANGED ->
+                                getString(R.string.export_undo_kept_changed, copy.name)
+                            else -> getString(R.string.export_undo_failed, copy.name)
+                        }
+                    )
+                    return@launch
+                }
+                savedCopy = null
+                documentsExistingName = null
+                undone = true
+                persistReceipt()
+                Toast.makeText(
+                    this@ToolResultActivity,
+                    when {
+                        isCompressResult && copy != null -> getString(R.string.compress_undo_removed_with_copy)
+                        isCompressResult -> getString(R.string.compress_undo_removed)
+                        else -> getString(R.string.tools_result_undone)
+                    },
+                    Toast.LENGTH_SHORT
+                ).show()
+                finish()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                fail(getString(R.string.w3_undo_not_removed))
+            } finally {
+                undoChecking = false
+                if (!undone) undoButton?.isEnabled = true
             }
-            withContext(Dispatchers.IO) {
-                docs.forEach { runCatching { repo.deleteDocument(it) } }
-                outs.forEach { runCatching { it.delete() } }
-            }
-            // W3: claim removal only after checking the copies are really gone. deleteDocument
-            // and File.delete can fail; a recreated screen can also ask to undo a run that is
-            // already gone. In both cases the honest answer is "not every copy was removed".
-            val remainingDocs = withContext(Dispatchers.IO) {
-                docs.filter { runCatching { repo.getDocument(it) }.getOrNull() != null }
-            }
-            val remainingFiles = withContext(Dispatchers.IO) { outs.filter { it.exists() } }
-            val allRunCopiesGone = remainingDocs.isEmpty() && remainingFiles.isEmpty()
-            val nothingToRemove = docs.isEmpty() && outs.isEmpty() && copy == null
-            // Data honesty: a copy that could not be removed is never reported as undone.
-            val (text, long) = when {
-                copyUndo == DownloadSaver.UndoResult.KEPT_CHANGED ->
-                    getString(R.string.export_undo_kept_changed, copy?.name.orEmpty()) to true
-                copyUndo == DownloadSaver.UndoResult.FAILED ->
-                    getString(R.string.export_undo_failed, copy?.name.orEmpty()) to true
-                nothingToRemove || !allRunCopiesGone ->
-                    getString(R.string.w3_undo_not_removed) to true
-                // B3 (#9-now): say exactly what this Undo removed, now that it is verified.
-                isCompressResult && copy != null ->
-                    getString(R.string.compress_undo_removed_with_copy) to false
-                isCompressResult ->
-                    getString(R.string.compress_undo_removed) to false
-                else -> getString(R.string.tools_result_undone) to false
-            }
-            Toast.makeText(
-                this@ToolResultActivity,
-                text,
-                if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
-            ).show()
-            finish()
         }
     }
 
@@ -1856,13 +1843,35 @@ class ToolResultActivity : BaseActivity() {
 
     /** Deletes exactly the card this run created (and its preview); nothing else is touched. */
     private fun discardIdCard() {
-        if (undone) return
-        undone = true
-        val docs = docIds.toList()
-        docIds.clear()
+        if (undone || undoChecking) return
+        undoChecking = true
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { docs.forEach { runCatching { repo.deleteDocument(it) } } }
-            if (!isFinishing && !isDestroyed) finish()
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    repo.removeResultOutputsIfUnchanged(
+                        docIds.toList(), files.toList(), outputIdentity, receiptSourceId
+                    )
+                }
+                when (result.state) {
+                    ScanRepository.ResultDeleteState.REMOVED -> {
+                        undone = true
+                        docIds.clear()
+                        files.clear()
+                        persistReceipt()
+                        if (!isFinishing && !isDestroyed) finish()
+                    }
+                    ScanRepository.ResultDeleteState.REFUSED ->
+                        fail(getString(R.string.ux130_l3_copy_changed))
+                    ScanRepository.ResultDeleteState.PARTIAL ->
+                        fail(getString(R.string.w3_undo_not_removed))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                fail(getString(R.string.w3_undo_not_removed))
+            } finally {
+                undoChecking = false
+            }
         }
     }
 
@@ -2103,15 +2112,11 @@ class ToolResultActivity : BaseActivity() {
                     }
                     "F:" + parts.joinToString(";")
                 } else if (docIds.isNotEmpty()) {
-                    val repo = ScanWhirlApp.from(context).repository
-                    val parts = mutableListOf<String>()
-                    for (id in docIds.sorted()) {
-                        val doc = repo.getDocument(id) ?: return null
-                        val pdf = doc.pdfFile
-                        if (!pdf.isFile) return null
-                        parts += "$id|${doc.createdAt}|${pdf.length()}|${Sha256.of(pdf)}"
-                    }
-                    "D:" + parts.joinToString(";")
+                    // D2 records every output byte in the document directory, not just scan.pdf.
+                    // Producer calls run on IO. Old D:/C: receipts cannot authorize deletion.
+                    com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.captureDocs(
+                        ScanWhirlApp.from(context).repository, docIds, create = true
+                    )
                 } else {
                     null
                 }
