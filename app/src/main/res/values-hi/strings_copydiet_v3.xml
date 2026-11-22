@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V3 copy diet: Hindi counterparts. Glossary: पन्ना, लिखावट, श्रेणी, सहेजी प्रति.
+     Positional %n$d order is preserved in v3_reader_find_partial. -->
+<resources>
+    <string name="v3_protected_banner">साझा PDF पर पासवर्ड है; पन्ने यहाँ खुलते हैं</string>
+    <string name="v3_actions_title">दस्तावेज़ के काम</string>
+    <string name="v3_save_copy">Documents में प्रति सहेजें</string>
+    <string name="v3_set_category">श्रेणी चुनें</string>
+    <string name="v3_organize">व्यवस्थित करें</string>
+    <string name="v3_ocr">लिखावट पढ़ें</string>
+    <string name="v3_ocr_a11y">लिखावट पढ़ें, OCR</string>
+    <string name="v3_find_more">और</string>
+    <string name="v3_find_more_a11y">खोज के बारे में और</string>
+    <string name="v3_reader_find_note_more">मिलान पहचानी गई लिखावट से आते हैं। पन्ने की तस्वीर पर निशान नहीं लगता।</string>
+    <string name="v3_reader_find_pending">लिखावट पढ़ रहे हैं…</string>
+    <string name="v3_reader_find_partial">खोज के लिए तैयार: %2$d में से %1$d पन्ने</string>
+    <string name="v3_reader_find_no_text">खोजने से पहले लिखावट पढ़ें</string>
+    <string name="v3_reader_find_external">लिखावट खोजने के लिए यह PDF आयात करें</string>
+    <string name="v3_reader_find_out_of_step">पन्नों के लिंक नहीं खुले: PDF और पन्ने अलग हैं</string>
+    <string name="v3_reader_start_changed">दस्तावेज़ बदल गया है। पन्ना 1 खोला गया।</string>
+    <string name="v3_reader_text_unavailable">लिखावट पढ़ने के लिए यह PDF आयात करें</string>
+    <plurals name="v3_reader_more_pages">
+        <item quantity="one">%d पन्ना</item>
+        <item quantity="other">%d पन्ने</item>
+    </plurals>
+</resources>

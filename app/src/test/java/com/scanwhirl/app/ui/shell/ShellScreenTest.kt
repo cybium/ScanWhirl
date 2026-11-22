@@ -233,7 +233,7 @@ class ShellScreenTest {
             // UI-B5: the row's overflow is the shared named Actions sheet, bound to this
             // row, not the old "Open / Share / Move to Trash" sheet it replaced.
             assertEquals(
-                activity.getString(R.string.doc_actions),
+                activity.getString(R.string.v3_actions_title),
                 dialog.findViewById<TextView>(R.id.swSheetTitle).text.toString()
             )
             val header = dialog.window?.decorView?.findViewWithTag<TextView>("docActions:name")
