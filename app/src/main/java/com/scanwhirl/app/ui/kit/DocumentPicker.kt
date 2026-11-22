@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -17,17 +18,30 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
+import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.SwDialog
+import com.scanwhirl.app.ui.showSw
 import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
+import com.scanwhirl.app.ui.tools.DevicePdfGate
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.StatusLine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * UI-W6 — the one reusable "choose a document" picker.
@@ -81,6 +95,41 @@ class DocumentPicker private constructor(
     private var picked = false
     private var hasScanAction = false
     private var hasImportAction = false
+
+    /**
+     * OWNER_QA item 1: the shared "From this phone" route. SAF launchers must be
+     * registered before the host Activity is STARTED, so a bottom sheet built on
+     * tap cannot use the Activity as its LifecycleOwner. A tiny private owner keeps
+     * just this registration: INITIALIZED at register time (the registry requires
+     * that), then STARTED immediately so the result callback is delivered. It is
+     * destroyed with the sheet, which unregisters the launcher.
+     */
+    private val deviceResultOwner = PickerResultOwner()
+    private val deviceLauncher: ActivityResultLauncher<Array<String>> =
+        activity.activityResultRegistry.register(
+            "sw_doc_picker_device_${System.identityHashCode(deviceResultOwner)}",
+            deviceResultOwner,
+            ActivityResultContracts.OpenDocument()
+        ) { uri -> pendingDeviceUri?.also { pendingDeviceUri = null }?.invoke(uri) }
+
+    /** Set only while the SAF picker is open; null on cancel. */
+    private var pendingDeviceUri: ((Uri?) -> Unit)? = null
+
+    private class PickerResultOwner : LifecycleOwner {
+        private val ownerLifecycle = LifecycleRegistry(this)
+        override val lifecycle: Lifecycle get() = ownerLifecycle
+        fun start() {
+            if (ownerLifecycle.currentState == Lifecycle.State.INITIALIZED) {
+                ownerLifecycle.currentState = Lifecycle.State.RESUMED
+            }
+        }
+
+        fun destroy() {
+            if (ownerLifecycle.currentState != Lifecycle.State.DESTROYED) {
+                ownerLifecycle.currentState = Lifecycle.State.DESTROYED
+            }
+        }
+    }
 
     init {
         val context = activity
@@ -254,7 +303,9 @@ class DocumentPicker private constructor(
             dialog.behavior.skipCollapsed = true
             dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
+        deviceResultOwner.start()
         dismissActions.add { if (!picked) onDismiss?.invoke() }
+        dismissActions.add { deviceResultOwner.destroy() }
         context.attachDialogLifecycle(dialog, dismissActions)
         render()
     }
@@ -371,10 +422,23 @@ class DocumentPicker private constructor(
             .apply { marginEnd = SwStyle.dp(context, 10f) })
 
         val thumbFrame = FrameLayout(context).apply {
+            // Council §4 / UI_100 §G1.6: every picker thumb sits on the shared dark
+            // canvas with a 3dp inset and a 1dp page edge — never a near-white tile.
+            // A protected/Vault document keeps the same canvas; its lock glyph below
+            // is the only thing that changes.
             background = SwStyle.rounded(
-                context,
-                SwStyle.color(context, if (masked) R.color.sw_thumb_locked else R.color.sw_paper_thumb),
-                radiusDp = 8f
+                context, SwStyle.color(context, R.color.sw_cc_canvas), 4f,
+                stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
+            )
+            setForeground(
+                SwStyle.rounded(
+                    context, Color.TRANSPARENT, 4f,
+                    stroke = SwStyle.color(context, R.color.sw_cc_page_edge)
+                )
+            )
+            setPadding(
+                SwStyle.dp(context, 3f), SwStyle.dp(context, 3f),
+                SwStyle.dp(context, 3f), SwStyle.dp(context, 3f)
             )
             clipToOutline = true
         }
@@ -432,9 +496,12 @@ class DocumentPicker private constructor(
             id = R.id.docPickerName
             text = doc.name
             // Names wrap instead of disappearing: four lines, then an ellipsis for a pathological one.
+            // Whole-word breaks only: never split "annot_test" mid-identifier.
             maxLines = 4
             ellipsize = TextUtils.TruncateAt.END
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            //noinspection WrongConstant
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
         })
         if (!masked) {
             val size = doc.cachedSize.takeIf { it > 0 } ?: doc.pdfFile.length()
@@ -513,6 +580,79 @@ class DocumentPicker private constructor(
         }
     }
 
+    // ---- OWNER_QA item 1: uniform "From this phone" (SAF) --------------------
+
+    /**
+     * Opens the SAF picker, then imports the chosen file through the SAME path the
+     * app's Import PDF door uses (ScanRepository.importPdfAsScanPlanned + the shared
+     * DevicePdfGate). The sheet stays open until the imported library document is
+     * ready; that document is then handed to the caller's [onPick] exactly as if the
+     * person had tapped it. Cancelling SAF leaves the picker as it was.
+     */
+    private fun onDeviceFileChosen(uri: Uri?) {
+        pendingDeviceUri = null
+        if (uri == null) return
+        val repo = ScanRepository(activity)
+        activity.lifecycleScope.launch {
+            val name = withContext(Dispatchers.IO) {
+                runCatching { repo.displayNameOf(uri) }.getOrNull()
+            }?.removeSuffix(".pdf")?.removeSuffix(".PDF")?.trim()?.takeIf { it.isNotBlank() }
+                ?: activity.getString(R.string.ck_picker_imported_file)
+            // Honest copy: say plainly that a ScanWhirl copy is made and the phone's
+            // original is left untouched before any byte is written.
+            SwDialog.card(activity)
+                .setTitle(R.string.ck_picker_import_title)
+                .setMessage(activity.getString(R.string.ck_picker_import_msg, name))
+                .setPositiveButton(R.string.continue_label) { _, _ -> runDeviceImport(uri, name) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .showSw(isSheet = false)
+        }
+    }
+
+    private fun runDeviceImport(uri: Uri, name: String) {
+        val repo = ScanRepository(activity)
+        var progress: SwSheet? = null
+        var cancelled = false
+        activity.lifecycleScope.launch {
+            try {
+                val doc = repo.importPdfAsScanPlanned(
+                    uri = uri,
+                    name = name,
+                    onPlan = { plan ->
+                        val decision = DevicePdfGate.decide(activity, plan)
+                        if (decision != ScanRepository.ImportDecision.Cancel) {
+                            progress = withContext(Dispatchers.Main) {
+                                DevicePdfGate.progress(activity) { cancelled = true }
+                                    .also { it.show() }
+                            }
+                        }
+                        decision
+                    },
+                    onPage = { done, total ->
+                        activity.runOnUiThread {
+                            progress?.setMessage(DevicePdfGate.progressText(activity, done, total))
+                        }
+                    }
+                )
+                progress?.dismiss()
+                if (doc == null || cancelled || picked) return@launch
+                picked = true
+                dismissActions.dismiss()
+                onPick(doc)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progress?.dismiss()
+                throw e
+            } catch (e: Exception) {
+                progress?.dismiss()
+                SwDialog.card(activity)
+                    .setTitle(R.string.ck_picker_import_failed_title)
+                    .setMessage(R.string.ck_picker_import_failed_msg)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .showSw(isSheet = false)
+            }
+        }
+    }
+
     /** A named row outside the document list, e.g. "From a PDF file". */
     class ExtraAction(val label: CharSequence, val onClick: () -> Unit)
 
@@ -559,6 +699,23 @@ class DocumentPicker private constructor(
                 picker.dismissActions.dismiss()
                 onEmptyImport?.invoke()
             }
+            val root = picker.view as LinearLayout
+            // OWNER_QA item 1: ONE uniform device route for every caller of the shared
+            // picker — no per-tool wiring. It is pinned below the list like the older
+            // extra action, so a long library or a 200% font cannot push it off-screen.
+            val fromPhone = picker.emptyAction(activity, primary = false).apply {
+                id = R.id.docPickerFromPhone
+                text = activity.getString(R.string.ck_picker_from_phone)
+                contentDescription = text
+                setOnClickListener {
+                    if (picker.picked) return@setOnClickListener
+                    picker.pendingDeviceUri = { uri -> picker.onDeviceFileChosen(uri) }
+                    picker.deviceLauncher.launch(arrayOf("application/pdf", "image/*"))
+                }
+            }
+            root.addView(fromPhone, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(activity, 8f) })
             if (extraAction != null) {
                 val extra = picker.emptyAction(activity, primary = false).apply {
                     id = R.id.docPickerExtra
@@ -571,22 +728,21 @@ class DocumentPicker private constructor(
                         extraAction.onClick()
                     }
                 }
-                val root = picker.view as LinearLayout
                 root.addView(extra, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = SwStyle.dp(activity, 8f) })
-                // KT1: pin the extra action. Only the document body shrinks/scrolls, so at 200%
-                // font (or with a long title) "From a PDF file" can never be pushed off-screen.
-                // Keep the dialog's own LayoutParams type (CoordinatorLayout) and change only
-                // the height: replacing it with a LinearLayout param crashes the dialog parent.
-                root.layoutParams?.let { lp ->
-                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT
-                    root.layoutParams = lp
-                }
-                picker.body.layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-                ).apply { topMargin = SwStyle.dp(activity, 10f) }
             }
+            // Pin the actions: only the document body shrinks/scrolls, so at 200%
+            // font (or with a long title) they can never be pushed off-screen.
+            // Keep the dialog's own LayoutParams type (CoordinatorLayout) and change
+            // only the height: replacing it with a LinearLayout param crashes the parent.
+            root.layoutParams?.let { lp ->
+                lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                root.layoutParams = lp
+            }
+            picker.body.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            ).apply { topMargin = SwStyle.dp(activity, 10f) }
             picker.render()
             androidx.core.view.ViewCompat.setAccessibilityPaneTitle(
                 picker.view, title.toString()

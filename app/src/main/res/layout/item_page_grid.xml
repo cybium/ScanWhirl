@@ -22,17 +22,22 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Council §4 / UI_100 §G1.10: a page cell is the dark sw_canvas with an
+             8dp inset and a 1dp page edge. fitCenter + pad keeps the white sheet
+             whole instead of centre-cropping it against the card edge. -->
         <com.scanwhirl.app.ui.pagegrid.AspectRatioLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:background="@color/sw_cc_canvas"
+            android:foreground="@drawable/bg_canvas_page_edge"
+            android:padding="8dp">
 
             <ImageView
                 android:id="@+id/pageThumb"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="?attr/colorSurfaceVariant"
                 android:contentDescription="@null"
-                android:scaleType="centerCrop"
+                android:scaleType="fitCenter"
                 android:src="@drawable/ic_document" />
 
             <!-- Review slice 1: current-page ring over the thumb (gone unless Review sets it). -->

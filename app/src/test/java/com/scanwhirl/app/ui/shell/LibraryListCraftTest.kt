@@ -19,6 +19,7 @@ import com.scanwhirl.app.util.ProGate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -128,8 +129,9 @@ class LibraryListCraftTest {
             assertTrue("a row is at least 88dp tall", card.measuredHeight >= dp(88f))
 
             assertEquals("the name wraps at most twice", 2, card.nameView.maxLines)
-            // T23 M1 (device sweep): the meta wraps to two lines so the date stays readable.
-            assertTrue("the meta may wrap to two lines", card.metaView.maxLines >= 2)
+            // Council §3: OLD = meta may wrap to two lines ("Unsorted" made it stack).
+            // NEW = exactly one meta line "N pages · size · date" at 100% font.
+            assertEquals("the meta is ONE line at 100%", 1, card.metaView.maxLines)
         }
     }
 
@@ -192,7 +194,9 @@ class LibraryListCraftTest {
                 card.layout(0, 0, width, card.measuredHeight)
                 idle()
 
-                val texts = listOf(card.nameView, card.metaView, card.categoryView)
+                // Council §3: the category/folder row is gone, so only the name
+                // and the single meta line can overlap. OLD included card.categoryView.
+                val texts = listOf(card.nameView, card.metaView)
                     .filter { it.isShown && it.text.isNotBlank() }
                 val boxes = texts.map { it to rectIn(card, it) }
                 for (i in boxes.indices) for (j in i + 1 until boxes.size) {
@@ -401,15 +405,16 @@ class LibraryListCraftTest {
     }
 
     @Test
-    fun `the row names the folder in sentence case`() {
+    fun `the row has no second folder line and the meta is the only meta view`() {
+        // Council §3: OLD = a visible "Holidays" folder row under the meta.
+        // NEW = folder is never a second line on the card face (only search results
+        // carry it); the row shows name + one meta line only.
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Bank letter")
         repo.setFolder(listOf(id), "Holidays")
         launch { activity ->
             val card = cards(activity).single()
-            val folder = card.findViewById<TextView>(R.id.swDocFolder)
-            assertNotNull(folder)
-            assertTrue(folder.isVisible)
-            assertEquals("Holidays", folder.text.toString())
+            assertNull("no folder line on the card face", card.findViewById<View>(R.id.swDocFolder))
+            assertEquals(1, card.metaView.maxLines)
         }
     }
 }

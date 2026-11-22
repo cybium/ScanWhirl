@@ -11,6 +11,7 @@ import com.scanwhirl.app.model.ScanDocument
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -231,7 +232,10 @@ class KitComponentsTest {
     }
 
     @Test
-    fun `DocCard shows name, meta, category and protected badge`() {
+    fun `DocCard shows name, ONE meta line and a lock overlay on the thumb`() {
+        // Council §3: OLD = name + "4 pages..." + a "Forms" category row + a
+        // "Protected" badge on the name row. NEW = name + one meta line, with the
+        // lock as a 16dp scrim circle over the thumbnail and "Protected" spoken once.
         val doc = ScanDocument(
             id = "doc1",
             name = "Rent agreement",
@@ -249,8 +253,12 @@ class KitComponentsTest {
 
         assertEquals("Rent agreement", card.nameView.text.toString())
         assertEquals("4 pages · 1.2 MB · Yesterday", card.metaView.text.toString())
-        assertEquals("Forms", card.categoryView.text.toString())
-        assertTrue(card.lockBadge.isVisible)
+        assertEquals(1, card.metaView.maxLines)
+        assertTrue(card.lockIcon.isVisible)
+        assertNull("there is no category/folder view on the card face", card.findViewById<View>(R.id.swDocFolder))
+        assertNull("there is no name-line lock badge", card.findViewById<View>(R.id.swDocLockBadge))
+        assertTrue("TalkBack still says Protected once",
+            card.contentDescription?.toString()?.contains(app.getString(R.string.home_protected)) == true)
         card.shareButton.performClick()
         card.moreButton.performClick()
         assertTrue(shared)

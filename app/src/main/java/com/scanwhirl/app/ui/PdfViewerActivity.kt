@@ -28,6 +28,7 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.databinding.ActivityPdfViewerBinding
 import com.scanwhirl.app.databinding.ItemPdfPageBinding
+import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -760,17 +761,24 @@ class PdfViewerActivity : BaseActivity() {
             val thumbW = (38 * density).toInt()
             val thumbH = (50 * density).toInt()
             val margin = (5 * density).toInt()
+            // Council §4 / UI_100 §G1.9: a filmstrip cell is a page host too — the
+            // shared sw_canvas with a 1dp edge, never a near-white tile.
             val outline = com.scanwhirl.app.ui.kit.SwStyle.rounded(
-                this, ContextCompat.getColor(this, R.color.sw_paper_thumb), 5f
+                this,
+                ContextCompat.getColor(this, R.color.sw_cc_canvas), 4f,
+                stroke = ContextCompat.getColor(this, R.color.sw_cc_page_edge)
             )
             val shown = minOf(pageCount, 40)
             for (index in 0 until shown) {
                 val thumb = ImageView(this).apply {
                     tag = index
                     contentDescription = getString(R.string.page_indicator, index + 1, pageCount)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                     background = outline
-                    setPadding(0, 0, 0, 0)
+                    setPadding(
+                        SwStyle.dp(this@PdfViewerActivity, 3f), SwStyle.dp(this@PdfViewerActivity, 3f),
+                        SwStyle.dp(this@PdfViewerActivity, 3f), SwStyle.dp(this@PdfViewerActivity, 3f)
+                    )
                 }
                 findViewById<android.view.ViewGroup>(R.id.readerStripPages).addView(
                     thumb,

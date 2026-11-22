@@ -40,6 +40,8 @@
                 android:id="@+id/compressSourceThumbFrame"
                 android:layout_width="56dp"
                 android:layout_height="78dp"
+                android:background="@color/sw_cc_canvas"
+                android:foreground="@drawable/bg_canvas_page_edge"
                 android:importantForAccessibility="no">
 
                 <ImageView

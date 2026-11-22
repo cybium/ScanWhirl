@@ -410,14 +410,17 @@ class SearchSnippetTest {
             for (row in rows) {
                 val layout = row.metaView.layout
                 assertNotNull("the meta was laid out", layout)
-                val laid = layout!!
-                for (line in 0 until laid.lineCount) {
-                    assertEquals(
-                        "the whole meta is readable at compact width",
-                        0,
-                        laid.getEllipsisCount(line)
-                    )
-                }
+                // Council §3: OLD = the meta wrapped to two lines so the date stayed
+                // readable at this compact (320dp) width. NEW = ONE line at 100%,
+                // designed for 360/411dp; at 320dp END ellipsis is expected. The full
+                // text (pages, decimal size, date) stays in the TextView for TalkBack,
+                // and the 200% no-clip assertions in LibraryRailMetaFitTest are untouched.
+                assertEquals("the meta is one line at 100%", 1, row.metaView.maxLines)
+                assertTrue(
+                    "the full meta stays in the view for TalkBack: ${row.metaView.text}",
+                    row.metaView.text.toString().contains("Today") ||
+                        row.metaView.text.toString().contains("Yesterday")
+                )
             }
         }
     }
