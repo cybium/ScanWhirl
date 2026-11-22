@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FF-P: Passport delivers the right asset. Examples are not portal promises. -->
+    <string name="ffp_what_need">What do you need?</string>
+    <string name="ffp_need_photo">Photo file</string>
+    <string name="ffp_need_print">Print sheet</string>
+    <string name="ffp_centre_note">For many appointments in India, your photo is taken at the centre. Check your service\'s instructions.</string>
+    <string name="ffp_manual_framing">Frame your whole face and ears on a plain light background.</string>
+
+    <string name="ffp_example_mission">Indian mission guidance, 14 Oct 2026</string>
+    <string name="ffp_example_mission_px">630 × 810 px</string>
+    <string name="ffp_example_custom">Your own size</string>
+    <string name="ffp_width_label">Width (px)</string>
+    <string name="ffp_height_label">Height (px)</string>
+    <string name="ffp_min_kb_label">Min KB (optional)</string>
+    <string name="ffp_max_kb_label">Max KB (optional)</string>
+    <string name="ffp_band_hint">px</string>
+
+    <string name="ffp_sheet_label">Sheet size</string>
+    <string name="ffp_sheet_a4">A4</string>
+    <string name="ffp_sheet_10x15">10 × 15 cm</string>
+    <string name="ffp_box_note">Each photo is placed in a 35 × 45 mm box.</string>
+
+    <string name="ffp_apply_photo">Make photo file</string>
+    <string name="ffp_apply_print">Make print sheet</string>
+
+    <string name="ffp_note_measured">Made %1$s: %2$d bytes, %3$d × %4$d px, %5$d DPI.</string>
+    <string name="ffp_note_band_ok">Inside your %1$s to %2$s band.</string>
+    <string name="ffp_note_band_miss">Size band missed: file is %1$s; you asked for %2$s to %3$s. Check your form\'s rule.</string>
+    <string name="ffp_note_band_none">No file-size band was set.</string>
+    <string name="ffp_note_source_kept">Your original photo was not changed.</string>
+    <string name="ffp_note_no_validation">This only sizes a file. It does not check photo rules or portal acceptance.</string>
+    <string name="ffp_note_print">Print sheet: %1$s, %2$d copies, each in a 35 × 45 mm box.</string>
+
+    <string name="ffp_error_band">Enter both a minimum and a maximum, or leave both empty.</string>
+    <string name="ffp_error_size">Use a size up to %1$d px.</string>
+    <string name="ffp_out_of_memory">This phone could not hold the photo at this size. Try a smaller crop.</string>
+    <string name="ffp_preparing">Preparing your photo…</string>
+</resources>
