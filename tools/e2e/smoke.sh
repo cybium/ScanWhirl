@@ -9,7 +9,8 @@
 #     and the centre Create sheet actually render - each tap comes from a fresh
 #     `uiautomator dump` (view ids set by the app), never a fixed coordinate;
 #   * both UI languages (en, hi) and 1.0x / 2.0x font scale draw real screens;
-#   * the app survives one rotation on the Library;
+#   * a forced landscape request keeps a phone in portrait and does not kill the app
+#     (owner policy: phones portrait-only; ScanWhirlApp sets portrait on every activity);
 #   * no FATAL EXCEPTION / ANR for the test package appears in logcat and the
 #     app process is still alive at the end;
 #   * two generated (self-authored) PDFs can be placed in /sdcard/Download.
@@ -369,11 +370,15 @@ if launch_until_library 90; then
         if [ -n "$pid_after" ] && [ "$pid_after" = "$pid_before" ] && wait_id swNavLibrary 45; then
             if shoot "rotation_landscape"; then
                 observed=$(xml_rotation "$OUT/rotation_landscape.xml")
-                if [ "$observed" = "1" ]; then
-                    record "rotation/library-landscape" PASS "$SHOT_DETAIL; actual hierarchy rotation=1"
-                    note "process $pid_before survived an ACTUAL rotation"
+                # Owner policy: phones are portrait-only (ScanWhirlApp applies
+                # SCREEN_ORIENTATION_PORTRAIT to every activity; Book is the exception).
+                # A forced landscape request must therefore keep the phone portrait and
+                # must not kill the process. Rotating to landscape would be the failure.
+                if [ "$observed" = "0" ]; then
+                    record "rotation/phone-stays-portrait" PASS "$SHOT_DETAIL; portrait held under forced landscape request"
+                    note "process $pid_before survived a forced landscape request in portrait policy"
                 else
-                    record "rotation/library-landscape" FAIL "WindowManager rotation not applied; observed=$observed; $SHOT_DETAIL"
+                    record "rotation/phone-stays-portrait" FAIL "phone rotated to landscape despite portrait policy; observed=$observed; $SHOT_DETAIL"
                 fi
             else
                 record "rotation/library-landscape" FAIL "blank/unreadable rotated frame: $SHOT_DETAIL"
