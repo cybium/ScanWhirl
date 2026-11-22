@@ -14,6 +14,19 @@ if [ "${#emulators[@]}" -ne 1 ]; then
 fi
 export ANDROID_SERIAL="${emulators[0]}"
 test "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = "1"
+# The build job produced the same test APK the smoke leg installs. Atlas must
+# install it itself: its emulator is a separate, fresh AVD.
+APK="${APK:-$(cd "$HERE/../../.." && pwd)/test-apk/app-debug.apk}"
+if [ ! -s "$APK" ]; then
+    echo "FATAL: test APK missing at $APK" >&2
+    exit 2
+fi
+mkdir -p "${ATLAS_OUT:-$(cd "$HERE/../../.." && pwd)/artifacts/atlas}"
+adb install -r "$APK" 2>&1 | tee "${ATLAS_OUT:-$(cd "$HERE/../../.." && pwd)/artifacts/atlas}/install.txt"
+adb shell settings put global window_animation_scale 0 >/dev/null 2>&1
+adb shell settings put global transition_animation_scale 0 >/dev/null 2>&1
+adb shell settings put global animator_duration_scale 0 >/dev/null 2>&1
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 # No binary is committed: build the fictional corpus on the runner. The verifier
 # needs numpy/Pillow/pypdf/pypdfium2; the generator needs Pillow/reportlab.
 python3 -m pip install --quiet numpy Pillow pypdf pypdfium2 reportlab
@@ -25,4 +38,6 @@ if [ -z "${ATLAS_TOOLS:-}" ] && [ -f "$HERE/selected_tools.txt" ]; then
     export ATLAS_TOOLS="$(tr -d '\r\n' < "$HERE/selected_tools.txt")"
 fi
 mkdir -p "$ATLAS_OUT"
+# Always leave a report in the artifact, even if a harness precondition aborts.
+printf '# Tool Atlas - harness did not complete\n\nSee the job log for the precondition failure.\n' > "$ATLAS_OUT/ATLAS_REPORT.md"
 python3 "$HERE/atlas_driver.py"

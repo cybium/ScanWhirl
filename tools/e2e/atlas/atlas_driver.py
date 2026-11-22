@@ -133,7 +133,8 @@ def soft_tap(**want):
 
 
 def type_text(text):
-    adb("shell", "input", "text", text)
+    # `adb shell input text` treats a literal space as a key separator; encode it.
+    adb("shell", "input", "text", str(text).replace(" ", "%s"))
     time.sleep(0.3)
     back()  # dismiss keyboard only
 
