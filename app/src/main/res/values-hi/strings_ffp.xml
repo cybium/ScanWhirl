@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FF-P: Hindi parity for the Passport output choices. "Custom" is "अपनी पसंद". -->
+    <string name="ffp_what_need">आपको क्या चाहिए?</string>
+    <string name="ffp_need_photo">फ़ोटो फ़ाइल</string>
+    <string name="ffp_need_print">प्रिंट शीट</string>
+    <string name="ffp_centre_note">भारत में कई आवेदनों में फ़ोटो केंद्र पर ली जाती है। अपने आवेदन के निर्देश जाँचें।</string>
+    <string name="ffp_manual_framing">सादे हल्के रंग की पृष्ठभूमि में अपना पूरा चेहरा और कान दिखाएँ।</string>
+
+    <string name="ffp_example_mission">भारतीय मिशन मार्गदर्शिका, 14 अक्टूबर 2026</string>
+    <string name="ffp_example_mission_px">630 × 810 px</string>
+    <string name="ffp_example_custom">अपनी पसंद</string>
+    <string name="ffp_width_label">चौड़ाई (px)</string>
+    <string name="ffp_height_label">ऊँचाई (px)</string>
+    <string name="ffp_min_kb_label">न्यूनतम KB (वैकल्पिक)</string>
+    <string name="ffp_max_kb_label">अधिकतम KB (वैकल्पिक)</string>
+    <string name="ffp_band_hint">px</string>
+
+    <string name="ffp_sheet_label">शीट का आकार</string>
+    <string name="ffp_sheet_a4">A4</string>
+    <string name="ffp_sheet_10x15">10 × 15 cm</string>
+    <string name="ffp_box_note">हर फ़ोटो 35 × 45 mm के डिब्बे में रखी जाएगी।</string>
+
+    <string name="ffp_apply_photo">फ़ोटो फ़ाइल बनाएँ</string>
+    <string name="ffp_apply_print">प्रिंट शीट बनाएँ</string>
+
+    <string name="ffp_note_measured">%1$s बनाई गई: %2$d बाइट, %3$d × %4$d px, %5$d DPI।</string>
+    <string name="ffp_note_band_ok">आपके %1$s से %2$s आकार के भीतर।</string>
+    <string name="ffp_note_band_miss">आकार का लक्ष्य नहीं मिला: फ़ाइल %1$s है; आपने %2$s से %3$s माँगा था। अपने फ़ॉर्म का नियम जाँचें।</string>
+    <string name="ffp_note_band_none">कोई फ़ाइल-आकार सीमा नहीं रखी गई।</string>
+    <string name="ffp_note_source_kept">आपकी मूल फ़ोटो नहीं बदली गई।</string>
+    <string name="ffp_note_no_validation">यह सिर्फ़ फ़ाइल का आकार तय करता है। यह फ़ोटो नियम या पोर्टल स्वीकृति नहीं जाँचता।</string>
+    <string name="ffp_note_print">प्रिंट शीट: %1$s, %2$d प्रतियाँ, हर एक 35 × 45 mm के डिब्बे में।</string>
+
+    <string name="ffp_error_band">न्यूनतम और अधिकतम दोनों भरें, या दोनों खाली छोड़ें।</string>
+    <string name="ffp_error_size">अधिकतम %1$d px तक का आकार इस्तेमाल करें।</string>
+    <string name="ffp_out_of_memory">इस फ़ोन में इस आकार की फ़ोटो नहीं रखी जा सकी। छोटा फ़्रेम आज़माएँ।</string>
+    <string name="ffp_preparing">आपकी फ़ोटो तैयार की जा रही है…</string>
+</resources>
