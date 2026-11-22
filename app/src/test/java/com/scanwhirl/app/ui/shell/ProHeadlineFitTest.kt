@@ -104,13 +104,18 @@ class ProHeadlineFitTest {
     }
 
     @Test
-    fun `the Pro promise and title wrap inside the margins at 200 percent`() {
+    fun `the Pro all-tools action and title wrap inside the margins at 200 percent`() {
         RuntimeEnvironment.setFontScale(2.0f)
         val (activity, screen) = proScreen()
         val all = texts(screen)
-        val promise = all.firstOrNull { it.text.toString() == activity.getString(R.string.pro_sub_compact) }
-        assertNotNull("the Pro promise is on the screen", promise)
-        checkInside(activity, promise!!, "Pro promise")
+        // OLD: the compact sales promise (pro_sub_compact) was deleted by COPY_DIET PRO2.
+        val expected = activity.getString(
+            R.string.copydiet_pro2_all_tools,
+            com.scanwhirl.app.ui.kit.ToolRegistry.proCount()
+        )
+        val promise = all.firstOrNull { it.text.toString() == expected }
+        assertNotNull("the single All tools action is on the screen", promise)
+        checkInside(activity, promise!!, "All Pro tools")
 
         val title = all.firstOrNull {
             it.text.toString().startsWith(activity.getString(R.string.pro_title_prefix).trim()) &&
@@ -121,14 +126,16 @@ class ProHeadlineFitTest {
     }
 
     @Test
-    fun `the Hindi Pro promise wraps inside the margins at 200 percent`() {
+    fun `the Hindi Pro all-tools action wraps inside the margins at 200 percent`() {
         RuntimeEnvironment.setFontScale(2.0f)
         RuntimeEnvironment.setQualifiers("hi-rIN-w320dp-h640dp-xhdpi")
         val (activity, screen) = proScreen()
-        val promise = texts(screen).firstOrNull {
-            it.text.toString() == activity.getString(R.string.pro_sub_compact)
-        }
-        assertNotNull("the Hindi Pro promise is on the screen", promise)
-        checkInside(activity, promise!!, "Pro promise (hi)")
+        val expected = activity.getString(
+            R.string.copydiet_pro2_all_tools,
+            com.scanwhirl.app.ui.kit.ToolRegistry.proCount()
+        )
+        val promise = texts(screen).firstOrNull { it.text.toString() == expected }
+        assertNotNull("the Hindi All tools action is on the screen", promise)
+        checkInside(activity, promise!!, "All tools (hi)")
     }
 }

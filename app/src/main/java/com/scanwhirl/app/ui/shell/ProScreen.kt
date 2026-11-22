@@ -54,7 +54,6 @@ class ProScreen(
     private val featureCells = mutableListOf<View>()
     private lateinit var priceCard: View
     private lateinit var priceValue: TextView
-    private lateinit var priceSuffix: TextView
     private lateinit var priceWrap: FrameLayout
     private lateinit var buyWrap: FrameLayout
     private lateinit var restoreRow: TextView
@@ -115,10 +114,10 @@ class ProScreen(
         // top, so the pinned offer stays the compact two-row price + purchase bar (no four-row
         // footer covering the promise chips at 130/200%).
         priceStatus = SwStyle.text(
-            context, 12f, SwStyle.color(context, R.color.laser_danger), bold = true, metadata = true
+            context, 16f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true
         ).apply {
             id = R.id.swProPriceStatus
-            text = context.getString(R.string.ux130_l5_pro_price_unavailable)
+            text = context.getString(R.string.copydiet_pro2_price_unavailable)
             visibility = View.GONE
         }
         // Added just after the promise row below, so the chips keep their measured viewport.
@@ -164,7 +163,7 @@ class ProScreen(
             context.getString(R.string.pro_title_pro)
         val titleGold = SwStyle.color(context, R.color.gold_pro_primary)
         val title = SwStyle.text(
-            context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true
+            context, 22f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true
         ).apply {
             text = android.text.SpannableString(titleText).apply {
                 val proStart = titleText.lastIndexOf(context.getString(R.string.pro_title_pro))
@@ -183,12 +182,15 @@ class ProScreen(
         }
         content.addView(title, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         titleRow = title
-        subtitle = SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-            text = context.getString(if (active) R.string.pro_active_sub else R.string.pro_sub_compact)
+        subtitle = SwStyle.text(context, 16f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true).apply {
+            // COPY_DIET PRO2: the compact sales slogan is deleted — the price card already owns
+            // "One payment. No subscription." The owned status is a short P line, not a grey
+            // thank-you paragraph.
+            text = context.getString(R.string.copydiet_pro2_active_sub)
             gravity = Gravity.CENTER
-            // ATLAS-F2 (026): the promise wraps inside the margins. It used to run edge to edge
-            // and stop at two lines, which dropped the end of the sentence at large fonts.
+            // ATLAS-F2 (026): wraps inside the margins instead of running edge to edge.
             setPadding(SwStyle.dp(context, 14f), 0, SwStyle.dp(context, 14f), 0)
+            visibility = if (active) View.VISIBLE else View.GONE
         }
         content.addView(
             subtitle,
@@ -232,7 +234,7 @@ class ProScreen(
         // PRO2: the missing-price status is paired with an explicit retry that re-queries Play's
         // product details. The buy path stays disabled until Play actually answers.
         retryButton = SwStyle.text(
-            context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true
+            context, 14f, SwStyle.color(context, R.color.copydiet_pro2_accent), bold = true
         ).apply {
             id = R.id.swProPriceRetry
             text = context.getString(R.string.ux130_l5_pro_price_retry)
@@ -287,9 +289,10 @@ class ProScreen(
         }
         content.addView(feat)
 
-        moreRow = SwStyle.text(context, 14f, SwStyle.color(context, R.color.gold_pro_primary), bold = true).apply {
+        moreRow = SwStyle.text(context, 14f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true).apply {
             id = R.id.swProMore
-            text = context.getString(R.string.pro_more_tools, ToolRegistry.proCount())
+            text = context.getString(R.string.copydiet_pro2_all_tools, ToolRegistry.proCount())
+            contentDescription = text
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
@@ -330,19 +333,16 @@ class ProScreen(
             orientation = HORIZONTAL
             gravity = Gravity.BOTTOM
         }
-        priceValue = SwStyle.text(context, 30f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+        priceValue = SwStyle.text(context, 28f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true).apply {
             id = R.id.swProPrice
         }
         priceRow.addView(priceValue)
-        priceSuffix = SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-            text = context.getString(R.string.pro_one_time)
-            setPadding(SwStyle.dp(context, 6f), 0, 0, SwStyle.dp(context, 3f))
-        }
-        priceRow.addView(priceSuffix)
         priceText.addView(priceRow)
+        // COPY_DIET PRO2: the "one time" suffix is deleted; this single S14 line is the only
+        // payment disclosure next to the P28 Play price.
         priceText.addView(
-            SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
-                text = context.getString(R.string.ux130_l5_pro_once)
+            SwStyle.text(context, 14f, SwStyle.color(context, R.color.copydiet_pro2_secondary), bold = true).apply {
+                text = context.getString(R.string.copydiet_pro2_once)
             }
         )
         price.addView(priceText, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
@@ -393,7 +393,7 @@ class ProScreen(
             // live in the immediately discoverable action area beside the purchase control.
             continueFree = SwStyle.quietAction(
                 context,
-                SwStyle.text(context, 14f, SwStyle.color(context, R.color.rv_accent), bold = true)
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.copydiet_pro2_accent), bold = true)
             ).apply {
                 id = R.id.swProContinueFree
                 text = context.getString(R.string.ux130_l5_pro_continue_free)
@@ -404,7 +404,7 @@ class ProScreen(
             }
             restoreRow = SwStyle.quietAction(
                 context,
-                SwStyle.text(context, 14f, SwStyle.color(context, R.color.text_hologram_hi), bold = true)
+                SwStyle.text(context, 14f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true)
             ).apply {
                 id = R.id.swProRestoreAction
                 text = context.getString(R.string.ux130_l5_pro_restore)
@@ -554,9 +554,8 @@ class ProScreen(
         priceValue.text = if (known) amount else context.getString(R.string.pro_price_play)
         priceValue.setTextSize(
             android.util.TypedValue.COMPLEX_UNIT_SP,
-            if (known) 30f else 15f
+            if (known) 28f else 16f
         )
-        priceSuffix.visibility = if (known) View.VISIBLE else View.GONE
         // S2 item 9: a missing price is an honest status on the BUY screen, not a claim that
         // payment is unavailable. An already-owned (active) screen has no price/Unlock row at all,
         // so a missing Play price must not surface a purchase-price error there.
@@ -731,7 +730,7 @@ class ProScreen(
                 .apply { marginEnd = SwStyle.dp(context, 10f) }
         )
         cell.addView(
-            SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+            SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true).apply {
                 text = context.getString(label)
                 // UX5-3: SwStyle.text applied the 13.5sp token; no px cap. Three wrap lines are
                 // allowed so the measured height always matches the laid-out text at 130/200%.
