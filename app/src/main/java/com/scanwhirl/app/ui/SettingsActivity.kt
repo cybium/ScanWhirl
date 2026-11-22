@@ -4,16 +4,22 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivitySettingsBinding
 import com.scanwhirl.app.util.Prefs
+import com.scanwhirl.app.util.PrivacySweep
+import com.scanwhirl.app.util.SizeUnits
+import com.scanwhirl.app.util.TextSizePrefs
+import java.io.File
 
 class SettingsActivity : BaseActivity() {
 
@@ -69,6 +75,16 @@ class SettingsActivity : BaseActivity() {
 
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }
+        // Lane Z rows: text size, storage, and permission-free support actions.
+        binding.rowTextSize.setOnClickListener { chooseTextSize() }
+        binding.rowClearTemp.setOnClickListener { clearTemporaryFiles() }
+        binding.rowRate.setOnClickListener { rateScanWhirl() }
+        binding.rowFeedback.setOnClickListener { sendFeedback() }
+        // No invented support address ships: hide the row until the lead fills the constant.
+        if (supportEmail() == PLACEHOLDER_SUPPORT_EMAIL) {
+            binding.rowFeedback.visibility = View.GONE
+            binding.dividerFeedback.visibility = View.GONE
+        }
         binding.rowGreeting.setOnClickListener {
             binding.switchGreeting.isChecked = !binding.switchGreeting.isChecked
         }
@@ -137,7 +153,9 @@ class SettingsActivity : BaseActivity() {
     /** Rows whose label lives on child TextViews: the clickable node owns the words instead. */
     private fun nameRowsForTalkBack() {
         val rows = listOf(
-            R.id.rowFont, R.id.rowLanguage, R.id.rowOcrLanguage, R.id.rowViewer, R.id.rowPrivacy
+            R.id.rowFont, R.id.rowLanguage, R.id.rowOcrLanguage, R.id.rowViewer, R.id.rowPrivacy,
+            R.id.rowTextSize, R.id.rowLibrarySize, R.id.rowTempSize, R.id.rowClearTemp,
+            R.id.rowRate, R.id.rowFeedback
         )
         for (id in rows) {
             val row = findViewById<android.view.View>(id) ?: continue
@@ -442,6 +460,8 @@ class SettingsActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Lane Z item 3: the two storage sizes are disk I/O, never on the main thread.
+        refreshStorageSizes()
         // M07: Trash count, read off the main thread.
         val repo = com.scanwhirl.app.store.ScanRepository(this)
         lifecycleScope.launch {
@@ -484,6 +504,194 @@ class SettingsActivity : BaseActivity() {
                 getString(ocrLanguageLabel(com.scanwhirl.app.util.OcrLanguageSettings.get(this)))
             )
         }
+        // Lane Z item 1: the label plus the honest multiplier under it.
+        val sizeMode = TextSizePrefs.mode(this)
+        binding.subTextSize.setText(textSizeLabel(sizeMode))
+        binding.textSizePercent.text =
+            getString(R.string.cz_text_size_preview, TextSizePrefs.percent(sizeMode))
+    }
+
+    // ---- Lane Z: Text size ---------------------------------------------------
+
+    private fun textSizeLabel(mode: String): Int = when (mode) {
+        TextSizePrefs.MODE_SMALL -> R.string.cz_text_size_small
+        TextSizePrefs.MODE_LARGE -> R.string.cz_text_size_large
+        TextSizePrefs.MODE_LARGEST -> R.string.cz_text_size_largest
+        else -> R.string.cz_text_size_default
+    }
+
+    /** Persist the choice and recreate: BaseActivity reads it in attachBaseContext. */
+    private fun chooseTextSize() {
+        val modes = TextSizePrefs.MODES
+        val labels = modes.map { getString(textSizeLabel(it)) }
+        val checked = modes.indexOf(TextSizePrefs.mode(this)).coerceAtLeast(0)
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.cz_text_size_title)
+            .setOptions(labels, checked) { which, _ ->
+                TextSizePrefs.setMode(this, modes[which])
+                recreate()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    // ---- Lane Z: Storage -----------------------------------------------------
+
+    /** Recursive size of one directory tree; a single unreadable child is skipped. */
+    private fun File.dirSize(): Long {
+        if (!exists()) return 0L
+        if (isFile) return length()
+        return listFiles()?.fold(0L) { total, child ->
+            total + runCatching { child.dirSize() }.getOrDefault(0L)
+        } ?: 0L
+    }
+
+    /**
+     * Only the cache entries PrivacySweep may delete. Nothing under filesDir is
+     * ever measured here as "temporary": the library, Vault, drafts, trash and
+     * in-progress work are excluded both from this number and from the clear action.
+     */
+    private fun temporaryBytes(): Long {
+        val cache = cacheDir ?: return 0L
+        val jobRunning = runCatching { PrivacySweep.backupRunning() }.getOrDefault(false)
+        val vaultUnlocked = runCatching {
+            com.scanwhirl.app.store.vault.VaultSession.isUnlocked()
+        }.getOrDefault(false)
+        var total = 0L
+        PrivacySweep.CACHE_DIRS.forEach { name ->
+            if (name == "vault_open" && vaultUnlocked) return@forEach
+            if (name == "fullbackup" && jobRunning) return@forEach
+            total += File(cache, name).dirSize()
+        }
+        cache.listFiles()?.forEach { file ->
+            val plainFile = file.isFile &&
+                PrivacySweep.CACHE_FILE_PREFIXES.any { file.name.startsWith(it) }
+            val plainDir = file.isDirectory &&
+                PrivacySweep.CACHE_DIR_PREFIXES.any { file.name.startsWith(it) }
+            val backupTemp = PrivacySweep.BACKUP_CACHE_PREFIXES.any { file.name.startsWith(it) }
+            when {
+                plainFile -> total += file.length()
+                plainDir -> total += file.dirSize()
+                backupTemp && !jobRunning ->
+                    total += if (file.isDirectory) file.dirSize() else file.length()
+            }
+        }
+        val documents = File(cache, "documents")
+        if (documents.isDirectory) {
+            documents.listFiles()?.forEach { child ->
+                if (child.name != "share") {
+                    total += if (child.isDirectory) child.dirSize() else child.length()
+                }
+            }
+        }
+        return total
+    }
+
+    private fun refreshStorageSizes() {
+        lifecycleScope.launch {
+            val sizes = withContext(Dispatchers.IO) {
+                storageThreadProbe?.invoke(Thread.currentThread().name)
+                File(filesDir, "documents").dirSize() to temporaryBytes()
+            }
+            binding.subLibrarySize.text = SizeUnits.format(sizes.first)
+            binding.subTempSize.text = SizeUnits.format(sizes.second)
+        }
+    }
+
+    /** The only delete this row performs is the same safe sweep used at cold start. */
+    private fun clearTemporaryFiles() {
+        binding.rowClearTemp.isEnabled = false
+        lifecycleScope.launch {
+            val freed = withContext(Dispatchers.IO) {
+                storageThreadProbe?.invoke(Thread.currentThread().name)
+                val before = temporaryBytes()
+                runCatching { PrivacySweep.run(applicationContext) }.getOrDefault(0)
+                val after = temporaryBytes()
+                (before - after).coerceAtLeast(0L)
+            }
+            withContext(Dispatchers.Main) {
+                binding.storageReceipt.text = if (freed > 0L) {
+                    getString(R.string.cz_storage_cleared, SizeUnits.format(freed))
+                } else {
+                    getString(R.string.cz_storage_nothing)
+                }
+                binding.rowClearTemp.isEnabled = true
+                refreshStorageSizes()
+            }
+        }
+    }
+
+    // ---- Lane Z: Rate and feedback ------------------------------------------
+
+    /**
+     * Permission-free fallback for a sideload/demo build or when the In-App Review
+     * API cannot reach Play. Never uses INTERNET in this app's own process.
+     */
+    internal fun openPlayListing() {
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
+        val web = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+        )
+        try {
+            if (market.resolveActivity(packageManager) != null) {
+                startActivity(market)
+                return
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            if (web.resolveActivity(packageManager) != null) {
+                startActivity(web)
+                return
+            }
+        } catch (_: Exception) {
+        }
+        // No resolver match (sideload/demo or a stripped test environment): still hand
+        // the https URL to the system. A real device with a browser opens it; a device
+        // with neither throws ActivityNotFoundException, which we swallow silently.
+        try {
+            startActivity(web)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun rateScanWhirl() {
+        val injected = reviewLauncher
+        if (injected != null) {
+            injected(this)
+            return
+        }
+        try {
+            val manager = com.google.android.play.core.review.ReviewManagerFactory.create(this)
+            manager.requestReviewFlow().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    // The API never reports whether the dialog was actually shown; do not
+                    // present a success/failure dialog of our own (Play guidance).
+                    manager.launchReviewFlow(this, task.result)
+                } else {
+                    openPlayListing()
+                }
+            }
+        } catch (_: Throwable) {
+            openPlayListing()
+        }
+    }
+
+    /** Null while the support address is still the placeholder. */
+    internal fun buildFeedbackIntent(): Intent? {
+        val email = supportEmail()
+        if (email == PLACEHOLDER_SUPPORT_EMAIL) return null
+        return Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
+            .putExtra(Intent.EXTRA_EMAIL, arrayOf(email))
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.cz_feedback_subject))
+    }
+
+    private fun sendFeedback() {
+        val intent = buildFeedbackIntent() ?: return
+        if (intent.resolveActivity(packageManager) == null) return
+        startActivity(Intent.createChooser(intent, getString(R.string.cz_feedback)))
     }
 
     private fun openPrivacy() {
@@ -598,6 +806,15 @@ class SettingsActivity : BaseActivity() {
     }
 
     companion object {
+        // TODO(lead): replace with ScanWhirl's real support address before release.
+        // Until then the Send feedback row stays hidden — no invented real email ships.
+        const val PLACEHOLDER_SUPPORT_EMAIL = "support@example.invalid"
+        internal var supportEmailOverride: String? = null
+        internal var storageThreadProbe: ((String) -> Unit)? = null
+        internal var reviewLauncher: ((android.app.Activity) -> Unit)? = null
+
+        internal fun supportEmail(): String = supportEmailOverride ?: PLACEHOLDER_SUPPORT_EMAIL
+
         fun intent(context: android.content.Context): Intent =
             Intent(context, SettingsActivity::class.java)
     }

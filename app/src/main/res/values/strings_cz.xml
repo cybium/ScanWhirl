@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lane Z: Text size, Storage, Rate/Feedback and the honest uninstall note.
+     English source; values-hi/strings_cz.xml is the Hindi pair. Only lane N edits
+     the existing strings*.xml files, so every new key lives here. -->
+<resources>
+    <!-- Item 1: Text size -->
+    <string name="cz_text_size_title">Text size</string>
+    <string name="cz_text_size_small">Small</string>
+    <string name="cz_text_size_default">Default (follows phone)</string>
+    <string name="cz_text_size_large">Large</string>
+    <string name="cz_text_size_largest">Largest</string>
+    <!-- The multiplier is stated, not a promise of a 200% redesign. -->
+    <string name="cz_text_size_preview">Preview · %1$d%% of your phone\'s text size</string>
+    <string name="cz_text_size_sample">Aa आ अ 123</string>
+
+    <!-- Item 3: Storage -->
+    <string name="cz_storage_section">Storage</string>
+    <string name="cz_loading">…</string>
+    <string name="cz_storage_library">Library size</string>
+    <string name="cz_storage_temporary">Temporary files size</string>
+    <string name="cz_storage_clear">Clear temporary files</string>
+    <string name="cz_storage_cleared">Freed %1$s of temporary files. Library and Vault untouched.</string>
+    <string name="cz_storage_nothing">Nothing to clear. Temporary files are already empty.</string>
+
+    <!-- Item 2: Rate and feedback -->
+    <string name="cz_support_section">Support</string>
+    <string name="cz_rate">Rate ScanWhirl</string>
+    <string name="cz_feedback">Send feedback</string>
+    <string name="cz_feedback_subject">ScanWhirl feedback</string>
+
+    <!-- Item 4: what Android deletes on uninstall (only the encrypted backup restores it). -->
+    <string name="cz_uninstall_note">Uninstalling removes your documents and Vault from this phone. Make a backup first.</string>
+</resources>
