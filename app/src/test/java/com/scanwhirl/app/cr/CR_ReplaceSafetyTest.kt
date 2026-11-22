@@ -108,9 +108,9 @@ class CR_ReplaceSafetyTest {
             repo.trashHasIdentity(key, id, requireNotNull(journal.findBySource(source)?.opId)))
 
         val restored = coordinator.undoByTrashKey(key).getOrThrow()
-        assertEquals(before, hashes(restored.id))
+        assertEquals(before, hashes(restored.restoredId))
         assertEquals(foreignBefore, hashes(foreign))
-        assertEquals(ReplaceJournal.STATE_UNDO, journal.findByTrashKey(key)?.state)
+        assertEquals(ReplaceJournal.STATE_UNDONE, journal.findBySource(source)?.state)
     }
 
     @Test
@@ -182,8 +182,8 @@ class CR_ReplaceSafetyTest {
         File(repo.docsDir, squatter).copyRecursively(File(repo.docsDir, source))
         assertNotNull(repo.getDocument(source))
         val restored = coordinator.undoByTrashKey(key).getOrThrow()
-        assertFalse("no overwrite of the squatter", restored.id == source)
-        assertEquals(before, hashes(restored.id))
+        assertFalse("no overwrite of the squatter", restored.restoredId == source)
+        assertEquals(before, hashes(restored.restoredId))
         assertEquals("squatter", repo.getDocument(source)?.name)
     }
 

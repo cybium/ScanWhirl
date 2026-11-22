@@ -1,11 +1,13 @@
 package com.scanwhirl.app.util
 
+import com.scanwhirl.app.BuildConfig
+
 /**
- * Lane CR feature flag for "Replace original".
+ * Lane CR feature flag for "Replace original". Ships OFF (COUNCIL §5).
  *
- * Ships OFF. It may only be switched on after a GPT Sol security GO and an
- * owner phone drill (COUNCIL_DECISIONS §5). Tests can opt in through
- * [testOverride]; production always reads [ENABLED] unless a test sets it.
+ * The mutable [testOverride] seam is honoured ONLY in debug/test builds.
+ * Production release ignores it entirely, so a stray test setter can never
+ * enable this feature in a shipped build.
  */
 object ReplaceFeature {
     const val ENABLED = false
@@ -13,7 +15,14 @@ object ReplaceFeature {
     @Volatile
     var testOverride: Boolean? = null
 
-    fun isEnabled(): Boolean = testOverride ?: ENABLED
+    /** Pure form so a test can prove release config cannot be flipped. */
+    fun resolve(allowOverride: Boolean, override: Boolean?): Boolean =
+        if (allowOverride) override ?: ENABLED else ENABLED
+
+    fun isEnabled(): Boolean = resolve(
+        allowOverride = BuildConfig.DEBUG || BuildConfig.TEST_BUILD,
+        override = testOverride
+    )
 
     internal fun resetForTests() {
         testOverride = null

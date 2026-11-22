@@ -1506,6 +1506,9 @@ class ScanRepository(private val context: Context) {
      * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
     fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
+        // Lane CR: central reconciliation BEFORE any expiry path. Every caller
+        // (app startup, Home, Trash screen, this sweep) is covered by this line.
+        runCatching { ReplaceJournal(context).recoverBeforeExpiry(this) }
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
@@ -5307,6 +5310,22 @@ class ScanRepository(private val context: Context) {
         }
     }
 
+    /**
+     * After a DONE journal passes its Trash window, release the Replace-specific
+     * expiry guard so the ordinary 30-day purge can finally reclaim the entry.
+     */
+    fun replaceReleaseExpiryGuard(trashKey: String): Boolean = synchronized(TRASH_LOCK) {
+        val dir = File(trashDir, trashKey)
+        if (!dir.isDirectory) return@synchronized false
+        val marker = File(dir, TRASH_MARKER)
+        val lines = runCatching { marker.readLines() }.getOrNull()
+            ?.filterNot { it.startsWith("previous=") } ?: return@synchronized false
+        runCatching {
+            Durable.atomicWriteText(marker, lines.joinToString("\n") + "\n")
+            File(dir, REPLACE_OP_MARKER).delete()
+        }.isSuccess
+    }
+
     /** Finds a Trash entry this operation moved, even if the key was never journalled. */
     fun replaceTrashKeyForOp(opId: String): String? = synchronized(TRASH_LOCK) {
         trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
@@ -5314,6 +5333,41 @@ class ScanRepository(private val context: Context) {
                 runCatching { File(dir, REPLACE_OP_MARKER).readText().trim() }.getOrNull() == opId
             }?.name
     }
+
+    /**
+     * Commit guard: revalidates BOTH recorded fingerprints and the tool
+     * provenance under the SEC2 lock order, then asks the caller to consume the
+     * single-use authorization inside the same critical section.
+     */
+    fun replaceCommitGuard(
+        sourceId: String, outputId: String, sourceFp: String, outputFp: String,
+        tool: String, authorize: () -> Boolean
+    ): Boolean {
+        var ok = false
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    if (tool in REPLACE_OPERATIONS && sourceId != outputId &&
+                        replaceDocIdentity(sourceId) == sourceFp &&
+                        replaceDocIdentity(outputId) == outputFp
+                    ) {
+                        val source = getDocument(sourceId)
+                        val output = getDocument(outputId)
+                        if (source != null && output != null &&
+                            !source.isLocked && !source.isVaulted &&
+                            !output.isLocked && !output.isVaulted
+                        ) {
+                            ok = authorize()
+                        }
+                    }
+                }
+            }
+        }
+        return ok
+    }
+
+    /** Cheap, non-hashing first gate for the result screen. */
+    fun replaceToolAllowed(tool: String): Boolean = tool in REPLACE_OPERATIONS
 
     /** Only these transforms are in scope; every other tool keeps both files. */
     fun replaceIsEligible(sourceId: String, outputId: String, operation: String): Boolean {
@@ -5343,23 +5397,39 @@ class ScanRepository(private val context: Context) {
                     if (doc.isLocked || doc.isVaulted) {
                         throw IOException("A protected source cannot be replaced")
                     }
-                    val key = moveToTrash(sourceId)
-                        ?: throw IOException("The source is no longer in the library")
-                    val marker = File(File(trashDir, key), TRASH_MARKER)
-                    val lines = runCatching { marker.readLines() }.getOrNull()?.toMutableList()
-                        ?: mutableListOf("v1", sourceId, System.currentTimeMillis().toString())
-                    val previous = "previous=$opId"
-                    if (lines.none { it.startsWith("previous=") }) lines += previous
-                    else lines.indices.forEach { i ->
-                        if (lines[i].startsWith("previous=")) lines[i] = previous
-                    }
-                    Durable.atomicWriteText(marker, lines.joinToString("\n") + "\n")
-                    Durable.atomicWriteText(File(File(trashDir, key), REPLACE_OP_MARKER), opId)
-                    movedKey = key
+                    // Write the op marker INSIDE the source BEFORE the single
+                    // rename. A crash after the rename can no longer leave an
+                    // unidentifiable original for the 30-day expiry to purge.
+                    Durable.atomicWriteText(File(File(docsDir, sourceId), REPLACE_OP_MARKER), opId)
+                    // trashUnderLocks writes trashed.txt with previous=<token>
+                    // before the rename too: marker and op identity travel with
+                    // the directory in one atomic move.
+                    movedKey = trashUnderLocks(File(docsDir, sourceId), sourceId, opId)
+                    dropDerivedCaches(sourceId)
                 }
             }
         }
         return movedKey ?: throw IOException("The source was not moved")
+    }
+
+    /**
+     * Undo swap: move the (unchanged) output to Trash with its own op marker.
+     * The caller checks identity first; a changed output is kept, never deleted.
+     */
+    fun replaceMoveOutputToTrash(outputId: String, expected: String, opId: String): String? {
+        var movedKey: String? = null
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    if (replaceDocIdentity(outputId) != expected) return@synchronized
+                    if (getDocument(outputId) == null) return@synchronized
+                    Durable.atomicWriteText(File(File(docsDir, outputId), REPLACE_OP_MARKER), opId)
+                    movedKey = trashUnderLocks(File(docsDir, outputId), outputId, opId)
+                    dropDerivedCaches(outputId)
+                }
+            }
+        }
+        return movedKey
     }
 
     /**

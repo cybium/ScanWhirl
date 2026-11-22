@@ -328,8 +328,13 @@ class TrashActivity : BaseActivity() {
                     isFocusable = true
                     setOnClickListener {
                         lifecycleScope.launch {
-                            withContext(Dispatchers.IO) {
+                            val outcome = withContext(Dispatchers.IO) {
                                 ReplaceCoordinator(this@TrashActivity, repo).undoByTrashKey(item.key)
+                            }
+                            outcome.onSuccess { done ->
+                                Snackbar.make(binding.root,
+                                    getString(if (done.outputKeptChanged) R.string.cr_undo_output_kept
+                                    else R.string.cr_undo_done), Snackbar.LENGTH_LONG).show()
                             }
                             reload()
                         }

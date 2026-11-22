@@ -157,6 +157,9 @@ class ToolResultActivity : BaseActivity() {
     private var receiptSourceId: String? = null
     private var sourceKept = false
 
+    /** Lane CR: result-bound, single-use Replace authorization. */
+    private var replaceAuthId: String? = null
+
     /** V2T T1: durable result receipt and its accessible status line. */
     private lateinit var receiptStore: V2tResultReceiptStore
     private var v2tStatus: TextView? = null
@@ -226,6 +229,26 @@ class ToolResultActivity : BaseActivity() {
             }
         }
         if (docIds.isNotEmpty() || files.isNotEmpty()) persistReceipt()
+        // Lane CR: bind both byte identities to THIS result off the main thread,
+        // before any Replace consent can be shown.
+        val authSource = receiptSourceId
+        val authOutput = docIds.singleOrNull()
+        if (ReplaceFeature.isEnabled() && !idCardFlow && authSource != null &&
+            authOutput != null && authOutput != authSource && files.isEmpty()
+        ) {
+            val source = authSource
+            val output = authOutput
+            if (source != null && output != null) {
+                replaceAuthId = "auth-$source-$output-$toolId"
+                lifecycleScope.launch(Dispatchers.IO) {
+                    runCatching {
+                        ReplaceCoordinator(this@ToolResultActivity, repo).authorizeResult(
+                            requireNotNull(replaceAuthId), source, output, toolId
+                        )
+                    }
+                }
+            }
+        }
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -701,7 +724,7 @@ class ToolResultActivity : BaseActivity() {
         if (!ReplaceFeature.isEnabled() || idCardFlow) return false
         val source = receiptSourceId ?: return false
         val output = docIds.singleOrNull() ?: return false
-        return files.isEmpty() && repo.replaceIsEligible(source, output, toolId)
+        return files.isEmpty() && repo.replaceToolAllowed(toolId)
     }
 
     private fun offerReplace() {
@@ -715,12 +738,18 @@ class ToolResultActivity : BaseActivity() {
         val entry: View? = findViewById(R.id.cr_replace_entry)
         entry?.isEnabled = false
         clearFail()
+        val authId = replaceAuthId
+        if (authId == null) {
+            fail(getString(R.string.cr_replace_refused))
+            return
+        }
         lifecycleScope.launch {
-            val key = withContext(Dispatchers.IO) {
-                ReplaceCoordinator(this@ToolResultActivity, repo).replace(source, output, toolId, name)
+            val result = withContext(Dispatchers.IO) {
+                ReplaceCoordinator(this@ToolResultActivity, repo)
+                    .replace(authId, source, output, toolId, name)
             }
             entry?.isEnabled = true
-            key.onFailure {
+            result.onFailure {
                 fail(getString(R.string.cr_replace_refused))
             }.onSuccess { trashKey ->
                 Toast.makeText(this@ToolResultActivity,
@@ -730,8 +759,13 @@ class ToolResultActivity : BaseActivity() {
                     com.google.android.material.snackbar.Snackbar.LENGTH_LONG
                 ).setAction(R.string.cr_replace_undo) {
                     lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
+                        val outcome = withContext(Dispatchers.IO) {
                             ReplaceCoordinator(this@ToolResultActivity, repo).undoByTrashKey(trashKey)
+                        }
+                        outcome.onSuccess { done ->
+                            Toast.makeText(this@ToolResultActivity,
+                                getString(if (done.outputKeptChanged) R.string.cr_undo_output_kept
+                                else R.string.cr_undo_done), Toast.LENGTH_LONG).show()
                         }
                     }
                 }.show()

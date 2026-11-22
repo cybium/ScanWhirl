@@ -30,7 +30,10 @@ class ReplaceJournal(private val context: Context) {
         val state: String,
         val trashKey: String?,
         val createdAt: Long,
-        val updatedAt: Long
+        val updatedAt: Long,
+        val authId: String? = null,
+        val undoOutputKey: String? = null,
+        val undoOutputChanged: Boolean = false
     )
 
     private fun dir(): File = File(context.filesDir, "replace").apply { mkdirs() }
@@ -56,6 +59,9 @@ class ReplaceJournal(private val context: Context) {
             append("trashKey=").append(enc(entry.trashKey)).append('\n')
             append("createdAt=").append(entry.createdAt).append('\n')
             append("updatedAt=").append(entry.updatedAt).append('\n')
+            append("authId=").append(enc(entry.authId)).append('\n')
+            append("undoOutputKey=").append(enc(entry.undoOutputKey)).append('\n')
+            append("undoOutputChanged=").append(entry.undoOutputChanged).append('\n')
         })
     }
 
@@ -93,7 +99,10 @@ class ReplaceJournal(private val context: Context) {
             state = v["state"] ?: STATE_INTENT,
             trashKey = dec(v["trashKey"]),
             createdAt = v["createdAt"]?.toLongOrNull() ?: 0L,
-            updatedAt = v["updatedAt"]?.toLongOrNull() ?: 0L
+            updatedAt = v["updatedAt"]?.toLongOrNull() ?: 0L,
+            authId = dec(v["authId"]),
+            undoOutputKey = dec(v["undoOutputKey"]),
+            undoOutputChanged = v["undoOutputChanged"]?.toBooleanStrictOrNull() ?: false
         )
     }
 
@@ -132,9 +141,36 @@ class ReplaceJournal(private val context: Context) {
                 STATE_DONE -> if (repo.getDocument(entry.sourceId) != null && entry.trashKey == null) {
                     write(entry.copy(state = STATE_UNDO, updatedAt = System.currentTimeMillis()))
                 }
+                STATE_UNDOING, STATE_UNDO -> {
+                    // An interrupted Undo: the original is back, the output either
+                    // went to Trash or was kept because it had changed. Either way
+                    // both documents still exist, so only the journal needs finishing.
+                    write(entry.copy(state = STATE_UNDONE, updatedAt = System.currentTimeMillis()))
+                }
             }
         }
+        prune(repo)
         return touched
+    }
+
+    fun backdate(opId: String, time: Long) {
+        load(opId)?.let { write(it.copy(createdAt = time, updatedAt = time)) }
+    }
+
+    /** Keep the journal bounded: done entries past the Trash window and undone entries go. */
+    fun prune(repo: ScanRepository) {
+        val cutoff = System.currentTimeMillis() - TRASH_WINDOW_MS
+        all().forEach { entry ->
+            when (entry.state) {
+                STATE_UNDONE, STATE_UNDO -> delete(entry.opId)
+                STATE_DONE, STATE_COMMITTING -> if (entry.createdAt in 1 until cutoff) {
+                    // Let the normal Trash purge reclaim the old entry once the
+                    // journal is no longer needed to protect it.
+                    entry.trashKey?.let { repo.replaceReleaseExpiryGuard(it) }
+                    delete(entry.opId)
+                }
+            }
+        }
     }
 
     private fun enc(value: String?): String = value.orEmpty()
@@ -150,6 +186,9 @@ class ReplaceJournal(private val context: Context) {
         const val STATE_COMMITTING = "COMMITTING"
         const val STATE_DONE = "DONE"
         const val STATE_UNDO = "UNDO"
+        const val STATE_UNDOING = "UNDOING"
+        const val STATE_UNDONE = "UNDONE"
+        const val TRASH_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         const val HEADER = "scanwhirl-replace-v1"
 
         /** Single-flight per source document: no two Replace ops can touch one id. */
