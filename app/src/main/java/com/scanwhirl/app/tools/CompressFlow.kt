@@ -1,5 +1,6 @@
 package com.scanwhirl.app.tools
 
+import android.content.Context
 import android.graphics.Rect
 import android.net.Uri
 import android.view.Gravity
@@ -22,6 +23,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.PdfImport
 import com.scanwhirl.app.util.PdfPageRenderer
 import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.SizeUnits
@@ -740,9 +742,20 @@ class CompressFlow(
         var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
         job = activity.lifecycleScope.launch {
             try {
-                val before = withContext(Dispatchers.IO) {
-                    activity.contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                // B3: an unknown/negative SAF length is not a zero-byte source. Counting the bytes
+                // actually read keeps the no-gain comparison honest; a provider we cannot measure
+                // at all fails closed below instead of publishing a "compressed" copy.
+                val before = measuredSourceBytes(activity, uri)
+                if (before == null) {
+                    Toast.makeText(
+                        activity,
+                        activity.getString(
+                            R.string.compress_failed,
+                            activity.getString(R.string.f8_reason_unreadable)
+                        ),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
                 }
                 val name = FlowUtil.devicePdfName(repo, uri)
                 sheet = withContext(Dispatchers.Main) {
@@ -796,9 +809,18 @@ class CompressFlow(
         var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
         job = activity.lifecycleScope.launch {
             try {
-                val before = withContext(Dispatchers.IO) {
-                    activity.contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize }?.takeIf { it > 0 } ?: 0L
+                // B3: same honest source count for the exact-target path; see runCompressFile.
+                val before = measuredSourceBytes(activity, uri)
+                if (before == null) {
+                    Toast.makeText(
+                        activity,
+                        activity.getString(
+                            R.string.compress_failed,
+                            activity.getString(R.string.f8_reason_unreadable)
+                        ),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
                 }
                 val baseName = FlowUtil.devicePdfName(repo, uri)
                 sheet = withContext(Dispatchers.Main) {
@@ -863,6 +885,38 @@ class CompressFlow(
     )
 
     internal companion object {
+
+        /**
+         * B3: a SAF provider may report an unknown (-1) or missing source length. That is not
+         * proof of a zero-byte file: passing 0 as `rejectNotSmallerThan` silently disables the
+         * repository's staged no-gain check and lets a grown output be published as "Compressed".
+         *
+         * Keep the provider's number when it is positive (known-size behaviour is unchanged).
+         * Otherwise count the bytes actually read from the source through the existing bounded,
+         * cancellable seekable copy; its temporary file never escapes this call. Null means no
+         * honest byte count could be established, so the caller must fail closed and publish
+         * nothing rather than claim a compression it cannot prove.
+         */
+        @VisibleForTesting
+        internal suspend fun measuredSourceBytes(context: Context, uri: Uri): Long? =
+            withContext(Dispatchers.IO) {
+                val stated = try {
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    null
+                }
+                if (stated != null && stated > 0L) return@withContext stated
+                val counted = try {
+                    PdfImport.withSeekableCopy(context, uri) { _, total -> total }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    null
+                }
+                counted?.takeIf { it > 0L }
+            }
 
         /**
          * Test seam: measures one level of one scan. Throw (or return null) to fail a level;
