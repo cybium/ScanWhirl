@@ -216,6 +216,18 @@ class ScanReviewFocusArrangeTest {
         val scheduler = kotlinx.coroutines.test.TestCoroutineScheduler()
         val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher(scheduler)
         kotlinx.coroutines.Dispatchers.setMain(testDispatcher)
+        // The queued coroutines need both the test scheduler and the main looper pumped; a real
+        // IO thread resumes them asynchronously, so one advanceUntilIdle() is not enough.
+        fun awaitRenamed(condition: () -> Boolean) {
+            val end = System.nanoTime() + 20_000_000_000L
+            while (System.nanoTime() < end) {
+                scheduler.advanceUntilIdle()
+                shadowOf(Looper.getMainLooper()).idle()
+                if (condition()) return
+                Thread.sleep(5)
+            }
+            fail("Timed out")
+        }
         try {
         val dir = stage(5)
         launch(dir).use { scenario ->
@@ -235,14 +247,14 @@ class ScanReviewFocusArrangeTest {
                 // Now let the queued rename (and any launch-time decode) run to completion.
                 scheduler.advanceUntilIdle()
             }
-            await { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
             assertEquals("nothing saved while busy", 0, repo.listDocuments().size)
             scenario.onActivity { a ->
                 assertEquals("selection follows the moved page", 2, a.currentIndex)
                 assertEquals("Page moved to position 3", snackbarText(a))
                 a.findViewById<View>(R.id.btnArrEarlier).performClick()
             }
-            await { widths(dir) == listOf(120, 121, 122, 123, 124) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 121, 122, 123, 124) && !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a ->
                 assertEquals(1, a.currentIndex)
                 a.findViewById<View>(R.id.btnArrMove).performClick()
@@ -250,7 +262,7 @@ class ScanReviewFocusArrangeTest {
                 ShadowDialog.getLatestDialog()
                     .findViewById<ViewGroup>(R.id.swSheetItems).getChildAt(4).performClick()
             }
-            await { widths(dir) == listOf(120, 122, 123, 124, 121) && !scenario.get { it.pageOpBusy } }
+            awaitRenamed { widths(dir) == listOf(120, 122, 123, 124, 121) && !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a -> assertEquals(4, a.currentIndex) }
             assertEquals("no duplicate or temp pages", 5, dir.listFiles()!!.count { it.extension == "jpg" })
             assertTrue(dir.listFiles()!!.none { it.name.startsWith("tmp_") })
