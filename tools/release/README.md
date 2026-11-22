@@ -10,13 +10,26 @@ signature-integrity validation. Compare the fingerprint with Play Console's
 ```powershell
 python -m unittest discover -s tools/release/tests -v
 # Equivalent: python -m unittest tools.release.tests.test_release -v
+python tools/release/check_release_manifest.py <merged-release-manifest.xml> --build-config <BuildConfig.java>
 python tools/release/verify_aab.py <signed.aab> --version-code 26112001 --version-name 1.3.0
 python tools/release/assemble_release.py --sha <full-frozen-SHA> --aab <signed.aab> --drafts <reviewed-drafts-dir> --out builds/2026-11-21/release-1.3.0 --gate-run <id> --e2e-run <id> --security <security-verdict.txt>
 ```
 
+`check_release_manifest.py` is the P-lane CI gate. It parses the plain XML from
+`:app:processReleaseManifest` (built without `-PtestBuild`) and the generated release
+`BuildConfig.java`. It fails closed on `INTERNET`, `ACCESS_NETWORK_STATE`, `AD_ID`
+(both namespaces), `QUERY_ALL_PACKAGES`, any `FOREGROUND_SERVICE*` permission (the
+family Play Asset Delivery merges), a non-release `package`/`label`, or
+`TEST_BUILD=true`. When `--build-config` is omitted, the release `package`/`label`
+alone prove `TEST_BUILD=false` because both come from the same `-PtestBuild` flag.
+The gate.yml step also runs this module's unittest suite, so a regression in either
+checker fails the lane.
+
 Verifier checks package, expected version, minSdk 24 / targetSdk 36 (overridable
 with `--min-sdk` / `--target-sdk`), permissions, backup/debug/test flags, and every
-native library's PT_LOAD alignment. 16 KB is required for arm64-v8a/x86_64;
+native library's PT_LOAD alignment. The forbidden-permission set (including the
+`FOREGROUND_SERVICE` family) is identical to `check_release_manifest.py`. 16 KB is
+required for arm64-v8a/x86_64;
 armeabi-v7a/x86 values are INFO, per the lead-approved
 [64-bit page-size requirement](https://developer.android.com/guide/practices/page-sizes).
 Malformed ELF and unknown ABIs still fail closed. AAPT2 protobuf manifest parsing follows

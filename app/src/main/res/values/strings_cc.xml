@@ -28,6 +28,7 @@
     <string name="cc_outcome_resized">Resized · %1$s</string>
     <string name="cc_outcome_compressed">Compressed · %1$s</string>
     <string name="cc_outcome_saved">Saved · %1$s</string>
+    <string name="cc_outcome_unknown">Result</string>
     <string name="cc_compress_smaller">%1$s → %2$s · %3$d%% smaller</string>
     <string name="cc_compress_larger">%1$s → %2$s · %3$d%% larger</string>
     <string name="cc_compress_same">%1$s → %2$s · same size</string>

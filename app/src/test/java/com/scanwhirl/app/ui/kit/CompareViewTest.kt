@@ -16,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -145,6 +146,76 @@ abstract class CompareViewBase {
             "edge is white at 24% alpha on #1E252A",
             Color.parseColor("#3DFFFFFF"), ContextCompat.getColor(app, R.color.sw_cc_page_edge)
         )
+    }
+
+    @Test(timeout = 30_000)
+    fun `rebinding recycles the bitmaps the previous bind decoded`() {
+        val view = CompareView(app)
+        bindAndWait(view, model(
+            beforePath = jpeg("rb-b1", 200, 300).path,
+            afterPath = jpeg("rb-a1", 160, 240).path
+        ))
+        val (firstBefore, firstAfter) = view.heldBitmaps()
+        assertNotNull("first before decoded", firstBefore)
+        assertNotNull("first after decoded", firstAfter)
+        assertFalse("first pages still live", firstBefore!!.isRecycled || firstAfter!!.isRecycled)
+
+        bindAndWait(view, model(
+            beforePath = jpeg("rb-b2", 220, 320).path,
+            afterPath = jpeg("rb-a2", 180, 260).path
+        ))
+        assertTrue("previous before freed", firstBefore!!.isRecycled)
+        assertTrue("previous after freed", firstAfter!!.isRecycled)
+        val (secondBefore, secondAfter) = view.heldBitmaps()
+        assertNotNull("second pages decoded", secondBefore)
+        assertNotNull(secondAfter)
+        assertFalse("new pages are live", secondBefore!!.isRecycled || secondAfter!!.isRecycled)
+    }
+
+    @Test(timeout = 30_000)
+    fun `detaching recycles both decoded bitmaps and cancels the job`() {
+        val view = CompareView(app)
+        bindAndWait(view, model(
+            beforePath = jpeg("dt-b", 200, 300).path,
+            afterPath = jpeg("dt-a", 160, 240).path
+        ))
+        val (before, after) = view.heldBitmaps()
+        val generation = view.decodeGeneration()
+        view.onDetachedFromWindow()
+        assertTrue("before freed on detach", before!!.isRecycled)
+        assertTrue("after freed on detach", after!!.isRecycled)
+        assertNull("nothing held after detach", view.heldBitmaps().first)
+        assertNull("nothing displayed after detach", view.displayedBitmap())
+        assertEquals("in-flight results invalidated", generation + 1, view.decodeGeneration())
+    }
+
+    @Test(timeout = 30_000)
+    fun `no recycled bitmap is ever drawn after a rebind`() {
+        val view = CompareView(app)
+        bindAndWait(view, model(
+            beforePath = jpeg("nr-b1", 200, 300).path,
+            afterPath = jpeg("nr-a1", 160, 240).path
+        ))
+        val (oldBefore, oldAfter) = view.heldBitmaps()
+        bindAndWait(view, model(
+            beforePath = jpeg("nr-b2", 220, 320).path,
+            afterPath = jpeg("nr-a2", 180, 260).path
+        ))
+        val recycled = setOf(oldBefore, oldAfter)
+        val shownAfter = view.displayedBitmap()
+        assertNotNull("new page displayed", shownAfter)
+        assertFalse("after pane is not a recycled bitmap", recycled.any { it === shownAfter })
+        assertFalse("after pane bitmap is live", shownAfter!!.isRecycled)
+
+        view.showBefore()
+        val shownBefore = view.displayedBitmap()
+        assertNotNull("before page displayed", shownBefore)
+        assertFalse("before pane is not a recycled bitmap", recycled.any { it === shownBefore })
+        assertFalse("before pane bitmap is live", shownBefore!!.isRecycled)
+
+        view.showAfter()
+        val reshownAfter = view.displayedBitmap()
+        assertFalse("after pane still live after toggling", reshownAfter!!.isRecycled)
     }
 
     @Test

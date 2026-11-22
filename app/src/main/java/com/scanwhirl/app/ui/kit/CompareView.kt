@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.kit
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
@@ -19,6 +20,8 @@ import com.scanwhirl.app.util.ImageTools
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -75,10 +78,17 @@ class CompareView @JvmOverloads constructor(
     private var beforeBitmap: Bitmap? = null
     private var afterBitmap: Bitmap? = null
 
+    /** The one in-flight decode; cancelled on a new bind and on detach. */
+    private var decodeJob: Job? = null
+    /** Invalidates results from a decode that was cancelled mid-flight. */
+    private var decodeGeneration = 0
+
     /** Test seam: called on the decode (IO) thread just before each bounded decode. */
     internal var decodeProbe: ((String) -> Unit)? = null
     /** Test seam: called after both images (or honest empty states) are rendered. */
     internal var onDecodeComplete: (() -> Unit)? = null
+    /** Test seam: the bitmaps this view freed (after the ImageView was cleared). */
+    internal var onBitmapsReleased: ((Bitmap?, Bitmap?) -> Unit)? = null
 
     init {
         orientation = VERTICAL
@@ -200,9 +210,13 @@ class CompareView @JvmOverloads constructor(
         scope: CoroutineScope,
         mainDispatcher: CoroutineDispatcher = Dispatchers.Main
     ) {
+        // A new result invalidates any decode still running and frees what we held before.
+        decodeGeneration++
+        decodeJob?.cancel()
+        decodeJob = null
+        releaseBitmaps()
+
         this.model = model
-        beforeBitmap = null
-        afterBitmap = null
         outcomeView.text = model.outcome
         visibility = if (model.showToggle || model.outcome.isNotBlank()) VISIBLE else GONE
         pageChip.text = model.pageLabel
@@ -217,16 +231,53 @@ class CompareView @JvmOverloads constructor(
             onDecodeComplete?.invoke()
             return
         }
-        scope.launch {
+        val generation = decodeGeneration
+        decodeJob = scope.launch {
             val before = decode(beforePath)
             val after = decode(afterPath)
             withContext(mainDispatcher) {
+                if (generation != decodeGeneration) {
+                    // Rebound or detached while decoding: never display a stale page.
+                    recycleDecoded(before, after)
+                    onBitmapsReleased?.invoke(before, after)
+                    return@withContext
+                }
                 beforeBitmap = before
                 afterBitmap = after
                 render()
                 onDecodeComplete?.invoke()
             }
         }
+    }
+
+    /**
+     * Detach ends the surface's ownership of its decoded pages. Cancel first so an in-flight
+     * decode cannot publish a bitmap into a dead view, then clear and free what we hold.
+     */
+    public override fun onDetachedFromWindow() {
+        decodeGeneration++
+        decodeJob?.cancel()
+        decodeJob = null
+        releaseBitmaps()
+        super.onDetachedFromWindow()
+    }
+
+    /** Detach the drawable BEFORE recycling, so no frame can draw a freed bitmap. */
+    private fun releaseBitmaps() {
+        image.setImageDrawable(null)
+        val before = beforeBitmap
+        val after = afterBitmap
+        beforeBitmap = null
+        afterBitmap = null
+        if (before == null && after == null) return
+        recycleDecoded(before, after)
+        onBitmapsReleased?.invoke(before, after)
+    }
+
+    /** Only bitmaps this view decoded are ever recycled; [image] is already cleared. */
+    private fun recycleDecoded(before: Bitmap?, after: Bitmap?) {
+        if (before != null && !before.isRecycled) before.recycle()
+        if (after != null && !after.isRecycled && after !== before) after.recycle()
     }
 
     private suspend fun decode(path: String?): Bitmap? = withContext(Dispatchers.IO) {
@@ -287,6 +338,9 @@ class CompareView @JvmOverloads constructor(
     internal fun captionText(): String = caption.text.toString()
     internal fun outcomeText(): String = outcomeView.text.toString()
     internal fun emptyLabel(): TextView = detail
+    internal fun displayedBitmap(): Bitmap? = (image.drawable as? BitmapDrawable)?.bitmap
+    internal fun heldBitmaps(): Pair<Bitmap?, Bitmap?> = beforeBitmap to afterBitmap
+    internal fun decodeGeneration(): Int = decodeGeneration
     internal fun pageImageView(): ImageView = image
     internal fun compareFrame(): FrameLayout = frame
     internal fun pageFrameView(): FrameLayout = pageFrame
