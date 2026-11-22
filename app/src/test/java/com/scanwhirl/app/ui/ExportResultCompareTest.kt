@@ -24,9 +24,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * Lane C: the export result (Resize/Compress) now shows a real Before | After pair on the dark
- * canvas. The old stats line and the preview id are kept for compatibility; Protect PDF's
- * state-only summary must never gain a plaintext preview.
+ * Lane RS: the export result leads with one size hero line, shows a stacked zoom pair, and pins
+ * Open / Share / More. Protect's state-only summary keeps no plaintext preview.
  */
 abstract class ExportResultCompareBase {
 
@@ -67,39 +66,40 @@ abstract class ExportResultCompareBase {
         activity.findViewById(R.id.ccCompare)
 
     @Test
-    fun `resize shows real before and after numbers on the compare surface`() {
+    fun `resize shows the hero line and real before and after numbers on stacked panes`() {
         val before = jpeg("before", 1600, 2100)
         val after = jpeg("after", 900, 1200)
         ActivityScenario.launch<ExportResultActivity>(intent(before, after)).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
+                val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
+                assertTrue("one hero line: $hero", hero.contains("290 KB") && hero.contains("113 KB"))
                 val view = compareView(activity)
                 assertEquals(View.VISIBLE, view.visibility)
                 assertTrue("after caption has the after size", view.captionText().contains("113 KB"))
                 assertTrue("after caption has the after pixels", view.captionText().contains("900 × 1200"))
-                view.showBefore()
-                assertTrue("before caption has the before size", view.captionText().contains("290 KB"))
-                assertTrue("before caption has the before pixels", view.captionText().contains("1600 × 2100"))
+                assertTrue("before caption has the before size", view.beforeCaptionText().contains("290 KB"))
+                assertTrue("before caption has the before pixels", view.beforeCaptionText().contains("1600 × 2100"))
+                assertEquals(app.getString(R.string.tool_resize),
+                    activity.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar).title.toString())
             }
         }
     }
 
     @Test
-    fun `a missing original is honest and the legacy stats still carry the sizes`() {
+    fun `a missing original is honest and the hero still carries the sizes`() {
         val after = jpeg("after", 900, 1200)
         ActivityScenario.launch<ExportResultActivity>(intent(null, after)).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
                 val view = compareView(activity)
-                view.showBefore()
                 assertEquals(
                     app.getString(R.string.cc_no_before_image), view.emptyLabel().text.toString()
                 )
-                assertEquals(View.GONE, view.pageImageView().visibility)
-                val stats = activity.findViewById<TextView>(R.id.resultStats).text.toString()
-                assertTrue("before size still in stats: $stats", stats.contains("290 KB"))
-                assertTrue("after size still in stats: $stats", stats.contains("113 KB"))
-                assertTrue("dimensions still in stats: $stats", stats.contains("900 × 1200"))
+                assertEquals(View.GONE, view.beforeImageView().visibility)
+                val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
+                assertTrue("before size still in hero: $hero", hero.contains("290 KB"))
+                assertTrue("after size still in hero: $hero", hero.contains("113 KB"))
                 assertNotNull("legacy preview id still exists", activity.findViewById<View>(R.id.resultPreview))
             }
         }
@@ -122,7 +122,7 @@ abstract class ExportResultCompareBase {
     }
 
     @Test
-    fun `an unmeasured export never prints an empty Resized outcome`() {
+    fun `an unmeasured export never prints a size hero`() {
         val file = jpeg("unknown", 100, 140)
         ActivityScenario.launch<ExportResultActivity>(
             ExportResultActivity.intent(
@@ -141,9 +141,9 @@ abstract class ExportResultCompareBase {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val outcome = compareView(activity).outcomeText()
-                assertEquals(app.getString(R.string.cc_outcome_unknown), outcome)
-                assertFalse("no dangling separator: $outcome", outcome.trim().endsWith("·"))
+                val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
+                assertEquals(app.getString(R.string.cc_outcome_unknown), hero)
+                assertFalse("no dangling size arrow: $hero", hero.contains("→"))
             }
         }
     }
@@ -157,6 +157,19 @@ abstract class ExportResultCompareBase {
                 val legacy = activity.findViewById<View>(R.id.resultPreview)
                 assertFalse("legacy preview is not a white host", legacy.background != null)
                 assertEquals(View.GONE, legacy.visibility)
+            }
+        }
+    }
+
+    @Test
+    fun `Open Share and More are in the pinned dock`() {
+        val after = jpeg("after", 900, 1200)
+        ActivityScenario.launch<ExportResultActivity>(intent(null, after)).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                listOf(R.id.btnOpenResult, R.id.btnShareResult, R.id.btnMoreResult).forEach { id ->
+                    assertNotNull("action $id", activity.findViewById<View>(id))
+                }
             }
         }
     }
@@ -179,7 +192,7 @@ class ExportResultCompareHiTest : ExportResultCompareBase() {
         ActivityScenario.launch<ExportResultActivity>(intent(null, after)).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                assertEquals("बाद में", compareView(activity).afterButton().text.toString())
+                assertTrue("Hindi after label", compareView(activity).captionText().startsWith("बाद में"))
             }
         }
     }

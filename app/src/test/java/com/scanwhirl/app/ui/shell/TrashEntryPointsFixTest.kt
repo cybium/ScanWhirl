@@ -288,7 +288,9 @@ class TrashEntryPointsFixTest {
             // Legacy Vault permanent delete inside the authenticated Vault.
             "MainActivity.kt" to 1,
             // Result Undo removes only the generated result documents (no Trash promise).
-            "tools/ToolResultActivity.kt" to 2
+            // Lane RS adds one more: the identity-guarded discard of OUR OWN freshly produced
+            // size result that did not get smaller (the source is explicitly excluded).
+            "tools/ToolResultActivity.kt" to 3
         )
         val uiDir = File("src/main/java/com/scanwhirl/app/ui")
         assertTrue("the UI source tree is where the test runs: ${uiDir.absolutePath}", uiDir.isDirectory)

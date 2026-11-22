@@ -22,10 +22,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Lane C: every tool result owns the one Before | After surface. Compress and the page tools
- * derive their proof from real output; other tools may supply measured facts (fields removed,
- * words found, page counts). The identity-guarded Undo, Last result receipt and the two
- * "this copy" quick actions must survive unchanged.
+ * Lane RS: Compress/Resize show a stacked zoom pair; mark tools show one After page; state-only
+ * tools show no image. The identity-guarded Undo, Last-result receipt and the two "this copy"
+ * quick actions stay unchanged and are pinned here.
  */
 abstract class ToolResultCompareBase {
 
@@ -49,10 +48,12 @@ abstract class ToolResultCompareBase {
         val out = DocFixtures.saved(repo, app, pages = 1, name = "Source small")
         val sourceBytes = repo.getDocument(source)!!.pdfFile.length()
         val outBytes = repo.getDocument(out)!!.pdfFile.length()
+        // A real compress shrinks the file; the two fixtures are the same size, so give the
+        // source a larger nominal size so this is not classified as a no-gain result.
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(
                 app, "compress", docIds = listOf(out),
-                beforeBytes = sourceBytes, receiptSourceId = source
+                beforeBytes = sourceBytes + 100_000L, receiptSourceId = source
             )
         ).use { scenario ->
             scenario.onActivity { activity ->
@@ -60,16 +61,12 @@ abstract class ToolResultCompareBase {
                 val view = compare(activity)
                 assertEquals(View.VISIBLE, view.visibility)
                 assertTrue(view.pageChipText().contains(app.getString(R.string.cc_page, 1)))
-                view.showBefore()
-                assertTrue(
-                    "before size present: ${view.captionText()}",
-                    view.captionText().contains(app.getString(R.string.cc_before_size, ""))
-                )
-                view.showAfter()
-                assertTrue(
-                    "after size present: ${view.captionText()}",
-                    view.captionText().contains(app.getString(R.string.cc_after_size, ""))
-                )
+                val beforeShown = com.scanwhirl.app.util.StatusLine.formatBytes(sourceBytes + 100_000L)
+                val afterShown = com.scanwhirl.app.util.StatusLine.formatBytes(outBytes)
+                assertTrue("before size on its pane: ${view.beforeCaptionText()}",
+                    view.beforeCaptionText().contains(beforeShown))
+                assertTrue("after size on its pane: ${view.captionText()}",
+                    view.captionText().contains(afterShown))
                 assertNotNull("identity-guarded Undo still present", activity.findViewById<View>(R.id.toolResultUndo))
             }
         }
@@ -78,36 +75,29 @@ abstract class ToolResultCompareBase {
     }
 
     @Test
-    fun `measured proof shows removed fields with a Before After toggle`() {
+    fun `a measured state tool shows no page image`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Clean")
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(
                 app, "clear_metadata", docIds = listOf(id),
                 compareOutcome = "12 fields removed",
                 compareBeforeCaption = "14 fields",
-                compareAfterCaption = "2 fields kept",
-                compareBeforeDetail = listOf("Author", "Creation time", "GPS location"),
-                compareAfterDetail = listOf("Page count")
+                compareAfterCaption = "2 fields kept"
             )
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val view = compare(activity)
-                assertEquals(View.VISIBLE, view.visibility)
-                assertEquals("12 fields removed", view.outcomeText())
-                view.showBefore()
-                assertEquals("14 fields", view.captionText())
-                assertTrue(view.emptyLabel().text.toString().contains("Author"))
-                assertTrue(view.emptyLabel().text.toString().contains("GPS location"))
-                view.showAfter()
-                assertEquals("2 fields kept", view.captionText())
-                assertTrue(view.emptyLabel().text.toString().contains("Page count"))
+                assertEquals(View.GONE, compare(activity).visibility)
+                assertEquals(
+                    "12 fields removed",
+                    activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
+                )
             }
         }
     }
 
     @Test
-    fun `page tools say one mark added on page 1`() {
+    fun `page tools show one After page and say one mark added on page 1`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Signed")
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "sign", docIds = listOf(id))
@@ -117,16 +107,16 @@ abstract class ToolResultCompareBase {
                 val view = compare(activity)
                 assertEquals(View.VISIBLE, view.visibility)
                 assertTrue(view.pageChipText().contains(app.getString(R.string.cc_page, 1)))
-                // The mark count is the outcome headline and is spoken with the caption.
+                assertEquals(View.GONE, view.beforeButton().visibility)
                 assertEquals(app.getString(R.string.cc_mark_added), view.outcomeText())
-                val a11y = view.findViewById<View>(R.id.ccCaption).contentDescription.toString()
+                val a11y = view.afterButton().contentDescription.toString()
                 assertTrue("mark count is spoken: $a11y", a11y.contains(app.getString(R.string.cc_mark_added)))
             }
         }
     }
 
     @Test
-    fun `state only tools hide the toggle but keep the honest state line`() {
+    fun `state only tools show no comparison surface`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Locked")
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(
@@ -137,10 +127,7 @@ abstract class ToolResultCompareBase {
         ).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
-                val view = compare(activity)
-                assertEquals(View.VISIBLE, view.visibility)
-                assertEquals(View.GONE, view.beforeButton().visibility)
-                assertEquals(View.GONE, view.afterButton().visibility)
+                assertEquals(View.GONE, compare(activity).visibility)
             }
         }
     }
@@ -192,15 +179,12 @@ class ToolResultCompareHiTest : ToolResultCompareBase() {
             scenario.onActivity { activity ->
                 idle()
                 val view = compare(activity)
-                view.showBefore()
-                assertTrue(view.captionText().contains("पहले:"))
-                view.showAfter()
-                assertTrue(view.captionText().contains("बाद में:"))
+                assertTrue(view.beforeCaptionText().contains("पहले"))
+                assertTrue(view.captionText().contains("बाद में"))
             }
         }
     }
 }
 
-/** Small helper on the view so the tests read the page chip without reaching into private fields. */
 private fun CompareView.pageChipText(): String =
     findViewById<TextView>(com.scanwhirl.app.R.id.ccPageChip)?.text?.toString().orEmpty()

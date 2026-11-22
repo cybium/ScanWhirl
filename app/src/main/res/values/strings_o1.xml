@@ -14,5 +14,5 @@
     <string name="tools_excel_no_tables_unread_msg">No table was found on the pages that could be read. Could not read %1$d of %2$d pages.</string>
 
     <!-- A slide deck with no recognised text has no speaker notes. -->
-    <string name="tools_result_pptx_no_text_note">Slides are page pictures. No text was read, so there are no speaker notes.</string>
+    <string name="tools_result_pptx_no_text_note">Picture slides · no text notes</string>
 </resources>

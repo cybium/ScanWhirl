@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="rsHeroBlock" type="id" />
+    <item name="rsBack" type="id" />
+    <item name="rsVisualHost" type="id" />
+    <item name="rsChip" type="id" />
+    <item name="rsTitle" type="id" />
+    <item name="rsBottomBar" type="id" />
+    <item name="rsTryStrong" type="id" />
+    <item name="rsDone" type="id" />
+    <item name="rsSaveAnother" type="id" />
+    <item name="rsRemoveNote" type="id" />
+    <item name="rsMoreNote" type="id" />
+    <item name="rsMoreLocation" type="id" />
+    <item name="rsZoomCaption" type="id" />
+    <item name="ccBeforeFrame" type="id" />
+    <item name="ccBeforeImage" type="id" />
+    <item name="ccAfterImage" type="id" />
+</resources>

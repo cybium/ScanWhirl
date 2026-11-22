@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.Context
@@ -8,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -15,9 +18,12 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityExportResultBinding
+import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.CompareMode
 import com.scanwhirl.app.ui.kit.CompareModel
 import com.scanwhirl.app.ui.kit.ComparePane
-import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.CompareView
+import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.SizeUnits
@@ -27,9 +33,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Shows the real output of Resize/Compress: a preview, actual before → after
- * sizes (plus dimensions for images), then Save (to Downloads/Documents) or
- * Share. Replaces the old "toast + forced share sheet" behaviour.
+ * Lane RS: the compact result for a file export (Resize / Protect / Unlock). The tool name is the
+ * title, one measured hero line replaces the old "Before X → After Y + stats" pile, the proof is a
+ * stacked zoom pair (or nothing at all for state-only tools), and Open / Share / More are pinned.
+ * A size result that did not get smaller is discarded; nothing the user owns is touched.
  */
 class ExportResultActivity : BaseActivity() {
 
@@ -43,6 +50,7 @@ class ExportResultActivity : BaseActivity() {
     private var beforeBytes = 0L
     private var afterBytes = 0L
     private var isPdf = false
+    private var alreadyCompact = false
 
     private var pendingSave: (() -> Unit)? = null
     private val permissionLauncher =
@@ -63,23 +71,29 @@ class ExportResultActivity : BaseActivity() {
         mime = intent.getStringExtra(EXTRA_MIME) ?: "image/jpeg"
         displayName = intent.getStringExtra(EXTRA_NAME) ?: "ScanWhirl"
         docId = intent.getStringExtra(EXTRA_DOC_ID)
-        // SECURITY_JUDGE 1.3.0: a protected copy's preview is plaintext in a new
-        // window; resolve the document's own policy from the id before showing it.
+        // SECURITY_JUDGE 1.3.0: resolve a protected document's policy before any preview.
         com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
         afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
         isPdf = mime == "application/pdf"
 
-        val title = intent.getStringExtra(EXTRA_TITLE)
-        if (!title.isNullOrBlank()) binding.toolbar.title = title
+        val summary = intent.getStringExtra(EXTRA_SUMMARY)
+        alreadyCompact = summary.isNullOrBlank() && beforeBytes > 0L && afterBytes >= beforeBytes
+        if (alreadyCompact) discardGrownOutput()
 
+        binding.toolbar.title = toolName(summary)
+
+        if (alreadyCompact) {
+            renderAlreadyCompact()
+        } else {
+            showStats()
+            bindCompare(summary)
+        }
         loadPreview()
-        showStats()
-        bindCompare()
 
         intent.getStringExtra(EXTRA_WARNING)?.takeIf { it.isNotBlank() }?.let {
             binding.resultWarning.text = it
-            binding.resultWarning.visibility = android.view.View.VISIBLE
+            binding.resultWarning.visibility = View.VISIBLE
         }
 
         binding.btnSaveResult.setText(
@@ -87,90 +101,194 @@ class ExportResultActivity : BaseActivity() {
         )
         binding.btnSaveResult.setOnClickListener { saveResult() }
         binding.btnShareResult.setOnClickListener { shareResult() }
+        binding.btnOpenResult.setOnClickListener { openResult() }
+        binding.btnMoreResult.setOnClickListener {
+            val opening = binding.rsExportMorePanel.visibility != View.VISIBLE
+            binding.rsExportMorePanel.visibility = if (opening) View.VISIBLE else View.GONE
+            binding.btnMoreResult.setText(
+                if (opening) R.string.tools_result_fewer_options else R.string.rs_more
+            )
+        }
     }
 
-    /**
-     * The old single preview is kept in the layout so existing callers/tests still find it, but
-     * the real before/after pair is now drawn by [binding.ccCompare] (bounded decode off main).
-     */
+    private fun toolName(summary: String?): String {
+        intent.getStringExtra(EXTRA_TOOL_ID)?.let { id ->
+            ToolRegistry.byId(id)?.let { return getString(it.title) }
+        }
+        return when {
+            summary != null -> getString(R.string.tool_protect)
+            beforeBytes > 0L && afterBytes > 0L && !isPdf -> getString(R.string.tool_resize)
+            else -> intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { getString(R.string.result_title) }
+        }
+    }
+
+    private fun renderAlreadyCompact() {
+        binding.resultStats.text = getString(R.string.rs_already_compact_title)
+        binding.resultStats.contentDescription = binding.resultStats.text
+        binding.rsSavedExport.text = getString(R.string.rs_already_compact_msg)
+        binding.rsChipExport.visibility = View.GONE
+        binding.ccCompare.visibility = View.GONE
+        binding.btnOpenResult.setText(R.string.tools_result_done)
+        binding.btnOpenResult.setOnClickListener { finish() }
+        binding.btnShareResult.visibility = View.GONE
+        binding.btnMoreResult.visibility = View.GONE
+    }
+
+    /** A fresh output that did not get smaller is our own file: remove it, keep the source. */
+    private fun discardGrownOutput() {
+        val path = outputPath ?: return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { File(path).delete() } }
+        }
+    }
+
+    /** The legacy preview id is kept for callers/tests, but it is never a white host. */
     private fun loadPreview() {
-        binding.resultPreview.visibility = android.view.View.GONE
+        binding.resultPreview.visibility = View.GONE
+        binding.resultPreview.background = null
     }
 
-    /**
-     * Lane C: Before | After for Resize/Compress exports. Real bytes and pixel sizes are always
-     * shown; the before page image is shown only when the producer supplied one — otherwise the
-     * pane says the original is unavailable instead of showing a fake or blank page.
-     * Protect/Unlock pass [EXTRA_SUMMARY] (state text only): never a plaintext preview.
-     */
-    private fun bindCompare() {
+    private fun formatBytes(bytes: Long): String = SizeUnits.format(bytes)
+
+    private fun pixels(width: Int, height: Int): String? =
+        if (width > 0 && height > 0) getString(R.string.result_dimensions, width, height) else null
+
+    private fun caption(size: String?, px: String?): String = listOfNotNull(size, px)
+        .joinToString(" · ")
+        .ifBlank { getString(R.string.cc_no_numbers) }
+
+    /** UX_RULES_SCANNER: status by vector icon, never a glyph in shipped text. */
+    private fun setStatusIcon(view: TextView, ok: Boolean) {
+        val d = androidx.appcompat.content.res.AppCompatResources.getDrawable(
+            this, if (ok) com.scanwhirl.app.R.drawable.ic_sym_check
+            else com.scanwhirl.app.R.drawable.ic_sym_error
+        )?.mutate()
+        val size = (16f * resources.displayMetrics.density).toInt()
+        d?.setBounds(0, 0, size, size)
+        d?.setTint(androidx.core.content.ContextCompat.getColor(
+            this, if (ok) com.scanwhirl.app.R.color.rv_accent
+            else com.scanwhirl.app.R.color.laser_danger
+        ))
+        view.setCompoundDrawablesRelative(d, null, null, null)
+        view.compoundDrawablePadding = (6f * resources.displayMetrics.density).toInt()
+    }
+
+    private fun showStats() {
+        val w = intent.getIntExtra(EXTRA_WIDTH, 0)
+        val h = intent.getIntExtra(EXTRA_HEIGHT, 0)
         val summary = intent.getStringExtra(EXTRA_SUMMARY)
         if (!summary.isNullOrBlank()) {
-            binding.ccCompare.visibility = android.view.View.GONE
+            binding.resultStats.text = summary
+            binding.rsSavedExport.text = savedLine()
+            binding.rsChipExport.visibility = View.GONE
             return
         }
-        val beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
-        val afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
+        if (beforeBytes <= 0L || afterBytes <= 0L) {
+            binding.resultStats.text = getString(R.string.cc_outcome_unknown)
+            binding.rsChipExport.visibility = View.GONE
+            binding.rsSavedExport.text = savedLine()
+            return
+        }
+        val from = formatBytes(beforeBytes)
+        val to = formatBytes(afterBytes)
+        binding.resultStats.text = getString(R.string.rs_size_hero, from, to)
+        binding.resultStats.contentDescription = getString(
+            R.string.rs_hero_a11y_size, from, to, reductionA11y(beforeBytes, afterBytes)
+        )
+        // UX_RULES_SCANNER: status as a short  chip with numbers, not a paragraph.
+        val px = pixels(w, h)
+        binding.rsChipExport.text = if (px != null) {
+            getString(R.string.rs_pixels_ok, w, h)
+        } else {
+            reductionChip(beforeBytes, afterBytes)
+        }
+        setStatusIcon(binding.rsChipExport, px != null || afterBytes <= beforeBytes)
+        binding.rsChipExport.visibility = View.VISIBLE
+        binding.rsSavedExport.text = savedLine()
+    }
+
+    private fun savedLine(): String = getString(
+        R.string.rs_saved_suffix_no_source
+    ).let { suffix -> getString(R.string.rs_saved_prefix) + displayName + suffix }
+
+    private fun reductionChip(before: Long, after: Long): String = when {
+        after >= before -> getString(R.string.rs_delta_larger, formatBytes(after - before))
+        formatBytes(before) == formatBytes(after) ->
+            getString(R.string.rs_delta_smaller, formatBytes(before - after))
+        before / after.coerceAtLeast(1L) >= 2L ->
+            getString(R.string.rs_chip_ratio, before / after.coerceAtLeast(1L))
+        else -> getString(
+            R.string.rs_chip_percent, ((before - after) * 100 / before).toInt().coerceIn(1, 99)
+        )
+    }
+
+    private fun reductionA11y(before: Long, after: Long): String = when {
+        after >= before -> getString(R.string.rs_delta_larger, formatBytes(after - before))
+        before / after.coerceAtLeast(1L) >= 2L ->
+            getString(R.string.rs_reduction_a11y_ratio, before / after.coerceAtLeast(1L))
+        else -> getString(
+            R.string.rs_reduction_a11y_percent,
+            ((before - after) * 100 / before).toInt().coerceIn(1, 99)
+        )
+    }
+
+    private fun bindCompare(summary: String?) {
+        val view: CompareView = binding.ccCompare
+        val mode = when {
+            alreadyCompact || !summary.isNullOrBlank() -> CompareMode.NONE
+            else -> CompareMode.ZOOM_STACKED
+        }
+        if (mode == CompareMode.NONE) {
+            view.visibility = View.GONE
+            return
+        }
         val w = intent.getIntExtra(EXTRA_WIDTH, 0)
         val h = intent.getIntExtra(EXTRA_HEIGHT, 0)
         val bw = intent.getIntExtra(EXTRA_BEFORE_WIDTH, 0)
         val bh = intent.getIntExtra(EXTRA_BEFORE_HEIGHT, 0)
         val afterPath = intent.getStringExtra(EXTRA_PREVIEW) ?: outputPath
         val beforePath = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)
-        val afterSize = if (afterBytes > 0L) formatBytes(afterBytes) else null
-        val beforeSize = if (beforeBytes > 0L) formatBytes(beforeBytes) else null
-
-        fun pixels(width: Int, height: Int): String? =
-            if (width > 0 && height > 0) getString(R.string.cc_pixels, width, height) else null
-        fun caption(size: String?, px: String?): String = listOfNotNull(size, px)
-            .joinToString(" · ")
-            .ifBlank { getString(R.string.cc_no_numbers) }
-
-        // Never print "Resized · " with an empty value: an unmeasured file just says "Result".
-        val fallbackOutcome = when {
-            afterSize == null -> getString(R.string.cc_outcome_unknown)
-            w > 0 && h > 0 -> getString(R.string.cc_outcome_resized, afterSize)
-            else -> getString(R.string.cc_outcome_saved, afterSize)
-        }
-        val outcome = intent.getStringExtra(EXTRA_OUTCOME)?.takeIf { it.isNotBlank() }
-            ?: fallbackOutcome
-
-        binding.ccCompare.bind(
+        view.visibility = View.VISIBLE
+        view.bind(
             CompareModel(
-                outcome = outcome,
+                outcome = binding.resultStats.text.toString(),
                 before = ComparePane(
                     imagePath = beforePath,
-                    caption = caption(beforeSize, pixels(bw, bh)),
+                    caption = caption(
+                        if (beforeBytes > 0L) formatBytes(beforeBytes) else null,
+                        pixels(bw, bh)
+                    ),
                     emptyText = if (beforePath == null) getString(R.string.cc_no_before_image) else null
                 ),
                 after = ComparePane(
                     imagePath = afterPath,
-                    caption = caption(afterSize, pixels(w, h)),
+                    caption = caption(
+                        if (afterBytes > 0L) formatBytes(afterBytes) else null,
+                        pixels(w, h)
+                    ),
                     emptyText = if (afterPath == null) getString(R.string.cc_no_after_image) else null
-                )
+                ),
+                mode = mode
             ),
             lifecycleScope
         )
     }
 
-    private fun showStats() {
-        // Protect PDF has no meaningful before/after size (the source had no PDF yet); it
-        // passes a summary instead of the comparison.
-        val summary = intent.getStringExtra(EXTRA_SUMMARY)
-        if (!summary.isNullOrBlank()) {
-            binding.resultStats.text = summary
+    private fun openResult() {
+        val file = outputPath?.let { File(it) } ?: return
+        if (!file.isFile || file.length() == 0L) {
+            Toast.makeText(this, R.string.resize_failed, Toast.LENGTH_LONG).show()
             return
         }
-        val text = getString(
-            R.string.result_before_after,
-            formatBytes(beforeBytes),
-            formatBytes(afterBytes)
-        )
-        binding.resultStats.text = text
-        val w = intent.getIntExtra(EXTRA_WIDTH, 0)
-        val h = intent.getIntExtra(EXTRA_HEIGHT, 0)
-        if (w > 0 && h > 0) {
-            binding.resultStats.append("\n" + getString(R.string.result_dimensions, w, h))
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.p1_share_failed, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -184,37 +302,28 @@ class ExportResultActivity : BaseActivity() {
             lifecycleScope.launch {
                 try {
                     if (isPdf) {
-                        // M06 export transaction (covers the Compress / Lock / Unlock
-                        // flows that land here): streamed from the result file, never
-                        // overwrites an earlier copy; identical re-save → "Already saved".
                         val saved = withContext(Dispatchers.IO) {
                             DownloadSaver.savePdfFile(
                                 this@ExportResultActivity, file, displayName
                             ).also {
-                                // T4.8: remember the copy so delete can remove it. A failure
-                                // to record it must not turn a finished export into a failure.
                                 docId?.let { id ->
                                     try {
-                                        ScanRepository(this@ExportResultActivity)
-                                            .addExport(id, it)
+                                        ScanRepository(this@ExportResultActivity).addExport(id, it)
                                     } catch (_: Exception) {
                                     }
                                 }
                             }
                         }
                         SavedSnackbar.showExport(
-                            this@ExportResultActivity,
-                            binding.root,
-                            saved,
-                            R.string.result_saved_documents,
-                            docId
+                            this@ExportResultActivity, binding.root, saved,
+                            R.string.result_saved_documents, docId
                         )
+                        binding.btnSaveResult.setText(R.string.rs_saved_documents)
+                        binding.btnSaveResult.isEnabled = false
                     } else {
-                        // Resized images get their own folder in Downloads (streamed, always a new file).
                         val finalName = withContext(Dispatchers.IO) {
                             DownloadSaver.saveJpeg(
-                                this@ExportResultActivity, file, displayName,
-                                subdir = "Resize"
+                                this@ExportResultActivity, file, displayName, subdir = "Resize"
                             )
                         }
                         Toast.makeText(
@@ -222,6 +331,8 @@ class ExportResultActivity : BaseActivity() {
                             getString(R.string.result_saved_downloads, finalName),
                             Toast.LENGTH_LONG
                         ).show()
+                        binding.btnSaveResult.setText(R.string.rs_saved_documents)
+                        binding.btnSaveResult.isEnabled = false
                     }
                 } catch (e: Exception) {
                     Toast.makeText(
@@ -238,16 +349,10 @@ class ExportResultActivity : BaseActivity() {
         val file = outputPath?.let { File(it) } ?: return
         if (!file.exists()) return
         try {
-            val uri = FileProvider.getUriForFile(
-                this, "$packageName.fileprovider", file
-            )
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = mime
                 putExtra(Intent.EXTRA_STREAM, uri)
-                // Android 12+ reads the read grant from ClipData when the sharesheet
-                // previews the file; EXTRA_STREAM alone logs a Permission Denial.
-                // Keep the same URI and MIME on both so the grant survives the
-                // chooser hop (same contract as ShareUtils, without calling it).
                 clipData = ClipData(
                     ClipDescription(file.name, arrayOf(mime)),
                     ClipData.Item(uri)
@@ -256,7 +361,6 @@ class ExportResultActivity : BaseActivity() {
             }
             startActivity(Intent.createChooser(intent, getString(R.string.result_share)))
         } catch (e: Exception) {
-            // A JVM message is diagnostics, not user-facing text.
             Toast.makeText(this, R.string.p1_share_failed, Toast.LENGTH_LONG).show()
         }
     }
@@ -274,9 +378,6 @@ class ExportResultActivity : BaseActivity() {
         }
     }
 
-    /** CP1: the one decimal formatter; the old local copy counted 1024-byte KB. */
-    private fun formatBytes(bytes: Long): String = SizeUnits.format(bytes)
-
     companion object {
         private const val EXTRA_OUTPUT = "output_path"
         private const val EXTRA_PREVIEW = "preview_path"
@@ -287,18 +388,13 @@ class ExportResultActivity : BaseActivity() {
         private const val EXTRA_SUMMARY = "result_summary"
         private const val EXTRA_WIDTH = "width"
         private const val EXTRA_HEIGHT = "height"
-
-        /** Lane C: optional real before-page data. Absent = honest "original unavailable". */
         private const val EXTRA_BEFORE_PREVIEW = "before_preview_path"
         private const val EXTRA_BEFORE_WIDTH = "before_width"
         private const val EXTRA_BEFORE_HEIGHT = "before_height"
-        private const val EXTRA_OUTCOME = "compare_outcome"
-
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_WARNING = "warning"
-
-        /** T4.8: the document whose meta.txt should record the saved copy. */
         private const val EXTRA_DOC_ID = "doc_id"
+        private const val EXTRA_TOOL_ID = "tool_id"
 
         fun intent(
             context: Context,
@@ -313,14 +409,12 @@ class ExportResultActivity : BaseActivity() {
             title: String?,
             warning: String?,
             docId: String? = null,
-            /** When set, replaces the before/after comparison (e.g. Protect PDF). */
             summary: String? = null,
-            /** Lane C: a real before-page image, only when the producer still has it. */
             beforePreviewPath: String? = null,
             beforeWidth: Int = 0,
             beforeHeight: Int = 0,
-            /** Lane C: an explicit outcome sentence, e.g. "Compressed · 113 KB". */
-            outcome: String? = null
+            outcome: String? = null,
+            toolId: String? = null
         ): Intent = Intent(context, ExportResultActivity::class.java)
             .putExtra(EXTRA_OUTPUT, outputPath)
             .putExtra(EXTRA_PREVIEW, previewPath)
@@ -337,6 +431,7 @@ class ExportResultActivity : BaseActivity() {
             .putExtra(EXTRA_BEFORE_PREVIEW, beforePreviewPath)
             .putExtra(EXTRA_BEFORE_WIDTH, beforeWidth)
             .putExtra(EXTRA_BEFORE_HEIGHT, beforeHeight)
-            .putExtra(EXTRA_OUTCOME, outcome)
+            .putExtra("compare_outcome", outcome)
+            .apply { if (toolId != null) putExtra(EXTRA_TOOL_ID, toolId) }
     }
 }

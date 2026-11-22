@@ -23,7 +23,7 @@ class L3_02_ResultHierarchyTest {
             en.keys.filter { !it.contains('[') }.toSet(),
             hi.keys.filter { !it.contains('[') }.toSet()
         )
-        assertEquals("Remove this new copy", en["ux130_l3_result_remove_copy"])
+        assertEquals("Remove new copy", en["ux130_l3_result_remove_copy"])
         assertTrue(
             "the consequence must name what is removed and that the original is safe",
             en["ux130_l3_result_remove_copy_consequence"].orEmpty().contains("Documents") &&
@@ -31,7 +31,7 @@ class L3_02_ResultHierarchyTest {
         )
         // Natural Hindi: "प्रत" for copy, never the rejected "कॉपी"; the Documents
         // folder name stays in English so it is not a false location.
-        assertEquals("यह नई प्रति हटाएँ", hi["ux130_l3_result_remove_copy"])
+        assertEquals("नई प्रति हटाएँ", hi["ux130_l3_result_remove_copy"])
         assertTrue(
             "Hindi consequence keeps the real Documents/ScanWhirl location",
             hi["ux130_l3_result_remove_copy_consequence"].orEmpty().contains("Documents/ScanWhirl")
@@ -45,8 +45,8 @@ class L3_02_ResultHierarchyTest {
         assertTrue("must stack them at fontScale 2", src.contains("stacksActionsAtLargeFont()"))
         assertTrue("must use the lane remove-copy label", src.contains("R.string.ux130_l3_result_remove_copy"))
         assertTrue(
-            "must show the exact removal consequence",
-            src.contains("R.string.ux130_l3_result_remove_copy_consequence")
+            "must state the original is kept beside removal",
+            src.contains("R.string.rs_remove_copy_note")
         )
         assertTrue("every action is at least 56dp", src.contains("56f"))
     }

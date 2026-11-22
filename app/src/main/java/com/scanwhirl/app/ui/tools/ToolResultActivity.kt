@@ -1,4 +1,4 @@
-﻿package com.scanwhirl.app.ui.tools
+package com.scanwhirl.app.ui.tools
 
 import android.Manifest
 import android.content.ActivityNotFoundException
@@ -7,6 +7,13 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextUtils
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.StyleSpan
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.Gravity
@@ -37,6 +44,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.CompareModel
+import com.scanwhirl.app.ui.kit.CompareMode
 import com.scanwhirl.app.ui.kit.ComparePane
 import com.scanwhirl.app.ui.kit.CompareView
 import com.scanwhirl.app.ui.kit.ToolRegistry
@@ -91,6 +99,22 @@ class ToolResultActivity : BaseActivity() {
     private lateinit var saveAs: ActivityResultLauncher<String>
     private var toolId = ""
     private var note: String? = null
+
+    /** Lane RS: the persisted outcome class, so a reopened Last result tells the truth. */
+    private enum class OutcomeClass { SMALLER, NOT_SMALLER, TARGET_MISSED }
+    private var outcomeClass: OutcomeClass? = null
+    private var alreadyCompact = false
+    private var noStrongerPreset = false
+    /** Lane RS: our own fresh output, captured before it is removed from the library. */
+    private var grownOutputIds: List<String> = emptyList()
+    private var grownOutputFiles: List<File> = emptyList()
+    private lateinit var chipView: TextView
+    private lateinit var savedLine: TextView
+    private lateinit var bottomBar: LinearLayout
+    private var alsoSaveButton: TextView? = null
+    private var saveAnotherCopy: View? = null
+    private var moreLocation: TextView? = null
+    private var moreNote: TextView? = null
 
     /**
      * H2-4: on Android 7-9 a Documents copy needs the runtime storage grant. The save this screen
@@ -193,6 +217,34 @@ class ToolResultActivity : BaseActivity() {
         note = intent.getStringExtra(EXTRA_NOTE)
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
+        // Lane RS: classify the outcome BEFORE anything is published. A fresh size result that did
+        // not get smaller is discarded below; its class is also persisted for a truthful reopen.
+        outcomeClass = intent.getStringExtra(EXTRA_OUTCOME_CLASS)
+            ?.let { runCatching { OutcomeClass.valueOf(it) }.getOrNull() }
+        noStrongerPreset = intent.getBooleanExtra(EXTRA_NO_STRONGER_PRESET, false)
+        if (isCompressResult) {
+            val grew = intent.getBooleanExtra(EXTRA_COMPRESS_GREW, false)
+            val measured = measuredOutputBytes()
+            alreadyCompact = grew || (beforeBytes?.let { measured >= it } == true)
+            if (alreadyCompact) outcomeClass = OutcomeClass.NOT_SMALLER
+            else if (outcomeClass == null) {
+                outcomeClass = if (
+                    intent.getBooleanExtra(EXTRA_COMPRESS_MISSED, false) ||
+                    targetBytes?.let { measured > it } == true
+                ) {
+                    OutcomeClass.TARGET_MISSED
+                } else {
+                    OutcomeClass.SMALLER
+                }
+            }
+        }
+        if (alreadyCompact) {
+            grownOutputIds = docIds.toList()
+            grownOutputFiles = files.toList()
+            docIds.clear()
+            files.clear()
+            discardGrownOutput()
+        }
         // L3-02 P1: the identity was captured when this intent was built, before
         // any later owner of the id could replace the output.
         outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
@@ -220,9 +272,29 @@ class ToolResultActivity : BaseActivity() {
                 documentsExistingName = saved.documentsExistingName
                 undone = saved.undone
                 sourceKept = receiptSourceId?.let { repo.getDocument(it) != null } ?: saved.sourceKept
+                // Lane RS: an older receipt has no class. Derive it from real bytes so a grown
+                // output can never reopen titled "Compressed".
+                if (toolId == "compress") {
+                    outcomeClass = saved.outcomeClass?.let { runCatching { OutcomeClass.valueOf(it) }.getOrNull() }
+                        ?: if (saved.beforeBytes?.let { measuredOutputBytes() >= it } == true) {
+                            OutcomeClass.NOT_SMALLER
+                        } else if (targetBytes?.let { measuredOutputBytes() > it } == true) {
+                            OutcomeClass.TARGET_MISSED
+                        } else {
+                            OutcomeClass.SMALLER
+                        }
+                    alreadyCompact = outcomeClass == OutcomeClass.NOT_SMALLER
+                    if (alreadyCompact && (docIds.isNotEmpty() || files.isNotEmpty())) {
+                        grownOutputIds = docIds.toList()
+                        grownOutputFiles = files.toList()
+                        docIds.clear()
+                        files.clear()
+                        discardGrownOutput()
+                    }
+                }
             }
         }
-        if (docIds.isNotEmpty() || files.isNotEmpty()) persistReceipt()
+        if (docIds.isNotEmpty() || files.isNotEmpty() || alreadyCompact) persistReceipt()
         // W3: a rotation must not lose what this run already learned. The saved Documents copy
         // stays undoable (it is still the same copy, still verified by its fingerprint), and an
         // already-undone result never offers the actions again as if nothing happened.
@@ -244,6 +316,7 @@ class ToolResultActivity : BaseActivity() {
         }
         rootView = buildRoot()
         setContentView(rootView)
+        if (savedCopy != null || documentsExistingName != null) markDocumentsSaved()
         render()
         // W3: if this result was already undone before a rotation, do not offer its actions again.
         if (undone) showAlreadyUndone()
@@ -268,8 +341,42 @@ class ToolResultActivity : BaseActivity() {
             chosenLocationName = chosenLocationName,
             documentsExistingName = documentsExistingName,
             undone = undone,
-            savedAt = System.currentTimeMillis()
+            savedAt = System.currentTimeMillis(),
+            outcomeClass = outcomeClass?.name
         ))
+    }
+
+    /** Stat-only size of this run's output; safe to read on Main, never a hash. */
+    private fun measuredOutputBytes(): Long = when {
+        docIds.isNotEmpty() -> docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
+            .sumOf { doc -> if (doc.pdfFile.isFile) doc.pdfFile.length() else 0L }
+        files.isNotEmpty() -> files.sumOf { file -> if (file.isFile) file.length() else 0L }
+        else -> 0L
+    }
+
+    /**
+     * Lane RS: a size tool that produced a larger file must not leave our own fresh output in the
+     * library. We re-check the SAME recorded identity Undo uses before deleting only those outputs;
+     * the source document (never in [grownOutputIds]) is untouched.
+     */
+    private fun discardGrownOutput() {
+        val ids = grownOutputIds
+        val outs = grownOutputFiles
+        if (ids.isEmpty() && outs.isEmpty()) return
+        val expected = outputIdentity
+        lifecycleScope.launch {
+            val matches = withContext(Dispatchers.IO) {
+                val current = captureOutputIdentityBlocking(this@ToolResultActivity, ids, outs)
+                expected == null || current == expected
+            }
+            if (!matches) return@launch
+            withContext(Dispatchers.IO) {
+                ids.forEach { id ->
+                    if (id != receiptSourceId) runCatching { repo.deleteDocument(id) }
+                }
+                outs.forEach { runCatching { it.delete() } }
+            }
+        }
     }
 
     /**
@@ -308,21 +415,26 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun buildRoot(): View {
+        val hi = SwStyle.color(this, R.color.text_hologram_hi)
+        val mid = SwStyle.color(this, R.color.text_hologram_mid)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(
                 SwStyle.dp(this@ToolResultActivity, 18f), SwStyle.dp(this@ToolResultActivity, 10f),
-                SwStyle.dp(this@ToolResultActivity, 18f), SwStyle.dp(this@ToolResultActivity, 24f)
+                SwStyle.dp(this@ToolResultActivity, 18f), SwStyle.dp(this@ToolResultActivity, 12f)
             )
             applySystemBarsPadding()
         }
+
+        // 1. Top bar: the tool name, never a sentence (except the honest outcome override).
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         bar.addView(SwStyle.iconButton(
-            this, R.drawable.ic_sym_arrow_back, SwStyle.color(this, R.color.text_hologram_hi)
+            this, R.drawable.ic_sym_arrow_back, hi
         ).apply {
+            id = R.id.rsBack
             contentDescription = getString(R.string.tools_setup_back)
             layoutParams = LinearLayout.LayoutParams(
                 SwStyle.dp(this@ToolResultActivity, 48f), SwStyle.dp(this@ToolResultActivity, 48f)
@@ -330,24 +442,19 @@ class ToolResultActivity : BaseActivity() {
             setOnClickListener { handleBack() }
         })
         bar.addView(
-            SwStyle.text(this, 22f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                // B3: a compressed result opens with what happened, not with "Done".
-                // CP1: a target miss or a copy that grew must not be titled "Compressed".
-                text = getString(
-                    when {
-                        isCompressResult &&
-                            intent.getBooleanExtra(EXTRA_COMPRESS_MISSED, false) ->
-                            R.string.cp1_compress_header_missed
-                        isCompressResult &&
-                            intent.getBooleanExtra(EXTRA_COMPRESS_GREW, false) ->
-                            R.string.cp1_compress_header_grew
-                        isCompressResult -> R.string.compress_result_header
-                        else -> R.string.tools_result_done
-                    }
-                )
+            SwStyle.text(this, 22f, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
+                id = R.id.rsTitle
+                text = when {
+                    alreadyCompact -> getString(R.string.rs_not_smaller_title)
+                    outcomeClass == OutcomeClass.TARGET_MISSED ->
+                        getString(R.string.cp1_compress_header_missed)
+                    else -> toolName
+                }
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = SwStyle.dp(this@ToolResultActivity, 10f)
+                marginStart = SwStyle.dp(this@ToolResultActivity, 8f)
             }
         )
         root.addView(bar)
@@ -359,74 +466,55 @@ class ToolResultActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        previewHost = FrameLayout(this).apply {
-            id = R.id.toolResultPreviewHost
-            // fixidcrop: a white ID card page on a white box had no visible paper edge. The card
-            // page sits on the ink backdrop, inset by a little padding and framed by a thin line,
-            // so the sheet is obvious. Every other tool result keeps its previous preview.
-            when {
-                idCardFlow -> {
-                    val pad = SwStyle.dp(this@ToolResultActivity, ID_PREVIEW_PADDING_DP)
-                    setPadding(pad, pad, pad, pad)
-                    background = SwStyle.rounded(
-                        this@ToolResultActivity,
-                        SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
-                        radiusDp = 16f,
-                        stroke = ID_PREVIEW_LINE
-                    )
-                }
-                // B3 (#8): a compressed page is shown smaller, on the ink surface, so the measured
-                // numbers above it stay the headline instead of a big white preview.
-                isCompressResult -> {
-                    background = SwStyle.rounded(
-                        this@ToolResultActivity,
-                        SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
-                        radiusDp = 16f,
-                        stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
-                    )
-                }
-                else -> {
-                    background = SwStyle.rounded(
-                        this@ToolResultActivity,
-                        SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
-                        radiusDp = 16f,
-                        stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
-                    )
-                }
-            }
-            clipToOutline = true
+        // 2. One hero row + one chip + one receipt row. No other sentences above the visual.
+        val heroBlock = LinearLayout(this).apply {
+            id = R.id.rsHeroBlock
+            orientation = LinearLayout.VERTICAL
         }
-        preview = ImageView(this).apply {
-            id = R.id.toolResultPreview
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            if (!idCardFlow && !isCompressResult) setBackgroundColor(Color.WHITE)
-            contentDescription = getString(R.string.tools_result_preview)
+        summary = SwStyle.text(this, 28f, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
+            id = R.id.toolResultSummary
+            maxLines = 3
+            ellipsize = TextUtils.TruncateAt.END
         }
-        previewHost.addView(preview, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        heroBlock.addView(summary, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
+        chipView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.rv_accent), bold = true).apply {
+            id = R.id.rsChip
+            visibility = View.GONE
+            gravity = Gravity.CENTER
+            setPadding(
+                SwStyle.dp(this@ToolResultActivity, 10f), SwStyle.dp(this@ToolResultActivity, 6f),
+                SwStyle.dp(this@ToolResultActivity, 10f), SwStyle.dp(this@ToolResultActivity, 6f)
+            )
+            background = SwStyle.rounded(
+                this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
+                radiusDp = 12f, stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+            )
+        }
+        heroBlock.addView(chipView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
+        column.addView(heroBlock, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) })
 
-        nameView = SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+        savedLine = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_secondary)).apply {
             id = R.id.toolResultName
             maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+            ellipsize = TextUtils.TruncateAt.END
+            movementMethod = LinkMovementMethod.getInstance()
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, 48f)
+            gravity = Gravity.CENTER_VERTICAL
         }
-
-        summary = SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-            id = R.id.toolResultSummary
-            setLineSpacing(0f, 1.25f)
-        }
-
-        // Outcome first. The receipt remains readable body text below the measured headline.
-        column.addView(summary, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
-        column.addView(nameView, LinearLayout.LayoutParams(
+        column.addView(savedLine, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
-        // V2T T1: one accessible status line, derived from actual library state.
+
+        // V2T T1: an a11y status node, deliberately not a visible line.
         v2tStatus = SwStyle.text(this, 13f, SwStyle.color(this, R.color.rv_accent)).apply {
             id = R.id.v2t_status
+            visibility = View.GONE
             maxLines = Int.MAX_VALUE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -434,177 +522,214 @@ class ToolResultActivity : BaseActivity() {
         }
         column.addView(v2tStatus, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
-        column.addView(previewHost, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, if (isCompressResult) 140f else 200f)
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
+        ))
 
-        // Lane C: one Before | After surface. Added after the existing preview so no current
-        // control or id moves; it stays GONE for results with no compare proof.
+        // 3. The one visual surface: stacked zoom crops, one After page, or nothing at all.
+        val visualHost = FrameLayout(this).apply { id = R.id.rsVisualHost }
+        previewHost = FrameLayout(this).apply {
+            id = R.id.toolResultPreviewHost
+            visibility = if (idCardFlow) View.VISIBLE else View.GONE
+            if (idCardFlow) {
+                val pad = SwStyle.dp(this@ToolResultActivity, ID_PREVIEW_PADDING_DP)
+                setPadding(pad, pad, pad, pad)
+            }
+            background = SwStyle.rounded(
+                this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
+                radiusDp = 16f, stroke = ID_PREVIEW_LINE
+            )
+            clipToOutline = true
+        }
+        preview = ImageView(this).apply {
+            id = R.id.toolResultPreview
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = View.GONE
+            contentDescription = getString(R.string.tools_result_preview)
+        }
+        previewHost.addView(preview, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        visualHost.addView(previewHost, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            if (idCardFlow) SwStyle.dp(this@ToolResultActivity, 200f)
+            else SwStyle.dp(this@ToolResultActivity, 1f)
+        ))
         compareView = CompareView(this).apply {
             id = R.id.ccCompare
             visibility = View.GONE
-        }.also { view ->
-            column.addView(
-                view,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) }
-            )
         }
+        visualHost.addView(compareView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        column.addView(visualHost, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
 
-        errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+        errorView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
             id = R.id.toolResultError
             isVisible = false
         }
         column.addView(errorView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
 
-        if (idCardFlow) {
-            // F1/W3: the card is already saved, so there is nothing to Save and nothing to Undo.
-            // Two clear actions: Keep (done) and Discard (delete this one card).
-            column.addView(
-                button(getString(R.string.fixflow_keep), tag = TAG_KEEP, primary = true) { finish() },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+        if (alreadyCompact) {
+            bottomBar = LinearLayout(this).apply {
+                id = R.id.rsBottomBar
+                orientation = LinearLayout.HORIZONTAL
+            }
+            if (!noStrongerPreset && !receiptSourceId.isNullOrBlank()) {
+                bottomBar.addView(
+                    button(getString(R.string.rs_try_strong), R.id.rsTryStrong, primary = true) { tryStrong() },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = SwStyle.dp(this@ToolResultActivity, 8f)
+                    }
+                )
+            }
+            bottomBar.addView(
+                button(getString(R.string.tools_result_done), R.id.rsDone,
+                    primary = noStrongerPreset || receiptSourceId.isNullOrBlank()) { finish() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             )
-            column.addView(
-                button(getString(R.string.discard), tag = TAG_DISCARD) { discardIdCard() },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-            )
+            root.addView(bottomBar, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
             return root
         }
 
-        // L3-02: Open is the one filled decision, Share is secondary. They sit side by side with
-        // an 8dp gap while both labels fit; at 200% type they stack so neither is squeezed.
-        val open = button(getString(R.string.tools_result_open), R.id.toolResultOpen, primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
-        val share = button(getString(R.string.tools_result_share), R.id.toolResultShare, icon = R.drawable.ic_sym_share) { share() }
-        if (pairPrimaryActions()) {
-            val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            pair.addView(open, LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-            ).apply { marginEnd = SwStyle.dp(this@ToolResultActivity, 8f) })
-            pair.addView(share, LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-            ))
-            column.addView(
-                pair,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+        if (idCardFlow) {
+            bottomBar = LinearLayout(this).apply { id = R.id.rsBottomBar; orientation = LinearLayout.HORIZONTAL }
+            bottomBar.addView(
+                button(getString(R.string.fixflow_keep), tag = TAG_KEEP, primary = true) { finish() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = SwStyle.dp(this@ToolResultActivity, 8f)
+                }
             )
-        } else {
-            column.addView(
-                open,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) }
+            bottomBar.addView(
+                button(getString(R.string.discard), tag = TAG_DISCARD) { discardIdCard() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             )
-            column.addView(
-                share,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-            )
-        }
-        // UI-B3 (#12): "Also save in Documents" stays plainly visible for every result,
-        // including a compress that missed its target (T05-RESULT-SLICE). It is added below.
-        column.addView(
-            button(getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave, icon = R.drawable.ic_sym_download) { alsoSave() },
-            LinearLayout.LayoutParams(
+            root.addView(bottomBar, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-        )
-        // H7: an exported file (Word, Excel, PowerPoint, images, ZIP) is not a library document
-        // and the Library can never list it, so "Show in library" went to a screen where the
-        // result was missing. The export lives in the app's own output folder until the user
-        // Saves it somewhere, so the smaller honest change is to drop the button, not to point
-        // it at another empty folder.
-        val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
-            showInLibrary()
+            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) })
+            return root
         }
-        if (isExportOnlyResult()) library.visibility = View.GONE
+
+        // Secondary actions live in one collapsible More panel (lane cr adds its Replace row here).
         val morePanel = LinearLayout(this).apply {
             id = R.id.toolResultMorePanel
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        moreLocation = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_secondary)).apply {
+            id = R.id.rsMoreLocation
+            visibility = View.GONE
+        }
+        morePanel.addView(moreLocation, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        moreNote = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_secondary)).apply {
+            id = R.id.rsMoreNote
+            visibility = View.GONE
+        }
+        morePanel.addView(moreNote, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        alsoSaveButton = button(
+            getString(R.string.tools_result_also_save), R.id.toolResultAlsoSave,
+            icon = R.drawable.ic_sym_download
+        ) { alsoSave() }
+        morePanel.addView(alsoSaveButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+        saveAnotherCopy = textAction(getString(R.string.rs_save_another_copy)).apply {
+            id = R.id.rsSaveAnother
+            visibility = View.GONE
+            setOnClickListener {
+                alsoSaveButton?.text = getString(R.string.tools_result_also_save)
+                alsoSaveButton?.isEnabled = true
+                visibility = View.GONE
+                alsoSave()
+            }
+        }
+        morePanel.addView(saveAnotherCopy, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         morePanel.addView(
             button(getString(R.string.tools_result_choose_location), R.id.toolResultSave) { save() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
+        val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
+            showInLibrary()
+        }
+        if (isExportOnlyResult()) library.visibility = View.GONE
+        morePanel.addView(library, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
         morePanel.addView(
-            library,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
-        )
-        // V2T T2: secondary actions on the verified OUTPUT copy. Open stays primary.
-        morePanel.addView(
-            button(getString(R.string.v2t_compress_this_copy), id = R.id.v2t_compress_copy,
+            button(getString(R.string.v2t_compress_this_copy), R.id.v2t_compress_copy,
                 icon = R.drawable.ic_sym_compress) { chainCompress() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
         morePanel.addView(
-            button(getString(R.string.v2t_protect_this_copy), id = R.id.v2t_protect_copy,
+            button(getString(R.string.v2t_protect_this_copy), R.id.v2t_protect_copy,
                 icon = R.drawable.ic_sym_encrypted) { chainProtect() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
-        val more = textAction(getString(R.string.tools_result_more_options)).apply {
-            id = R.id.toolResultMore
-            setOnClickListener {
-                val opening = morePanel.visibility != View.VISIBLE
-                morePanel.visibility = if (opening) View.VISIBLE else View.GONE
-                text = getString(
-                    if (opening) R.string.tools_result_fewer_options
-                    else R.string.tools_result_more_options
-                )
-            }
-        }
-        column.addView(
-            more,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 10f) }
-        )
-        column.addView(
-            morePanel,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-        // L3-02: the output removal is named ("Remove this new copy") and its exact
-        // consequence is stated above the action, before the person taps it. The
-        // original is never a candidate here (B2-H1 / T10-FIX-PDFA-UNDO).
-        column.addView(
-            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
-                text = getString(R.string.ux130_l3_result_remove_copy_consequence)
-                setLineSpacing(0f, 1.2f)
-                maxLines = Int.MAX_VALUE
+        morePanel.addView(
+            SwStyle.text(this, 13f, mid).apply {
+                id = R.id.rsRemoveNote
+                text = getString(R.string.rs_remove_copy_note)
             },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
-        // L3-02 (lead-authorized): one label for the same action everywhere,
-        // including compress results without provenance. One-tap removal stays.
-        val undoLabel = getString(R.string.ux130_l3_result_remove_copy)
-        column.addView(
-            button(undoLabel, R.id.toolResultUndo, icon = R.drawable.ic_sym_undo) { undo() },
+        morePanel.addView(
+            button(getString(R.string.ux130_l3_result_remove_copy), R.id.toolResultUndo,
+                icon = R.drawable.ic_sym_delete) { undo() },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) }
         )
+        column.addView(morePanel, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+
+        // 4. Primary actions are pinned, always visible at 100% on 360/411dp portrait.
+        bottomBar = LinearLayout(this).apply {
+            id = R.id.rsBottomBar
+            orientation = LinearLayout.VERTICAL
+            background = SwStyle.rounded(
+                this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.glass_surface),
+                radiusDp = 16f, stroke = SwStyle.color(this@ToolResultActivity, R.color.sw_cyan_hair)
+            )
+        }
+        val open = button(getString(R.string.tools_result_open), R.id.toolResultOpen,
+            primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
+        val share = button(getString(R.string.tools_result_share), R.id.toolResultShare,
+            icon = R.drawable.ic_sym_share) { share() }
+        val more = button(getString(R.string.rs_more), R.id.toolResultMore) {
+            val opening = morePanel.visibility != View.VISIBLE
+            morePanel.visibility = if (opening) View.VISIBLE else View.GONE
+            findViewById<TextView>(R.id.toolResultMore)?.text = getString(
+                if (opening) R.string.tools_result_fewer_options else R.string.rs_more
+            )
+        }
+        val actions = listOf(open, share, more)
+        actions.forEach { action ->
+            bottomBar.addView(action, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        root.addView(bottomBar, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
         return root
     }
 
@@ -740,214 +865,253 @@ class ToolResultActivity : BaseActivity() {
     // ---- content ----------------------------------------------------------
 
     private fun render() {
+        if (alreadyCompact) {
+            renderAlreadyCompact()
+            return
+        }
         val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
-        if (docs.isNotEmpty()) {
-            val pages = docs.sumOf { it.pageCount }
-            val bytes = docs.sumOf { if (it.pdfFile.exists()) it.pdfFile.length() else 0L }
-            nameView.text = if (docs.size == 1) {
-                docs.first().name
-            } else {
-                getString(R.string.tools_result_name_more, docs.first().name, docs.size - 1)
-            }
-            var line = resources.getQuantityString(R.plurals.tools_result_pages, pages, pages)
-            if (docs.size > 1) {
-                line += " · " + resources.getQuantityString(
-                    R.plurals.tools_result_documents, docs.size, docs.size
+        val measured = when {
+            docs.isNotEmpty() -> docs.sumOf { if (it.pdfFile.isFile) it.pdfFile.length() else 0L }
+            files.isNotEmpty() -> files.sumOf { if (it.isFile) it.length() else 0L }
+            else -> 0L
+        }
+        val pages = docs.sumOf { it.pageCount }
+        if (isCompressResult) {
+            val before = beforeBytes
+            if (before != null && before > 0L) {
+                val from = StatusLine.formatBytes(before)
+                val to = StatusLine.formatBytes(measured)
+                summary.text = getString(R.string.rs_size_hero, from, to)
+                summary.contentDescription = getString(
+                    R.string.rs_hero_a11y_size, from, to, reductionA11y(before, measured)
                 )
-            }
-            line = getString(R.string.compress_result_size, StatusLine.formatBytes(bytes)) + "\n" + line
-            if (isCompressResult) {
-                applyCompressSummary(bytes)
+                val target = targetBytes
+                chipView.text = target?.let { t ->
+                    val limit = StatusLine.formatBytes(t)
+                    when {
+                        measured > t -> getString(R.string.rs_over_limit, limit)
+                        measured == t -> getString(R.string.rs_at_limit, limit)
+                        else -> getString(R.string.rs_under_limit, limit)
+                    }
+                } ?: reductionChip(before, measured)
+                setStatusIcon(chipView, measured < before && (target == null || measured <= target))
+                chipView.visibility = View.VISIBLE
+            } else if (measured <= 0L) {
+                summary.text = getString(R.string.compress_result_size_unknown)
+                summary.contentDescription = summary.text
+                chipView.visibility = View.GONE
             } else {
-                applySummary(line)
-            }
-            previewPreview(docs.first().pageFiles.firstOrNull())
-        } else if (files.isNotEmpty()) {
-            val bytes = files.sumOf { it.length() }
-            nameView.text = if (files.size == 1) {
-                files.first().name
-            } else {
-                getString(R.string.tools_result_name_more, files.first().name, files.size - 1)
-            }
-            var line = resources.getQuantityString(R.plurals.tools_result_files_count, files.size, files.size)
-            line = getString(R.string.compress_result_size, StatusLine.formatBytes(bytes)) + "\n" + line
-            applySummary(line)
-            val first = files.first()
-            if (isTypedFile(first)) {
-                // The type card already names this artifact; do not repeat that name outside it.
-                nameView.isVisible = files.size > 1
-                showFileCard(first)
-            } else {
-                preview.isVisible = true
-                val image = files.firstOrNull { it.name.endsWith(".jpg") || it.name.endsWith(".png") }
-                previewPreview(image)
-                if (image == null) preview.setImageResource(iconFor(first))
+                summary.text = getString(R.string.compress_result_size, StatusLine.formatBytes(measured))
+                summary.contentDescription = summary.text
+                val target = targetBytes
+                if (target != null) {
+                    val limit = StatusLine.formatBytes(target)
+                    chipView.text = when {
+                        measured > target -> getString(R.string.rs_over_limit, limit)
+                        measured == target -> getString(R.string.rs_at_limit, limit)
+                        else -> getString(R.string.rs_under_limit, limit)
+                    }
+                    setStatusIcon(chipView, measured <= target)
+                    chipView.visibility = View.VISIBLE
+                } else {
+                    chipView.visibility = View.GONE
+                }
             }
         } else {
-            nameView.text = ""
-            applySummary(getString(R.string.tools_result_nothing))
+            // UX_RULES_SCANNER: the hero is numbers only. A producer note (Form photo's six-line
+            // measurement paragraph) is detail: it lives in More, never on the face of the screen.
+            val fact = measuredFactFromNote(note)
+                ?: intent.getStringExtra(EXTRA_COMPARE_OUTCOME)?.takeIf { it.isNotBlank() }
+                ?: (if (pages > 0) resources.getQuantityString(R.plurals.rs_fact_pages, pages, pages) else null)
+                ?: (if (measured > 0L) getString(R.string.compress_result_size, StatusLine.formatBytes(measured)) else null)
+                ?: getString(R.string.tools_result_nothing)
+            summary.text = fact
+            summary.contentDescription = fact
+            chipView.visibility = View.GONE
         }
-        refreshLocationLines()
+
+        val name = when {
+            docs.size == 1 -> docs.first().name
+            docs.size > 1 -> getString(R.string.tools_result_name_more, docs.first().name, docs.size - 1)
+            files.size == 1 -> files.first().name
+            files.size > 1 -> getString(R.string.tools_result_name_more, files.first().name, files.size - 1)
+            else -> ""
+        }
+        renderSavedLine(name)
+
+        if (idCardFlow) {
+            previewHost.visibility = View.VISIBLE
+            preview.visibility = View.VISIBLE
+            previewPreview(docs.firstOrNull()?.pageFiles?.firstOrNull())
+        } else {
+            previewHost.visibility = View.GONE
+            if (docs.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
+                showFileCard(files.first())
+            }
+        }
+        renderMoreLocation()
+        moreNote?.let { view ->
+            val text = note?.takeIf { it.isNotBlank() }
+            view.isVisible = text != null
+            view.text = text.orEmpty()
+        }
         renderV2tStatus()
         bindCompare()
     }
 
-    /** V2T T1: the status is only a claim we can verify against the library. */
+    private fun renderMoreLocation() {
+        moreLocation?.let { view ->
+            val text = chosenLocationName?.let { name ->
+                getString(R.string.rs_where_chosen) + " · " + name
+            } ?: documentsExistingName?.let { name ->
+                getString(R.string.rs_where_documents_existing) + " · " + name
+            } ?: savedCopy?.let { copy ->
+                getString(R.string.rs_where_documents) + " · " + copy.name
+            } ?: when {
+                docIds.isNotEmpty() -> getString(R.string.rs_where_library)
+                files.isNotEmpty() -> getString(R.string.rs_unsaved_output)
+                else -> null
+            }
+            view.isVisible = text != null
+            view.text = text.orEmpty()
+        }
+    }
+
+    /**
+     * Pull the two deciding numbers out of a producer's measurement note, so the screen shows
+     * "140 × 60 px · 32 KB" instead of the whole paragraph. The note itself stays in More.
+     */
+    private fun measuredFactFromNote(note: String?): String? {
+        if (note.isNullOrBlank()) return null
+        val px = Regex("""(\d+)\s*[×xX]\s*(\d+)\s*px""").find(note)?.let {
+            "${it.groupValues[1]} × ${it.groupValues[2]} px"
+        }
+        val size = Regex("""\b\d+(?:\.\d+)?\s*(?:KB|MB|GB|B)\b""").find(note)?.value
+        return listOfNotNull(px, size).joinToString(" · ").takeIf { it.isNotBlank() }
+    }
+
+    /** UX_RULES_SCANNER: status by vector icon, never a glyph in shipped text. */
+    internal fun setStatusIcon(view: TextView, ok: Boolean) {
+        val d = androidx.appcompat.content.res.AppCompatResources.getDrawable(
+            this, if (ok) R.drawable.ic_sym_check else R.drawable.ic_sym_error
+        )?.mutate()
+        val size = SwStyle.dp(this, 16f)
+        d?.setBounds(0, 0, size, size)
+        d?.setTint(SwStyle.color(this, if (ok) R.color.rv_accent else R.color.laser_danger))
+        view.setCompoundDrawablesRelative(d, null, null, null)
+        view.compoundDrawablePadding = SwStyle.dp(this, 6f)
+    }
+
+    private fun renderAlreadyCompact() {
+        summary.text = getString(R.string.rs_already_compact_title)
+        summary.contentDescription = summary.text
+        chipView.visibility = View.GONE
+        savedLine.text = getString(R.string.rs_already_compact_msg)
+        savedLine.isVisible = true
+        savedLine.contentDescription = savedLine.text
+        previewHost.visibility = View.GONE
+        compareView?.visibility = View.GONE
+    }
+
+    /** The one receipt row: a tappable name between a prefix and an honest original suffix. */
+    private fun renderSavedLine(name: String) {
+        if (name.isBlank()) {
+            savedLine.isVisible = false
+            return
+        }
+        savedLine.isVisible = true
+        val prefix = getString(R.string.rs_saved_prefix)
+        val suffix = when {
+            sourceKept -> getString(R.string.rs_saved_suffix_kept)
+            receiptSourceId == null -> getString(R.string.rs_saved_suffix_no_source)
+            repo.getDocument(receiptSourceId!!) != null -> getString(R.string.rs_saved_suffix_kept)
+            else -> getString(R.string.rs_saved_suffix_missing)
+        }
+        val start = prefix.length
+        val end = start + name.length
+        SpannableString(prefix + name + suffix).apply {
+            setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) = open()
+            }, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            savedLine.text = this
+        }
+        savedLine.contentDescription = getString(R.string.rs_saved_line_a11y, name)
+    }
+
+    /** Rounding can print "1.6 MB → 1.6 MB"; the chip then states the real signed delta. */
+    private fun reductionChip(before: Long, after: Long): String = when {
+        after >= before -> getString(R.string.rs_delta_larger, StatusLine.formatBytes(after - before))
+        StatusLine.formatBytes(before) == StatusLine.formatBytes(after) ->
+            getString(R.string.rs_delta_smaller, StatusLine.formatBytes(before - after))
+        before / after.coerceAtLeast(1L) >= 2L ->
+            getString(R.string.rs_chip_ratio, before / after.coerceAtLeast(1L))
+        else -> getString(
+            R.string.rs_chip_percent,
+            ((before - after) * 100 / before).toInt().coerceIn(1, 99)
+        )
+    }
+
+    private fun reductionA11y(before: Long, after: Long): String = when {
+        after >= before -> getString(R.string.rs_delta_larger, StatusLine.formatBytes(after - before))
+        before / after.coerceAtLeast(1L) >= 2L ->
+            getString(R.string.rs_reduction_a11y_ratio, before / after.coerceAtLeast(1L))
+        else -> getString(
+            R.string.rs_reduction_a11y_percent,
+            ((before - after) * 100 / before).toInt().coerceIn(1, 99)
+        )
+    }
+
+    /** V2T T1: the status remains a live a11y node; the visible receipt is the one saved row. */
     private fun renderV2tStatus() {
         val view = v2tStatus ?: return
         val source = receiptSourceId
         when {
-            source == null -> view.isVisible = false
+            source == null -> view.text = ""
             repo.getDocument(source) != null -> {
-                view.isVisible = true
                 view.text = getString(R.string.v2t_new_copy_original_kept)
                 view.contentDescription = view.text
             }
             else -> {
-                view.isVisible = true
                 view.text = getString(R.string.v2t_original_missing)
                 view.contentDescription = view.text
             }
         }
+        view.isVisible = false
     }
 
-    private fun applySummary(line: String) {
-        summaryBaseLine = if (note.isNullOrBlank()) line else "$line\n$note"
-        renderSummary()
+    /** Receipt bookkeeping stays; the visible receipt is the single saved row above. */
+    private fun refreshLocationLines() = Unit
+
+    /** Lane RS: reopen a stronger compress setup for the untouched source document. */
+    private fun tryStrong() {
+        val source = receiptSourceId ?: return
+        startActivity(ToolSetupActivity.intent(this, "compress", selectedDocId = source))
+        finish()
     }
+    // ---- Lane RS: the one proof surface -----------------------------------
 
-    private fun composeSummary(): String = buildString {
-        append(
-            if (isCompressResult && summaryBaseLine == null) compressSummaryText()
-            else summaryBaseLine.orEmpty()
-        )
-        for (line in locationLines) {
-            if (line.isNotBlank()) append("\n").append(line)
-        }
-    }
-
-    private fun renderSummary() {
-        val text = composeSummary()
-        val end = text.indexOf('\n').let { if (it < 0) text.length else it }
-        summary.text = android.text.SpannableString(text).apply {
-            setSpan(android.text.style.RelativeSizeSpan(24f / 14f), 0, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
-
-    /**
-     * W3: the persistent receipt. A copy made from a library document lives in the Library; an
-     * exported file lives in the app until it is saved; "Also save" and the system picker add the
-     * exact place they wrote to. Only lines that are true for this result are shown.
-     */
-    private fun refreshLocationLines() {
-        val next = mutableListOf<String>()
-        if (docIds.isNotEmpty()) {
-            val docs = docIds.mapNotNull { runCatching { repo.getDocument(it) }.getOrNull() }
-            if (docs.isNotEmpty()) {
-                next += getString(R.string.u4_where_library)
-            }
-        } else if (files.isNotEmpty()) {
-            next += getString(R.string.w3_where_app_output)
-        }
-        savedCopy?.let { next += getString(R.string.w3_where_documents, it.name) }
-        documentsExistingName?.let {
-            next += getString(R.string.w3_where_documents_existing, it)
-        }
-        chosenLocationName?.let { next += getString(R.string.w3_where_chosen, it) }
-        if (next != locationLines) {
-            locationLines.clear()
-            locationLines.addAll(next)
-            renderSummary()
-        }
-    }
-
-    /**
-     * UI-B3 (#8): a Compress result answers the question it was asked, in this order:
-     *
-     * 1. the measured size, plus the target status only when the bytes prove it
-     *    ("9 KB · Under your 10 KB limit", "... Exactly at ..." when equal, "132 KB · Above ..."
-     *    when the smallest honest result is still bigger); with no target, the measured size
-     *    alone, and no status line at all;
-     * 2. "Before: 824 KB", when the source size is known;
-     * 3. where the original is, for a copy made from a library document.
-     *
-     * A result whose PDF cannot be measured never claims a size or a success.
-     */
-    private fun applyCompressSummary(measuredBytes: Long?) {
-        measuredSummaryBytes = measuredBytes
-        summaryBaseLine = null
-        renderSummary()
-    }
-
-    private fun compressSummaryText(): String = buildString {
-        append(compressOutcome(measuredSummaryBytes))
-        beforeBytes?.let {
-            append("\n").append(
-                getString(R.string.compress_result_before, StatusLine.formatBytes(it))
-            )
-        }
-        if (sourceKept) {
-            // V2T T1: a sourced result uses the lane's consistent wording; the
-            // legacy boolean-only callers keep the old line (existing contract).
-            val line = if (receiptSourceId != null) {
-                getString(R.string.v2t_new_copy_original_kept)
-            } else {
-                getString(R.string.compress_result_source_kept)
-            }
-            append("\n").append(line)
-        }
-        if (!note.isNullOrBlank()) append("\n").append(note)
-    }
-
-    private enum class SizeRelation { BELOW, EQUAL, ABOVE }
-
-    private fun compressOutcome(measuredBytes: Long?): String {
-        val measured = measuredBytes?.takeIf { it > 0L }
-            ?: return getString(R.string.compress_result_size_unknown)
-        val target = targetBytes
-            ?: return getString(R.string.compress_result_size, StatusLine.formatBytes(measured))
-        // W3: exact bytes decide; the displayed number must never contradict that verdict.
-        val relation = when {
-            measured < target -> SizeRelation.BELOW
-            measured > target -> SizeRelation.ABOVE
-            else -> SizeRelation.EQUAL
-        }
-        val shown = measuredForDisplay(measured, target, relation)
-        val targetShown = StatusLine.formatBytes(target)
-        return when (relation) {
-            SizeRelation.BELOW -> getString(R.string.compress_result_under_limit, shown, targetShown)
-            SizeRelation.EQUAL -> getString(R.string.compress_result_at_limit, shown, targetShown)
-            SizeRelation.ABOVE -> getString(R.string.compress_result_over_limit, shown, targetShown)
-        }
-    }
-
-    /**
-     * Whole-KB rounding can print a file one byte over 100 KB as "100 KB", which would read
-     * "100 KB · Above your 100 KB limit". When the rounded size would collide with the target,
-     * the exact byte count is shown next to it, so the sentence cannot contradict itself.
-     */
-    private fun measuredForDisplay(measured: Long, target: Long, relation: SizeRelation): String {
-        val shown = StatusLine.formatBytes(measured)
-        if (relation == SizeRelation.EQUAL) return shown
-        return if (shown == StatusLine.formatBytes(target)) {
-            getString(R.string.w3_size_with_exact_bytes, shown, measured)
-        } else {
-            shown
-        }
-    }
-
-    // ---- Lane C: Before | After -----------------------------------------
-
-    /** The tools whose proof is a marked page 1 plus "1 mark added" (council §6). */
+    /** One After page, no Before: a mark was added and the rest of the page is unchanged. */
     private val markTools = setOf(
         "sign", "add_text", "draw", "highlight", "stamp", "watermark", "page_numbers"
     )
 
+    /** State-only tools carry no page image at all (never decode a protected/vaulted source). */
+    private val noVisualTools = setOf(
+        "protect", "unlock", "ocr", "ocr_hindi", "clear_metadata", "redact", "pdf_a", "pdfa"
+    )
+
     private fun bindCompare() {
         val view = compareView ?: return
+        if (alreadyCompact) {
+            view.visibility = View.GONE
+            return
+        }
         val explicit = intent.getStringExtra(EXTRA_COMPARE_OUTCOME)
         val model = when {
+            explicit != null && toolId in noVisualTools ->
+                CompareModel(explicit, ComparePane(caption = ""), ComparePane(caption = ""),
+                    mode = CompareMode.NONE)
             !explicit.isNullOrBlank() -> explicitCompareModel(explicit)
             isCompressResult -> compressCompareModel()
             toolId in markTools -> markCompareModel()
@@ -959,6 +1123,13 @@ class ToolResultActivity : BaseActivity() {
         }
         view.visibility = View.VISIBLE
         view.bind(model, lifecycleScope)
+    }
+
+    private fun compareModeForTool(): CompareMode = when {
+        toolId in noVisualTools || !intent.getBooleanExtra(EXTRA_COMPARE_SHOW_TOGGLE, true) ->
+            CompareMode.NONE
+        toolId in markTools -> CompareMode.AFTER_ONLY
+        else -> CompareMode.ZOOM_STACKED
     }
 
     /** Measured proof supplied by a producer (OCR words, removed fields, page counts, ...). */
@@ -984,7 +1155,7 @@ class ToolResultActivity : BaseActivity() {
                 EXTRA_COMPARE_AFTER_DETAIL, R.string.cc_no_after_image
             ),
             pageLabel = intent.getStringExtra(EXTRA_COMPARE_PAGE)?.takeIf { it.isNotBlank() },
-            showToggle = intent.getBooleanExtra(EXTRA_COMPARE_SHOW_TOGGLE, true)
+            mode = compareModeForTool()
         )
     }
 
@@ -993,52 +1164,48 @@ class ToolResultActivity : BaseActivity() {
      * real before image. A locked/vaulted source is never decoded to plaintext here.
      */
     private fun compressCompareModel(): CompareModel {
-        val after = measuredSummaryBytes ?: docIds.firstOrNull()
-            ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
-            ?.pdfFile?.let { if (it.isFile) it.length() else 0L }?.takeIf { it > 0L }
-        val afterSize = after?.let { StatusLine.formatBytes(it) }
-        val beforeSize = beforeBytes?.takeIf { it > 0L }?.let { StatusLine.formatBytes(it) }
+        val after = measuredOutputBytes().takeIf { it > 0L }
+        val before = beforeBytes?.takeIf { it > 0L }
         val source = receiptSourceId?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
             ?.takeIf { !it.isLocked && !it.isVaulted }
-        val beforeImage = source?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
-        val afterImage = docIds.firstOrNull()
+        val output = docIds.firstOrNull()
             ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
-            ?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+            ?.takeIf { !it.isLocked && !it.isVaulted }
+        val beforeImage = source?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+        val afterImage = output?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
         return CompareModel(
-            outcome = compressOutcome(after),
+            outcome = summary.text.toString(),
             before = ComparePane(
                 imagePath = beforeImage,
-                caption = beforeSize?.let { getString(R.string.cc_before_size, it) }
-                    ?: getString(R.string.cc_no_numbers),
+                caption = before?.let { StatusLine.formatBytes(it) } ?: getString(R.string.cc_no_numbers),
                 emptyText = if (beforeImage == null) getString(R.string.cc_no_before_image) else null
             ),
             after = ComparePane(
                 imagePath = afterImage,
-                caption = afterSize?.let { getString(R.string.cc_after_size, it) }
-                    ?: getString(R.string.cc_no_numbers),
+                caption = after?.let { StatusLine.formatBytes(it) } ?: getString(R.string.cc_no_numbers),
                 emptyText = if (afterImage == null) getString(R.string.cc_no_after_image) else null
             ),
-            pageLabel = getString(R.string.cc_page, 1)
+            pageLabel = getString(R.string.cc_page, 1),
+            mode = CompareMode.ZOOM_STACKED
         )
     }
 
-    /** Page tools: the result page plus the honest "1 mark added" caption. */
+    /** Page tools: one After page with an honest mark caption, never a duplicate Before page. */
     private fun markCompareModel(): CompareModel {
-        val afterImage = docIds.firstOrNull()
+        val output = docIds.firstOrNull()
             ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
-            ?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+            ?.takeIf { !it.isLocked && !it.isVaulted }
+        val afterImage = output?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
         return CompareModel(
             outcome = getString(R.string.cc_mark_added),
-            before = ComparePane(
-                caption = getString(R.string.cc_no_before_image),
-                emptyText = getString(R.string.cc_no_before_image)
-            ),
+            before = ComparePane(caption = ""),
             after = ComparePane(
                 imagePath = afterImage,
-                caption = getString(R.string.cc_after_mark),
+                caption = getString(R.string.rs_after_size_label, getString(R.string.cc_after_mark)),
                 emptyText = if (afterImage == null) getString(R.string.cc_no_after_image) else null
             ),
-            pageLabel = getString(R.string.cc_page, 1)
+            pageLabel = getString(R.string.cc_page, 1),
+            mode = CompareMode.AFTER_ONLY
         )
     }
 
@@ -1107,7 +1274,7 @@ class ToolResultActivity : BaseActivity() {
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
-        val meta = SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+        val meta = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_primary)).apply {
             id = R.id.toolResultFileMeta
             text = StatusLine.formatBytes(file.length())
             gravity = Gravity.CENTER
@@ -1282,6 +1449,8 @@ class ToolResultActivity : BaseActivity() {
                 }
                 refreshLocationLines()
                 persistReceipt()
+                // Lead addition: the button itself becomes the durable receipt, not just a toast.
+                markDocumentsSaved()
                 SavedSnackbar.showExport(
                     this@ToolResultActivity, rootView, saved, R.string.result_saved_documents, docId
                 ) { result ->
@@ -1290,6 +1459,7 @@ class ToolResultActivity : BaseActivity() {
                     if (result == DownloadSaver.UndoResult.REMOVED) {
                         savedCopy = null
                         documentsExistingName = null
+                        markDocumentsNotSaved()
                         refreshLocationLines()
                         persistReceipt()
                     }
@@ -1300,6 +1470,19 @@ class ToolResultActivity : BaseActivity() {
                 fail(getString(R.string.tools_result_save_failed, e.message ?: ""))
             }
         }
+    }
+
+    /** Lead addition: a successful Documents save is a durable button state, not a passing toast. */
+    private fun markDocumentsSaved() {
+        alsoSaveButton?.text = getString(R.string.rs_saved_documents)
+        alsoSaveButton?.isEnabled = false
+        saveAnotherCopy?.isVisible = true
+    }
+
+    private fun markDocumentsNotSaved() {
+        alsoSaveButton?.text = getString(R.string.tools_result_also_save)
+        alsoSaveButton?.isEnabled = true
+        saveAnotherCopy?.isVisible = false
     }
 
     /** The type the Documents copy is indexed with: a document's PDF, a ZIP, or the result's own. */
@@ -1377,6 +1560,7 @@ class ToolResultActivity : BaseActivity() {
                 val created = withContext(Dispatchers.IO) { createdName(uri, suggested) }
                 chosenLocationName = created
                 refreshLocationLines()
+                renderMoreLocation()
                 persistReceipt()
                 Toast.makeText(
                     this@ToolResultActivity,
@@ -1582,6 +1766,7 @@ class ToolResultActivity : BaseActivity() {
             R.id.toolResultMore, R.id.toolResultMorePanel, R.id.toolResultUndo,
             R.id.toolResultSave, R.id.toolResultLibrary
         ).forEach { id -> findViewById<View>(id)?.visibility = View.GONE }
+        if (::bottomBar.isInitialized) bottomBar.isVisible = false
         summary.text = getString(R.string.w3_result_undone_note)
     }
 
@@ -1697,6 +1882,10 @@ class ToolResultActivity : BaseActivity() {
         private const val EXTRA_COMPARE_PAGE = "cc_page_label"
         private const val EXTRA_COMPARE_SHOW_TOGGLE = "cc_show_toggle"
 
+        /** Lane RS: persisted outcome class and whether a stronger preset still exists. */
+        private const val EXTRA_OUTCOME_CLASS = "rs_outcome_class"
+        private const val EXTRA_NO_STRONGER_PRESET = "rs_no_stronger_preset"
+
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
         private const val KEY_COPY_URI = "w3_copy_uri"
@@ -1745,7 +1934,11 @@ class ToolResultActivity : BaseActivity() {
             compareBeforeDetail: List<String>? = null,
             compareAfterDetail: List<String>? = null,
             comparePageLabel: String? = null,
-            compareShowToggle: Boolean = true
+            compareShowToggle: Boolean = true,
+            /** Lane RS: SMALLER / NOT_SMALLER / TARGET_MISSED, persisted for a truthful reopen. */
+            outcomeClass: String? = null,
+            /** Lane RS: hide "Try Strong" when the strongest preset was already used. */
+            noStrongerPreset: Boolean = false
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1769,6 +1962,8 @@ class ToolResultActivity : BaseActivity() {
                 if (compareAfterDetail != null) putExtra(EXTRA_COMPARE_AFTER_DETAIL, compareAfterDetail.toTypedArray())
                 if (comparePageLabel != null) putExtra(EXTRA_COMPARE_PAGE, comparePageLabel)
                 if (!compareShowToggle) putExtra(EXTRA_COMPARE_SHOW_TOGGLE, false)
+                if (outcomeClass != null) putExtra(EXTRA_OUTCOME_CLASS, outcomeClass)
+                if (noStrongerPreset) putExtra(EXTRA_NO_STRONGER_PRESET, true)
                 // No hashing here: intent() runs on Main. Producers capture the
                 // full identity in their own IO work; any caller that did not gets
                 // a cheap stat-only identity (id + createdAt + size + mtime), so

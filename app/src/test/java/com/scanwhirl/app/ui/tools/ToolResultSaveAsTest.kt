@@ -158,7 +158,7 @@ class ToolResultSaveAsTest {
             )
             assertTrue(
                 "H2-2: the receipt names the created file, not the suggestion: ${summaryTextOf(scenario)}",
-                pollUntil { summaryTextOf(scenario).contains("In the location you chose: Split (1).zip") }
+                pollUntil { summaryTextOf(scenario).contains("Split (1).zip") }
             )
             assertTrue(
                 "H2-2: the confirmation names the created file too",
@@ -169,7 +169,7 @@ class ToolResultSaveAsTest {
             )
             assertFalse(
                 "the suggestion is not claimed as the created name: ${summaryTextOf(scenario)}",
-                summaryTextOf(scenario).contains("In the location you chose: Split.zip")
+                summaryTextOf(scenario).contains("Split.zip")
             )
         }
     }
@@ -197,7 +197,7 @@ class ToolResultSaveAsTest {
             )
             assertFalse(
                 "no location is claimed for a copy that failed: ${summaryTextOf(scenario)}",
-                summaryTextOf(scenario).contains("In the location you chose")
+                summaryTextOf(scenario).contains(app.getString(R.string.rs_where_chosen))
             )
             assertTrue(
                 "the screen says the chosen file could not be written: ${errorTextOf(scenario)}",
@@ -232,7 +232,7 @@ class ToolResultSaveAsTest {
             assertTrue("nothing was created", picker.deletes + picker.documentDeletes == 0)
             assertFalse(
                 "no location is claimed: ${summaryTextOf(scenario)}",
-                summaryTextOf(scenario).contains("In the location you chose")
+                summaryTextOf(scenario).contains(app.getString(R.string.rs_where_chosen))
             )
         }
     }
@@ -304,7 +304,8 @@ class ToolResultSaveAsTest {
     private fun summaryTextOf(scenario: ActivityScenario<ToolResultActivity>): String {
         var text = ""
         scenario.onActivity { activity ->
-            text = activity.findViewById<TextView>(R.id.toolResultSummary)?.text?.toString().orEmpty()
+            val location = activity.findViewById<TextView>(R.id.rsMoreLocation)
+            text = location?.text?.toString().orEmpty()
         }
         return text
     }

@@ -2,7 +2,7 @@
 <!-- UX 1.3.0 lane L3 — Hindi parity. "Documents/ScanWhirl" is the real folder, kept as-is. -->
 <resources>
     <!-- L3-02: परिणाम पदानुक्रम. -->
-    <string name="ux130_l3_result_remove_copy">यह नई प्रति हटाएँ</string>
+    <string name="ux130_l3_result_remove_copy">नई प्रति हटाएँ</string>
     <string name="ux130_l3_result_remove_copy_consequence">इससे यह नई प्रति और इसी कार्रवाई के दौरान Documents/ScanWhirl में सहेजी गई प्रति हट जाती है। आपकी मूल फ़ाइल वैसी ही रहती है।</string>
     <string name="ux130_l3_copy_changed">यह प्रति पहले ही बदली या हटा दी गई।</string>
 

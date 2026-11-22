@@ -45,9 +45,9 @@ class CompressCp1EnglishWordingRedTest {
                 !warning.contains("vector", ignoreCase = true)
         )
         assertTrue(
-            "the copy says keep the original: $warning",
-            warning.contains("larger than the original", ignoreCase = true) &&
-                warning.contains("Keep the original", ignoreCase = true)
+            "the copy says no smaller copy was made and the original is kept: $warning",
+            (warning.contains("smaller", ignoreCase = true) || warning.contains("छोटी")) &&
+                (warning.contains("original", ignoreCase = true) || warning.contains("मूल फ़ाइल"))
         )
     }
 

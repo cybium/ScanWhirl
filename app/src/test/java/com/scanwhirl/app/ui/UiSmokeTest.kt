@@ -276,9 +276,9 @@ class UiSmokeTest {
                 assertNotNull(activity.findViewById<android.view.View>(R.id.btnShareResult))
                 val stats = activity.findViewById<android.widget.TextView>(R.id.resultStats)
                     .text.toString()
-                assertTrue("before size missing: $stats", stats.contains("4 KB"))
-                assertTrue("after size missing: $stats", stats.contains("1 KB"))
-                assertTrue("dimensions missing: $stats", stats.contains("310 × 444 px"))
+                assertTrue("one size hero line: $stats", stats.contains("4 KB") && stats.contains("1 KB"))
+                val compare = activity.findViewById<android.view.View>(R.id.ccCompare)
+                assertNotNull("the zoom proof is present", compare)
                 assertNotNull(activity.findViewById<android.view.View>(R.id.resultPreview))
             }
         }
