@@ -138,15 +138,15 @@ class ToolsEngineTest {
 
         val first = runBlocking { repo.compressScan(id, 60, null) }
         val second = runBlocking { repo.compressScan(id, 60, null) }
-        assertEquals("Contract - Compressed", first.name)
-        assertEquals("Contract - Compressed (2)", second.name)
+        assertEquals("Contract (2)", first.name)
+        assertEquals("Contract (3)", second.name)
 
         val split = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
         // fixui: tiles removed (owner F6/F7/F20) - split parts are "<name> part N".
-        assertEquals("Contract part 1", split.first().name)
+        assertEquals("Contract (2) part 1", split.first().name)
 
         val again = runBlocking { repo.splitByRange(first.id, listOf(PageRanges.Span(1, 2))) }
-        assertEquals("Contract part 1 (2)", again.first().name)
+        assertEquals("Contract (2) part 1 (2)", again.first().name)
     }
 
     @Test
@@ -154,7 +154,7 @@ class ToolsEngineTest {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Target")
         val before = requireNotNull(repo.getDocument(id))
         val copy = runBlocking { repo.compressScanToTarget(id, 120_000L) }
-        assertEquals("Target - Compressed", copy.name)
+        assertEquals("Target (2)", copy.name)
         assertEquals(3, copy.pageCount)
         assertTrue("the published PDF exists", copy.pdfFile.isFile)
         assertTrue(
@@ -481,10 +481,10 @@ class ToolsEngineTest {
         val second = DocFixtures.saved(repo, app, pages = 1, name = "isz12")
 
         val merged = runBlocking { repo.mergeDocuments(listOf(first, second), null) }
-        assertEquals("isz14 - Merged", merged.name)
+        assertEquals("isz14 (2)", merged.name)
 
         val again = runBlocking { repo.mergeDocuments(listOf(first, second), null) }
-        assertEquals("isz14 - Merged (2)", again.name)
+        assertEquals("isz14 (3)", again.name)
     }
 
     // ---------------------------------------------------------------- Excel

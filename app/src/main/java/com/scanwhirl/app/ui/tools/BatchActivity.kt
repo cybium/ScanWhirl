@@ -387,7 +387,12 @@ class BatchActivity : BaseActivity() {
     private fun showActionSheet() {
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.tools_batch_action_title)
-            .setMessage(R.string.tools_batch_action_note)
+            // Council §5: every batch result is a new copy under the source stem, and the source
+            // is kept. Say so before the run, not only on the result screen.
+            .setMessage(
+                getString(R.string.tools_batch_action_note) + "\n" +
+                    getString(R.string.co_new_copy_receipt)
+            )
             .setSecondary(R.string.sheet_cancel)
             .build()
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

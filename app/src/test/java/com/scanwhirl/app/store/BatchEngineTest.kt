@@ -44,7 +44,7 @@ class BatchEngineTest {
         assertEquals(3, results.count { it.ok })
         assertTrue(results.all { it.outputId != null })
         assertEquals("three sources plus three copies", 6, repo.listDocuments().size)
-        val outputs = repo.listDocuments().filter { it.name.endsWith(" - Compressed") }
+        val outputs = repo.listDocuments().filter { it.name.endsWith(" (2)") }
         assertEquals(3, outputs.size)
         assertEquals("3 unique output names", 3, outputs.map { it.name }.toSet().size)
     }
@@ -64,7 +64,7 @@ class BatchEngineTest {
 
         assertEquals(listOf(true, false, true), results.map { it.ok })
         assertTrue("a reason is recorded", !results[1].reason.isNullOrBlank())
-        assertEquals("two copies published", 2, repo.listDocuments().count { it.name.endsWith(" - Compressed") })
+        assertEquals("two copies published", 2, repo.listDocuments().count { it.name.endsWith(" (2)") })
     }
 
     @Test
@@ -82,7 +82,7 @@ class BatchEngineTest {
         assertEquals("only the first document ran", 1, results.size)
         assertTrue(results.single().ok)
         assertEquals("one output, no partial copy", 4, repo.listDocuments().size)
-        assertEquals(1, repo.listDocuments().count { it.name.endsWith(" - Compressed") })
+        assertEquals(1, repo.listDocuments().count { it.name.endsWith(" (2)") })
     }
 
     @Test
@@ -144,7 +144,7 @@ class BatchEngineTest {
             repo.runBatch(ids, ScanRepository.BatchAction.RemoveMetadata)
         }
         assertEquals(2, results.count { it.ok })
-        val clean = repo.listDocuments().filter { it.name.endsWith(" - Clean") }
+        val clean = repo.listDocuments().filter { it.name.endsWith(" (2)") }
         assertEquals(2, clean.size)
         assertEquals(2, clean.map { it.name }.toSet().size)
     }
