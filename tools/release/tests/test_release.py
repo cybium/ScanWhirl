@@ -10,6 +10,7 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 from tools.release import assemble_release as package
+from tools.release.check_release_manifest import review as review_merged_manifest
 from tools.release.verify_aab import (
     ANDROID, check_manifest, elf_load_alignments, fields, manifest_facts, proto_xml, verify,
 )
@@ -112,6 +113,86 @@ class ManifestTests(unittest.TestCase):
         for data in (b"\x0a\x05x", b"\x80", b"\x00"):
             with self.assertRaises(ValueError):
                 fields(data)
+
+    def test_new_forbidden_permissions_fail_in_aab(self):
+        for name in ("android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
+                     "android.permission.AD_ID", "com.google.android.gms.permission.AD_ID",
+                     "android.permission.QUERY_ALL_PACKAGES",
+                     "android.permission.FOREGROUND_SERVICE",
+                     "android.permission.FOREGROUND_SERVICE_DATA_SYNC"):
+            facts = manifest_facts(proto_xml(self.manifest([("uses-permission", name)])))
+            self.assertTrue(any("forbidden" in e for e in check_manifest(facts, 26112001, "1.3.0")), name)
+
+
+class MergedManifestGateTests(unittest.TestCase):
+    """P lane: the CI step calls check_release_manifest.py on AGP's merged release manifest."""
+
+    def merged(self, permissions=(), package="com.scanwhirl.app", label="ScanWhirl"):
+        entries = "".join(f'<uses-permission android:name="{p}"/>' for p in permissions)
+        return (f'<?xml version="1.0" encoding="utf-8"?>\n'
+                f'<manifest xmlns:android="{ANDROID}" package="{package}" '
+                f'android:versionCode="26112001" android:versionName="1.3.0">'
+                f'<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>'
+                f'{entries}'
+                f'<application android:label="{label}" android:allowBackup="false"/>'
+                f'</manifest>')
+
+    def write(self, text):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "AndroidManifest.xml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_clean_release_manifest_passes(self):
+        path = self.write(self.merged(["android.permission.CAMERA", "com.android.vending.BILLING"]))
+        good, report = review_merged_manifest(path)
+        self.assertTrue(good, report)
+        self.assertIn("TEST_BUILD: false", report)
+        self.assertIn("MANIFEST PASS", report)
+
+    def test_forbidden_permissions_fail(self):
+        for name in ("android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
+                     "android.permission.AD_ID", "com.google.android.gms.permission.AD_ID",
+                     "android.permission.QUERY_ALL_PACKAGES",
+                     "android.permission.FOREGROUND_SERVICE",
+                     "android.permission.FOREGROUND_SERVICE_DATA_SYNC"):
+            with self.subTest(name=name):
+                path = self.write(self.merged([name]))
+                good, report = review_merged_manifest(path)
+                self.assertFalse(good, name)
+                self.assertIn("FAIL: forbidden", report)
+
+    def test_test_build_package_and_label_fail(self):
+        for package, label in (("com.scanwhirl.app.test", "ScanWhirl Test"),
+                               ("com.scanwhirl.app.demo", "ScanWhirl")):
+            with self.subTest(package=package):
+                path = self.write(self.merged(package=package, label=label))
+                good, report = review_merged_manifest(path)
+                self.assertFalse(good, report)
+                self.assertIn("FAIL: package", report)
+
+    def test_build_config_true_fails_and_false_passes(self):
+        path = self.write(self.merged())
+        config = path.parent / "BuildConfig.java"
+        config.write_text("public final class BuildConfig {\n"
+                          "  public static final boolean TEST_BUILD = true;\n}\n", encoding="utf-8")
+        good, report = review_merged_manifest(path, config)
+        self.assertFalse(good, report)
+        self.assertIn("TEST_BUILD=true", report)
+        config.write_text("public final class BuildConfig {\n"
+                          "  public static final boolean TEST_BUILD = false;\n}\n", encoding="utf-8")
+        good, report = review_merged_manifest(path, config)
+        self.assertTrue(good, report)
+        self.assertIn("TEST_BUILD: false", report)
+
+    def test_malformed_and_missing_manifest_fail_closed(self):
+        path = self.write("not xml")
+        good, report = review_merged_manifest(path)
+        self.assertFalse(good)
+        self.assertIn("MANIFEST FAIL", report)
+        good, report = review_merged_manifest(path.parent / "absent.xml")
+        self.assertFalse(good)
 
 
 class PackagingTests(unittest.TestCase):

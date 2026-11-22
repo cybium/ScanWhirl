@@ -24,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
 
@@ -66,6 +67,69 @@ class V2ReceiptAndSignatureTest {
             assertTrue("a named Trash route must be offered: $labels",
                 labels.any { it.contains("Move original to Trash") })
             StampSaveRunner.consume(id)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `redaction receipt keeps primary safe and offers an undoable confirmed Trash route`() {
+        val id = DocFixtures.saved(repo, app, pages = 1, name = "V2 trash receipt")
+        val controller = controller(id)
+        try {
+            val screen = controller.setup().get()
+            screen.deliverSaveForTest(Result.success(repo.getDocument(id)!!), R.string.c1_redacted_label)
+            val receipt = ShadowDialog.getLatestDialog()
+            val primary = receipt.findViewById<TextView>(R.id.swSheetPrimary).text.toString()
+            val secondary = receipt.findViewById<TextView>(R.id.swSheetSecondary).text.toString()
+            assertEquals("Keep original must be the primary", app.getString(R.string.v2v_keep_original), primary)
+            assertEquals("Trash must be the secondary", app.getString(R.string.v2v_move_original_to_trash), secondary)
+
+            receipt.findViewById<View>(R.id.swSheetSecondary).performClick()
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val confirm = ShadowDialog.getLatestDialog()
+            assertNotNull("a confirm sheet must appear before any deletion", confirm)
+            assertTrue("original still exists before confirmation", repo.getDocument(id) != null)
+            assertEquals("confirm also keeps Keep primary", app.getString(R.string.v2v_keep_original),
+                confirm.findViewById<TextView>(R.id.swSheetPrimary).text.toString())
+
+            confirm.findViewById<View>(R.id.swSheetSecondary).performClick()
+            val deadline = System.currentTimeMillis() + 8000L
+            while (repo.getDocument(id) != null && System.currentTimeMillis() < deadline) {
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                Thread.sleep(10)
+            }
+            assertTrue("the original must be in Trash after confirmation", repo.getDocument(id) == null)
+            val barTexts = mutableListOf<String>()
+            fun walk(v: View) {
+                if (v is TextView) v.text?.toString()?.let { barTexts += it }
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+            screen.window?.decorView?.let { walk(it) }
+            assertTrue("the Trash route must offer Undo: $barTexts",
+                barTexts.any { it == app.getString(R.string.undo) })
+            StampSaveRunner.consume(id)
+        } finally {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            controller.destroy()
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `signature wording says all pages everywhere`() {
+        val en = java.io.File("src/main/res/values/strings_v2v.xml").readText(Charsets.UTF_8)
+        assertTrue("EN must say all pages",
+            en.contains("<string name=\"v2v_apply_signature\">Apply signature to all pages</string>"))
+        assertFalse("EN must not claim selected pages", en.contains("selected pages"))
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val controller = controller(id)
+        try {
+            val screen = controller.setup().get()
+            val tile = screen.findViewById<View>(
+                screen.resources.getIdentifier("v2vApplySignature", "id", screen.packageName))
+            assertNotNull("the all-pages signature tile must exist", tile)
+            assertEquals("the tile's spoken name must say all pages",
+                app.getString(R.string.v2v_apply_signature), tile!!.contentDescription?.toString())
         } finally {
             controller.destroy()
         }

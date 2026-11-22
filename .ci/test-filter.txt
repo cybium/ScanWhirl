@@ -1,0 +1,1 @@
+com.scanwhirl.app.v2v.V1LocalizedErrorsTest,com.scanwhirl.app.v2v.V2ReceiptAndSignatureTest,com.scanwhirl.app.v2v.V2vProtectedHonestyTest,com.scanwhirl.app.v2v.V2vActionsSheetRowsTest,com.scanwhirl.app.v2v.V2vFindEmptyTest

@@ -751,8 +751,16 @@ class StampEditorActivity : BaseActivity() {
             val hits = outcome.hits.filter { it.second.kind in kinds }
             if (hits.isEmpty()) {
                 if (outcome.unreadablePages.isEmpty()) {
-                    // Text was read on every page and nothing matched.
+                    // Text was read on every page and nothing matched. The snackbar
+                    // keeps the existing contract; the sheet makes the honest empty
+                    // outcome persistent and visible where the person was looking.
                     note(getString(R.string.find_none_clean))
+                    SwSheet.builder(this@StampEditorActivity)
+                        .setTitle(R.string.v2v_find_none_title)
+                        .setMessage(R.string.find_none_clean)
+                        .setPrimary(android.R.string.ok) { }
+                        .build()
+                        .show()
                 } else {
                     warnUnreadable(outcome.unreadablePages)
                 }
@@ -1016,10 +1024,11 @@ class StampEditorActivity : BaseActivity() {
                 getString(R.string.v2v_redact_receipt_body, copy.name) + "\n" +
                     getString(R.string.v2v_redact_original_kept)
             )
-            .setPrimary(R.string.v2v_move_original_to_trash) {
+            // P2: the safe, reversible choice is primary; Trash is the secondary.
+            .setPrimary(R.string.v2v_keep_original) { }
+            .setSecondary(R.string.v2v_move_original_to_trash) {
                 confirmTrashOriginal(document.id)
             }
-            .setSecondary(R.string.v2v_keep_original) { }
             .build()
             .show()
     }
@@ -1028,11 +1037,23 @@ class StampEditorActivity : BaseActivity() {
         SwSheet.builder(this)
             .setTitle(R.string.v2v_trash_original_confirm)
             .setMessage(R.string.v2v_trash_original_body)
-            .setPrimary(R.string.v2v_move_original_to_trash) {
-                TrashActions.moveAll(repo, listOf(id))
-                note(getString(R.string.v2v_trash_original_done))
+            .setPrimary(R.string.v2v_keep_original) { }
+            .setSecondary(R.string.v2v_move_original_to_trash) {
+                // Same path as every other Trash route: off the main thread, with the
+                // named Undo snackbar. Never delete without this confirmation.
+                lifecycleScope.launch {
+                    val moved = withContext(Dispatchers.IO) {
+                        TrashActions.moveAll(repo, listOf(id))
+                    }
+                    if (moved.keys.isEmpty()) {
+                        note(getString(R.string.trash_move_failed))
+                        return@launch
+                    }
+                    val root = findViewById<View>(android.R.id.content) ?: window.decorView
+                    TrashActions.showMoved(this@StampEditorActivity, root, null, moved) { }
+                    note(getString(R.string.v2v_trash_original_done))
+                }
             }
-            .setSecondary(R.string.v2v_keep_original) { }
             .build()
             .show()
     }
