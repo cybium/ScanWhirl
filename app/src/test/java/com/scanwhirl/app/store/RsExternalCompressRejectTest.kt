@@ -78,7 +78,7 @@ class RsExternalCompressRejectTest {
         assertEquals("NOT_SMALLER", receipt.outcomeClass)
         assertTrue(receipt.docIds.isEmpty())
         assertTrue(receipt.files.isEmpty())
-        assertNull(receipt.receiptSourceId)
+        assertTrue("external: no library source", receipt.receiptSourceId.isNullOrEmpty())
         assertEquals(before, receipt.beforeBytes)
         assertEquals(target, receipt.targetBytes)
     }
