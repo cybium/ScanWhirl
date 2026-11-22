@@ -54,8 +54,9 @@ class SwSheet private constructor(
             setPadding(padH, (10 * density).toInt(), padH, (22 * density).toInt())
             background = SwStyle.rounded(
                 context,
-                // Opaque ink: the reader dock must never show through a sheet.
-                0xFF161D21.toInt(),
+                // Opaque ink: the reader dock must never show through a sheet. A semantic
+                // token now, so a future Paper palette can repaint it without a code edit.
+                SwStyle.color(context, R.color.rv_surface),
                 radiusDp = 28f,
                 stroke = SwStyle.color(context, R.color.sw_cyan_hair_strong)
             )
