@@ -20,9 +20,11 @@
     <!-- Quick tools: Customize button and the checkbox editor. -->
     <string name="cb_customize">Customize</string>
     <string name="cb_customize_desc">Customize quick tools</string>
-    <string name="cb_quick_editor_title">Customize quick tools</string>
-    <string name="cb_quick_editor_hint">Tap to add or remove</string>
-    <string name="cb_quick_max_reached">You can keep up to 6 quick tools.</string>
+    <string name="cb_quick_editor_title">Quick tools</string>
+    <!-- SH2: one instruction line replaces the old hint + duplicate cap line. -->
+    <string name="cb_quick_editor_hint">Choose up to 6 tools. Use the arrows to reorder.</string>
+    <string name="cb_quick_save">Save quick tools</string>
+    <string name="cb_quick_max_reached">Choose up to 6 tools</string>
     <string name="cb_move_up">Move %1$s up</string>
     <string name="cb_move_down">Move %1$s down</string>
     <string name="cb_more_actions">More actions</string>

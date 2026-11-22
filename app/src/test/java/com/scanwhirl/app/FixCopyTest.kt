@@ -405,7 +405,8 @@ class FixCopyTest {
             "compress_level_medium" to "Balanced",
             "compress_level_high" to "Smaller",
             "compress_level_ultra" to "Smallest",
-            "compress_target_label" to "Custom size (optional)",
+            // SH2 COPY_DIET: OLD "Custom size (optional)" -> NEW "Maximum file size".
+            "compress_target_label" to "Maximum file size",
             "settings_auto_enhance_summary" to
                 "Cleans up scans. Off keeps the photo as taken.",
             "settings_searchable_pdf_summary" to

@@ -5,6 +5,7 @@
     <string name="u4_backup_restore_code_note">Enter the Vault recovery code used for this backup.</string>
     <string name="u4_library_documents">Documents</string>
     <string name="u4_where_library">Saved in Library</string>
-    <string name="u4_quick_editor_hint">Tap − to remove, drag to reorder.</string>
-    <string name="u4_quick_reset">Reset to defaults</string>
+    <!-- SH2 COPY_DIET: the stale drag-based instruction is deleted; the arrows editor's
+         one instruction line is cb_quick_editor_hint. -->
+    <string name="u4_quick_reset">Reset</string>
 </resources>
