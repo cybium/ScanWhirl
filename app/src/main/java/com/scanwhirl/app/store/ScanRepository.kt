@@ -72,7 +72,7 @@ class ScanRepository(private val context: Context) {
         get() = File(context.filesDir, "documents").apply { mkdirs() }
 
     internal val ocrStore: OcrStore
-        get() = OcrStore(docsDir)
+        get() = OcrStore(docsDir, enforceLiveDocument = true)
 
     companion object {
         /** Process-wide lock for PDF regeneration - several ScanRepository instances exist at once. */
@@ -1437,19 +1437,35 @@ class ScanRepository(private val context: Context) {
      * private purge area, never into the ordinary (listable, restorable) Trash.
      * Returns true only when the whole folder moved out of the Library.
      */
-    fun moveOriginalToVaultPendingPurge(id: String): Boolean = synchronized(TRASH_LOCK) {
-        val src = File(docsDir, id)
-        if (!src.isDirectory) return@synchronized false
-        val dest = File(vaultPendingPurgeDir, id)
-        if (dest.exists()) return@synchronized false
-        if (!vaultPendingMove(src, dest)) return@synchronized false
-        Durable.syncDir(docsDir)
-        dest.parentFile?.let { Durable.syncDir(it) }
-        true
-    }
+    fun moveOriginalToVaultPendingPurge(id: String): Boolean =
+        // SEC2 N2: restore the established lock order used by moveToTrash.
+        // PDF_LOCK -> OcrStore.lock -> TRASH_LOCK excludes an OCR commit from
+        // validating a page and then writing plaintext into a moved directory.
+        synchronized(PDF_LOCK) {
+            OcrStore.locked {
+                synchronized(TRASH_LOCK) {
+                    val src = File(docsDir, id)
+                    if (!src.isDirectory) return@synchronized false
+                    val dest = File(vaultPendingPurgeDir, id)
+                    if (dest.exists()) return@synchronized false
+                    if (!vaultPendingMove(src, dest)) return@synchronized false
+                    Durable.syncDir(docsDir)
+                    dest.parentFile?.let { Durable.syncDir(it) }
+                    true
+                }
+            }
+        }
 
     /** True while a plaintext original is still waiting to be purged for [id]. */
     fun vaultPendingPurgeExists(id: String): Boolean = File(vaultPendingPurgeDir, id).exists()
+
+    /**
+     * SEC2 N1: every locally owned pending-purge entry, independent of any
+     * Vault marker or encrypted entry. The folder's own existence is deletion
+     * authority; a stale marker must never strand its plaintext.
+     */
+    internal fun vaultPendingPurgeIds(): List<String> =
+        vaultPendingPurgeDir.listFiles { f -> f.isDirectory }?.map { it.name }.orEmpty()
 
     /**
      * Purges a private Vault original. Returns true only when every file is gone;
@@ -2127,7 +2143,7 @@ class ScanRepository(private val context: Context) {
             }
         }
         if (outTexts.isNotEmpty()) {
-            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, outTexts, outGeo)
+            OcrStore(OpStaging.root(context.filesDir)).putStagedAll(staging.name, outTexts, outGeo)
         }
     }
 
@@ -4155,6 +4171,10 @@ class ScanRepository(private val context: Context) {
             val language = com.scanwhirl.app.util.OcrLanguageSettings.get(appContext())
             for (page in unread) {
                 currentCoroutineContext().ensureActive()
+                // SEC2 R3: capture identity before recognition and re-check it
+                // atomically with the write; a moved/purged document is refused
+                // quietly, with nothing written to a recreated directory.
+                val sourceHash = Sha256.of(page)
                 val result = try {
                     OcrEngine.recognizeFile(page, language)
                 } catch (e: kotlinx.coroutines.CancellationException) {
@@ -4166,7 +4186,7 @@ class ScanRepository(private val context: Context) {
                     unreadPages += doc.pageFiles.indexOf(page)
                     continue
                 }
-                ocrStore.putPage(id, page.name, result.text, result.page)
+                ocrStore.putPage(id, page.name, result.text, result.page, sourceHash)
                 text[page.name] = result.text
             }
         }
@@ -4369,6 +4389,9 @@ class ScanRepository(private val context: Context) {
                 // never replace it with a fresh read of the image.
                 text != null -> textOnlyOcrPage(text)
                 else -> {
+                    // SEC2 R3: atomic identity re-check inside putPage; a late
+                    // publish after a Vault move is refused without crashing.
+                    val sourceHash = Sha256.of(page)
                     val result = try {
                         OcrEngine.recognizeFile(page, com.scanwhirl.app.util.OcrLanguageSettings.get(appContext()))
                     } catch (e: CancellationException) {
@@ -4384,7 +4407,7 @@ class ScanRepository(private val context: Context) {
                     } else {
                         // H4-2: keep what was read, exactly like To Word, so the Text screen shows
                         // it and the next export needs no second English pass.
-                        ocrStore.putPage(id, page.name, result.text, result.page)
+                        ocrStore.putPage(id, page.name, result.text, result.page, sourceHash)
                         result.page
                     }
                 }
@@ -4470,7 +4493,7 @@ class ScanRepository(private val context: Context) {
                 stagePageBytes(bytes, staging, i)
             }
             if (texts.isNotEmpty()) {
-                OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, texts, geo)
+                OcrStore(OpStaging.root(context.filesDir)).putStagedAll(staging.name, texts, geo)
             }
         }
     }
@@ -5014,7 +5037,7 @@ class ScanRepository(private val context: Context) {
             OpFaults.at("op:page:$i")
         }
         if (texts.isNotEmpty() || geo.isNotEmpty()) {
-            OcrStore(OpStaging.root(context.filesDir)).putAll(staging.name, texts, geo)
+            OcrStore(OpStaging.root(context.filesDir)).putStagedAll(staging.name, texts, geo)
         }
     }
 

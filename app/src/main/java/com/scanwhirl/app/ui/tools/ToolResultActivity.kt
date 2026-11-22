@@ -1341,6 +1341,20 @@ class ToolResultActivity : BaseActivity() {
         else -> "image/jpeg"
     }
 
+    override fun onDestroy() {
+        // SEC2 N3: after a handoff this screen owns the FORM1 output cache.
+        // A real exit ends the flow; rotation keeps the file restorable.
+        if (isFinishing && !isChangingConfigurations) {
+            val form1Cache = File(cacheDir, "form1_out").canonicalFile
+            files.forEach { file ->
+                runCatching {
+                    if (file.canonicalFile.parentFile == form1Cache) file.delete()
+                }
+            }
+        }
+        super.onDestroy()
+    }
+
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"
         private const val EXTRA_DOC_IDS = "doc_ids"
