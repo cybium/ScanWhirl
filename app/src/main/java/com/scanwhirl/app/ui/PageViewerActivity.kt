@@ -33,6 +33,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
@@ -61,20 +63,38 @@ class PageViewerActivity : BaseActivity() {
     private var document: ScanDocument? = null
     private var pages: List<File> = emptyList()
 
-    private var pendingDelete: String? = null
+    /** The page waiting for its Undo window to end, by path (staging) and stable identity (saved). */
+    private data class PendingPage(val path: String, val identity: String)
+
+    private var pendingDelete: PendingPage? = null
     private val committingDeletes = mutableSetOf<String>()
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * PVR: one flight for every operation that mutates the draft and its display state. An edit
+     * holds this lock across its IO work, so a filter-result write and a delete remap can never
+     * interleave. State (filterChoice / pageIds / pages) is only touched while holding it, on the
+     * main thread; the repo calls inside run on IO.
+     */
+    private val pageOps = Mutex()
 
     /** Last known page (kept when the snap view isn't measurable yet). */
     private var currentPos: Int = 0
 
     /**
-     * E1: filters the user picked for SAVED-document pages, keyed by page INDEX (not path),
-     * because applying a filter or rotating a page gives it a new `r_<n>.jpg` name. Persisted
-     * in instance state so a recreation does not forget the checked filter. On disk the filter
-     * is already baked into the replacement file, so this is display state only.
+     * PVR: stable identity for each visible page, parallel to [pages]. A base page keeps the
+     * identity of its source file across filter / rotate / crop renames; an inserted page keeps
+     * its first replacement. Correlating by identity (never by a shifting index) is what lets a
+     * late filter result be dropped when its page was deleted meanwhile.
      */
-    private val filterChoice = mutableMapOf<Int, ScanFilter>()
+    private var pageIds: List<String> = emptyList()
+
+    /**
+     * PVR: filters the user picked for SAVED-document pages, keyed by stable page IDENTITY.
+     * Persisted in instance state so a recreation does not forget the checked filter. On disk the
+     * filter is already baked into the replacement file, so this is display state only.
+     */
+    private val filterChoice = mutableMapOf<String, ScanFilter>()
 
     /** Crop overlay state: the page being cropped + its display-size copy. */
     private var cropPath: String? = null
@@ -220,37 +240,28 @@ class PageViewerActivity : BaseActivity() {
         super.onDestroy()
     }
 
-    /** E1: restores the saved-document filter choices across a recreation. */
+    /** PVR: restores the saved-document filter choices across a recreation. */
     private fun restoreFilterChoices(saved: Bundle) {
-        val indices = saved.getIntArray(KEY_FILTER_INDICES) ?: return
-        val names = saved.getStringArray(KEY_FILTER_IDS) ?: return
+        val ids = saved.getStringArray(KEY_FILTER_KEYS) ?: return
+        val names = saved.getStringArray(KEY_FILTER_VALUES) ?: return
         filterChoice.clear()
-        indices.zip(names).forEach { (index, name) ->
-            runCatching { ScanFilter.valueOf(name) }.getOrNull()?.let { filterChoice[index] = it }
+        ids.zip(names).forEach { (id, name) ->
+            runCatching { ScanFilter.valueOf(name) }.getOrNull()?.let { filterChoice[id] = it }
         }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putIntArray(KEY_FILTER_INDICES, filterChoice.keys.toIntArray())
-        outState.putStringArray(KEY_FILTER_IDS, filterChoice.values.map { it.name }.toTypedArray())
+        outState.putStringArray(KEY_FILTER_KEYS, filterChoice.keys.toTypedArray())
+        outState.putStringArray(KEY_FILTER_VALUES, filterChoice.values.map { it.name }.toTypedArray())
     }
 
     /**
-     * C1: [filterChoice] is keyed by page index. Once a page is really gone, the choice for its
-     * index is dropped and every later page shifts down by one; otherwise a neighbour inherits a
-     * filter the person never chose for it.
+     * PVR: choices are keyed by identity, so removing a page needs no index shifting at all —
+     * drop that one identity's choice and every surviving page keeps exactly what the person chose.
      */
-    private fun remapFilterChoiceAfterDelete(deletedIndex: Int) {
-        val shifted = filterChoice.mapNotNull { (index, filter) ->
-            when {
-                index == deletedIndex -> null
-                index > deletedIndex -> (index - 1) to filter
-                else -> index to filter
-            }
-        }.toMap()
-        filterChoice.clear()
-        filterChoice.putAll(shifted)
+    private fun dropFilterChoice(identity: String) {
+        filterChoice.remove(identity)
     }
 
     /** Re-reads the current page list (minus pending deletes) into the pager. */
@@ -289,12 +300,36 @@ class PageViewerActivity : BaseActivity() {
         }
         document = doc
         // PM-2.3b: the pager shows the draft's pages (base pages where nothing was edited).
-        pages = kotlinx.coroutines.runBlocking { repo.draftPages(id) }.filter {
-            it.path != pendingDelete && it.path !in committingDeletes
+        // PVR: keep the stable identity of each visible page in lockstep with [pages].
+        val allPages = kotlinx.coroutines.runBlocking { repo.draftPages(id) }
+        val allIds = identitiesFor(allPages)
+        val visible = allPages.indices.filter { i ->
+            allPages[i].path != pendingDelete?.path && allPages[i].path !in committingDeletes
         }
+        pages = visible.map { allPages[it] }
+        pageIds = visible.map { allIds[it] }
         pagerAdapter.filterFor = { file -> previewFilterFor(file) }
         pagerAdapter.submit(pages)
         return true
+    }
+
+    /**
+     * PVR: a stable identity per draft page, in the same order as [allPages]. A base page (with
+     * or without a draft yet) uses its source name, which no edit ever changes; an inserted page
+     * uses its first replacement. Never a shifting index or the current file name.
+     */
+    private fun identitiesFor(allPages: List<File>): List<String> {
+        val id = docId ?: return allPages.map { it.path }
+        val entries = kotlinx.coroutines.runBlocking { repo.draftOf(id) }?.entries
+        val baseNames = document?.pageFiles?.map { it.name }.orEmpty()
+        return allPages.indices.map { i ->
+            val e = entries?.getOrNull(i)
+            e?.source?.let { "src:$it" }
+                ?: e?.replacementOrig?.let { "r:$it" }
+                ?: e?.replacement?.let { "r:$it" }
+                ?: baseNames.getOrNull(i)?.let { "src:$it" }
+                ?: allPages[i].path
+        }
     }
 
     /**
@@ -309,7 +344,7 @@ class PageViewerActivity : BaseActivity() {
 
     /** Selected filter for a saved-document page, for the sheet's checked row. */
     internal fun selectedFilter(index: Int): ScanFilter =
-        filterChoice[index] ?: ScanFilter.ORIGINAL
+        pageIds.getOrNull(index)?.let { filterChoice[it] } ?: ScanFilter.ORIGINAL
 
     private fun reloadStaging(dir: File): Boolean {
         if (!dir.exists()) {
@@ -354,7 +389,7 @@ class PageViewerActivity : BaseActivity() {
                     tombstone.delete()
                     return@forEach
                 }
-                if (originalPath != pendingDelete) {
+                if (originalPath != pendingDelete?.path) {
                     val original = File(originalPath)
                     if (!original.exists()) hidden.renameTo(original)
                 }
@@ -401,24 +436,26 @@ class PageViewerActivity : BaseActivity() {
         val file = pages.getOrNull(pos) ?: return
         val dir = stagingDir
         lifecycleScope.launch {
-            try {
-                if (dir != null) {
-                    withContext(Dispatchers.IO) { ImageTools.rotate90(file, clockwise) }
-                } else {
-                    val id = docId ?: return@launch
-                    withContext(Dispatchers.IO) { commitPendingDeleteNow() }
-                    repo.draftRotate(id, pos, clockwise)
+            pageOps.withLock {
+                try {
+                    if (dir != null) {
+                        withContext(Dispatchers.IO) { ImageTools.rotate90(file, clockwise) }
+                    } else {
+                        val id = docId ?: return@withLock
+                        commitPendingDeleteNowLocked()
+                        repo.draftRotate(id, pos, clockwise)
+                    }
+                    reload()
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@PageViewerActivity,
+                        getString(R.string.page_op_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@PageViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
             }
         }
     }
@@ -454,11 +491,15 @@ class PageViewerActivity : BaseActivity() {
                 withContext(Dispatchers.IO) { commitPendingDeleteNow() }
                 val livePos = currentPosition().takeIf { it in pages.indices } ?: currentPos
                 if (livePos !in pages.indices) return@launch
+                // PVR: remember WHICH page the person chose for, not just its position. If a
+                // delete remaps the order before the filter lands, the result is dropped instead
+                // of landing on the neighbour that shifted into this slot.
+                val targetIdentity = pageIds[livePos]
                 val checked = filters.indexOf(selectedFilter(livePos))
                 com.scanwhirl.app.ui.kit.SwSheet.builder(this@PageViewerActivity)
                     .setTitle(R.string.filter_title)
                     .setOptions(filters.map { getString(it.labelRes) }, checked) { which, _ ->
-                        applyFilter(id, livePos, filters[which])
+                        applyFilter(id, targetIdentity, filters[which])
                     }
                     .setSecondary(android.R.string.cancel)
                     .build()
@@ -473,23 +514,32 @@ class PageViewerActivity : BaseActivity() {
         }
     }
 
-    private fun applyFilter(id: String, pos: Int, filter: ScanFilter) {
+    /**
+     * PVR: apply a filter to the page with [identity]. The whole read-modify-write of the draft
+     * and its display state runs as one flight under [pageOps], so a delete cannot remap between
+     * the repo write and the choice write. If the page was deleted before this runs, the result
+     * is dropped: neither the choice nor a replacement file is written for the neighbour.
+     */
+    internal fun applyFilter(id: String, identity: String, filter: ScanFilter) {
         lifecycleScope.launch {
-            try {
-                repo.draftFilter(id, pos, filter)
-                // Keep the choice by page index: the replacement file gets a new name, so a
-                // path-keyed map would make the sheet show Original after the next rotation.
-                filterChoice[pos] = filter
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@PageViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
+            pageOps.withLock {
+                try {
+                    val liveIndex = pageIds.indexOf(identity)
+                    if (liveIndex < 0) return@withLock // deleted meanwhile: drop the stale result
+                    repo.draftFilter(id, liveIndex, filter)
+                    // Still under the lock: no delete can have shifted the page in between.
+                    filterChoice[identity] = filter
+                    reload()
+                    currentPos = liveIndex.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@PageViewerActivity,
+                        getString(R.string.page_op_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
@@ -508,7 +558,7 @@ class PageViewerActivity : BaseActivity() {
         commitPendingDelete()
 
         if (stagingDir != null && !file.renameTo(File(file.path + DEL_SUFFIX))) return
-        pendingDelete = file.path
+        pendingDelete = PendingPage(file.path, pageIds.getOrNull(pos) ?: file.path)
         reload()
         currentPos = pos.coerceAtMost(pages.lastIndex)
         binding.pager.scrollToPosition(currentPos)
@@ -530,7 +580,7 @@ class PageViewerActivity : BaseActivity() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
                     // Only commit this snackbar's own page: a replacement may
                     // already have moved pendingDelete on to a newer one.
-                    if (event != DISMISS_EVENT_ACTION && pendingDelete == path) {
+                    if (event != DISMISS_EVENT_ACTION && pendingDelete?.path == path) {
                         commitPendingDelete()
                     }
                 }
@@ -659,23 +709,25 @@ class PageViewerActivity : BaseActivity() {
         closeCrop()
 
         lifecycleScope.launch {
-            try {
-                if (dir != null) {
-                    withContext(Dispatchers.IO) { ImageTools.cropTo(file, fileRect) }
-                } else {
-                    val id = docId ?: return@launch
-                    repo.draftCrop(id, pos, fileRect)
+            pageOps.withLock {
+                try {
+                    if (dir != null) {
+                        withContext(Dispatchers.IO) { ImageTools.cropTo(file, fileRect) }
+                    } else {
+                        val id = docId ?: return@withLock
+                        repo.draftCrop(id, pos, fileRect)
+                    }
+                    reload()
+                    currentPos = pos.coerceAtMost(pages.lastIndex)
+                    binding.pager.scrollToPosition(currentPos)
+                    updateIndicator()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@PageViewerActivity,
+                        getString(R.string.page_op_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-                reload()
-                currentPos = pos.coerceAtMost(pages.lastIndex)
-                binding.pager.scrollToPosition(currentPos)
-                updateIndicator()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@PageViewerActivity,
-                    getString(R.string.page_op_failed, e.message),
-                    Toast.LENGTH_LONG
-                ).show()
             }
         }
     }
@@ -686,7 +738,7 @@ class PageViewerActivity : BaseActivity() {
      * Undo would (an unsaved scan's hidden `.del` file is renamed back), so nothing is lost.
      */
     private fun restorePendingDelete() {
-        val path = pendingDelete ?: return
+        val path = pendingDelete?.path ?: return
         pendingDelete = null
         if (stagingDir != null) {
             File(path + DEL_SUFFIX).takeIf { it.exists() }?.renameTo(File(path))
@@ -695,35 +747,25 @@ class PageViewerActivity : BaseActivity() {
 
     /** Deletes the Undo-pending page for good. No-op when nothing is pending. */
     internal fun commitPendingDelete() {
-        val path = pendingDelete ?: return
+        val pending = pendingDelete ?: return
         pendingDelete = null
         if (stagingDir != null) {
             // Hidden since the rename; only now does the file really go.
-            val hidden = File(path + DEL_SUFFIX)
+            val hidden = File(pending.path + DEL_SUFFIX)
             if (hidden.exists() && !stagingHiddenDelete(hidden)) {
                 // C1: the file could not be deleted. Without a tombstone the next load's orphan
                 // restore would rename it back and resurrect a deliberately deleted page.
-                runCatching { File(path + TOMBSTONE_SUFFIX).writeText("1") }
+                runCatching { File(pending.path + TOMBSTONE_SUFFIX).writeText("1") }
             }
             return
         }
         val id = docId ?: return
-        committingDeletes.add(path)
+        committingDeletes.add(pending.path)
         deleteScope.launch {
-            var deletedIndex = -1
-            try {
-                val now = repo.draftPages(id)
-                val idx = now.indexOfFirst { it.path == path }
-                if (idx >= 0 && now.size > 1) {
-                    repo.draftDelete(id, idx)
-                    deletedIndex = idx
-                }
-            } catch (_: Exception) {
-                // Best effort; a failed delete leaves the page in place.
-            }
-            committingDeletes.remove(path)
+            val deleted = pageOps.withLock { commitPendingDeleteLocked(id, pending) }
+            committingDeletes.remove(pending.path)
             runOnUiThread {
-                if (deletedIndex >= 0) remapFilterChoiceAfterDelete(deletedIndex)
+                if (deleted) dropFilterChoice(pending.identity)
                 if (!isFinishing && !isDestroyed) {
                     val keep = currentPosition().takeIf { it in pages.indices } ?: currentPos
                     reload()
@@ -736,20 +778,44 @@ class PageViewerActivity : BaseActivity() {
     }
 
     /** Blocking variant used before index-sensitive work; clears pendingDelete. */
-    private suspend fun commitPendingDeleteNow() {
-        val path = pendingDelete ?: return
+    private suspend fun commitPendingDeleteNow() = pageOps.withLock {
+        commitPendingDeleteNowLocked()
+    }
+
+    /**
+     * [pageOps] is already held by the caller. Lands the pending delete and clears the choice of
+     * the page it removed, before the caller re-reads page indices.
+     */
+    private suspend fun commitPendingDeleteNowLocked() {
+        val pending = pendingDelete ?: return
         pendingDelete = null
         val id = docId ?: return
-        try {
-            val now = repo.draftPages(id)
-            val idx = now.indexOfFirst { it.path == path }
-            if (idx >= 0 && now.size > 1) {
-                repo.draftDelete(id, idx)
-                withContext(Dispatchers.Main) { remapFilterChoiceAfterDelete(idx) }
-            }
-        } catch (_: Exception) {
-            // Best effort.
+        if (commitPendingDeleteLocked(id, pending)) {
+            withContext(Dispatchers.Main) { dropFilterChoice(pending.identity) }
         }
+    }
+
+    /**
+     * [pageOps] is already held. Deletes the pending page resolved by stable IDENTITY, so an
+     * in-flight edit that renamed its file cannot send the delete to the wrong page (or lose it).
+     */
+    private suspend fun commitPendingDeleteLocked(id: String, pending: PendingPage): Boolean = try {
+        val idxInView = pageIds.indexOf(pending.identity)
+        if (idxInView in pageIds.indices && pageIds.size > 1) {
+            repo.draftDelete(id, idxInView)
+            true
+        } else {
+            // Defensive: state changed before this flight began; resolve against a fresh draft.
+            val fresh = repo.draftPages(id)
+            val idx = identitiesFor(fresh).indexOf(pending.identity)
+            if (idx in fresh.indices && fresh.size > 1) {
+                repo.draftDelete(id, idx)
+                true
+            } else false
+        }
+    } catch (_: Exception) {
+        // Best effort; a failed delete leaves the page in place.
+        false
     }
 
     private inner class PagerAdapter : RecyclerView.Adapter<PagerVH>() {
@@ -840,8 +906,8 @@ class PageViewerActivity : BaseActivity() {
         @androidx.annotation.VisibleForTesting
         internal var stagingHiddenDelete: (File) -> Boolean = { it.delete() }
 
-        private const val KEY_FILTER_INDICES = "e1_filter_indices"
-        private const val KEY_FILTER_IDS = "e1_filter_ids"
+        private const val KEY_FILTER_KEYS = "pvr_filter_keys"
+        private const val KEY_FILTER_VALUES = "pvr_filter_values"
 
         fun intent(context: Context, docId: String, pageIndex: Int): Intent =
             Intent(context, PageViewerActivity::class.java)

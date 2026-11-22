@@ -95,6 +95,19 @@ class ScanRepository(private val context: Context) {
         internal var listTagsProbe: ((thread: String) -> Unit)? = null
 
         /**
+         * PVR test seam: called on the IO thread at the start of one draft page operation,
+         * before it touches the manifest, so a concurrency test can hold that operation in
+         * flight. Production leaves both null.
+         */
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        internal var draftFilterProbe: (() -> Unit)? = null
+
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        internal var draftDeleteProbe: (() -> Unit)? = null
+
+        /**
          * Serialises new-scan save transactions and the abandoned-save reaper, so a
          * cleanup can never race an active transaction (several ScanRepository
          * instances exist at once, hence process-wide).
@@ -4694,6 +4707,7 @@ class ScanRepository(private val context: Context) {
 
     /** Hides one draft page. The last page can never be deleted. */
     internal suspend fun draftDelete(id: String, index: Int): DraftStore.Draft = withContext(Dispatchers.IO) {
+        draftDeleteProbe?.invoke()
         synchronized(DRAFT_LOCK) {
             val doc = draftEditDoc(id)
             val draft = draftFor(doc)
@@ -4821,6 +4835,7 @@ class ScanRepository(private val context: Context) {
         index: Int,
         filter: ScanFilter
     ): DraftStore.Draft = withContext(Dispatchers.IO) {
+        draftFilterProbe?.invoke()
         synchronized(DRAFT_LOCK) {
             val doc = draftEditDoc(id)
             val draft = draftFor(doc)
