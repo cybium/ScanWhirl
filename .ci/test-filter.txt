@@ -1,0 +1,1 @@
+com.scanwhirl.app.util.LongImageTest,com.scanwhirl.app.ui.tools.linkindex.LinkIndexActivityTest,com.scanwhirl.app.ui.tools.linkindex.LinkIndexFontFitTest,com.scanwhirl.app.ui.tools.linkindex.LinkIndexStringsTest
