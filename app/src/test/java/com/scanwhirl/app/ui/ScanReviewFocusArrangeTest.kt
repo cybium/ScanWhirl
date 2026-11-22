@@ -25,6 +25,8 @@ import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.SwActivitySession
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
