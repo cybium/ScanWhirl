@@ -168,7 +168,7 @@ class ScanRepositoryTest {
         val a = saveDoc(repo, "A")
         val b = saveDoc(repo, "B")
         val merged = repo.mergeDocuments(listOf(a.id, b.id), null)
-        assertTrue(merged.name == "A - Merged")
+        assertEquals("A (2)", merged.name)
     }
 
     @Test
@@ -292,14 +292,14 @@ class ScanRepositoryTest {
 
         val compressed = repo.compressScan(doc.id, quality = 20, maxDim = 400)
 
-        assertEquals("${doc.name} - Compressed", compressed.name)
+        assertEquals("${doc.name} (2)", compressed.name)
         assertEquals(3, compressed.pageCount)
         assertTrue(compressed.pdfFile.exists())
         assertTrue("/Count 3" in compressed.pdfFile.readText(Charsets.ISO_8859_1))
         // source untouched
         val source = repo.listDocuments().first { it.id == doc.id }
         assertEquals(3, source.pageCount)
-        assertTrue(!source.name.contains(" - Compressed"))
+        assertEquals("the source keeps its own name", doc.name, source.name)
         // downscale applied
         for (page in compressed.pageFiles) {
             val (w, h) = com.scanwhirl.app.util.ImageTools.imageSize(page.readBytes())!!

@@ -13,6 +13,7 @@ import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -43,6 +44,7 @@ import com.scanwhirl.app.ui.pagegrid.PageThumbLoader
 import com.scanwhirl.app.ui.protect.UnlockSheet
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.LongImage
+import com.scanwhirl.app.util.OutputNames
 import com.scanwhirl.app.util.PageRanges
 import com.scanwhirl.app.util.ScanFilter
 import com.scanwhirl.app.util.SizeUnits
@@ -89,6 +91,8 @@ class ToolSetupActivity : BaseActivity() {
     private var target: Long? = null
     private var rangesText = ""
     private var nameText = ""
+    /** The last name we prefilled ourselves; if the user has edited it we never overwrite it. */
+    private var autoName = ""
     private var targetText = ""
     private var wordPictures = false
     private var excelTablesOnly = true
@@ -103,6 +107,9 @@ class ToolSetupActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var runButton: TextView
     private lateinit var progressOverlay: View
+    /** Scrollable spacer below the last option: the pinned Continue can never cover an input. */
+    private lateinit var bottomSpacer: View
+    private var pinnedBarHeight = 0
 
     /** The four compress rows and the size label inside each (rebuilt with the options). */
     private val levelRows = mutableListOf<LinearLayout>()
@@ -110,6 +117,9 @@ class ToolSetupActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // With the keyboard open the viewport shrinks; the ScrollView must resize (not pan) so
+        // every option stays reachable by scrolling above the pinned action bar.
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         repo = ScanWhirlApp.from(this).repository
         val id = intent.getStringExtra(EXTRA_TOOL_ID).orEmpty()
         preselectedDocId = intent.getStringExtra(EXTRA_SELECTED_DOC_ID)
@@ -129,6 +139,7 @@ class ToolSetupActivity : BaseActivity() {
         tool = found
         toolId = id
         nameText = ""
+        autoName = ""
         // H5-2: a recreation (rotation, dark mode, font size, language) must come back on the
         // same document with the same typed values, never on whatever is newest.
         if (savedInstanceState != null) restoreSetupState(savedInstanceState)
@@ -200,10 +211,16 @@ class ToolSetupActivity : BaseActivity() {
                     if (docs.any { it.id == preferred }) selected += preferred
                 }
                 if (selected.isEmpty()) docs.firstOrNull()?.let { selected += it.id }
-                nameText = if (toolId == "duplicate" || toolId == "merge" || toolId == "zip") {
-                    ""
+                // Council §5: the editable field is prefilled with the source stem only, never a
+                // verb suffix. Because the source itself occupies that stem, forNewCopy returns
+                // the collision-safe "<stem> (2)".
+                if (toolId == "duplicate" || toolId == "merge") {
+                    nameText = prefillCopyName()
+                    autoName = nameText
+                } else if (toolId == "zip") {
+                    nameText = ""
                 } else {
-                    docs.firstOrNull()?.name.orEmpty()
+                    nameText = docs.firstOrNull()?.name.orEmpty()
                 }
             } else {
                 selected.retainAll { id -> docs.any { it.id == id } }
@@ -240,15 +257,12 @@ class ToolSetupActivity : BaseActivity() {
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = SwStyle.dp(this@ToolSetupActivity, 18f)
-            // The pinned bar covers the bottom of the viewport: the list ends above it, so the
-            // last source row or option is never hidden behind Continue.
-            setPadding(
-                pad,
-                SwStyle.dp(this@ToolSetupActivity, 10f),
-                pad,
-                SwStyle.dp(this@ToolSetupActivity, BAR_CLEARANCE_DP)
-            )
+            setPadding(pad, SwStyle.dp(this@ToolSetupActivity, 10f), pad, 0)
         }
+        // Clearance is a real, scrollable child rather than bottom padding: Android does not
+        // always count a LinearLayout's bottom padding in a fillViewport ScrollView's scroll
+        // range, which is how the Split range field ended up under Continue on the phone.
+        bottomSpacer = View(this).apply { tag = BOTTOM_SPACER_TAG }
         scroll.addView(column)
         root.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
@@ -282,12 +296,13 @@ class ToolSetupActivity : BaseActivity() {
         root.addView(bar, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.BOTTOM })
-        // The list's bottom clearance follows the real bar height (it grows while an error line
-        // is shown), so the last row is never covered.
+        // The spacer follows the real bar height (it grows while an error line is shown), so the
+        // last input can always be scrolled clear of Continue at 100% font, 360 and 411 dp.
         bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             val h = v.height
-            if (h > 0 && column.paddingBottom != h) {
-                column.setPadding(column.paddingLeft, column.paddingTop, column.paddingRight, h)
+            if (h > 0 && pinnedBarHeight != h) {
+                pinnedBarHeight = h
+                resizeBottomSpacer()
             }
         }
 
@@ -337,7 +352,20 @@ class ToolSetupActivity : BaseActivity() {
         }
         buildOptions()
         column.addView(optionsHost)
+        column.addView(bottomSpacer, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, spacerHeight()
+        ))
         applyRunEnabled()
+    }
+
+    /** At least one bar's worth of scrollable empty space below the last option. */
+    private fun spacerHeight(): Int =
+        maxOf(pinnedBarHeight + SwStyle.dp(this, 8f), SwStyle.dp(this, BAR_CLEARANCE_DP))
+
+    private fun resizeBottomSpacer() {
+        if (!::bottomSpacer.isInitialized) return
+        bottomSpacer.layoutParams?.let { it.height = spacerHeight() }
+        bottomSpacer.requestLayout()
     }
 
     /**
@@ -348,10 +376,23 @@ class ToolSetupActivity : BaseActivity() {
      */
     private fun applyRunEnabled() {
         if (!::runButton.isInitialized) return
-        val ready = tool.id != "merge" || selected.size >= 2
+        // A name is mandatory wherever the screen offers an editable name field: an erased field
+        // must never silently fall back to an auto-generated name.
+        val ready = (tool.id != "merge" || selected.size >= 2) &&
+            (!hasNameField() || nameText.isNotBlank())
         runButton.isEnabled = ready
         runButton.isClickable = ready
         runButton.alpha = if (ready) 1f else DISABLED_ALPHA
+    }
+
+    private fun hasNameField(): Boolean = toolId == "duplicate" || toolId == "merge"
+
+    /** Inline validation under the name field; text watcher and rotation both rebuild it. */
+    private fun refreshNameError() {
+        if (!hasNameField()) return
+        val error = optionsHost.findViewWithTag<TextView>(NAME_ERROR_TAG)
+        error?.isVisible = nameText.isBlank()
+        applyRunEnabled()
     }
 
     private fun header(): View {
@@ -957,9 +998,58 @@ class ToolSetupActivity : BaseActivity() {
         listOf(80 to null, 65 to 2000, 50 to 1600, 38 to 1200)
 
     private fun buildNameOption() {
-        optionsHost.addView(field(
-            R.string.tools_setup_name_hint, R.id.toolSetupName, nameText
-        ) { nameText = it })
+        optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid), bold = true).apply {
+                text = getString(R.string.co_save_as_new_copy)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
+        )
+        // The extension is read-only: the editable field holds the stem only.
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(
+            field(R.string.co_name_hint, R.id.toolSetupName, nameText) { nameText = it },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        )
+        row.addView(
+            SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+                text = getString(R.string.co_name_extension)
+                gravity = Gravity.CENTER_VERTICAL
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                setPadding(SwStyle.dp(this@ToolSetupActivity, 6f), 0, 0, 0)
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this, 52f)
+            )
+        )
+        optionsHost.addView(row)
+        optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
+                tag = NAME_ERROR_TAG
+                text = getString(R.string.co_name_required)
+                contentDescription = text
+                isVisible = nameText.isBlank()
+                setLineSpacing(0f, 1.2f)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
+        )
+        optionsHost.addView(
+            SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_dim)).apply {
+                tag = RECEIPT_TAG
+                text = getString(R.string.co_new_copy_receipt)
+                contentDescription = text
+                setLineSpacing(0f, 1.25f)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
+        )
     }
 
     private fun buildMergeOptions() {
@@ -1108,12 +1198,15 @@ class ToolSetupActivity : BaseActivity() {
         setPadding(pad, pad, pad, pad)
         this.inputType = inputType
         isSingleLine = true
+        // Tapping a field with the IME open scrolls it clear of the pinned Continue button.
+        setOnFocusChangeListener { v, focused -> if (focused) keepFieldAboveBar(v) }
         setText(initial)
         addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 onChange(s?.toString().orEmpty())
+                this@ToolSetupActivity.refreshNameError()
                 if (this@ToolSetupActivity.tool.id == "split" || this@ToolSetupActivity.tool.id == "extract") {
                     optionsHost.findViewById<TextView>(R.id.toolSetupRangePreview)
                         ?.let { updateRangePreview(it) }
@@ -1124,6 +1217,26 @@ class ToolSetupActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
         minimumHeight = SwStyle.dp(this@ToolSetupActivity, 52f)
+    }
+
+    /**
+     * The pinned bar is a sibling of the ScrollView, so a focused field near the bottom would sit
+     * behind Continue once the keyboard resizes the viewport. Scroll by the field's own offset in
+     * the content, leaving one bar plus a little air below it.
+     */
+    private fun keepFieldAboveBar(field: View) {
+        field.post {
+            val scroll = findViewById<ScrollView>(R.id.toolSetupScroll) ?: return@post
+            var y = 0
+            var parent = field.parent
+            while (parent is View && parent !== scroll) {
+                y += parent.top
+                parent = parent.parent
+            }
+            y += field.bottom
+            val visibleBottom = scroll.height - pinnedBarHeight - SwStyle.dp(this, 12f)
+            scroll.scrollTo(0, maxOf(0, y - visibleBottom))
+        }
     }
 
     /**
@@ -1184,8 +1297,25 @@ class ToolSetupActivity : BaseActivity() {
             selected.clear()
             selected += docId
         }
+        // A new source gets a new prefill, but only while the field still shows our own default;
+        // a name the person typed is never silently replaced.
+        if ((toolId == "duplicate" || toolId == "merge") && nameText == autoName) {
+            nameText = prefillCopyName()
+            autoName = nameText
+        }
         render()
     }
+
+    /** The stem of the selected source, sanitised and collision-safe. */
+    private fun prefillCopyName(): String {
+        val source = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } }
+        return if (source == null) "" else OutputNames.forNewCopy(source.name, docs.map { it.name })
+    }
+
+    /** Sanitises what the person typed before it becomes the new copy's name. */
+    private fun typedCopyName(): String? =
+        if (nameText.isBlank()) null
+        else OutputNames.newCopyFromField(nameText, docs.map { it.name })
 
     /**
      * A locked source is not a dead end: L3's Unlock sheet takes the password, then the user
@@ -1310,7 +1440,7 @@ class ToolSetupActivity : BaseActivity() {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
                 execute({
-                    val ids = listOf(repo.duplicateDocument(doc.id, nameText.ifBlank { null }).id)
+                    val ids = listOf(repo.duplicateDocument(doc.id, typedCopyName()).id)
                     ids to captureDocs(ids)
                 }) { (ids, identity) -> openDocs(ids, outputIdentity = identity) }
             }
@@ -1318,7 +1448,7 @@ class ToolSetupActivity : BaseActivity() {
                 val ids = selected.toList()
                 if (ids.size < 2) return fail(getString(R.string.tools_setup_need_two))
                 execute({
-                    val out = listOf(repo.mergeDocuments(ids, nameText.ifBlank { null }).id)
+                    val out = listOf(repo.mergeDocuments(ids, typedCopyName()).id)
                     out to captureDocs(out)
                 }) { (out, identity) -> openDocs(out, outputIdentity = identity) }
             }
@@ -1644,6 +1774,12 @@ class ToolSetupActivity : BaseActivity() {
         private const val BAR_CLEARANCE_DP = 96f
         /** Every option chip label carries this tag, so a UI test can walk the chips on any tool. */
         const val CHIP_TAG = "swChip"
+        /** The new-copy receipt under the name field (no new resource id needed). */
+        const val RECEIPT_TAG = "co_new_copy_receipt"
+        /** The scrollable clearance child below the last option. */
+        const val BOTTOM_SPACER_TAG = "co_bottom_spacer"
+        /** Inline required-name error under the editable field. */
+        const val NAME_ERROR_TAG = "co_name_required"
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
 
