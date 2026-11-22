@@ -59,8 +59,8 @@ class TilesFixUiTest {
     fun `the derived counts match the shipped catalogue`() {
         // Owner F6/F7/F20 removed six tiles from the 43-tool catalogue; FORM1 adds form_ready.
         assertEquals(38, ToolRegistry.all.size)
-        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
-        assertEquals("two tiles are still Coming soon", 2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
+        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        assertEquals("one tile is still Coming soon", 1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         // PRO_PLAN line 10-11 (accepted): folder creation and move-to-folder are FREE;
         // only tags and the other Pro tools stay on sale.
         assertEquals("folders left Pro with the accepted free-folder correction", 15, ToolRegistry.proCount())

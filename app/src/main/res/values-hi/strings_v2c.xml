@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX v2 regrade, lane C: Hindi copy using the 1.3.0 consistency glossary. -->
+<resources>
+    <!-- C1: बारीक और बड़े कदम, बोली जाने वाली स्थिति। -->
+    <string name="v2c_crop_move_left_more">बाएँ और ले जाएँ</string>
+    <string name="v2c_crop_move_right_more">दाएँ और ले जाएँ</string>
+    <string name="v2c_crop_move_up_more">ऊपर और ले जाएँ</string>
+    <string name="v2c_crop_move_down_more">नीचे और ले जाएँ</string>
+    <string name="v2c_crop_position">%1$s, बाएँ से %2$d%%, ऊपर से %3$d%%</string>
+    <string name="v2c_crop_at_edge">%1$s, किनारे पर है</string>
+
+    <!-- C2: स्थायी नाम वाली सूचनाएँ और दोबारा लेना। -->
+    <string name="v2c_receipt_label">अंतिम जानकारी: %1$s</string>
+    <string name="v2c_receipt_scan">पन्ने जोड़े गए</string>
+    <string name="v2c_receipt_saved">दस्तावेज़ सहेजा गया</string>
+    <string name="v2c_receipt_save_failed">सहेजना नहीं हो सका</string>
+    <string name="v2c_receipt_retake">पन्ना बदला गया</string>
+    <string name="v2c_receipt_retake_failed">दोबारा लेना नहीं हो सका</string>
+    <string name="v2c_receipt_capture_failed">तस्वीर लेना विफल रहा</string>
+    <string name="v2c_retake_page">यह पन्ना दोबारा लें</string>
+    <string name="v2c_retake_title">यह पन्ना दोबारा लें?</string>
+    <string name="v2c_retake_msg">नई तस्वीर पन्ना %1$d की जगह लेगी। रद्द करने पर वर्तमान पन्ना रहेगा।</string>
+    <string name="v2c_retake_confirm">पन्ना दोबारा लें</string>
+    <string name="v2c_retake_detail">पन्ना %1$d</string>
+
+    <!-- C2: स्थानीय कारण, बिना कच्चे त्रुटि पाठ के। -->
+    <string name="v2c_error_unreadable">यह तस्वीर पढ़ी नहीं जा सकी। दूसरी तस्वीर चुनें।</string>
+    <string name="v2c_error_page_unreadable">पन्ना %1$d पढ़ा नहीं जा सका। दूसरी तस्वीर चुनें।</string>
+    <string name="v2c_error_too_large">यह तस्वीर बहुत बड़ी है। छोटी तस्वीर आज़माएँ।</string>
+    <string name="v2c_error_no_space">पर्याप्त खाली जगह नहीं है। जगह खाली करके फिर कोशिश करें।</string>
+    <string name="v2c_error_scanner">स्कैन उपलब्ध नहीं है। तस्वीरें चुनें।</string>
+    <string name="v2c_error_generic">यह काम पूरा नहीं हो सका। फिर कोशिश करें।</string>
+    <string name="v2c_book_failed">किताब नहीं बन सकी: %1$s</string>
+    <string name="v2c_capture_failed">तस्वीर लेना विफल रहा: %1$s</string>
+</resources>

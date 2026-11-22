@@ -68,15 +68,17 @@ class OcrFlow(
         activity.lifecycleScope.launch {
             try {
                 // Render + read one page at a time: no whole PDF in memory.
-                val text = withContext(Dispatchers.IO) {
-                    PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
-                        val count = PdfPageRenderer.pageCount(fd)
-                        (0 until count).mapNotNull { i ->
-                            val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
-                            val t = OcrEngine
-                                .recognizeBytes(page, OcrLanguageSettings.get(activity))
-                                .trim()
-                            if (t.isEmpty()) null else "--- Page ${i + 1} ---\n$t"
+                val text = OcrEngine.withRecognizerSession {
+                    withContext(Dispatchers.IO) {
+                        PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
+                            val count = PdfPageRenderer.pageCount(fd)
+                            (0 until count).mapNotNull { i ->
+                                val page = PdfPageRenderer.renderPageJpeg(fd, i, 200f, 2400, 92)
+                                val t = OcrEngine
+                                    .recognizeBytes(page, OcrLanguageSettings.get(activity))
+                                    .trim()
+                                if (t.isEmpty()) null else "--- Page ${i + 1} ---\n$t"
+                            }
                         }
                     }
                 }.joinToString("\n\n")

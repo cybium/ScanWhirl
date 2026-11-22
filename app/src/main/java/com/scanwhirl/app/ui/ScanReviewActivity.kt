@@ -35,7 +35,6 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.gms.common.api.ApiException
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -50,6 +49,8 @@ import com.scanwhirl.app.store.SavedCopyPolicy
 import com.scanwhirl.app.store.SavedReviewConflictException
 import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.ScanLauncher
+import com.scanwhirl.app.tools.V2cFailureMap
+import com.scanwhirl.app.tools.V2cReceiptStore
 import com.scanwhirl.app.util.CategoryLabels
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.CategoryStyle
@@ -169,11 +170,50 @@ class ScanReviewActivity : BaseActivity() {
         }
 
     private var pendingDownload: (() -> Unit)? = null
+
+    /** Latest result snackbar; used to release retake backup state on dismissal. */
+    private var lastSnackbar: Snackbar? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingDownload?.invoke()
             else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
             pendingDownload = null
+        }
+
+    /** V2C: the page being retaken (kept across rotation until the capture returns). */
+    private var retakeTargetIndex = -1
+
+    /**
+     * V2C C2: one page is replaced through the existing ML Kit capture launcher.
+     * Cancellation leaves the original page exactly as it was.
+     */
+    private val retakeLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            val index = retakeTargetIndex
+            retakeTargetIndex = -1
+            if (result.resultCode != RESULT_OK || result.data == null || index < 0) return@registerForActivityResult
+            val uris = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+                ?.pages.orEmpty().mapNotNull { it.imageUri }
+            if (uris.size != 1) {
+                recordReceipt(
+                    getString(R.string.v2c_receipt_retake_failed),
+                    getString(R.string.v2c_error_unreadable)
+                )
+                return@registerForActivityResult
+            }
+            val bytes = try {
+                contentResolver.openInputStream(uris.first())?.use(ImageTools::readPageBytes)
+            } catch (_: Exception) {
+                null
+            }
+            if (bytes == null) {
+                recordReceipt(
+                    getString(R.string.v2c_receipt_retake_failed),
+                    getString(R.string.v2c_error_unreadable)
+                )
+            } else {
+                replaceStagedPage(index, bytes)
+            }
         }
 
     /** Another scanner batch ("Add pages"), appended to this staging folder. */
@@ -183,6 +223,10 @@ class ScanReviewActivity : BaseActivity() {
             val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
             val uris = scanResult?.pages.orEmpty().mapNotNull { it.imageUri }
             if (uris.isEmpty()) {
+                recordReceipt(
+                    getString(R.string.v2c_receipt_capture_failed),
+                    getString(R.string.scan_no_pages)
+                )
                 Toast.makeText(this, R.string.scan_no_pages, Toast.LENGTH_SHORT).show()
             } else {
                 appendStagedPages(uris)
@@ -250,8 +294,10 @@ class ScanReviewActivity : BaseActivity() {
             arrangeMode = it.getBoolean(STATE_ARRANGE, false)
             filtersEdited = it.getBoolean(STATE_FILTERS_EDITED, false)
             editedBeforeRecreate = it.getBoolean(STATE_EDITED, false)
+            retakeTargetIndex = it.getInt(STATE_RETAKE_INDEX, -1)
         }
         currentIndex = currentIndex.coerceIn(0, pages.lastIndex)
+        showLatestReceipt()
 
         binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ORIGINAL }
         binding.pageGrid.checkedAt = { i -> selected.contains(pages.getOrNull(i)?.path) }
@@ -324,6 +370,7 @@ class ScanReviewActivity : BaseActivity() {
         reviewStateHandler.removeCallbacks(persistReviewStateTask)
         // Leaving the screen makes any pending page delete permanent.
         if (!saved) commitPendingDeletes(pendingDeletes.toList())
+        if (saved || isFinishing) clearRetakeBackups()
         super.onDestroy()
     }
 
@@ -372,6 +419,7 @@ class ScanReviewActivity : BaseActivity() {
         outState.putBoolean(STATE_ARRANGE, arrangeMode)
         outState.putBoolean(STATE_FILTERS_EDITED, filtersEdited)
         outState.putBoolean(STATE_EDITED, isEdited())
+        outState.putInt(STATE_RETAKE_INDEX, retakeTargetIndex)
         if (reviewStateReady) {
             outState.putString(REVIEW_STATE, PendingScans.encodeReviewState(stagingDir, reviewState()))
             persistReviewState()
@@ -730,7 +778,7 @@ class ScanReviewActivity : BaseActivity() {
         val density = resources.displayMetrics.density
         val ids = listOf(
             R.id.btnToolCrop, R.id.btnToolRotate, R.id.btnToolFilter,
-            R.id.btnToolAdd, R.id.btnToolDelete,
+            R.id.btnToolAdd, R.id.btnToolDelete, R.id.btnToolRetake,
             R.id.btnArrEarlier, R.id.btnArrLater, R.id.btnArrMove,
             R.id.btnArrEdit, R.id.btnArrDelete
         )
@@ -777,6 +825,7 @@ class ScanReviewActivity : BaseActivity() {
         binding.btnToolDelete.setOnClickListener {
             pages.getOrNull(currentIndex)?.let { deletePage(it) }
         }
+        binding.btnToolRetake.setOnClickListener { showRetakeSheet() }
     }
 
     private fun setupArrange() {
@@ -1089,11 +1138,29 @@ class ScanReviewActivity : BaseActivity() {
         else HapticFeedbackConstants.LONG_PRESS
 
     /** Result snackbar with Undo when [undo] is given. */
-    private fun snack(text: CharSequence, undo: (() -> Unit)?) {
+    private fun snack(text: CharSequence, undo: (() -> Unit)?) = snack(text, undo, null)
+
+    /** With [onDismissed], the caller can release state when Undo is no longer possible. */
+    private fun snack(
+        text: CharSequence,
+        undo: (() -> Unit)?,
+        onDismissed: ((Int) -> Unit)?
+    ) {
         val bar = styled(Snackbar.make(binding.root, text, Snackbar.LENGTH_LONG))
+        lastSnackbar = bar
         if (undo != null) bar.setAction(R.string.undo) { undo() }
+        if (onDismissed != null) {
+            bar.addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event != DISMISS_EVENT_ACTION) onDismissed(event)
+                }
+            })
+        }
         bar.show()
     }
+
+    /** Test seam for dismissing the visible Undo snackbar deterministically. */
+    internal fun lastSnackbarForTest(): Snackbar? = lastSnackbar
 
     /**
      * Floats above the visible tool row (never over Earlier / Later, so repeated
@@ -1169,19 +1236,14 @@ class ScanReviewActivity : BaseActivity() {
                     scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
                 }
                 .addOnFailureListener { e ->
-                    val msg = if (e is ApiException) {
-                        getString(R.string.scanner_unavailable, e.statusCode)
-                    } else {
-                        getString(R.string.scanner_failed, getString(R.string.s1_reason_scanner_failed))
-                    }
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    val reason = V2cFailureMap.message(this, e)
+                    recordReceipt(getString(R.string.v2c_receipt_capture_failed), reason)
+                    Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
                 }
         } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                getString(R.string.scanner_failed, getString(R.string.s1_reason_scanner_failed)),
-                Toast.LENGTH_LONG
-            ).show()
+            val reason = V2cFailureMap.message(this, e)
+            recordReceipt(getString(R.string.v2c_receipt_capture_failed), reason)
+            Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1226,11 +1288,19 @@ class ScanReviewActivity : BaseActivity() {
                 } else {
                     getString(R.string.stage_failed, getString(R.string.f8_reason_unreadable))
                 }
+                recordReceipt(
+                    getString(R.string.v2c_receipt_capture_failed),
+                    V2cFailureMap.message(this@ScanReviewActivity, e)
+                )
                 Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
             } finally {
                 // Even when a later input is invalid, earlier added pages invalidate
                 // the scanner PDF and must remain visible/recoverable in review.
                 if (appended) {
+                    recordReceipt(
+                        getString(R.string.v2c_receipt_scan),
+                        resources.getQuantityString(R.plurals.review_page_count, uris.size, uris.size)
+                    )
                     pdfFile = null
                     structureChanged = true
                     // Land on the first added page so the owner sees what came in.
@@ -1242,12 +1312,153 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     // ------------------------------------------------------------------
+    // V2C C2: durable named receipts
+    // ------------------------------------------------------------------
+
+    /** Records a named outcome inside staging and shows it, not only in a Toast. */
+    internal fun recordReceipt(name: String, detail: String) {
+        if (::stagingDir.isInitialized) {
+            V2cReceiptStore.recordIn(stagingDir, name, detail)
+        }
+        showLatestReceipt()
+    }
+
+    /** Shows the last receipt of this review, or the last scan receipt if none. */
+    internal fun showLatestReceipt() {
+        if (!::binding.isInitialized) return
+        val receipt = (if (::stagingDir.isInitialized) V2cReceiptStore.latestIn(stagingDir) else null)
+            ?: V2cReceiptStore.latest(this, "scan")
+        binding.v2cReceipt.isVisible = receipt != null
+        if (receipt == null) return
+        binding.v2cReceipt.text = "${receipt.name} · ${receipt.detail}"
+        binding.v2cReceipt.contentDescription =
+            getString(R.string.v2c_receipt_label, receipt.name)
+    }
+
+    /** A retake backup is only for the live Undo window; never leave one behind. */
+    private fun clearRetakeBackups() {
+        if (!::stagingDir.isInitialized || !stagingDir.isDirectory) return
+        stagingDir.listFiles { f -> f.name.endsWith(RETAKE_BACKUP_SUFFIX) }
+            ?.forEach { it.delete() }
+    }
+
+    // ------------------------------------------------------------------
+    // V2C C2: retake exactly one staged page
+    // ------------------------------------------------------------------
+
+    /** Confirmation sheet for replacing the currently shown page. */
+    internal fun showRetakeSheet() {
+        val index = currentIndex
+        if (refuseWhileBusy() || index !in pages.indices) return
+        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(R.string.v2c_retake_title)
+            .setMessage(getString(R.string.v2c_retake_msg, index + 1))
+            .setPrimary(R.string.v2c_retake_confirm) { launchRetake(index) }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    /** Uses the existing ML Kit scanner for ONE replacement photo; no engine change. */
+    private fun launchRetake(index: Int) {
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(false)
+            .setScannerMode(
+                if (Prefs.autoEnhanceScan(this)) GmsDocumentScannerOptions.SCANNER_MODE_FULL
+                else GmsDocumentScannerOptions.SCANNER_MODE_BASE
+            )
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            // No per-entry page cap: the shared camera session options govern every
+            // capture. Exactly one returned page is accepted by retakeLauncher; a
+            // different count is reported honestly and leaves this page untouched.
+            .build()
+        retakeTargetIndex = index
+        try {
+            GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(this)
+                .addOnSuccessListener { sender ->
+                    retakeLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                }
+                .addOnFailureListener { e ->
+                    retakeTargetIndex = -1
+                    val reason = V2cFailureMap.message(this, e)
+                    recordReceipt(getString(R.string.v2c_receipt_retake_failed), reason)
+                }
+        } catch (e: Exception) {
+            retakeTargetIndex = -1
+            recordReceipt(
+                getString(R.string.v2c_receipt_retake_failed),
+                V2cFailureMap.message(this, e)
+            )
+        }
+    }
+
+    /**
+     * Replaces the bytes of one page in place: its file name (hence order),
+     * filter entry and all other pages are untouched. The old bytes are kept
+     * in a sibling backup until Undo expires, so the replacement is reversible.
+     */
+    internal fun replaceStagedPage(index: Int, bytes: ByteArray) {
+        val target = pages.getOrNull(index) ?: return
+        if (refuseWhileBusy()) return
+        pageOpBusy = true
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // A previous retake's Undo window is over: its backup must not linger.
+                    clearRetakeBackups()
+                    val backup = File(target.path + RETAKE_BACKUP_SUFFIX)
+                    backup.writeBytes(target.readBytes())
+                    val tmp = File(target.path + ".new")
+                    tmp.writeBytes(ImageTools.normalizePage(bytes))
+                    // renameTo cannot overwrite an existing file on every platform;
+                    // copy over it so the same page name (hence order/filter) survives.
+                    tmp.copyTo(target, overwrite = true)
+                    tmp.delete()
+                }
+                pageOpBusy = false
+                structureChanged = true
+                pdfFile = null
+                reloadFromDisk()
+                recordReceipt(
+                    getString(R.string.v2c_receipt_retake),
+                    getString(R.string.v2c_retake_detail, index + 1)
+                )
+                snack(
+                    getString(R.string.v2c_receipt_retake),
+                    undo = {
+                        val backup = File(target.path + RETAKE_BACKUP_SUFFIX)
+                        if (backup.exists()) {
+                            backup.copyTo(target, overwrite = true)
+                            backup.delete()
+                            reloadFromDisk()
+                            recordReceipt(
+                                getString(R.string.v2c_receipt_retake),
+                                getString(R.string.undo)
+                            )
+                        }
+                    },
+                    onDismissed = { clearRetakeBackups() }
+                )
+            } catch (e: Exception) {
+                pageOpBusy = false
+                recordReceipt(
+                    getString(R.string.v2c_receipt_retake_failed),
+                    V2cFailureMap.message(this@ScanReviewActivity, e)
+                )
+                reloadFromDisk()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Save / discard
     // ------------------------------------------------------------------
 
     private fun saveAndFinish(policy: SavedCopyPolicy = SavedCopyPolicy.ASK) {
         if (saving) return
         if (pages.isEmpty()) return
+        clearRetakeBackups()
         withStoragePermission {
             reviewStateHandler.removeCallbacks(persistReviewStateTask)
             saving = true
@@ -1269,6 +1480,10 @@ class ScanReviewActivity : BaseActivity() {
                         // saved, staged pages are untouched, and the owner can retry.
                         saving = false
                         progress.dismiss()
+                        recordReceipt(
+                            getString(R.string.v2c_receipt_save_failed),
+                            getString(R.string.review_state_failed)
+                        )
                         Toast.makeText(this@ScanReviewActivity, R.string.review_state_failed,
                             Toast.LENGTH_LONG).show()
                         return@launch
@@ -1309,6 +1524,7 @@ class ScanReviewActivity : BaseActivity() {
                     } else {
                         getString(R.string.scan_saved)
                     }
+                    recordReceipt(getString(R.string.v2c_receipt_saved), doc.name)
                     Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
                     // M06: back on Home, the new document is scrolled into view.
                     com.scanwhirl.app.ui.home.HomeReveal.request(doc.id)
@@ -1331,11 +1547,14 @@ class ScanReviewActivity : BaseActivity() {
                 } catch (e: Exception) {
                     saving = false
                     progress.dismiss()
-                    Toast.makeText(
-                        this@ScanReviewActivity,
-                        getString(R.string.page_op_failed, e.message),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    val page = V2cFailureMap.pageNumberOf(e)
+                    val reason = if (page != null) {
+                        getString(R.string.v2c_error_page_unreadable, page)
+                    } else {
+                        V2cFailureMap.message(this@ScanReviewActivity, e)
+                    }
+                    recordReceipt(getString(R.string.v2c_receipt_save_failed), reason)
+                    Toast.makeText(this@ScanReviewActivity, reason, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1370,6 +1589,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     private fun discard() {
+        clearRetakeBackups()
         saved = true // stops any later cleanup concerns; staging is removed now
         // fixflow F22 fallout: a queued review-state write must not leave a file in the folder
         // and keep a discarded scan visible as "unfinished" (see PendingScans.discard).
@@ -1399,11 +1619,13 @@ class ScanReviewActivity : BaseActivity() {
         private const val EXTRA_NAME = "default_name"
         private const val FILTERS_FILE = "filters.txt"
         private const val DEL_SUFFIX = ".del"
+        private const val RETAKE_BACKUP_SUFFIX = ".retake"
         private const val REVIEW_STATE = "review_state"
         private const val STATE_CURRENT = "review_current_page"
         private const val STATE_ARRANGE = "review_arrange_mode"
         private const val STATE_FILTERS_EDITED = "review_filters_edited"
         private const val STATE_EDITED = "review_edited"
+        private const val STATE_RETAKE_INDEX = "v2c_retake_index"
 
         /** Filmstrip thumb decode target (px); also the instant Focus placeholder. */
         private const val FILM_THUMB_PX = 200

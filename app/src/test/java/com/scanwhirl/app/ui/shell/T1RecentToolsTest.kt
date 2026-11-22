@@ -200,7 +200,8 @@ abstract class T1RecentToolsBase {
 
     @Test
     fun `unknown ids and Coming-soon ids are ignored`() {
-        storeRawRecents("no_such_tool,compress,organize_pages")
+        // batch_rename is still SOON; organize_pages is now a real READY tool.
+        storeRawRecents("no_such_tool,compress,batch_rename")
         assertEquals(
             "only a READY tool this build ships can be recent",
             listOf("compress"),

@@ -74,6 +74,10 @@ class VaultStore(
         @androidx.annotation.VisibleForTesting
         internal var keyWipeProbe: ((String) -> Unit)? = null
 
+        /** SEC2 LOW: test seam for the Vault-backup import key wipe. */
+        @androidx.annotation.VisibleForTesting
+        internal var importKeyWipeProbe: (() -> Unit)? = null
+
         private fun wipeKey(key: ByteArray, where: String) {
             key.fill(0)
             keyWipeProbe?.invoke(where)
@@ -598,12 +602,20 @@ class VaultStore(
         Opened(id = id, name = manifest.name, dir = target, pageFiles = pageFiles, pdfFile = pdf)
     }
 
-    /** Removes the encrypted entry. The plaintext was already purged when it was added. */
+    /**
+     * Removes the encrypted entry. SEC2 N1: the plaintext original may still be
+     * in the private purge area when an earlier purge failed. Finish that cleanup
+     * here; if it fails too, the folder itself is the durable authority and the
+     * independent startup sweep retries it. Never drop the marker before both
+     * copies are gone.
+     */
     fun removeFromVault(id: String) = synchronized(LOCK) {
         requireKey()
         requireCompleted()
         entryDir(id).deleteRecursively()
         File(openDir, id).deleteRecursively()
+        val purged = repo.purgeVaultPendingOriginal(id)
+        if (purged) File(vaultDir, "$ADDING_PREFIX$id").delete()
     }
 
     // ------------------------------------------------------------------
@@ -677,9 +689,11 @@ class VaultStore(
 
         vaultDir.mkdirs()
         val staging = File(vaultDir, "$RESTORE_PREFIX${UUID.randomUUID().toString().take(8)}")
+        var importKey: ByteArray? = null
         try {
             val contents = VaultBackup.extract(src, staging)
             val key = VaultKeyWrap.open(contents.recoveryBlob, VaultCrypto.normalizeRecoveryCode(recoveryCode))
+            importKey = key
 
             val verified = contents.entryIds.map { id ->
                 val dir = containedFile(staging, id)
@@ -719,6 +733,10 @@ class VaultStore(
             VaultSession.open(key)
             listEntries()
         } finally {
+            // SEC2 LOW: the session copied this key; the caller's unwrapped
+            // array is done and must not linger after a failed import either.
+            importKey?.fill(0)
+            importKeyWipeProbe?.invoke()
             staging.deleteRecursively()
         }
     }
@@ -736,6 +754,9 @@ class VaultStore(
                 f.deleteRecursively()
             }
         }
+        // SEC2 R3 LOW: pending plaintext is locally owned even when this Vault
+        // was never set up (or was wiped). Sweep it before any early return.
+        sweepPendingPurges()
         if (!isSetUp()) {
             // An interrupted provisioning transaction: its wraps belong to no Vault and must
             // never shadow a later (or restored) passcode wrap (review MUST-FIX 2).
@@ -767,6 +788,26 @@ class VaultStore(
                 if (repo.purgeVaultPendingOriginal(id)) clearCompletedAdd(id)
             } catch (_: Exception) {
                 // Keep the local marker so an interrupted purge can be retried.
+            }
+        }
+
+        // A marker invalidated above is no longer an owner; sweep again so one
+        // startup can finish cleanup after the marker loop.
+        sweepPendingPurges()
+    }
+
+    /**
+     * SEC2 N1/R3: pending plaintext is locally owned. Removing an encrypted
+     * entry or losing the .adding marker must never strand it. A still-live
+     * add owns its folder; a checked failure leaves it for the next start.
+     */
+    private fun sweepPendingPurges() {
+        repo.vaultPendingPurgeIds().forEach { id ->
+            if (File(vaultDir, "$ADDING_PREFIX$id").exists()) return@forEach
+            try {
+                repo.purgeVaultPendingOriginal(id)
+            } catch (_: Exception) {
+                // Keep the plaintext for a checked retry; never claim success.
             }
         }
     }
@@ -810,6 +851,15 @@ class VaultStore(
     /** Removes every Vault file and key (used by "remove all" and by restore tests). */
     fun wipeAll() = synchronized(LOCK) {
         VaultSession.close()
+        // SEC2 R3 LOW: removing the whole Vault identity must not strand the
+        // private pending-purge plaintext from an earlier interrupted add.
+        var allPendingPurged = true
+        repo.vaultPendingPurgeIds().forEach { id ->
+            if (!runCatching { repo.purgeVaultPendingOriginal(id) }.getOrDefault(false)) {
+                allPendingPurged = false
+            }
+        }
+        if (allPendingPurged) repo.vaultPendingPurgeDir.deleteRecursively()
         vaultDir.deleteRecursively()
         openDir.deleteRecursively()
         File(context.cacheDir, "vault_verify").deleteRecursively()

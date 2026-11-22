@@ -84,12 +84,18 @@ class ResizeFlow(
             R.string.resize_file_info, name, SizeUnits.format(bytes.size.toLong()), origW, origH
         )
 
-        val presetValues = mapOf(
-            R.id.preset50 to "50 KB",
-            R.id.preset100 to "100 KB",
-            R.id.preset200 to "200 KB",
-            R.id.preset500 to "500 KB"
-        )
+        // V2T T2: one free decimal-KB table across Resize and Compress.
+        val presetValues = CompressionPresentation.quickTargetKb.associateWith { kb ->
+            activity.getString(CompressionPresentation.quickTargetLabel(kb))
+        }.map { (kb, label) ->
+            val id = when (kb) {
+                20 -> R.id.v2t_quick_20
+                50 -> R.id.v2t_quick_50
+                100 -> R.id.v2t_quick_100
+                else -> R.id.v2t_quick_200
+            }
+            id to label
+        }.toMap()
 
         // Preset chip fills the size field; typing a custom size deselects the chip.
         var suppressPreset = false

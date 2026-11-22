@@ -16,13 +16,14 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.common.api.ApiException
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.tools.ScanLauncher
+import com.scanwhirl.app.tools.V2cFailureMap
+import com.scanwhirl.app.tools.V2cReceiptStore
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -87,6 +88,9 @@ class BookPagesActivity : BaseActivity() {
         val scanning = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
         val uris = scanning?.pages.orEmpty().mapNotNull { it.imageUri }
         if (uris.isEmpty()) {
+            V2cReceiptStore.record(
+                this, "book", getString(R.string.book_title), getString(R.string.v2c_error_unreadable)
+            )
             Toast.makeText(this, R.string.book_read_failed, Toast.LENGTH_SHORT).show()
         } else {
             loadImages(uris)
@@ -107,16 +111,11 @@ class BookPagesActivity : BaseActivity() {
                     scanSpread.launch(IntentSenderRequest.Builder(sender).build())
                 }
                 .addOnFailureListener { e ->
-                    val message = if (e is ApiException) {
-                        getString(R.string.book_scanner_fallback)
-                    } else {
-                        getString(R.string.book_scanner_fallback)
-                    }
-                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    reportFailure(e)
                     pickImages.launch("image/*")
                 }
         } catch (e: Exception) {
-            Toast.makeText(this, R.string.book_scanner_fallback, Toast.LENGTH_LONG).show()
+            reportFailure(e)
             pickImages.launch("image/*")
         }
     }
@@ -475,14 +474,27 @@ class BookPagesActivity : BaseActivity() {
             } catch (e: Exception) {
                 busy = false
                 updateControls()
-                SwSheet.note(
-                    this@BookPagesActivity,
-                    getString(R.string.book_title),
-                    getString(R.string.book_failed, e.message.orEmpty())
-                ).show()
+                reportFailure(e)
             }
         }
     }
+
+    /**
+     * V2C C2: one localized, durable reason for every capture/Book failure.
+     * The raw exception text is only classified; it is never shown or stored.
+     */
+    private fun reportFailure(failure: Throwable?) {
+        val reason = V2cFailureMap.message(this, failure)
+        V2cReceiptStore.record(this, "book", getString(R.string.book_title), reason)
+        SwSheet.note(
+            this,
+            getString(R.string.book_title),
+            getString(R.string.v2c_book_failed, reason)
+        ).show()
+    }
+
+    /** Test seam for the same localized failure path without a real scanner. */
+    internal fun reportFailureForTest(failure: Throwable?) = reportFailure(failure)
 
     /** "Book 14 Nov", then "Book 14 Nov (2)" when the name already exists. */
     internal fun nextBookName(today: Date = Date()): String {

@@ -192,7 +192,7 @@ class CropView @JvmOverloads constructor(
             if (handle !in 0..7) return false
             // Only accept moves that make sense for this handle (corners: all four;
             // horizontal edges: up/down; vertical edges: left/right).
-            if (action in ACTION_MOVE_LEFT..ACTION_MOVE_DOWN &&
+            if (action in ACTION_MOVE_LEFT..ACTION_MOVE_DOWN_MORE &&
                 action !in moveActionsFor(handle).map { it.first }
             ) {
                 return false
@@ -213,6 +213,10 @@ class CropView @JvmOverloads constructor(
                 ACTION_MOVE_RIGHT -> moveHandle(handle, 1f, 0f)
                 ACTION_MOVE_UP -> moveHandle(handle, 0f, -1f)
                 ACTION_MOVE_DOWN -> moveHandle(handle, 0f, 1f)
+                ACTION_MOVE_LEFT_MORE -> moveHandle(handle, -1f, 0f, coarse = true)
+                ACTION_MOVE_RIGHT_MORE -> moveHandle(handle, 1f, 0f, coarse = true)
+                ACTION_MOVE_UP_MORE -> moveHandle(handle, 0f, -1f, coarse = true)
+                ACTION_MOVE_DOWN_MORE -> moveHandle(handle, 0f, 1f, coarse = true)
                 else -> false
             }
         }
@@ -413,21 +417,33 @@ class CropView @JvmOverloads constructor(
         }
     )
 
-    /** Corners can move on both axes; an edge only moves perpendicular to itself. */
+    /**
+     * Corners can move on both axes; an edge only moves perpendicular to itself.
+     * Every direction has a fine (4dp) and a coarse (24dp) named action so a
+     * small signature and a full page are both reachable without a drag.
+     */
     private fun moveActionsFor(handle: Int): List<Pair<Int, Int>> = when (handle) {
         in 0..3 -> listOf(
             ACTION_MOVE_LEFT to R.string.ux130_l2_crop_move_left,
             ACTION_MOVE_RIGHT to R.string.ux130_l2_crop_move_right,
             ACTION_MOVE_UP to R.string.ux130_l2_crop_move_up,
-            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down
+            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down,
+            ACTION_MOVE_LEFT_MORE to R.string.v2c_crop_move_left_more,
+            ACTION_MOVE_RIGHT_MORE to R.string.v2c_crop_move_right_more,
+            ACTION_MOVE_UP_MORE to R.string.v2c_crop_move_up_more,
+            ACTION_MOVE_DOWN_MORE to R.string.v2c_crop_move_down_more
         )
         4, 6 -> listOf(
             ACTION_MOVE_UP to R.string.ux130_l2_crop_move_up,
-            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down
+            ACTION_MOVE_DOWN to R.string.ux130_l2_crop_move_down,
+            ACTION_MOVE_UP_MORE to R.string.v2c_crop_move_up_more,
+            ACTION_MOVE_DOWN_MORE to R.string.v2c_crop_move_down_more
         )
         else -> listOf(
             ACTION_MOVE_LEFT to R.string.ux130_l2_crop_move_left,
-            ACTION_MOVE_RIGHT to R.string.ux130_l2_crop_move_right
+            ACTION_MOVE_RIGHT to R.string.ux130_l2_crop_move_right,
+            ACTION_MOVE_LEFT_MORE to R.string.v2c_crop_move_left_more,
+            ACTION_MOVE_RIGHT_MORE to R.string.v2c_crop_move_right_more
         )
     }
 
@@ -456,10 +472,15 @@ class CropView @JvmOverloads constructor(
      * the very same drag/aspect/clamp code a finger uses. Returns true only when
      * the rectangle actually changed, so a boundary no-op is not announced.
      */
-    private fun moveHandle(handle: Int, directionX: Float, directionY: Float): Boolean {
+    private fun moveHandle(
+        handle: Int,
+        directionX: Float,
+        directionY: Float,
+        coarse: Boolean = false
+    ): Boolean {
         val bmp = image ?: return false
         if (imageRect.width() <= 0f || imageRect.height() <= 0f) return false
-        val step = 24f * density
+        val step = (if (coarse) 24f else 4f) * density
         val dx = directionX * step * bmp.width / imageRect.width()
         val dy = directionY * step * bmp.height / imageRect.height()
         val before = RectF(crop)
@@ -476,7 +497,16 @@ class CropView @JvmOverloads constructor(
         }
         clampToImage(bmp)
         selectHandle(handle)
-        if (crop == before) return false
+        val moved = crop != before
+        // Spoken coordinates after every move, or the honest limit when blocked.
+        val announcement = positionAnnouncement(handle, moved)
+        lastAnnouncement = announcement
+        try {
+            announceForAccessibility(announcement)
+        } catch (_: Throwable) {
+            // A test host may not have an AccessibilityManager; written state still holds.
+        }
+        if (!moved) return false
         invalidate()
         // The virtual node moved: refresh TalkBack's cached bounds and announce it.
         val virtualId = HANDLE_BASE + handle
@@ -484,14 +514,18 @@ class CropView @JvmOverloads constructor(
         cropTouchHelper.invalidateVirtualView(virtualId)
         eventsForTest += virtualId to AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
         cropTouchHelper.sendEventForVirtualView(virtualId, AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED)
-        val announcement = context.getString(R.string.ux130_l2_crop_moved, handleLabel(handle))
-        lastAnnouncement = announcement
-        try {
-            announceForAccessibility(announcement)
-        } catch (_: Throwable) {
-            // A test host may not have an AccessibilityManager; the written state still holds.
-        }
         return true
+    }
+
+    /** Spoken name + position of a handle, or "at the edge" when it cannot move. */
+    private fun positionAnnouncement(handle: Int, moved: Boolean): String {
+        val label = handleLabel(handle)
+        if (!moved) return context.getString(R.string.v2c_crop_at_edge, label)
+        val bmp = image ?: return label
+        val (x, y) = if (handle < 4) cornerImagePoint(handle) else edgeImagePoint(handle - 4)
+        val percentX = ((x / bmp.width.toFloat()) * 100f).toInt().coerceIn(0, 100)
+        val percentY = ((y / bmp.height.toFloat()) * 100f).toInt().coerceIn(0, 100)
+        return context.getString(R.string.v2c_crop_position, label, percentX, percentY)
     }
 
     /**
@@ -511,10 +545,19 @@ class CropView @JvmOverloads constructor(
             }
             if (direction != null) {
                 val handle = if (selectedHandle in 0..7) selectedHandle else 0
-                if (moveHandle(handle, direction.first, direction.second)) return true
-            } else if (keyCode == KeyEvent.KEYCODE_TAB && selectedHandle in 0..6) {
-                selectHandle(selectedHandle + 1)
-                return true
+                val coarse = event?.hasModifiers(KeyEvent.META_SHIFT_ON) == true
+                if (moveHandle(handle, direction.first, direction.second, coarse)) return true
+            } else if (keyCode == KeyEvent.KEYCODE_TAB) {
+                val backward = event?.hasModifiers(KeyEvent.META_SHIFT_ON) == true
+                if (backward && selectedHandle in 1..7) {
+                    selectHandle(selectedHandle - 1)
+                    return true
+                }
+                if (!backward && selectedHandle in 0..6) {
+                    selectHandle(selectedHandle + 1)
+                    return true
+                }
+                // First handle with Shift+Tab, last handle with Tab: leave this view.
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -728,5 +771,11 @@ class CropView @JvmOverloads constructor(
         const val ACTION_MOVE_RIGHT = 0x01000002
         const val ACTION_MOVE_UP = 0x01000003
         const val ACTION_MOVE_DOWN = 0x01000004
+
+        /** Coarse actions: the same directions with a 24dp step instead of 4dp. */
+        const val ACTION_MOVE_LEFT_MORE = 0x01000011
+        const val ACTION_MOVE_RIGHT_MORE = 0x01000012
+        const val ACTION_MOVE_UP_MORE = 0x01000013
+        const val ACTION_MOVE_DOWN_MORE = 0x01000014
     }
 }

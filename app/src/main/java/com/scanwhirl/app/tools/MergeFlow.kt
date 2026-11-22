@@ -99,7 +99,8 @@ class MergeFlow(
                 // H5-3: cancellation (screen closed or recreated) is not a failure.
                 throw e
             } catch (e: Exception) {
-                host.toast(activity.getString(R.string.merge_failed, e.message ?: ""), Toast.LENGTH_LONG)
+                // V2T T1: no raw exception text in the UI.
+                host.toast(activity.getString(R.string.v2t_merge_failed), Toast.LENGTH_LONG)
             }
         }
     }

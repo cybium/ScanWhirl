@@ -46,7 +46,10 @@ object PrivacySweep {
      * that work, so it follows the same 24 h age gate.
      */
     internal val CAPTURE_CACHE_DIRS = setOf(
-        "t1_passport", "t1_business_card", "id_card_state", "stamp_editor"
+        "t1_passport", "t1_business_card", "id_card_state", "stamp_editor",
+        // SEC2 N3: FORM1 holds a picked signature/ID photo and a generated output.
+        // Age-gated so a process death inside the flow can still restore them.
+        "form1_pick", "form1_out"
     )
 
     /** Cache directories (relative to cacheDir) that only ever hold plaintext copies. */
@@ -63,7 +66,10 @@ object PrivacySweep {
         "id_card_state",
         // S2 item 1: serialised stamp-editor marks (signature + redaction), age-gated like the
         // capture caches so a process-death restore within 24 h still finds them.
-        "stamp_editor"
+        "stamp_editor",
+        // SEC2 N3: FORM1 plaintext picked/generated photos, age-gated above.
+        "form1_pick",
+        "form1_out"
     )
 
     /** Cache files (relative to cacheDir) whose names start with a marker. */

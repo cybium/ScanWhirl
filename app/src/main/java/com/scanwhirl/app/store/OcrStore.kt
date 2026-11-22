@@ -32,7 +32,15 @@ import java.util.concurrent.locks.ReentrantLock
  * truncates the previous file. Geometry payloads may carry a text digest;
  * this binds geometry to the text it describes across interrupted edits.
  */
-class OcrStore(private val docsDir: File) {
+class OcrStore(
+    private val docsDir: File,
+    /**
+     * SEC2 R3: the repository's live library store must never recreate a
+     * document that was moved or purged. Standalone stores (unit fixtures and
+     * explicit private staging via [putStagedAll]) are not live documents.
+     */
+    private val enforceLiveDocument: Boolean = false
+) {
 
     private val OCR_HEADER = "#scanwhirl-ocr-v2"
     private val OCR_GEO_HEADER = "#scanwhirl-ocrgeo-v1"
@@ -97,6 +105,9 @@ class OcrStore(private val docsDir: File) {
 
         internal fun writeCountForTests(): Int = writeCount.get()
         internal fun resetWriteCountForTests() { writeCount.set(0) }
+
+        /** SEC2 N2: called under the OCR lock after validation, before publishing. */
+        @Volatile internal var recognizedCommitProbe: (() -> Unit)? = null
 
         // Never acquire the repository PDF lock while holding this lock.
         internal fun <T> locked(action: () -> T): T = lock.withLock(action)
@@ -220,11 +231,16 @@ class OcrStore(private val docsDir: File) {
         }
     }
 
-    /** Intentional replace-all operation. Editors must use [updateTexts] instead. */
-    fun putTexts(id: String, pages: Map<String, String>) {
-        lock.withLock {
-            val dir = docDir(id)
-            dir.mkdirs()
+    /**
+     * Intentional replace-all operation. Editors must use [updateTexts] instead.
+     * SEC2 R3: returns false and writes nothing when the live document is gone.
+     */
+    fun putTexts(id: String, pages: Map<String, String>): Boolean = lock.withLock {
+        val dir = docDir(id)
+        if (enforceLiveDocument && !dir.isDirectory) false
+        else {
+            // Standalone/staging stores may create their own private folder.
+            if (!dir.isDirectory) dir.mkdirs()
             bindGeometry(id, readTextStrict(id))
             atomicWrite(
                 File(dir, TEXT_FILE),
@@ -232,6 +248,7 @@ class OcrStore(private val docsDir: File) {
                     "$name\t${encodeText(text)}"
                 }).joinToString("\n")
             )
+            true
         }
     }
 
@@ -277,8 +294,12 @@ class OcrStore(private val docsDir: File) {
      * PM-2.2b: writes the OCR carried over from a draft's base into a staging folder in one go.
      * Geometry goes first; the text rename is the commit point (`OcrStore.kt` write order).
      */
-    internal fun putAll(id: String, texts: Map<String, String>, geo: Map<String, OcrPage>) {
+    internal fun putStagedAll(id: String, texts: Map<String, String>, geo: Map<String, OcrPage>) {
         lock.withLock {
+            // Explicit staging API: the caller owns a fresh private staging
+            // folder, so creating it here is intentional, not a live-document
+            // resurrection. Live publishers use putPage/putTexts and refuse a
+            // missing directory.
             docDir(id).mkdirs()
             if (geo.isNotEmpty()) writeGeometry(id, geo.filterKeys { it in texts }, texts)
             if (texts.isNotEmpty()) writeTexts(id, texts)
@@ -335,27 +356,45 @@ class OcrStore(private val docsDir: File) {
         }
     }
 
-    /** Writes one page's text + geometry in one synchronized rewrite. */
-    fun putPage(id: String, key: String, text: String, page: OcrPage?) {
-        lock.withLock {
-            val dir = docDir(id)
-            dir.mkdirs()
-
-            val before = readTextStrict(id)
-            val currentGeo = readGeoStrict(id, before).toMutableMap()
-            // Keep the previous geometry candidate until the text commit. A
-            // failed/cancelled text write can still resolve the old pair.
-            val previous = currentGeo[key]?.takeIf { before[key] != text }
-                ?.let { mapOf(key to (before[key].orEmpty() to it)) } ?: emptyMap()
-            val currentText = before.toMutableMap()
-            currentText[key] = text
-            if (page == null) {
-                currentGeo.remove(key)
-            } else {
-                currentGeo[key] = page
+    /**
+     * Writes one page's text + geometry in one synchronized rewrite.
+     * SEC2 R3: a late recognition result must never recreate a document that
+     * was moved or purged while recognition ran. When [expectedSourceHash] is
+     * given, the page's bytes are re-checked under this same lock, so identity
+     * validation and publication are atomic. Returns false on refusal.
+     */
+    fun putPage(
+        id: String,
+        key: String,
+        text: String,
+        page: OcrPage?,
+        expectedSourceHash: String? = null
+    ): Boolean = lock.withLock {
+        val dir = docDir(id)
+        val source = File(dir, key)
+        when {
+            enforceLiveDocument && !dir.isDirectory -> false
+            expectedSourceHash != null &&
+                (!source.isFile || Sha256.of(source) != expectedSourceHash) -> false
+            else -> {
+                if (!dir.isDirectory) dir.mkdirs()
+                val before = readTextStrict(id)
+                val currentGeo = readGeoStrict(id, before).toMutableMap()
+                // Keep the previous geometry candidate until the text commit. A
+                // failed/cancelled text write can still resolve the old pair.
+                val previous = currentGeo[key]?.takeIf { before[key] != text }
+                    ?.let { mapOf(key to (before[key].orEmpty() to it)) } ?: emptyMap()
+                val currentText = before.toMutableMap()
+                currentText[key] = text
+                if (page == null) {
+                    currentGeo.remove(key)
+                } else {
+                    currentGeo[key] = page
+                }
+                writeGeometry(id, currentGeo, currentText, previous)
+                writeTexts(id, currentText)
+                true
             }
-            writeGeometry(id, currentGeo, currentText, previous)
-            writeTexts(id, currentText)
         }
     }
 
@@ -416,7 +455,11 @@ class OcrStore(private val docsDir: File) {
         }
 
         if (stored > 0) {
-            dir.mkdirs()
+            recognizedCommitProbe?.invoke()
+            // SEC2 N2: a Vault move (or any delete) can remove this directory
+            // between validation and publish. Never mkdirs a removed document:
+            // that would leave plaintext OCR under a fresh ordinary library id.
+            if (!dir.isDirectory) return@withLock BatchResult(0, already, stale)
             writeGeometry(id, geo, before, previous)
             writeTexts(id, before)
         }

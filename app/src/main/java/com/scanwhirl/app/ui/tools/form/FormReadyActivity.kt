@@ -93,6 +93,12 @@ class FormReadyActivity : BaseActivity() {
 
     private var lastOutput: File? = null
 
+    /**
+     * SEC2 N3: once an output is handed to the result screen, that screen owns
+     * the cache file; this activity must not delete bytes it still needs.
+     */
+    private var outputHandedOff = false
+
     /** Tests: the exact note given to the shared result screen after a run. */
     @Volatile
     internal var lastNoteForTest: String? = null
@@ -651,6 +657,8 @@ class FormReadyActivity : BaseActivity() {
                     this@FormReadyActivity, TOOL_ID,
                     files = listOf(file), mime = "image/jpeg", note = note
                 ))
+                // SEC2 N3: ownership moves to the result screen before this exits.
+                outputHandedOff = true
                 finish()
             } catch (e: CancellationException) {
                 throw e
@@ -702,7 +710,14 @@ class FormReadyActivity : BaseActivity() {
         bitmap?.takeIf { !it.isRecycled }?.recycle()
         bitmap = null
         if (isFinishing && !isChangingConfigurations) {
+            // SEC2 N3: a picked plaintext copy is never needed after the flow ends.
+            // An output that was handed off belongs to the result screen; an
+            // abandoned one is safe to remove here. Rotation keeps both so a
+            // process death inside the flow can still restore the work.
             runCatching { File(cacheDir, "form1_pick").deleteRecursively() }
+            if (!outputHandedOff) {
+                runCatching { File(cacheDir, "form1_out").deleteRecursively() }
+            }
         }
         super.onDestroy()
     }

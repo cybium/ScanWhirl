@@ -449,7 +449,9 @@ class DocCard(context: Context) : LinearLayout(context) {
         val firstPage = document.pageFiles.firstOrNull()
         // A locked or Vault document never gets a page image in a search/library row:
         // the neutral letter placeholder is the only tile it may show (UI-W4).
-        val canShowPage = firstPage != null && firstPage.exists() &&
+        // PERF 3: pageFiles came from the repository's listFiles() pass; its non-empty list and
+        // pageCount are the cached existence proof. No main-thread exists()/stat per bind.
+        val canShowPage = firstPage != null && document.pageCount > 0 &&
             !document.isLocked && !document.isVaulted
         showThumbPlaceholder(if (canShowPage) null else document)
         if (firstPage != null && canShowPage) {
@@ -468,7 +470,10 @@ class DocCard(context: Context) : LinearLayout(context) {
                         showThumbPlaceholder(null)
                     },
                     onFailed = { showThumbPlaceholder(document) },
-                    skipStale = true
+                    skipStale = true,
+                    // PERF 3: the caller has the listing-time revision, so the loader's key
+                    // needs no lastModified()/length() stat on the main thread.
+                    revision = document.revision.toString()
                 )
             }
         } else {

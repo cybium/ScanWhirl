@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2T lane view ids. -->
+<resources>
+    <item name="v2t_status" type="id" />
+    <item name="v2t_quick_group" type="id" />
+    <item name="v2t_quick_20" type="id" />
+    <item name="v2t_quick_50" type="id" />
+    <item name="v2t_quick_100" type="id" />
+    <item name="v2t_quick_200" type="id" />
+    <item name="v2t_compress_copy" type="id" />
+    <item name="v2t_protect_copy" type="id" />
+</resources>

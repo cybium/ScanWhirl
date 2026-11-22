@@ -267,11 +267,32 @@ class CompressFlow(
         }
 
         dialogBinding.compressModeGroup.setOnCheckedChangeListener { _, _ -> applyMode() }
+        // V2T T2: free decimal-KB chips. A typed target always wins; the selected
+        // chip is exposed by Material's filter-chip checked state for TalkBack.
+        var suppressChip = false
+        CompressionPresentation.quickTargetKb.forEach { kb ->
+            val id = when (kb) {
+                20 -> R.id.v2t_quick_20
+                50 -> R.id.v2t_quick_50
+                100 -> R.id.v2t_quick_100
+                else -> R.id.v2t_quick_200
+            }
+            dialogBinding.root.findViewById<com.google.android.material.chip.Chip>(id)
+                ?.setOnClickListener {
+                    suppressChip = true
+                    dialogBinding.editCompressTarget.setText(
+                        activity.getString(CompressionPresentation.quickTargetLabel(kb))
+                    )
+                    suppressChip = false
+                }
+        }
         dialogBinding.editCompressTarget.addTextChangedListener(object :
             android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = clearError()
-            override fun afterTextChanged(s: android.text.Editable?) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!suppressChip) dialogBinding.v2tQuickGroup.clearCheck()
+            }
         })
         dialogBinding.editCompressTarget.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
@@ -409,26 +430,29 @@ class CompressFlow(
                 withContext(Dispatchers.IO) {
                     // One seekable copy: SAF pipes cannot be rendered directly.
                     PdfPageRenderer.withSeekablePdf(activity, uri) { fd ->
-                        for (index in levels.indices) {
-                            if (session != sheetSeq) return@withSeekablePdf
-                            currentCoroutineContext().ensureActive()
-                            val level = levels[index]
-                            val rendered = runCatching {
-                                PdfPageRenderer.renderPageJpeg(
-                                    fd, pageIndex, level.dpi,
-                                    level.maxDim ?: 3000, level.quality
-                                )
-                            }.getOrNull()
-                            val bytes = rendered?.let {
-                                SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
-                            }
-                            withContext(Dispatchers.Main) { onLevel(index, bytes) }
-                            if (bytes == null) {
-                                // The same render failed: the remaining levels cannot be sized.
-                                for (rest in index + 1 until levels.size) {
-                                    withContext(Dispatchers.Main) { onLevel(rest, null) }
+                        // PERF item 4: one native renderer for all quality levels.
+                        PdfPageRenderer.withRendererSuspend(fd) { renderer ->
+                            for (index in levels.indices) {
+                                if (session != sheetSeq) return@withRendererSuspend
+                                currentCoroutineContext().ensureActive()
+                                val level = levels[index]
+                                val rendered = runCatching {
+                                    PdfPageRenderer.renderPageJpeg(
+                                        renderer, pageIndex, level.dpi,
+                                        level.maxDim ?: 3000, level.quality
+                                    )
+                                }.getOrNull()
+                                val bytes = rendered?.let {
+                                    SizeUnits.estimateJpegPages(it.size.toDouble(), pages)
                                 }
-                                return@withSeekablePdf
+                                withContext(Dispatchers.Main) { onLevel(index, bytes) }
+                                if (bytes == null) {
+                                    // The same render failed: the remaining levels cannot be sized.
+                                    for (rest in index + 1 until levels.size) {
+                                        withContext(Dispatchers.Main) { onLevel(rest, null) }
+                                    }
+                                    return@withRendererSuspend
+                                }
                             }
                         }
                     }

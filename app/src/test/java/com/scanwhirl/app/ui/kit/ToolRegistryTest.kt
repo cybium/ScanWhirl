@@ -25,10 +25,10 @@ import org.robolectric.annotation.GraphicsMode
 class ToolRegistryTest {
 
     @Test
-    fun `insert pages is ready and the two unfinished organize tools are coming soon`() {
-        // Owner 2026-11-16: Batch rename has no reachable rename action and Organize pages has no
-        // working reorder, so both are Coming soon instead of shipping a dead tile.
-        assertEquals(ToolStatus.SOON, ToolRegistry.byId("organize_pages")?.status)
+    fun `organize pages routes to its real viewer while batch rename is still coming soon`() {
+        // V2L: Organize pages now opens the existing selectable document viewer (page ticks,
+        // reorder, duplicate, move). Batch rename still has no reachable rename action.
+        assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         assertEquals(ToolStatus.SOON, ToolRegistry.byId("batch_rename")?.status)
         assertEquals(ToolStatus.READY, ToolRegistry.byId("insert_pages")?.status)
         assertNull("Mask Aadhaar folded into Redact's Find", ToolRegistry.byId("mask_aadhaar"))
@@ -52,12 +52,12 @@ class ToolRegistryTest {
 
     // fixui: tiles removed (owner F6/F7/F20) - Book pages, Photos to PDF, Business card,
     // Duplicate, Enhance and B&W left the catalogue: 43 - 6 = 37; FORM1 adds form_ready = 38
-    // tiles (36 READY, 2 Coming soon).
+    // tiles (37 READY, 1 Coming soon).
     @Test
     fun `catalogue holds all 38 tools, each id once`() {
         assertEquals(38, ToolRegistry.all.size)
-        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
-        assertEquals(2, ToolRegistry.all.count { it.status == ToolStatus.SOON })
+        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        assertEquals(1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         assertEquals(
             "duplicate tool ids",
             ToolRegistry.all.size,
