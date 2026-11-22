@@ -15,9 +15,10 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.databinding.ActivityExportResultBinding
+import com.scanwhirl.app.ui.kit.CompareModel
+import com.scanwhirl.app.ui.kit.ComparePane
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.DownloadSaver
-import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.SavedSnackbar
 import com.scanwhirl.app.util.SizeUnits
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,7 @@ class ExportResultActivity : BaseActivity() {
 
         loadPreview()
         showStats()
+        bindCompare()
 
         intent.getStringExtra(EXTRA_WARNING)?.takeIf { it.isNotBlank() }?.let {
             binding.resultWarning.text = it
@@ -87,18 +89,63 @@ class ExportResultActivity : BaseActivity() {
         binding.btnShareResult.setOnClickListener { shareResult() }
     }
 
+    /**
+     * The old single preview is kept in the layout so existing callers/tests still find it, but
+     * the real before/after pair is now drawn by [binding.ccCompare] (bounded decode off main).
+     */
     private fun loadPreview() {
-        val path = intent.getStringExtra(EXTRA_PREVIEW) ?: outputPath
-        if (path == null) {
-            binding.resultPreview.visibility = android.view.View.GONE
+        binding.resultPreview.visibility = android.view.View.GONE
+    }
+
+    /**
+     * Lane C: Before | After for Resize/Compress exports. Real bytes and pixel sizes are always
+     * shown; the before page image is shown only when the producer supplied one — otherwise the
+     * pane says the original is unavailable instead of showing a fake or blank page.
+     * Protect/Unlock pass [EXTRA_SUMMARY] (state text only): never a plaintext preview.
+     */
+    private fun bindCompare() {
+        val summary = intent.getStringExtra(EXTRA_SUMMARY)
+        if (!summary.isNullOrBlank()) {
+            binding.ccCompare.visibility = android.view.View.GONE
             return
         }
-        try {
-            val bitmap = ImageTools.decodeSampledFile(File(path), 1600)
-            binding.resultPreview.setImageBitmap(bitmap)
-        } catch (_: Exception) {
-            binding.resultPreview.visibility = android.view.View.GONE
-        }
+        val beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L)
+        val afterBytes = intent.getLongExtra(EXTRA_AFTER, 0L)
+        val w = intent.getIntExtra(EXTRA_WIDTH, 0)
+        val h = intent.getIntExtra(EXTRA_HEIGHT, 0)
+        val bw = intent.getIntExtra(EXTRA_BEFORE_WIDTH, 0)
+        val bh = intent.getIntExtra(EXTRA_BEFORE_HEIGHT, 0)
+        val afterPath = intent.getStringExtra(EXTRA_PREVIEW) ?: outputPath
+        val beforePath = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)
+        val afterSize = if (afterBytes > 0L) formatBytes(afterBytes) else null
+        val beforeSize = if (beforeBytes > 0L) formatBytes(beforeBytes) else null
+
+        fun pixels(width: Int, height: Int): String? =
+            if (width > 0 && height > 0) getString(R.string.cc_pixels, width, height) else null
+        fun caption(size: String?, px: String?): String = listOfNotNull(size, px)
+            .joinToString(" · ")
+            .ifBlank { getString(R.string.cc_no_numbers) }
+
+        val outcome = intent.getStringExtra(EXTRA_OUTCOME)?.takeIf { it.isNotBlank() }
+            ?: if (w > 0 && h > 0) getString(R.string.cc_outcome_resized, afterSize.orEmpty())
+            else getString(R.string.cc_outcome_saved, afterSize.orEmpty())
+
+        binding.ccCompare.bind(
+            CompareModel(
+                outcome = outcome,
+                before = ComparePane(
+                    imagePath = beforePath,
+                    caption = caption(beforeSize, pixels(bw, bh)),
+                    emptyText = if (beforePath == null) getString(R.string.cc_no_before_image) else null
+                ),
+                after = ComparePane(
+                    imagePath = afterPath,
+                    caption = caption(afterSize, pixels(w, h)),
+                    emptyText = if (afterPath == null) getString(R.string.cc_no_after_image) else null
+                )
+            ),
+            lifecycleScope
+        )
     }
 
     private fun showStats() {
@@ -235,6 +282,13 @@ class ExportResultActivity : BaseActivity() {
         private const val EXTRA_SUMMARY = "result_summary"
         private const val EXTRA_WIDTH = "width"
         private const val EXTRA_HEIGHT = "height"
+
+        /** Lane C: optional real before-page data. Absent = honest "original unavailable". */
+        private const val EXTRA_BEFORE_PREVIEW = "before_preview_path"
+        private const val EXTRA_BEFORE_WIDTH = "before_width"
+        private const val EXTRA_BEFORE_HEIGHT = "before_height"
+        private const val EXTRA_OUTCOME = "compare_outcome"
+
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_WARNING = "warning"
 
@@ -255,7 +309,13 @@ class ExportResultActivity : BaseActivity() {
             warning: String?,
             docId: String? = null,
             /** When set, replaces the before/after comparison (e.g. Protect PDF). */
-            summary: String? = null
+            summary: String? = null,
+            /** Lane C: a real before-page image, only when the producer still has it. */
+            beforePreviewPath: String? = null,
+            beforeWidth: Int = 0,
+            beforeHeight: Int = 0,
+            /** Lane C: an explicit outcome sentence, e.g. "Compressed · 113 KB". */
+            outcome: String? = null
         ): Intent = Intent(context, ExportResultActivity::class.java)
             .putExtra(EXTRA_OUTPUT, outputPath)
             .putExtra(EXTRA_PREVIEW, previewPath)
@@ -269,5 +329,9 @@ class ExportResultActivity : BaseActivity() {
             .putExtra(EXTRA_WARNING, warning)
             .putExtra(EXTRA_DOC_ID, docId)
             .putExtra(EXTRA_SUMMARY, summary)
+            .putExtra(EXTRA_BEFORE_PREVIEW, beforePreviewPath)
+            .putExtra(EXTRA_BEFORE_WIDTH, beforeWidth)
+            .putExtra(EXTRA_BEFORE_HEIGHT, beforeHeight)
+            .putExtra(EXTRA_OUTCOME, outcome)
     }
 }

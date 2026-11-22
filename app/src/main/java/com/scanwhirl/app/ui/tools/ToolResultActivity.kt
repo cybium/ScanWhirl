@@ -36,6 +36,9 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.CompareModel
+import com.scanwhirl.app.ui.kit.ComparePane
+import com.scanwhirl.app.ui.kit.CompareView
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.DownloadSaver
@@ -83,6 +86,8 @@ class ToolResultActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var previewHost: FrameLayout
     private lateinit var preview: ImageView
+    /** Lane C: the one Before | After surface on this result, GONE until bindCompare succeeds. */
+    private var compareView: CompareView? = null
     private lateinit var saveAs: ActivityResultLauncher<String>
     private var toolId = ""
     private var note: String? = null
@@ -434,6 +439,20 @@ class ToolResultActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolResultActivity, if (isCompressResult) 140f else 200f)
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) })
 
+        // Lane C: one Before | After surface. Added after the existing preview so no current
+        // control or id moves; it stays GONE for results with no compare proof.
+        compareView = CompareView(this).apply {
+            id = R.id.ccCompare
+            visibility = View.GONE
+        }.also { view ->
+            column.addView(
+                view,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 14f) }
+            )
+        }
+
         errorView = SwStyle.text(this, 13f, SwStyle.color(this, R.color.laser_danger)).apply {
             id = R.id.toolResultError
             isVisible = false
@@ -770,6 +789,7 @@ class ToolResultActivity : BaseActivity() {
         }
         refreshLocationLines()
         renderV2tStatus()
+        bindCompare()
     }
 
     /** V2T T1: the status is only a claim we can verify against the library. */
@@ -915,6 +935,111 @@ class ToolResultActivity : BaseActivity() {
         } else {
             shown
         }
+    }
+
+    // ---- Lane C: Before | After -----------------------------------------
+
+    /** The tools whose proof is a marked page 1 plus "1 mark added" (council §6). */
+    private val markTools = setOf(
+        "sign", "add_text", "draw", "highlight", "stamp", "watermark", "page_numbers"
+    )
+
+    private fun bindCompare() {
+        val view = compareView ?: return
+        val explicit = intent.getStringExtra(EXTRA_COMPARE_OUTCOME)
+        val model = when {
+            !explicit.isNullOrBlank() -> explicitCompareModel(explicit)
+            isCompressResult -> compressCompareModel()
+            toolId in markTools -> markCompareModel()
+            else -> null
+        }
+        if (model == null) {
+            view.visibility = View.GONE
+            return
+        }
+        view.visibility = View.VISIBLE
+        view.bind(model, lifecycleScope)
+    }
+
+    /** Measured proof supplied by a producer (OCR words, removed fields, page counts, ...). */
+    private fun explicitCompareModel(outcome: String): CompareModel {
+        fun pane(captionKey: String, imageKey: String, detailKey: String, missing: Int): ComparePane {
+            val path = intent.getStringExtra(imageKey)?.takeIf { it.isNotBlank() }
+            return ComparePane(
+                imagePath = path,
+                caption = intent.getStringExtra(captionKey)?.takeIf { it.isNotBlank() }
+                    ?: getString(R.string.cc_no_numbers),
+                detail = intent.getStringArrayExtra(detailKey)?.toList().orEmpty(),
+                emptyText = if (path == null) getString(missing) else null
+            )
+        }
+        return CompareModel(
+            outcome = outcome,
+            before = pane(
+                EXTRA_COMPARE_BEFORE_CAPTION, EXTRA_COMPARE_BEFORE_IMAGE,
+                EXTRA_COMPARE_BEFORE_DETAIL, R.string.cc_no_before_image
+            ),
+            after = pane(
+                EXTRA_COMPARE_AFTER_CAPTION, EXTRA_COMPARE_AFTER_IMAGE,
+                EXTRA_COMPARE_AFTER_DETAIL, R.string.cc_no_after_image
+            ),
+            pageLabel = intent.getStringExtra(EXTRA_COMPARE_PAGE)?.takeIf { it.isNotBlank() },
+            showToggle = intent.getBooleanExtra(EXTRA_COMPARE_SHOW_TOGGLE, true)
+        )
+    }
+
+    /**
+     * Compress uses the bytes we actually produced and the source document's first page as the
+     * real before image. A locked/vaulted source is never decoded to plaintext here.
+     */
+    private fun compressCompareModel(): CompareModel {
+        val after = measuredSummaryBytes ?: docIds.firstOrNull()
+            ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
+            ?.pdfFile?.let { if (it.isFile) it.length() else 0L }?.takeIf { it > 0L }
+        val afterSize = after?.let { StatusLine.formatBytes(it) }
+        val beforeSize = beforeBytes?.takeIf { it > 0L }?.let { StatusLine.formatBytes(it) }
+        val source = receiptSourceId?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
+            ?.takeIf { !it.isLocked && !it.isVaulted }
+        val beforeImage = source?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+        val afterImage = docIds.firstOrNull()
+            ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
+            ?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+        return CompareModel(
+            outcome = compressOutcome(after),
+            before = ComparePane(
+                imagePath = beforeImage,
+                caption = beforeSize?.let { getString(R.string.cc_before_size, it) }
+                    ?: getString(R.string.cc_no_numbers),
+                emptyText = if (beforeImage == null) getString(R.string.cc_no_before_image) else null
+            ),
+            after = ComparePane(
+                imagePath = afterImage,
+                caption = afterSize?.let { getString(R.string.cc_after_size, it) }
+                    ?: getString(R.string.cc_no_numbers),
+                emptyText = if (afterImage == null) getString(R.string.cc_no_after_image) else null
+            ),
+            pageLabel = getString(R.string.cc_page, 1)
+        )
+    }
+
+    /** Page tools: the result page plus the honest "1 mark added" caption. */
+    private fun markCompareModel(): CompareModel {
+        val afterImage = docIds.firstOrNull()
+            ?.let { id -> runCatching { repo.getDocument(id) }.getOrNull() }
+            ?.pageFiles?.firstOrNull()?.takeIf { it.isFile }?.path
+        return CompareModel(
+            outcome = getString(R.string.cc_mark_added),
+            before = ComparePane(
+                caption = getString(R.string.cc_no_before_image),
+                emptyText = getString(R.string.cc_no_before_image)
+            ),
+            after = ComparePane(
+                imagePath = afterImage,
+                caption = getString(R.string.cc_after_mark),
+                emptyText = if (afterImage == null) getString(R.string.cc_no_after_image) else null
+            ),
+            pageLabel = getString(R.string.cc_page, 1)
+        )
     }
 
     /**
@@ -1561,6 +1686,17 @@ class ToolResultActivity : BaseActivity() {
         /** L3-02 P2: the library source used to derive the "original kept" receipt. */
         private const val EXTRA_RECEIPT_SOURCE_ID = "l3_receipt_source_id"
 
+        // Lane C: optional, measured before/after proof for the compare surface.
+        private const val EXTRA_COMPARE_OUTCOME = "cc_outcome"
+        private const val EXTRA_COMPARE_BEFORE_CAPTION = "cc_before_caption"
+        private const val EXTRA_COMPARE_AFTER_CAPTION = "cc_after_caption"
+        private const val EXTRA_COMPARE_BEFORE_IMAGE = "cc_before_image"
+        private const val EXTRA_COMPARE_AFTER_IMAGE = "cc_after_image"
+        private const val EXTRA_COMPARE_BEFORE_DETAIL = "cc_before_detail"
+        private const val EXTRA_COMPARE_AFTER_DETAIL = "cc_after_detail"
+        private const val EXTRA_COMPARE_PAGE = "cc_page_label"
+        private const val EXTRA_COMPARE_SHOW_TOGGLE = "cc_show_toggle"
+
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
         private const val KEY_COPY_URI = "w3_copy_uri"
@@ -1599,7 +1735,17 @@ class ToolResultActivity : BaseActivity() {
             /** L3-02 P2: library source, used only to derive the receipt from actual state. */
             receiptSourceId: String? = null,
             /** L3-02 P1: identity captured by the producer OFF the main thread. */
-            outputIdentity: String? = null
+            outputIdentity: String? = null,
+            /** Lane C: explicit before/after proof; absent = derive for compress/page tools. */
+            compareOutcome: String? = null,
+            compareBeforeCaption: String? = null,
+            compareAfterCaption: String? = null,
+            compareBeforeImage: String? = null,
+            compareAfterImage: String? = null,
+            compareBeforeDetail: List<String>? = null,
+            compareAfterDetail: List<String>? = null,
+            comparePageLabel: String? = null,
+            compareShowToggle: Boolean = true
         ): Intent = Intent(context, ToolResultActivity::class.java)
             .putExtra(EXTRA_TOOL_ID, toolId)
             .putStringArrayListExtra(EXTRA_DOC_IDS, ArrayList(docIds))
@@ -1613,6 +1759,16 @@ class ToolResultActivity : BaseActivity() {
                 if (compressTargetMissed) putExtra(EXTRA_COMPRESS_MISSED, true)
                 if (compressGrew) putExtra(EXTRA_COMPRESS_GREW, true)
                 if (receiptSourceId != null) putExtra(EXTRA_RECEIPT_SOURCE_ID, receiptSourceId)
+                // Lane C: measured before/after proof, only when a producer supplies it.
+                if (compareOutcome != null) putExtra(EXTRA_COMPARE_OUTCOME, compareOutcome)
+                if (compareBeforeCaption != null) putExtra(EXTRA_COMPARE_BEFORE_CAPTION, compareBeforeCaption)
+                if (compareAfterCaption != null) putExtra(EXTRA_COMPARE_AFTER_CAPTION, compareAfterCaption)
+                if (compareBeforeImage != null) putExtra(EXTRA_COMPARE_BEFORE_IMAGE, compareBeforeImage)
+                if (compareAfterImage != null) putExtra(EXTRA_COMPARE_AFTER_IMAGE, compareAfterImage)
+                if (compareBeforeDetail != null) putExtra(EXTRA_COMPARE_BEFORE_DETAIL, compareBeforeDetail.toTypedArray())
+                if (compareAfterDetail != null) putExtra(EXTRA_COMPARE_AFTER_DETAIL, compareAfterDetail.toTypedArray())
+                if (comparePageLabel != null) putExtra(EXTRA_COMPARE_PAGE, comparePageLabel)
+                if (!compareShowToggle) putExtra(EXTRA_COMPARE_SHOW_TOGGLE, false)
                 // No hashing here: intent() runs on Main. Producers capture the
                 // full identity in their own IO work; any caller that did not gets
                 // a cheap stat-only identity (id + createdAt + size + mtime), so

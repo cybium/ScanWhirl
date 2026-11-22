@@ -1,0 +1,1 @@
+com.scanwhirl.app.ui.kit.CompareViewEnTest,com.scanwhirl.app.ui.kit.CompareViewHiTest,com.scanwhirl.app.ui.ExportResultCompareEnTest,com.scanwhirl.app.ui.ExportResultCompareHiTest,com.scanwhirl.app.ui.tools.ToolResultCompareEnTest,com.scanwhirl.app.ui.tools.ToolResultCompareHiTest,com.scanwhirl.app.ui.CompareLifecycleTest
