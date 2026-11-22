@@ -106,7 +106,9 @@ class L1WallpaperContrastTest {
                 activity.findViewById<View>(R.id.swQuickAll).parent as View,
                 activity.findViewById<View>(R.id.swSort).parent as View,
                 activity.findViewById<View>(R.id.swHomeSearch).parent.parent as View, // search wrap
-                activity.findViewById<View>(R.id.uxL1SearchHelp),
+                // Council §7: the helper line became the field's placeholder, and the
+                // sort-dependent heading is now its own exposed text row.
+                activity.findViewById<View>(R.id.cbDocHeading),
                 activity.findViewById<View>(R.id.uxL1SearchStatus)
             )
             for ((index, row) in rows.withIndex()) {
@@ -114,7 +116,7 @@ class L1WallpaperContrastTest {
             }
             val surface = surfaceOverWhite(app.getColor(R.color.glass_surface))
             for ((id, color) in listOf(
-                R.id.uxL1SearchHelp to app.getColor(R.color.text_hologram_mid),
+                R.id.cbDocHeading to app.getColor(R.color.text_hologram_hi),
                 R.id.uxL1SearchStatus to app.getColor(R.color.text_hologram_hi)
             )) {
                 val c = contrast(color, surface)

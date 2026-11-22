@@ -5,6 +5,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -53,14 +54,26 @@ class HomeAllChipFixTextTest {
         return (0 until list.childCount).mapNotNull { (list.getChildAt(it) as DocCard).doc?.name }
     }
 
-    private fun allChip(activity: ShellActivity): View {
-        val row = activity.findViewById<LinearLayout>(R.id.swChipRow)
-        assertTrue("the category chips are shown", row.childCount > 0)
-        return row.getChildAt(0)
+    private fun categoryRows(): ViewGroup {
+        val sheet = ShadowDialog.getLatestDialog()
+        assertNotNull("the shared chooser opens", sheet)
+        val row = sheet!!.findViewById<ViewGroup>(R.id.swChipRow)
+        assertNotNull("the category rows are shown", row)
+        assertTrue("there are category rows", row.childCount > 0)
+        return row
+    }
+
+    private fun categoryText(label: String): TextView {
+        val sheet = ShadowDialog.getLatestDialog()!!
+        val row = sheet.findViewById<ViewGroup>(R.id.swChipRow)
+        return (0 until row.childCount)
+            .map { row.getChildAt(it) }
+            .filterIsInstance<TextView>()
+            .first { it.text.toString().contains(label, ignoreCase = true) }
     }
 
     @Test
-    fun `the All chip opens the category choice and filters the library`() {
+    fun `the shared chooser offers categories and filtering stays reversible`() {
         val receipt = DocFixtures.saved(repo, app, pages = 1, name = "Electricity bill")
         repo.setCategory(receipt, CategoryRules.RECEIPTS)
         DocFixtures.saved(repo, app, pages = 1, name = "Lecture notes").let {
@@ -76,30 +89,23 @@ class HomeAllChipFixTextTest {
                     cards(activity).toSet()
                 )
 
-                allChip(activity).performClick()
+                // Council §7: OLD tapped a face "All" chip and got a separate six-option
+                // category sheet. NEW opens the one folder/category chooser; the category
+                // rows inside it are the one-tap filter choice.
+                activity.findViewById<View>(R.id.swAllFolders).performClick()
                 idle()
-                val sheet = ShadowDialog.getLatestDialog()
-                assertNotNull("tapping All opens the category choice", sheet)
-                assertEquals(
-                    activity.getString(R.string.home_filter_category_title),
-                    sheet.findViewById<android.view.View>(R.id.swSheetTitle)?.let {
-                        (it as android.widget.TextView).text.toString()
-                    }
-                )
-                val items = sheet.findViewById<ViewGroup>(R.id.swSheetItems)
-                assertNotNull("the sheet lists the categories", items)
-                assertEquals("All + the five categories", 6, items.childCount)
-
-                // 0 = All categories, 1 Study, 2 Receipts, ...
-                items.getChildAt(2).performClick()
+                assertTrue("All categories plus the categories with documents", categoryRows().childCount >= 2)
+                categoryText("Receipts").performClick()
                 idle()
                 assertEquals(
                     "picking Receipts filters the library",
                     listOf("Electricity bill"),
                     cards(activity)
                 )
-                // The All chip is no longer active: tapping it clears the filter.
-                allChip(activity).performClick()
+
+                activity.findViewById<View>(R.id.swAllFolders).performClick()
+                idle()
+                categoryText(activity.getString(R.string.home_filter_all_documents)).performClick()
                 idle()
                 assertEquals(
                     "tapping All again shows every document",

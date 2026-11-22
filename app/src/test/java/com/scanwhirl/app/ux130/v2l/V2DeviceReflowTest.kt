@@ -98,9 +98,11 @@ class V2DeviceReflowTest {
             idle()
             layout(activity)
             val where = "$lang ${width}dp @2.0"
+            // Council §7: OLD checked the three captioned lines of the band. NEW checks
+            // the one row's controls plus the sort-dependent heading; the reflow intent
+            // (whole words, one-line sort value, no ellipsis at 2.0) is unchanged.
             for (id in intArrayOf(
-                R.id.uxL1FolderLabel, R.id.uxL1FilterLabel, R.id.uxL1SortLabel,
-                R.id.swSort, R.id.swDocCount, R.id.swAllFolders
+                R.id.swAllFolders, R.id.swSort, R.id.swDocCount, R.id.cbDocHeading
             )) {
                 val tv = activity.findViewById<View>(id) as? TextView ?: continue
                 assertWholeText(tv, "$where control $id")
