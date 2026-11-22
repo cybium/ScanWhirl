@@ -95,6 +95,9 @@ class ToolSetupActivity : BaseActivity() {
     private var compressEstimates: List<Long>? = null
     private var estimatesFor: String? = null
 
+    /** V2T T2: a caller may hand us one verified output document to act on. */
+    private var preselectedDocId: String? = null
+
     private lateinit var column: LinearLayout
     private lateinit var optionsHost: LinearLayout
     private lateinit var errorView: TextView
@@ -109,6 +112,7 @@ class ToolSetupActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
         val id = intent.getStringExtra(EXTRA_TOOL_ID).orEmpty()
+        preselectedDocId = intent.getStringExtra(EXTRA_SELECTED_DOC_ID)
         val found = ToolRegistry.byId(id)
         if (found == null) {
             finish()
@@ -192,7 +196,10 @@ class ToolSetupActivity : BaseActivity() {
             docs = fresh
             draftIds = drafts
             if (firstLoad) {
-                docs.firstOrNull()?.let { selected += it.id }
+                preselectedDocId?.let { preferred ->
+                    if (docs.any { it.id == preferred }) selected += preferred
+                }
+                if (selected.isEmpty()) docs.firstOrNull()?.let { selected += it.id }
                 nameText = if (toolId == "duplicate" || toolId == "merge" || toolId == "zip") {
                     ""
                 } else {
@@ -369,6 +376,18 @@ class ToolSetupActivity : BaseActivity() {
                 marginStart = SwStyle.dp(this@ToolSetupActivity, 10f)
             }
         )
+        // V2T T1: the durable result can always be reopened from setup.
+        bar.addView(SwStyle.text(this, 13f, SwStyle.color(this, R.color.rv_accent), bold = true).apply {
+            text = getString(R.string.v2t_last_result)
+            contentDescription = text
+            minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { startActivity(ToolResultActivity.intentLastResult(this@ToolSetupActivity)) }
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         if (tool.pro) {
             bar.addView(SwStyle.text(this, 10f, SwStyle.color(this, R.color.gold_pro_primary), bold = true).apply {
                 text = getString(R.string.badge_pro)
@@ -794,11 +813,45 @@ class ToolSetupActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 8f) }
         )
+        // V2T T2: the same free decimal-KB chips as the Compress sheet. A typed
+        // target always wins; the checked chip is the TalkBack-selected state.
+        var suppressChip = false
+        val quickGroup = com.google.android.material.chip.ChipGroup(this).apply {
+            id = R.id.v2t_quick_group
+            isSingleSelection = true
+        }
+        CompressionPresentation.quickTargetKb.forEach { kb ->
+            val label = getString(CompressionPresentation.quickTargetLabel(kb))
+            val chip = com.google.android.material.chip.Chip(this).apply {
+                id = when (kb) {
+                    20 -> R.id.v2t_quick_20
+                    50 -> R.id.v2t_quick_50
+                    100 -> R.id.v2t_quick_100
+                    else -> R.id.v2t_quick_200
+                }
+                text = label
+                isCheckable = true
+                isCheckedIconVisible = false
+                setOnClickListener {
+                    suppressChip = true
+                    targetText = label
+                    optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText(label)
+                    suppressChip = false
+                }
+            }
+            quickGroup.addView(chip)
+        }
+        optionsHost.addView(quickGroup, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
         // The sheet ends with "Custom size"; the setup page does the same.
         optionsHost.addView(field(
             R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,
             inputType = InputType.TYPE_CLASS_TEXT
-        ) { targetText = it }, LinearLayout.LayoutParams(
+        ) { text ->
+            targetText = text
+            if (!suppressChip) quickGroup.clearCheck()
+        }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
         paintLevels()
@@ -1586,6 +1639,7 @@ class ToolSetupActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_TOOL_ID = "tool_id"
+        private const val EXTRA_SELECTED_DOC_ID = "v2t_selected_doc_id"
         /** Room kept at the end of the list for the pinned action bar (before its height is known). */
         private const val BAR_CLEARANCE_DP = 96f
         /** Every option chip label carries this tag, so a UI test can walk the chips on any tool. */
@@ -1612,6 +1666,10 @@ class ToolSetupActivity : BaseActivity() {
 
         fun intent(context: Context, toolId: String): Intent =
             Intent(context, ToolSetupActivity::class.java).putExtra(EXTRA_TOOL_ID, toolId)
+
+        /** V2T T2: open the setup for a specific verified output document. */
+        fun intent(context: Context, toolId: String, selectedDocId: String): Intent =
+            intent(context, toolId).putExtra(EXTRA_SELECTED_DOC_ID, selectedDocId)
 
         /** The tool id this intent opens (tests and the shell read it). */
         fun toolIdOf(intent: Intent): String? = intent.getStringExtra(EXTRA_TOOL_ID)

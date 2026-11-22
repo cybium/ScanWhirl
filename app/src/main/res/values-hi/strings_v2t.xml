@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2T lane Hindi parity. "PDF" and KB stay in Latin as elsewhere in the app. -->
+<resources>
+    <!-- T1: स्थायी और ईमानदार परिणाम प्राप्ति. -->
+    <string name="v2t_new_copy_original_kept">नई प्रति; मूल फ़ाइल रखी गई।</string>
+    <string name="v2t_original_missing">मूल फ़ाइल अब कागज़ात में नहीं है।</string>
+    <string name="v2t_merge_failed">इन PDF को मिलाया नहीं जा सका। दूसरी फ़ाइलें चुनें।</string>
+    <string name="v2t_status_label">परिणाम की स्थिति</string>
+    <string name="v2t_last_result">पिछला परिणाम</string>
+
+    <!-- T2: त्वरित आकार और सत्यापित प्रति पर कार्रवाई. -->
+    <string name="v2t_size_20">20 KB</string>
+    <string name="v2t_size_50">50 KB</string>
+    <string name="v2t_size_100">100 KB</string>
+    <string name="v2t_size_200">200 KB</string>
+    <string name="v2t_compress_this_copy">इस प्रति को छोटा करें</string>
+    <string name="v2t_protect_this_copy">इस प्रति को सुरक्षित करें</string>
+</resources>

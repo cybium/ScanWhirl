@@ -5,6 +5,7 @@ import org.junit.rules.Timeout
 import android.app.Application
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.test.core.app.ActivityScenario
@@ -335,19 +336,22 @@ class OrganizeDraftUiTest {
         }
     }
 
+    /**
+     * V2L: OLD asserted Organize pages was SOON and opened nothing. NEW asserts it is READY
+     * and opens the real document chooser; selecting a document opens this same viewer.
+     */
     @Test(timeout = 60_000)
-    fun `the organize pages tool is coming soon instead of a dead reorder tile`() {
+    fun `the organize pages tile opens the document chooser`() {
         DocFixtures.saved(repo, app, pages = 1)
         val host = Robolectric.buildActivity(Host::class.java).setup().get()
         val tool = requireNotNull(
             com.scanwhirl.app.ui.kit.ToolRegistry.byId("organize_pages")
         )
-        assertEquals(com.scanwhirl.app.ui.kit.ToolStatus.SOON, tool.status)
-        assertNotNull("a Coming-soon tile explains itself", tool.soonNote)
+        assertEquals(com.scanwhirl.app.ui.kit.ToolStatus.READY, tool.status)
         tool.launch(host, tool)
         idle()
-        assertNull("the Coming-soon tile never opens the page grid", sheet())
-        assertNull(shadowOf(host).nextStartedActivity)
+        assertNotNull("the document chooser opens", sheet())
+        assertNotNull("the chooser lists documents", sheet()!!.findViewById<View>(R.id.docPickerList))
     }
 
     @Test(timeout = 60_000)

@@ -127,12 +127,20 @@ object ToolRegistry {
         ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
-        // Owner 11-16: Organize pages ships its document grid, but page reorder is not reachable
-        // there yet; the tile is Coming soon instead of a dead reorder promise.
-        soon(
+        // V2L: the selectable document grid is real — page selection, reorder, duplicate and
+        // move already work there. Route the tile to that existing viewer; no new engine, and
+        // its document chooser keeps the honest empty-library state.
+        ready(
             "organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages,
             R.drawable.ic_sym_view_module, "organize reorder pages move",
-            note = R.string.soon_organize_pages
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity != null) {
+                    com.scanwhirl.app.ui.DocumentViewerActivity.openOrganizePicker(activity)
+                } else {
+                    host.open(tool)
+                }
+            }
         ),
         ready("insert_pages", ToolGroup.ORGANIZE, R.string.tool_insert_pages, R.drawable.ic_sym_add, "insert add pages into pdf", launch = { host, tool ->
             val activity = host as? android.app.Activity

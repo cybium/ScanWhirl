@@ -152,7 +152,11 @@ class OcrIndexer(
      */
     suspend fun index(docId: String, resetAttempts: Boolean = false): IndexReport = mutex.withLock {
         try {
-            store.withRecognitionLock(docId) { indexDocument(docId, resetAttempts) }
+            // PERF item 5: reuse one recognizer per script for this whole document pass,
+            // then close them when the pass ends (including cancellation and failure).
+            OcrEngine.withRecognizerSession {
+                store.withRecognitionLock(docId) { indexDocument(docId, resetAttempts) }
+            }
         } catch (failure: Throwable) {
             // A failed commit is not a completed pass, including a direct index() call
             // that did not go through enqueue(). Keep it discoverable on the next pass.

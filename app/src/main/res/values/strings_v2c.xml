@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX v2 regrade, lane C: capture precision and recoverable review. -->
+<resources>
+    <!-- C1: fine and coarse crop movement with spoken position/limits. -->
+    <string name="v2c_crop_move_left_more">Move left more</string>
+    <string name="v2c_crop_move_right_more">Move right more</string>
+    <string name="v2c_crop_move_up_more">Move up more</string>
+    <string name="v2c_crop_move_down_more">Move down more</string>
+    <string name="v2c_crop_position">%1$s, %2$d%% from left, %3$d%% from top</string>
+    <string name="v2c_crop_at_edge">%1$s, at the edge</string>
+
+    <!-- C2: persistent named receipts and retake. -->
+    <string name="v2c_receipt_label">Last update: %1$s</string>
+    <string name="v2c_receipt_scan">Pages added</string>
+    <string name="v2c_receipt_saved">Document saved</string>
+    <string name="v2c_receipt_save_failed">Save failed</string>
+    <string name="v2c_receipt_retake">Page replaced</string>
+    <string name="v2c_receipt_retake_failed">Retake failed</string>
+    <string name="v2c_receipt_capture_failed">Capture failed</string>
+    <string name="v2c_retake_page">Retake this page</string>
+    <string name="v2c_retake_title">Retake this page?</string>
+    <string name="v2c_retake_msg">A new photo replaces page %1$d. The current page is kept if you cancel.</string>
+    <string name="v2c_retake_confirm">Retake page</string>
+    <string name="v2c_retake_detail">Page %1$d</string>
+
+    <!-- C2: localized failure mapping; no raw exception text reaches the UI. -->
+    <string name="v2c_error_unreadable">This image could not be read. Choose another image.</string>
+    <string name="v2c_error_page_unreadable">Page %1$d could not be read. Choose another image.</string>
+    <string name="v2c_error_too_large">This image is too large. Try a smaller image.</string>
+    <string name="v2c_error_no_space">There is not enough free space. Free some space and try again.</string>
+    <string name="v2c_error_scanner">The scanner is not available. Choose photos instead.</string>
+    <string name="v2c_error_generic">Could not complete this action. Try again.</string>
+    <string name="v2c_book_failed">Could not create the book: %1$s</string>
+    <string name="v2c_capture_failed">Capture failed: %1$s</string>
+</resources>

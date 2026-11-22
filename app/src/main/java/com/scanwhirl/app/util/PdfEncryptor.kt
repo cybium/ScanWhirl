@@ -20,6 +20,10 @@ object PdfEncryptor {
     @androidx.annotation.VisibleForTesting
     internal var verificationKeyWipeProbe: (() -> Unit)? = null
 
+    /** SEC2 LOW: test seam for the file-key wipe; null in production. */
+    @androidx.annotation.VisibleForTesting
+    internal var fileKeyWipeProbe: (() -> Unit)? = null
+
     /**
      * Shared structural limits of ScanWhirl's PDF reader/writer pair. [PdfDecryptor] (lane S4A)
      * enforces the same two values, and its round-trip test references them here, so a file this
@@ -71,36 +75,42 @@ object PdfEncryptor {
         // and the whole syntax are proven here, and the parse is repeated while emitting.
         validateOnly(text, layout)
         val encryption = PdfAes.create(userPassword)
-        val derived = PdfAes.userKey(userPassword, encryption.u, encryption.ue)
-        // SEC1 1.3.0: the verification copy of the key is no longer needed after
-        // this comparison; wipe it in finally even when verification throws.
-        val verified = try {
-            derived != null && derived.contentEquals(encryption.fileKey)
-        } finally {
-            derived?.fill(0)
-            verificationKeyWipeProbe?.invoke()
-        }
-        if (!verified) throw IOException("The password could not be verified before writing")
-
-        val parent = dst.absoluteFile.parentFile ?: throw IOException("No folder for ${dst.name}")
-        parent.mkdirs()
-        val tmp = File.createTempFile("protect-", ".tmp", parent)
         try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            FileOutputStream(tmp).use { file ->
-                val buffered = BufferedOutputStream(DigestOutputStream(file, digest), 64 * 1024)
-                val out = PdfOutput(buffered)
-                rewrite(raw, text, layout, encryption, out)
-                buffered.flush()
-                Durable.syncStream(file, tmp)
+            val derived = PdfAes.userKey(userPassword, encryption.u, encryption.ue)
+            // SEC1 1.3.0: the verification copy of the key is no longer needed after
+            // this comparison; wipe it in finally even when verification throws.
+            val verified = try {
+                derived != null && derived.contentEquals(encryption.fileKey)
+            } finally {
+                derived?.fill(0)
+                verificationKeyWipeProbe?.invoke()
             }
-            if (!Sha256.of(tmp).equals(toHex(digest.digest()), ignoreCase = true)) {
-                throw IOException("Protection could not be verified")
+            if (!verified) throw IOException("The password could not be verified before writing")
+
+            val parent = dst.absoluteFile.parentFile ?: throw IOException("No folder for ${dst.name}")
+            parent.mkdirs()
+            val tmp = File.createTempFile("protect-", ".tmp", parent)
+            try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                FileOutputStream(tmp).use { file ->
+                    val buffered = BufferedOutputStream(DigestOutputStream(file, digest), 64 * 1024)
+                    val out = PdfOutput(buffered)
+                    rewrite(raw, text, layout, encryption, out)
+                    buffered.flush()
+                    Durable.syncStream(file, tmp)
+                }
+                if (!Sha256.of(tmp).equals(toHex(digest.digest()), ignoreCase = true)) {
+                    throw IOException("Protection could not be verified")
+                }
+                if (!tmp.renameTo(dst)) throw IOException("Could not publish ${dst.name}")
+                Durable.syncDir(parent)
+            } finally {
+                tmp.delete()
             }
-            if (!tmp.renameTo(dst)) throw IOException("Could not publish ${dst.name}")
-            Durable.syncDir(parent)
         } finally {
-            tmp.delete()
+            // SEC2 LOW: the file key is no longer needed after the final rewrite.
+            encryption.fileKey.fill(0)
+            fileKeyWipeProbe?.invoke()
         }
     }
 

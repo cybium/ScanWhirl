@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 1.3.0 lane V2L: Hindi parity. No visible copy is added by this lane. -->
+<resources>
+    <!-- Trash confirmation must agree with its count in both languages. -->
+    <plurals name="v2l_move_to_trash_title">
+        <item quantity="one">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजें?</item>
+        <item quantity="other">%1$d दस्तावेज़ हटाई गई फ़ाइलों में भेजें?</item>
+    </plurals>
+</resources>
