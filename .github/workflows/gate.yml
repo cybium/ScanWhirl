@@ -39,6 +39,15 @@ jobs:
         with:
           cache-read-only: false
 
+      # Robolectric downloads its android-all jars from Maven Central at test time; Maven 429s
+      # failed whole runs. Keep them cached between runs (keyed by the Robolectric version).
+      - name: Cache Robolectric android-all jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-m2-${{ hashFiles('gradle/libs.versions.toml', 'app/build.gradle.kts') }}
+          restore-keys: robolectric-m2-
+
       # The verdict script must reject every known false-green case before it judges this run.
       - name: Verdict self-test (control cases)
         run: python3 tools/ci/test_gate_verdict.py
