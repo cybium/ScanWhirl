@@ -127,6 +127,9 @@ class FormReadyActivity : BaseActivity() {
     private var settingFields = false
 
     private var lastOutput: File? = null
+    /** P2 pre-review: the exact source-pixel rectangles used by preview and export. */
+    private var lastPreviewRect: RectF? = null
+    private var lastExportRect: RectF? = null
 
     /**
      * SEC2 N3: once an output is handed to the result screen, that screen owns
@@ -871,10 +874,17 @@ class FormReadyActivity : BaseActivity() {
             cleanupPreview.isVisible = false
             return
         }
-        val left = rect.left.toInt().coerceIn(0, source.width - 1)
-        val top = rect.top.toInt().coerceIn(0, source.height - 1)
-        val width = rect.width().toInt().coerceIn(1, source.width - left)
-        val height = rect.height().toInt().coerceIn(1, source.height - top)
+        // P2 pre-review: the preview must show EXACTLY the region the encoder will save. Use the
+        // same exact-aspect snapping as apply(), never the raw float drag rectangle.
+        val (targetW, targetH) = currentPixels()
+        val snapped = FormCrop.snapToAspect(
+            rect, targetW.toFloat() / targetH, source.width, source.height
+        )
+        lastPreviewRect = RectF(snapped)
+        val left = snapped.left
+        val top = snapped.top
+        val width = snapped.width()
+        val height = snapped.height()
         // The copy is made on the caller's thread while the source is known live; the bounded
         // scaling and thresholding run on a worker.
         val rawRegion = runCatching { Bitmap.createBitmap(source, left, top, width, height) }.getOrNull()
@@ -1135,6 +1145,7 @@ class FormReadyActivity : BaseActivity() {
         // pixels. The encoder then uses one uniform scale; no independent x/y stretch is possible.
         val (targetW, targetH) = currentPixels()
         val snapped = FormCrop.snapToAspect(rect, targetW.toFloat() / targetH, source.width, source.height)
+        lastExportRect = RectF(snapped)
         if (snapped.width() < 1 || snapped.height() < 1) return
         if (!FormPresets.fitsFormLimit(targetW, targetH)) {
             errorView.text = getString(R.string.form1_size_too_large)
@@ -1351,6 +1362,8 @@ class FormReadyActivity : BaseActivity() {
     internal fun outputNameForTest(): String = uniqueOutputName(File(cacheDir, "form1_out"))
 
     internal fun currentSpecIdForTest(): String = spec.id
+    internal fun previewCropRectForTest(): RectF? = lastPreviewRect
+    internal fun exportCropRectForTest(): RectF? = lastExportRect
     internal fun previewBitmapsForTest(): List<Bitmap> =
         listOfNotNull(previewOriginalBitmap, previewCleanedBitmap)
 
