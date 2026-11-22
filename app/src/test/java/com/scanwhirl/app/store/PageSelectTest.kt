@@ -70,8 +70,8 @@ class PageSelectTest {
         assertNotEquals("a new document, not a move", src.id, out.id)
         assertEquals("the selection only", 2, out.pageCount)
         assertEquals(
-            "the name says which pages left",
-            "Contract - Pages 1, 3",
+            "a new copy under the source stem, not a verb suffix",
+            "Contract (2)",
             out.name
         )
         // Category inherited, like duplicateDocument.
@@ -103,21 +103,21 @@ class PageSelectTest {
         val out = repo.extractPages(src.id, listOf(1))
 
         assertEquals(1, out.pageCount)
-        assertEquals("Receipt - Page 2", out.name)
+        assertEquals("Receipt (2)", out.name)
         assertEquals(3, repo.getDocument(src.id)!!.pageCount)
     }
 
     @Test
-    fun `extract names the actual selection, not a false page range`() = runBlocking {
+    fun `extract keeps a unique copy name without a forced page suffix`() = runBlocking {
         val repo = ScanRepository(context)
         val src = seedDoc(repo, "Far apart", pages = 10)
 
         val sparse = repo.extractPages(src.id, listOf(0, 9))
-        assertEquals("Far apart - Pages 1, 10", sparse.name)
+        assertEquals("Far apart (2)", sparse.name)
         assertEquals("only the two picked pages", 2, sparse.pageCount)
 
         val contiguous = seedDoc(repo, "Nearby", pages = 3)
-        assertEquals("Nearby - Pages 1-3", repo.extractPages(contiguous.id, listOf(0, 1, 2)).name)
+        assertEquals("Nearby (2)", repo.extractPages(contiguous.id, listOf(0, 1, 2)).name)
     }
 
     @Test
@@ -127,7 +127,7 @@ class PageSelectTest {
 
         // Unsorted input still yields pages 0 then 2 in disk order.
         val out = repo.extractPages(src.id, listOf(2, 0))
-        assertEquals("Sorted - Pages 1, 3", out.name)
+        assertEquals("Sorted (2)", out.name)
 
         runCatching { repo.extractPages(src.id, emptyList()) }
             .exceptionOrNull()

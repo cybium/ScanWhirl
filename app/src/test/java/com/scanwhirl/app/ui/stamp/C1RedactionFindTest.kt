@@ -117,7 +117,7 @@ class C1RedactionFindTest {
     }
 
     @Test
-    fun `a partially hidden find saves under a neutral redacted label`() {
+    fun `a partially hidden find saves a neutral new copy`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Private data")
         val screen = activity(id)
         screen.findScanner = {
@@ -141,12 +141,14 @@ class C1RedactionFindTest {
         idle()
         ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
         assertTrue(
-            "a neutral redacted copy is saved",
+            "a neutral new copy is saved",
             waitFor("the saved copy") {
-                repo.listDocuments(includeVaulted = true).any { it.name.contains("Redacted") }
+                repo.listDocuments(includeVaulted = true).any { it.id != id }
             }
         )
-        val copy = repo.listDocuments(includeVaulted = true).first { it.name.contains("Redacted") }
+        val copy = repo.listDocuments(includeVaulted = true).first { it.id != id }
+        // Council §5: no forced "Redacted" label; the copy is just the source stem + collision.
+        assertFalse("no forced verb suffix: ${copy.name}", copy.name.contains("Redacted"))
         assertFalse(
             "no blanket private-info claim when not every found category was hidden",
             copy.name.contains("Private info hidden")
