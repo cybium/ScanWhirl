@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/lxRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/rv_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="12dp">
+
+            <TextView
+                android:id="@+id/lxTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/lx_tool_title"
+                android:textColor="@color/lx_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/lxClose"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/sheet_close"
+                android:src="@drawable/ic_sym_close"
+                app:tint="@color/text_hologram_mid" />
+        </LinearLayout>
+
+        <!-- Step 1: pick a document -->
+        <LinearLayout
+            android:id="@+id/lxStepPick"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/lxPickSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/lx_tool_sub"
+                android:textColor="@color/lx_secondary"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/lxProBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/lx_pro_badge"
+                android:textColor="@color/gold_pro_primary"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lxPickLibrary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:minHeight="48dp"
+                android:text="@string/lx_choose_doc" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lxPickFile"
+                style="@style/Widget.ScanWhirl.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/lx_from_pdf" />
+        </LinearLayout>
+
+        <!-- Step 2: contents pages, offset and editable proposals -->
+        <ScrollView
+            android:id="@+id/lxStepSet"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="24dp">
+
+                <TextView
+                    android:id="@+id/lxDocName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/lx_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/lxChoosePagesLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/lx_choose_pages"
+                    android:textColor="@color/lx_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/lxPagesSelected"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="@color/lx_primary"
+                    android:textSize="16sp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/lxPageStrip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <TextView
+                    android:id="@+id/lxOffsetLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/lx_offset_label"
+                    android:textColor="@color/lx_secondary"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/lxOffsetMinus"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/lx_offset_earlier"
+                        android:src="@drawable/ic_lx_minus"
+                        app:tint="@color/cyan_primary" />
+
+                    <TextView
+                        android:id="@+id/lxOffsetValue"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:textColor="@color/lx_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/lxOffsetPlus"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/lx_offset_later"
+                        android:src="@drawable/ic_add"
+                        app:tint="@color/cyan_primary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/lxCalibrate"
+                        style="@style/Widget.ScanWhirl.Button.Secondary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/lx_calibrate" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/lxCalibrateHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/lx_calibrate_hint"
+                    android:textColor="@color/lx_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/lxSuggestionsLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/lx_suggestions"
+                    android:textColor="@color/lx_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/lxRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lxAddEntry"
+                    style="@style/Widget.ScanWhirl.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
+                    android:text="@string/lx_add_entry" />
+
+                <EditText
+                    android:id="@+id/lxCopyName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:background="@drawable/bg_title_input"
+                    android:hint="@string/lx_copy_name"
+                    android:minHeight="48dp"
+                    android:paddingHorizontal="12dp"
+                    android:textColor="@color/lx_primary"
+                    android:textColorHint="@color/lx_secondary"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lxCreate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:minHeight="48dp"
+                    android:text="@string/lx_create" />
+
+                <TextView
+                    android:id="@+id/lxLimitedShort"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/lx_limited_short"
+                    android:textColor="@color/lx_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/lxMoreLimits"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:minHeight="48dp"
+                    android:gravity="center_vertical"
+                    android:text="@string/lx_more"
+                    android:textColor="@color/lx_action"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Step 3: honest receipt -->
+        <LinearLayout
+            android:id="@+id/lxStepResult"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/lxResultTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/lx_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/lxOriginalKept"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/lx_original_kept"
+                android:textColor="@color/lx_secondary"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/lxSkipped"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/lx_warning"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lxOpen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:minHeight="48dp"
+                android:text="@string/lx_open" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lxShare"
+                style="@style/Widget.ScanWhirl.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/lx_share" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lxDone"
+                style="@style/Widget.ScanWhirl.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/lx_done" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/lxProgress"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:clickable="true"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/lxProgressText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="@string/lx_working"
+            android:textColor="@android:color/white"
+            android:textSize="16sp" />
+    </FrameLayout>
+</FrameLayout>

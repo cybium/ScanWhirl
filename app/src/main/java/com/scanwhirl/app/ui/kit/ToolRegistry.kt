@@ -285,6 +285,24 @@ object ToolRegistry {
         ready(
             "read_text", ToolGroup.TEXT, R.string.tool_read_text, R.drawable.ic_sym_ocr,
             "ocr extract text recognize recognise read text to text txt हिंदी लिखा हुआ copy"
+        ),
+        // LX: Pro with one free successful use. The Activity owns the disclosure,
+        // the counter and the ProOffer gate after that first use.
+        ready(
+            "link_index", ToolGroup.TEXT, R.string.lx_tool_title,
+            R.drawable.ic_sym_format_list_numbered,
+            "link index contents table of contents bookmarks outline titles pages सूची लिंक",
+            pro = true,
+            launch = { host, tool ->
+                val activity = host as? android.app.Activity
+                if (activity != null) {
+                    activity.startActivity(
+                        com.scanwhirl.app.ui.tools.linkindex.LinkIndexActivity.intent(activity)
+                    )
+                } else {
+                    host.open(tool)
+                }
+            }
         )
     )
 
@@ -344,6 +362,7 @@ object ToolRegistry {
         // OCR & search
         "read_text" to ToolJob.TEXT,
         "searchable_pdf" to ToolJob.TEXT,
+        "link_index" to ToolJob.TEXT,
         // Convert
         "pdf_to_images" to ToolJob.FORMAT,
         "long_image" to ToolJob.FORMAT,

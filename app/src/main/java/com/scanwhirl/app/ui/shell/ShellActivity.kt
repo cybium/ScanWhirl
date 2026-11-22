@@ -1421,6 +1421,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     /** v2 UI: 06_pro — a Pro tool in a Free build opens the Pro screen. */
     override fun proGate(tool: SwTool): Boolean {
+        // LX: Link index is Pro with one free successful use. The tile keeps its Pro
+        // badge and count; only a spent free use is gated here. The Activity itself
+        // shows the disclosure before the first run and gates later launches too.
+        if (tool.id == com.scanwhirl.app.ui.tools.linkindex.LinkIndexActivity.TOOL_ID &&
+            !com.scanwhirl.app.util.LinkIndexTrial.needsPro(this)
+        ) return false
         if (com.scanwhirl.app.util.ProGate.isPro(this)) return false
         showPro()
         return true

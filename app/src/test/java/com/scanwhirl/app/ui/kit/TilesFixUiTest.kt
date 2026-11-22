@@ -59,12 +59,14 @@ class TilesFixUiTest {
     fun `the derived counts match the shipped catalogue`() {
         // Owner F6/F7/F20 removed six tiles; FORM1 added form_ready; council lane N
         // merged to_text into OCR, so one fewer tile ships.
-        assertEquals(37, ToolRegistry.all.size)
-        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        // LX added link_index: Pro, READY, one free use (old -> new: 37->38, 36->37,
+        // 15->16 on sale, 16->17 pro).
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals("one tile is still Coming soon", 1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
         // PRO_PLAN line 10-11 (accepted): folder creation and move-to-folder are FREE;
-        // only tags and the other Pro tools stay on sale.
-        assertEquals("folders left Pro with the accepted free-folder correction", 15, ToolRegistry.proCount())
-        assertEquals(16, ToolRegistry.all.count { it.pro })
+        // only tags and the other Pro tools stay on sale. Link index is Pro with one free use.
+        assertEquals("the Pro catalogue drives the See all count", 16, ToolRegistry.proCount())
+        assertEquals(17, ToolRegistry.all.count { it.pro })
     }
 }

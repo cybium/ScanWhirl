@@ -204,11 +204,13 @@ class ToolNamesCouncilRegistryTest {
 
     @Test
     fun `counts are derived from the merged catalogue`() {
-        assertEquals(37, ToolRegistry.all.size)
-        assertEquals(36, ToolRegistry.all.count { it.status == ToolStatus.READY })
+        // LX added link_index: Pro, READY, one free use (old -> new: 37->38, 36->37,
+        // 16->17 pro, 15->16 on sale). The formatted Pro count still comes from proCount().
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(37, ToolRegistry.all.count { it.status == ToolStatus.READY })
         assertEquals(1, ToolRegistry.all.count { it.status == ToolStatus.SOON })
-        assertEquals(16, ToolRegistry.all.count { it.pro })
-        assertEquals(15, ToolRegistry.proCount())
+        assertEquals(17, ToolRegistry.all.count { it.pro })
+        assertEquals(16, ToolRegistry.proCount())
     }
 
     @Test
