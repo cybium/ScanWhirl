@@ -18,7 +18,6 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
@@ -26,8 +25,10 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.ImageTools
+import com.scanwhirl.app.util.SwActivitySession
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -135,9 +136,9 @@ class InsertPhotosCropFixInsertCropTest {
 
     private fun documentViewer(
         target: String,
-        block: (ActivityScenario<DocumentViewerActivity>, DocumentViewerActivity) -> Unit
+        block: (SwActivitySession<DocumentViewerActivity>, DocumentViewerActivity) -> Unit
     ) {
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target))
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target))
             .use { scenario ->
                 var viewer: DocumentViewerActivity? = null
                 scenario.onActivity { viewer = it }
@@ -187,7 +188,7 @@ class InsertPhotosCropFixInsertCropTest {
 
     /** Waits for photo [index] on the corner screen, checks the header, and confirms it. */
     private fun confirmPhoto(
-        scenario: ActivityScenario<PhotoCropFlowActivity>,
+        scenario: SwActivitySession<PhotoCropFlowActivity>,
         activity: PhotoCropFlowActivity,
         index: Int,
         total: Int
@@ -293,9 +294,9 @@ class InsertPhotosCropFixInsertCropTest {
 
     private fun launchCrop(
         intent: Intent,
-        block: (ActivityScenario<PhotoCropFlowActivity>, PhotoCropFlowActivity) -> Unit
+        block: (SwActivitySession<PhotoCropFlowActivity>, PhotoCropFlowActivity) -> Unit
     ) {
-        ActivityScenario.launch<PhotoCropFlowActivity>(intent).use { scenario ->
+        SwActivitySession.launch<PhotoCropFlowActivity>(intent).use { scenario ->
             var activity: PhotoCropFlowActivity? = null
             scenario.onActivity { activity = it }
             block(scenario, requireNotNull(activity))
@@ -338,14 +339,27 @@ class InsertPhotosCropFixInsertCropTest {
         idle()
     }
 
+    @Before
+    fun setUp() {
+        // These gates are process-wide test hooks. A test that fails while a worker is blocked
+        // must not leak a gate (or a latch still waiting on it) into the next test in this fork.
+        PhotoCropFlowActivity.prepareGate = null
+        PhotoCropFlowActivity.beforeWriteForTest = null
+        PhotoCropFlowActivity.afterWriteForTest = null
+        insertDirs().forEach { it.deleteRecursively() }
+        ShadowDialog.reset()
+    }
+
     @After
     fun tearDown() {
         PhotoCropFlowActivity.prepareGate = null
         PhotoCropFlowActivity.beforeWriteForTest = null
         PhotoCropFlowActivity.afterWriteForTest = null
+        insertDirs().forEach { it.deleteRecursively() }
+        ShadowDialog.reset()
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a picked photo opens the corner crop screen instead of landing on the page`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)
@@ -369,7 +383,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("the batch folder is cleaned up", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a photo of a page on a coloured table is inserted without the table colour`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)
@@ -416,7 +430,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("the picked copies are gone after the insert", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Back on the corner screen inserts nothing and keeps the draft untouched`() {
         val target = DocFixtures.saved(repo, app, pages = 2)
         val photo = photoOfPageOnTable(whitePage)
@@ -449,7 +463,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("Back keeps no picked copy", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `two photos are confirmed one after another and land in order`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
@@ -505,7 +519,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("the picked copies are gone after the insert", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `cancelling the insert position keeps no picked copy`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)
@@ -531,7 +545,7 @@ class InsertPhotosCropFixInsertCropTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotation while the insert position is asked keeps no picked copy`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)
@@ -555,7 +569,7 @@ class InsertPhotosCropFixInsertCropTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotation keeps the current photo and the adjusted corners`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
@@ -619,7 +633,7 @@ class InsertPhotosCropFixInsertCropTest {
 
     // ---- rework after critic: D1 (tap during the next load), D2 (frame during that load) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a confirm tap that lands while the next photo loads is ignored`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
@@ -683,7 +697,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("the picked copies are gone", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotation while the next photo loads does not reuse the previous frame`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
@@ -740,7 +754,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertTrue("a cancelled batch keeps no picked copy", waitUntil { insertDirs().isEmpty() })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a viewer recreated while the corner screen is on top inserts at the chosen position`() {
         val target = DocFixtures.saved(repo, app, pages = 2)
         val photo = photoOfPageOnTable(greenPage)
@@ -835,7 +849,7 @@ class InsertPhotosCropFixInsertCropTest {
 
     // ---- rework 2 after judge: R1 (copy ownership), R2 (write isolation), R3 (recovery) ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a photo that cannot be read leaves no picked copy behind`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val good = photoOfPageOnTable(whitePage)
@@ -857,14 +871,14 @@ class InsertPhotosCropFixInsertCropTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `finishing during the picked-photo copy keeps no picked copy`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val first = photoOfPageOnTable(whitePage)
         val second = photoOfPageOnTable(greenPage)
         val copyGate = CountDownLatch(1)
         val copyStarted = CountDownLatch(1)
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target))
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, target))
             .use { scenario ->
                 var viewer: DocumentViewerActivity? = null
                 scenario.onActivity {
@@ -907,7 +921,7 @@ class InsertPhotosCropFixInsertCropTest {
         assertNull("nothing is inserted", runBlocking { repo.draftOf(target) })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `an obsolete writer cannot overwrite the newly confirmed crop`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(greenPage)
@@ -992,7 +1006,7 @@ class InsertPhotosCropFixInsertCropTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a restored photo that is gone says so and keeps no picked copy`() {
         val target = DocFixtures.saved(repo, app, pages = 1)
         val photo = photoOfPageOnTable(whitePage)

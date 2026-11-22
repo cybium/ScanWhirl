@@ -2,8 +2,8 @@ package com.scanwhirl.app.ui
 
 import android.app.Application
 import android.graphics.RectF
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.util.SwActivitySession
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.PdfInvariants
@@ -65,11 +65,11 @@ class PageEditorDraftTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `crop in the page viewer writes to the draft not the document`() {
         val id = DocFixtures.saved(repo, app, pages = 1)
         val d0 = digest(id)
-        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+        SwActivitySession.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
             scenario.onActivity { it.findViewById<android.view.View>(R.id.btnCrop)!!.performClick() }
             var open = false
             assertTrue("crop overlay", pollUntil {
@@ -87,7 +87,7 @@ class PageEditorDraftTest {
             scenario.onActivity { cropCorners(it) }
             assertTrue(
                 "the draft must exist",
-                pollUntil(30_000) { runBlocking { repo.draftOf(id) } != null }
+                pollUntil(20_000) { runBlocking { repo.draftOf(id) } != null }
             )
             assertEquals("the saved document changed before Save", d0, digest(id))
             val cropped = runBlocking { repo.draftPages(id) }.first()
@@ -96,7 +96,7 @@ class PageEditorDraftTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `filter applies from the original without stacking and Original removes the replacement`() = runBlocking {
         val id = DocFixtures.saved(repo, app, pages = 1)
         val base = repo.getDocument(id)!!.pageFiles.single()
@@ -122,11 +122,11 @@ class PageEditorDraftTest {
         assertNull("Original becomes a pure base reference", restored.replacementOrig)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `rotate and delete in the page viewer write to the draft`() {
         val id = DocFixtures.saved(repo, app, pages = 3)
         val d0 = digest(id)
-        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+        SwActivitySession.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
@@ -135,7 +135,25 @@ class PageEditorDraftTest {
             // failure says which step stalled.
             assertTrue(
                 "rotate never reached the draft (changes=${runBlocking { repo.draftOf(id) }?.changes})",
-                pollUntil(30_000) { runBlocking { repo.draftOf(id) }?.changes == 1 }
+                pollUntil(20_000) { runBlocking { repo.draftOf(id) }?.changes == 1 }
+            )
+            // TEST2 root cause: the draft manifest is written BEFORE the viewer's main-thread
+            // continuation calls reload(). Clicking Delete in that window uses the viewer's stale
+            // page path, so commitPendingDelete() cannot find it in the fresh draft and silently
+            // does nothing. Wait for the viewer to actually show the rotated draft page first.
+            val rotatedPath = runBlocking { repo.draftPages(id) }.first().path
+            var shownPage: String? = null
+            assertTrue(
+                "the viewer reloaded the rotated page before the next action",
+                pollUntil(20_000) {
+                    scenario.onActivity {
+                        // notifyDataSetChanged() only rebinds on a layout pass under Robolectric.
+                        forceLayout(it.findViewById(R.id.pager))
+                        shownPage = (it.findViewById<android.view.View>(R.id.pageImage)?.tag as? String)
+                            ?.substringBefore('|')
+                    }
+                    shownPage == rotatedPath
+                }
             )
             assertEquals("the saved document changed after rotate", d0, digest(id))
 
@@ -146,13 +164,13 @@ class PageEditorDraftTest {
             }
             assertTrue(
                 "delete never reached the draft (pages=${runBlocking { repo.draftPages(id) }.size})",
-                pollUntil(30_000) { runBlocking { repo.draftPages(id) }.size == 2 }
+                pollUntil(20_000) { runBlocking { repo.draftPages(id) }.size == 2 }
             )
             assertEquals("the saved document changed before Save", d0, digest(id))
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `crop then discard leaves the base byte identical`() = runBlocking {
         val id = DocFixtures.saved(repo, app, pages = 1)
         val d0 = digest(id)
@@ -162,7 +180,7 @@ class PageEditorDraftTest {
         assertFalse(draftDir(id).exists())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `saved copy has the cropped size and the original keeps its own`() = runBlocking {
         val id = DocFixtures.saved(repo, app, pages = 1)
         repo.setPageFilter(id, 0, ScanFilter.BLACKWHITE) // creates the base .orig in place
@@ -181,11 +199,11 @@ class PageEditorDraftTest {
         assertEquals("the base page keeps its own size", baseSize, PageReplace.bounds(basePage))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `back from the page viewer keeps the draft edit and the bar shows it`() {
         val id = DocFixtures.saved(repo, app, pages = 2)
         val d0 = digest(id)
-        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
+        SwActivitySession.launch<PageViewerActivity>(PageViewerActivity.intent(app, id, 0)).use { scenario ->
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()
@@ -197,7 +215,7 @@ class PageEditorDraftTest {
         assertEquals(d0, digest(id))
 
         // Returning to Organize shows the change count.
-        ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+        SwActivitySession.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
             var shown = false
             assertTrue("the draft bar must show the change", pollUntil {
                 scenario.onActivity { shown = it.findViewById<android.view.View>(R.id.draftBar)?.visibility == android.view.View.VISIBLE }
@@ -216,12 +234,12 @@ class PageEditorDraftTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `staging back keeps the staged rotate for the review`() {
         val dir = File(app.cacheDir, "stage_${UUID.randomUUID()}").apply { mkdirs() }
         val page = File(dir, "page_001.jpg")
         page.writeBytes(ImportFixtures.image(width = 200, height = 300))
-        ActivityScenario.launch<PageViewerActivity>(PageViewerActivity.stagingIntent(app, dir.path, 0)).use { scenario ->
+        SwActivitySession.launch<PageViewerActivity>(PageViewerActivity.stagingIntent(app, dir.path, 0)).use { scenario ->
             scenario.onActivity { activity ->
                 forceLayout(activity.findViewById(R.id.pager))
                 activity.findViewById<android.view.View>(R.id.btnRotateRight)!!.performClick()

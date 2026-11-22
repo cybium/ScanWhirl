@@ -158,7 +158,16 @@ android {
                 ?: System.getProperty("scanwhirl.atlas")) == "true"
             val corpusRun = System.getProperty("scanwhirl.corpus") == "true"
             all {
+                val cloudRun = project.hasProperty("testHeap")
+                // TEST2 speed: the cloud gate runs on a 4-vCPU / 16 GB runner. The Robolectric suite
+                // is ~11 min of measured test time (668 s over 614 classes in the 338c1784 artifact),
+                // almost all of it serial in one JVM. Two independent test JVMs overlap that work
+                // while each still gets the full 4 g heap gate.yml asks for (2 x 4 g + Gradle < 16 GB).
+                // The local WSL mirror has ~3.5 GB: keep it at one fork so a lane never OOMs the PC.
+                it.maxParallelForks = if (cloudRun) 2 else 1
                 it.maxHeapSize = (project.findProperty("testHeap") as String?) ?: "1536m"
+                // Keep the gate's proven 200-class recycle; two forks each see the same
+                // per-fork memory profile the single fork already passed on the runner.
                 it.forkEvery = (project.findProperty("testForkEvery") as String?)?.toLongOrNull() ?: 40L
                 it.systemProperty("scanwhirl.atlas", if (atlasRun) "true" else "false")
                 it.systemProperty(

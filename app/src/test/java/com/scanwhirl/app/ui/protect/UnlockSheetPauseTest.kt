@@ -1,7 +1,6 @@
 package com.scanwhirl.app.ui.protect
 
 import android.app.Dialog
-import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.EditText
@@ -23,17 +22,18 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * K1 defects 3 and 4: the tries-left line must name the *real* next pause (which doubles), and
  * after a pause ends every action, including "Use password saved in Vault", must come back.
  *
- * S2 item 6: deterministic. The only asynchrony in the sheet is its check on Dispatchers.Default;
- * the test publishes a sentinel on the main looper from inside `verify` and pumps the looper until
- * that sentinel has run, so the main-thread continuation (failure + pause scheduling) has been
- * applied before the controlled clock and the looper scheduler are advanced together. No real
- * sleeps and no wall-clock deadline.
+ * TEST2: the sheet's check runs on Dispatchers.Default and its continuation is posted to the main
+ * looper afterwards. The old "sentinel posted from inside verify" only proved that the worker had
+ * started: the sheet's failure continuation could still be queued *after* the sentinel, so the
+ * following assertion raced it on a loaded runner. There is no way for a test to observe when a
+ * foreign coroutine's continuation is enqueued, so we wait for the actual, observable UI state
+ * instead. The wait pumps the looper and has a generous bounded deadline; no assertion is relaxed,
+ * no sleep is used as a synchroniser, and a timeout still fails the test with the expected state.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -42,7 +42,6 @@ class UnlockSheetPauseTest {
 
     private var controller: ActivityController<ProtectHostActivity>? = null
     private val looper get() = Looper.getMainLooper()
-    private val applyOnMain = AtomicBoolean(false)
 
     private fun host(): AppCompatActivity {
         val c = Robolectric.buildActivity(ProtectHostActivity::class.java).setup()
@@ -59,6 +58,22 @@ class UnlockSheetPauseTest {
     /** Runs every main-looper message queued right now; never advances time or sleeps. */
     private fun pump() = shadowOf(looper).idle()
 
+    /**
+     * Bounded, condition-driven wait for a state the production continuation must publish.
+     * Tickling the looper is the only synchronisation; the deadline is a guard against a hang,
+     * not a timing assumption.
+     */
+    private fun awaitUi(message: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (System.nanoTime() < deadline) {
+            pump()
+            if (condition()) return
+            Thread.sleep(5)
+        }
+        pump()
+        assertTrue(message, condition())
+    }
+
     /** Advances the Handler scheduler by the same amount the test moved the injected clock. */
     private fun advanceScheduler(ms: Long) {
         shadowOf(looper).idleFor(Duration.ofMillis(ms))
@@ -72,7 +87,7 @@ class UnlockSheetPauseTest {
         ShadowDialog.reset()
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the tries line names the real next pause and the vault button returns after it`() {
         var nowRef = 1_000L
         val cooldown = TryCooldown(maxTries = 2, firstPauseMs = 1_000L, clock = { nowRef })
@@ -80,12 +95,7 @@ class UnlockSheetPauseTest {
         val dialog = UnlockSheet.show(
             activity = activity,
             documentName = "Rent agreement",
-            verify = {
-                // The check runs on Dispatchers.Default. Post a sentinel to the main looper so the
-                // test can pump until the sheet's main-thread continuation is queued behind it.
-                Handler(Looper.getMainLooper()).post { applyOnMain.set(true) }
-                false
-            },
+            verify = { false },
             cooldown = cooldown,
             vaultAvailable = true,
             onUnlocked = { },
@@ -99,30 +109,26 @@ class UnlockSheetPauseTest {
         val error = dialog.view<TextView>(R.id.unlockError)
         assertEquals(View.VISIBLE, vault.visibility)
 
-        fun wrong() {
-            applyOnMain.set(false)
+        fun wrong(message: String, applied: () -> Boolean) {
             field.setText("bad")
             open.performClick()
-            // A bounded pump, not a sleep: when the sentinel has run, the continuation queued
-            // behind it (registerFailure + tickPause) has also run in this idle() pass.
-            repeat(100) {
-                pump()
-                if (applyOnMain.get()) return@repeat
-                Thread.yield()
-            }
-            assertTrue("the background check must reach the main thread", applyOnMain.get())
-            pump()
+            awaitUi(message, applied)
         }
 
         // First cycle: one wrong try, then the 1 s pause starts.
-        wrong()
-        assertTrue("the tries line is shown", error.visibility == View.VISIBLE && error.text.contains("1 tries left"))
+        wrong("the tries line is shown") {
+            error.visibility == View.VISIBLE && error.text.contains("1 tries left")
+        }
         assertTrue(
             "the tries line names the real first pause, not a fixed number",
             error.text.contains("1-second pause")
         )
-        wrong()
-        assertTrue("the pause disables Open", !open.isEnabled)
+        // setChecking(true) also disables Open while the KDF runs, so require the failure
+        // continuation's paused error line as well: this proves the pause, not just "still checking".
+        wrong("the pause disables Open") {
+            error.visibility == View.VISIBLE && !open.isEnabled &&
+                error.text.toString() == activity.getString(R.string.unlock_wrong_paused, 1)
+        }
         assertFalse("the pause also disables Vault", vault.isEnabled)
 
         // End the pause: both the injected clock and the Handler's scheduler move forward together.
@@ -133,11 +139,7 @@ class UnlockSheetPauseTest {
         assertTrue("Vault returns after the pause too", vault.isEnabled)
 
         // Second cycle: the next pause doubled to 2 s, and the tries line must say so.
-        wrong()
-        assertTrue(
-            "the tries line names the doubled pause",
-            error.text.contains("2-second pause")
-        )
+        wrong("the tries line names the doubled pause") { error.text.contains("2-second pause") }
         dialog.dismiss()
     }
 }
