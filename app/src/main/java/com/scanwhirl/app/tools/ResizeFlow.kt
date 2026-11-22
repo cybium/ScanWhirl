@@ -32,6 +32,8 @@ import java.util.UUID
  * movable aspect-locked frame; the alternative aspect-fits the whole picture on
  * white bars. Both preserve the subject's shape. A byte target only changes JPEG
  * quality and an unmet target is reported, never hidden by shrinking pixels.
+ * Resize is exact-canvas image preparation, not compression: a valid output is
+ * kept at the requested pixels even when its JPEG is larger than the source.
  */
 class ResizeFlow(
     private val activity: AppCompatActivity,
@@ -291,37 +293,19 @@ class ResizeFlow(
         return activity.lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { compute(bytes, opts) }
-                val rejected = result.bytes.size >= bytes.size
-                if (rejected) withContext(Dispatchers.IO) {
-                    try {
-                        com.scanwhirl.app.store.V2tResultReceiptStore(activity).save(
-                            com.scanwhirl.app.store.V2tResultReceiptStore.Receipt(
-                                toolId = "resize", docIds = emptyList(), files = emptyList(),
-                                mime = "image/jpeg", note = null, targetBytes = null,
-                                beforeBytes = bytes.size.toLong(), outputIdentity = null,
-                                receiptSourceId = null, sourceKept = true, chosenLocationName = null,
-                                documentsExistingName = null, undone = false,
-                                savedAt = System.currentTimeMillis(), outcomeClass = "NOT_SMALLER"
-                            )
-                        )
-                    } catch (_: IOException) {
-                        // The rejection has no output to persist. Failure to save its
-                        // optional last-result receipt must not hide "Nothing saved".
-                    }
-                }
-                // Rejected (not-smaller) results have no output file. Don't reserve
-                // a folder for them: a full cache must not turn an honest rejection
-                // into a misleading storage failure.
-                val dir = if (rejected) null else withContext(Dispatchers.IO) { resizeOutputDir(activity.cacheDir) }
+                // Resize is exact-canvas image preparation, not compression. A valid
+                // result is staged at the requested pixels even when its JPEG grows
+                // (or stays equal) relative to the source. Byte growth is not a
+                // rejection and never suppresses the output file.
+                val dir = withContext(Dispatchers.IO) { resizeOutputDir(activity.cacheDir) }
                 val base = FlowUtil.sanitizeFileName(name).substringBeforeLast('.').ifBlank { "image" }
                 val fileName = "${base}_${result.width}x${result.height}.jpg"
-                val file = dir?.let { File(it, fileName) }
-                // Decide before writing even a cache result. Activity death cannot leave a grown copy.
-                if (!rejected) withContext(Dispatchers.IO) { requireNotNull(file).writeBytes(result.bytes) }
+                val file = File(dir, fileName)
+                withContext(Dispatchers.IO) { file.writeBytes(result.bytes) }
 
                 // Report from the saved file, decoded again, not from the request.
                 val saved = withContext(Dispatchers.IO) {
-                    val raw = if (rejected) result.bytes else requireNotNull(file).readBytes()
+                    val raw = file.readBytes()
                     val dims = ImageTools.imageSize(raw)
                     Triple(raw.size.toLong(), dims?.first, dims?.second)
                 }
@@ -335,8 +319,8 @@ class ResizeFlow(
                 activity.startActivity(
                     ExportResultActivity.intent(
                         activity,
-                        outputPath = file?.path.orEmpty(),
-                        previewPath = file?.path,
+                        outputPath = file.path,
+                        previewPath = file.path,
                         mime = result.mime,
                         displayName = fileName,
                         beforeBytes = bytes.size.toLong(),
@@ -344,8 +328,9 @@ class ResizeFlow(
                         width = saved.second ?: result.width,
                         height = saved.third ?: result.height,
                         title = name,
-                        warning = if (rejected) null else warning,
-                        outcome = if (rejected) "NOT_SMALLER" else null,
+                        warning = warning,
+                        // No no-gain outcome from Resize: the exact requested image exists.
+                        outcome = null,
                         toolId = "resize"
                     )
                 )
