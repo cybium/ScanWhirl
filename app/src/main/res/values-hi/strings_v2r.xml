@@ -16,6 +16,9 @@
     <string name="v2r_vault_move_back_done">%1$s को कागज़ात में वापस रख दिया गया। तिजोरी में याद रखा गया PDF पासवर्ड साथ नहीं आता।</string>
     <string name="v2r_vault_move_back_failed">%1$s को वापस नहीं रख सके। तिजोरी वाली प्रति नहीं बदली गई।</string>
     <string name="v2r_vault_move_back_partial">कागज़ात वाली प्रति तैयार है, पर तिजोरी वाली प्रति अभी भी है। इसे इसी मेन्यू से हटाएँ।</string>
+    <string name="v2r_vault_move_back_verify_failed">कागज़ात वाली प्रति जाँची नहीं जा सकी। उसे हटाई गई फ़ाइलों में रख दिया गया; तिजोरी वाली प्रति नहीं बदली गई।</string>
+    <string name="v2r_vault_move_back_cleanup_failed">कागज़ात वाली प्रति हटाई नहीं जा सकी। कागज़ात और तिजोरी दोनों देखें।</string>
+    <string name="v2r_vault_move_back_remove_failed">कागज़ात में वापस रख दिया गया, पर तिजोरी वाली प्रति हटाई नहीं जा सकी। उसे तिजोरी से हटाएँ।</string>
 
     <!-- Pro paywall: expanding the full catalogue with honest tier labels. -->
     <string name="v2r_see_all_pro_tools">सभी Pro औज़ार देखें</string>

@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.vault
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
@@ -75,6 +76,19 @@ import java.util.Locale
 class VaultActivity : BaseActivity() {
 
     companion object {
+        /** Test seams for the three distinct move-back failure outcomes. Always null/false in the app. */
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        var failCreateForTest: Throwable? = null
+
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        var failVerifyForTest: Boolean = false
+
+        @JvmField
+        @androidx.annotation.VisibleForTesting
+        var failRemoveForTest: Throwable? = null
+
         /** Test seam: a VaultStore built with the fake Keystore and a small PBKDF2 count. */
         @Volatile
         internal var storeOverride: VaultStore? = null
@@ -1758,36 +1772,70 @@ class VaultActivity : BaseActivity() {
      * and only then remove the Vault entry. A failure never removes the encrypted source.
      * No password or recovery code is stored or logged on this path.
      */
+    private fun decodablePage(file: File): Boolean {
+        if (!file.isFile || file.length() == 0L) return false
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        return options.outWidth > 0 && options.outHeight > 0
+    }
+
     private fun moveBackToLibrary(entry: VaultStore.Entry) {
         lifecycleScope.launch {
-            val outcome = try {
+            // Declared outside the try so every outcome can be reported exactly as it happened.
+            var opened: VaultStore.Opened? = null
+            var created: ScanDocument? = null
+            var failed = false
+            var removeFailed = false
+            try {
                 withContext(Dispatchers.IO) {
-                    val opened = store.openDocument(entry.id)
-                    val pageBytes = opened.pageFiles.sortedBy { it.name }.map { it.readBytes() }
-                    val created = repo.createDocument(entry.name, pageBytes)
-                    val verified = repo.getDocument(created.id) != null
-                    var removed = false
-                    if (verified) {
+                    failCreateForTest?.let { throw it }
+                    opened = store.openDocument(entry.id)
+                    val expected = opened!!.pageFiles.size
+                    // Keep the store's PageOrder; never re-sort by file name. The save path reads
+                    // one page at a time, so no list of page bytes is held in memory.
+                    // These are this app's own decrypted cache files; the save path reads one
+                    // page at a time through the resolver, so no page-byte list is held in memory.
+                    val uris = opened!!.pageFiles.map { Uri.fromFile(it) }
+                    created = repo.saveScan(uris, null, suggestedName = entry.name)
+                    val doc = created!!
+                    val verified = !failVerifyForTest && doc.name.isNotBlank() &&
+                        doc.pageCount == expected && doc.pageFiles.size == expected &&
+                        doc.pageFiles.all { decodablePage(it) }
+                    if (!verified) throw IllegalStateException("Library copy did not verify")
+                    try {
+                        failRemoveForTest?.let { throw it }
                         store.removeFromVault(entry.id)
-                        removed = true
+                    } catch (t: Throwable) {
+                        // Keep BOTH copies and say so; never claim the Vault is unchanged here.
+                        removeFailed = true
                     }
-                    Triple(created.name, verified, removed)
                 }
-            } catch (e: Exception) {
-                null
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                failed = true
+            } finally {
+                opened?.dir?.deleteRecursively()
+            }
+
+            var cleanupFailed = false
+            if (failed && created != null) {
+                withContext(Dispatchers.IO) {
+                    // A failed move-back copy is a user-visible document: Trash is the only
+                    // allowed removal route, never a direct purge.
+                    runCatching { repo.moveToTrash(created!!.id) }
+                    cleanupFailed = repo.getDocument(created!!.id) != null
+                }
             }
             render()
-            val (title, body) = when {
-                outcome == null -> R.string.v2r_vault_move_back to getString(
-                    R.string.v2r_vault_move_back_failed, entry.name
-                )
-                outcome.second && outcome.third -> R.string.v2r_vault_move_back to getString(
-                    R.string.v2r_vault_move_back_done, outcome.first
-                )
-                else -> R.string.v2r_vault_move_back to getString(R.string.v2r_vault_move_back_partial)
+            val body = when {
+                failed && cleanupFailed -> getString(R.string.v2r_vault_move_back_cleanup_failed)
+                failed && created != null -> getString(R.string.v2r_vault_move_back_verify_failed)
+                failed -> getString(R.string.v2r_vault_move_back_failed, entry.name)
+                removeFailed -> getString(R.string.v2r_vault_move_back_remove_failed)
+                else -> getString(R.string.v2r_vault_move_back_done, created!!.name)
             }
             SwSheet.builder(this@VaultActivity)
-                .setTitle(title)
+                .setTitle(R.string.v2r_vault_move_back)
                 .setMessage(body)
                 .setPrimary(android.R.string.ok) { }
                 .build()
