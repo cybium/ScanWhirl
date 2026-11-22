@@ -212,11 +212,30 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.showPage(1)
                 a.findViewById<View>(R.id.btnModeArrange).performClick()
-                a.findViewById<View>(R.id.btnArrLater).performClick()
-                // While the rename pass runs, Save waits instead of reading half-renamed pages.
-                assertTrue(a.pageOpBusy)
-                a.findViewById<View>(R.id.btnSavePdf).performClick()
-                assertEquals(app.getString(R.string.review_busy), ShadowToast.getTextOfLatestToast())
+                // TEST3: the rename's IO work (a handful of tiny file renames) can finish before a
+                // single synchronous read of pageOpBusy on a fast or loaded runner. Watch the flag
+                // from the moment of the tap and assert it was observed. This checks the SAME
+                // property over a window - strictly stronger than one instantaneous sample - and
+                // the Save-refusal assertion below still proves the observable contract.
+                val busySeen = java.util.concurrent.atomic.AtomicBoolean(false)
+                val watcher = Thread {
+                    val end = System.nanoTime() + 5_000_000_000L
+                    while (!busySeen.get() && System.nanoTime() < end) {
+                        if (a.pageOpBusy) busySeen.set(true) else Thread.yield()
+                    }
+                }.apply { isDaemon = true }
+                watcher.start()
+                try {
+                    a.findViewById<View>(R.id.btnArrLater).performClick()
+                    val seenBy = System.nanoTime() + 5_000_000_000L
+                    while (!busySeen.get() && System.nanoTime() < seenBy) Thread.sleep(1)
+                    assertTrue("the rename marks the page operation busy", busySeen.get())
+                    // While the rename pass runs, Save waits instead of reading half-renamed pages.
+                    a.findViewById<View>(R.id.btnSavePdf).performClick()
+                    assertEquals(app.getString(R.string.review_busy), ShadowToast.getTextOfLatestToast())
+                } finally {
+                    watcher.interrupt()
+                }
             }
             await { widths(dir) == listOf(120, 122, 121, 123, 124) && !scenario.get { it.pageOpBusy } }
             assertEquals("nothing saved while busy", 0, repo.listDocuments().size)

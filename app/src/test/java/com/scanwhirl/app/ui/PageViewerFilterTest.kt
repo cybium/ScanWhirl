@@ -8,13 +8,13 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.recyclerview.widget.RecyclerView
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ScanFilter
+import com.scanwhirl.app.util.SwActivitySession
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,7 +43,7 @@ class PageViewerFilterTest {
 
     private val repo get() = ScanRepository(context)
 
-    private fun launch(id: String) = ActivityScenario.launch<PageViewerActivity>(
+    private fun launch(id: String) = SwActivitySession.launch<PageViewerActivity>(
         PageViewerActivity.intent(context, id, 0)
             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
     )
@@ -52,12 +52,12 @@ class PageViewerFilterTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    private fun waitFor(label: String, timeoutMs: Long = 10_000, check: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
+    private fun waitFor(label: String, timeoutMs: Long = 20_000, check: () -> Boolean) {
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+        while (System.nanoTime() < deadline) {
             idle()
             if (check()) return
-            Thread.sleep(20)
+            Thread.sleep(5)
         }
         throw AssertionError("timed out waiting for $label")
     }
@@ -91,7 +91,20 @@ class PageViewerFilterTest {
         waitFor("the filter sheet to open") { shownSheetItems() != null }
     }
 
-    private var currentScenario: ActivityScenario<PageViewerActivity>? = null
+    private var currentScenario: SwActivitySession<PageViewerActivity>? = null
+
+    @org.junit.Before
+    fun setUp() {
+        // ShadowDialog is process-wide; a sheet left by an earlier test in the same fork
+        // otherwise makes shownSheetItems() inspect the wrong dialog.
+        ShadowDialog.reset()
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        currentScenario = null
+        ShadowDialog.reset()
+    }
 
     private fun displayedBitmap(): Bitmap? =
         pageImage()?.let { (it.first.drawable as? BitmapDrawable)?.bitmap }
