@@ -47,6 +47,6 @@
     <string name="cdf1_storage_library">Library</string>
     <string name="cdf1_storage_temporary">Temporary files</string>
     <string name="cdf1_storage_clear">Clear temporary</string>
-    <string name="cdf1_storage_cleared">Freed %1$s. Library and Vault kept.</string>
+    <string name="cdf1_storage_cleared">Freed %1$s. Library, Vault and backups untouched.</string>
     <string name="cdf1_storage_nothing">No removable temporary files</string>
 </resources>
