@@ -41,6 +41,10 @@ object ShareUtils {
             doc.pdfFile.exists() -> {
                 shareCopy(context, doc.pdfFile, "application/pdf", documentFileName(doc))
             }
+            // S2: a protected or Vault document may only leave as its (encrypted) PDF. Its page
+            // JPEGs are plaintext, so a missing PDF must never fall back to sharing them.
+            doc.isLocked || doc.isVaulted ->
+                Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
             doc.pageFiles.isNotEmpty() -> sharePages(context, doc)
             else -> Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
         }
