@@ -202,4 +202,26 @@ class VaultPickerStaleResultTest {
             latestDialog()?.isShowing != true
         )
     }
+    @Test
+    fun recoverySaveRequiredBeforeConfirmation() {
+        val recovery = reachRecoveryCode()
+        val primary = recovery.need<View>(R.id.swSheetPrimary)
+        assertTrue("cannot confirm without saving", !primary.isEnabled)
+        primary.performClick()
+        assertTrue("defensive handler does not advance", recovery.isShowing)
+        val request = tapSave(recovery)
+        shadowOf(controller!!.get()).callOnActivityResult(request.first, Activity.RESULT_CANCELED, null)
+        idle()
+        assertTrue("cancel does not enable confirmation", !primary.isEnabled)
+        saveRecoveryFileForTest(controller!!.get(), recovery)
+        controller!!.recreate()
+        idle()
+        val restored = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertTrue("successful proof survives rotation", restored.need<View>(R.id.swSheetPrimary).isEnabled)
+        restored.need<View>(R.id.swSheetPrimary).performClick()
+        idle()
+        assertEquals("Type 4 characters", (ShadowDialog.getLatestDialog() as BottomSheetDialog).need<TextView>(R.id.swSheetTitle).text.toString())
+        assertTrue("the existing confirmation step is still owed", store.isUnlocked())
+    }
+
 }

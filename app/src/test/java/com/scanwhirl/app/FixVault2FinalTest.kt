@@ -253,6 +253,7 @@ class FixVault2FinalTest {
 
         val codeSheet = startReplacement(activity)
         val candidateCode = codeSheet.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        saveRecoveryFileForTest(controller!!.get(), codeSheet)
         codeSheet.need<View>(R.id.swSheetPrimary).performClick()   // I saved it
         idle()
         val confirm = sheet()

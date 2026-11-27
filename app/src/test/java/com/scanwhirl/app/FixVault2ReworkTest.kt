@@ -216,6 +216,7 @@ class FixVault2ReworkTest {
         val recovery = sheet()
         assertEquals(codeTitle, titleOf(recovery))
         val code = recovery.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        saveRecoveryFileForTest(controller!!.get(), recovery)
         recovery.need<View>(R.id.swSheetPrimary).performClick()
         idle()
         val confirm = sheet()
@@ -276,6 +277,7 @@ class FixVault2ReworkTest {
 
         // The user can still finish: confirm the new code, and the normal Vault comes back.
         val before2 = shownCount()
+        saveRecoveryFileForTest(controller!!.get(), codeSheet)
         codeSheet.need<View>(R.id.swSheetPrimary).performClick()
         idle()
         val confirm = awaitNewSheetSince(before2, confirmTitle)
@@ -404,6 +406,7 @@ class FixVault2ReworkTest {
         val codeSheet = awaitNewSheetSince(before, codeTitle)
         assertNotNull("a new code is prepared", codeSheet)
         val newCode = codeSheet!!.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        saveRecoveryFileForTest(controller!!.get(), codeSheet)
         codeSheet.need<View>(R.id.swSheetPrimary).performClick()
         idle()
         val confirm = sheet()

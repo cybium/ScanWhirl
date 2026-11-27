@@ -18,6 +18,14 @@ object VaultSession {
     /** One lock for open/close/expiry, so a close already in flight cannot race a fresh open. */
     private val lock = Any()
 
+    // An opaque, in-memory session generation (never the key). A new unlock invalidates
+    // enrollment save receipts even if the Vault's persistent identity did not change.
+    private var generation = 0L
+
+    internal fun sessionIdentity(): Long? = synchronized(lock) {
+        if (keyOrNull() == null) null else generation
+    }
+
     @Volatile
     private var key: ByteArray? = null
 
@@ -61,6 +69,7 @@ object VaultSession {
             // A new key replaces the old one in memory. It must not wipe copies a caller has just
             // decrypted under this key: only close()/expiry ends the lifetime of plaintext copies.
             dropKeyLocked()
+            generation++
             key = vaultKey.copyOf()
             backgroundAt = 0L
         }

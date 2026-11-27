@@ -172,6 +172,7 @@ class VaultActivityTest {
         assertEquals(24, VaultCrypto.normalizeRecoveryCode(code).length)
         assertTrue(store.isSetUp())
 
+        com.scanwhirl.app.saveRecoveryFileForTest(activity, recoverySheet)
         primary(recoverySheet).performClick()
         idle()
         val confirmSheet = sheet()

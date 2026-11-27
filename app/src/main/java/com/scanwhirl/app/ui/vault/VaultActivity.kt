@@ -40,6 +40,7 @@ import com.scanwhirl.app.store.vault.VaultKeyInvalidatedException
 import com.scanwhirl.app.store.vault.VaultLockedException
 import com.scanwhirl.app.store.vault.VaultStaleReplacementException
 import com.scanwhirl.app.store.vault.VaultStore
+import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.PdfViewerActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
@@ -200,6 +201,10 @@ class VaultActivity : BaseActivity() {
          * result may only write while both still match (VAULT-F1).
          */
         var pendingSave: PendingSave? = null
+        var pickerOutstanding = false
+        var savedProof: PendingSave? = null
+        var saveEpoch = 0
+        var writingEpoch: Int? = null
         var code: String? = null
         var confirmCode: String? = null
         var replacement: VaultStore.RecoveryReplacement? = null
@@ -219,6 +224,9 @@ class VaultActivity : BaseActivity() {
 
         fun clearSecrets() {
             pendingSave = null
+            savedProof = null
+            saveEpoch++
+            writingEpoch = null
             code = null
             confirmCode = null
             replacement = null
@@ -230,7 +238,7 @@ class VaultActivity : BaseActivity() {
     }
 
     /** One picker save in flight, with the code and the Vault it is allowed to write for. */
-    private class PendingSave(val code: String, val vaultIdentity: String?)
+    private class PendingSave(val code: String, val vaultIdentity: String?, val epoch: Int, val session: Long)
 
     private var recoveryFlow = RecoveryFlow()
     private var pickedRestore: File? = null
@@ -1031,6 +1039,12 @@ class VaultActivity : BaseActivity() {
         }
         // The flow is retained in memory so a rotation brings this exact sheet (and the check it
         // leads to) back; nothing about it is saved to disk. A new flow invalidates older sheets.
+        if (recoveryFlow.code != code || recoveryFlow.vaultIdentity != store.vaultIdentity()) {
+            recoveryFlow.saveEpoch++
+            recoveryFlow.savedProof = null
+            recoveryFlow.pendingSave = null
+            recoveryFlow.writingEpoch = null
+        }
         recoveryFlow.generation++
         recoveryFlow.code = code
         recoveryFlow.confirmCode = null
@@ -1106,9 +1120,13 @@ class VaultActivity : BaseActivity() {
         // The recovery code sits in this dialog's own window: it needs FLAG_SECURE too, the
         // activity window's flag does not cover a separate dialog window.
         sheet.secure()
-        sheet.setPrimary(R.string.vault_recovery_saved) {
+        sheet.setPrimaryStayOpen(R.string.vault_recovery_saved) {
+            if (!hasRecoverySaveProof(code)) return@setPrimaryStayOpen
             showConfirmRecovery(code, migrateLegacy)
+            sheet.dismiss()
         }
+        sheet.primaryButton.isEnabled = hasRecoverySaveProof(code)
+        sheet.primaryButton.alpha = if (sheet.primaryButton.isEnabled) 1f else 0.45f
         // A dismissal (X, Back) abandons the step; a rotation keeps it for the new instance.
         sheet.setOnDismissListener { onEnrollmentSheetDismissed(displayCode = code) }
         enrollmentSheet = sheet
@@ -1120,6 +1138,10 @@ class VaultActivity : BaseActivity() {
         if (!store.isUnlocked()) {
             dropRetainedSecrets()
             showUnlock()
+            return
+        }
+        if (!hasRecoverySaveProof(code)) {
+            showRecoveryCode(code, migrateLegacy)
             return
         }
         // The check is owed from here on: a rotation restores this sheet instead of dropping it,
@@ -1159,6 +1181,12 @@ class VaultActivity : BaseActivity() {
                 showError(getString(R.string.vault_code_stale))
                 return@setOnClickListener
             }
+            if (!hasRecoverySaveProof(code)) {
+                dropRetainedSecrets()
+                sheet.dismiss()
+                showError(getString(R.string.vault_code_stale))
+                return@setOnClickListener
+            }
             // Capture the validated candidate now, not inside the worker: the flow can be
             // invalidated while the key work runs.
             val candidate = recoveryFlow.replacement
@@ -1184,6 +1212,7 @@ class VaultActivity : BaseActivity() {
                     return@keyWorkOffMain
                 }
                 recoveryFlow.replacement = null
+                recoveryFlow.savedProof = null
                 recoveryFlow.confirmCode = null
                 recoveryFlow.vaultIdentity = null
                 recoveryFlow.migrateLegacy = false
@@ -2143,17 +2172,32 @@ class VaultActivity : BaseActivity() {
      * S1: the recovery code never goes to the clipboard (see [saveRecoveryCode]); the user
      * picks a file and only the code plus one warning line is written there.
      */
+    private fun hasRecoverySaveProof(code: String): Boolean {
+        val proof = recoveryFlow.savedProof ?: return false
+        return store.isUnlocked() && proof.code == code &&
+            proof.epoch == recoveryFlow.saveEpoch && proof.session == VaultSession.sessionIdentity() &&
+            proof.vaultIdentity != null && proof.vaultIdentity == store.vaultIdentity()
+    }
+
     private fun startSaveRecoveryCode(code: String) {
-        recoveryFlow.pendingSave = PendingSave(
-            code = code,
-            vaultIdentity = recoveryFlow.vaultIdentity
-        )
-        saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
+        if (recoveryFlow.code != code || !store.isUnlocked() ||
+            recoveryFlow.pickerOutstanding || recoveryFlow.writingEpoch != null) return
+        val session = VaultSession.sessionIdentity() ?: return
+        recoveryFlow.pendingSave = PendingSave(code, recoveryFlow.vaultIdentity, recoveryFlow.saveEpoch, session)
+        recoveryFlow.pickerOutstanding = true
+        try {
+            saveRecoveryCode.launch(getString(R.string.vault_recovery_file_name))
+        } catch (e: Exception) {
+            recoveryFlow.pendingSave = null
+            recoveryFlow.pickerOutstanding = false
+            Toast.makeText(this, R.string.vault_recovery_file_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun handleRecoverySaveResult(uri: Uri?) {
         val save = recoveryFlow.pendingSave
         recoveryFlow.pendingSave = null
+        recoveryFlow.pickerOutstanding = false
         // Cancel: the user picked nothing, so there is nothing to write and nothing to report.
         if (uri == null) return
         if (save == null) {
@@ -2176,25 +2220,40 @@ class VaultActivity : BaseActivity() {
             deleteQuietly(uri)
             return
         }
-        writeRecoveryCode(uri, save.code)
+        recoveryFlow.writingEpoch = save.epoch
+        writeRecoveryCode(uri, save)
     }
 
     /** The same code still on screen, unlocked, same Vault: only then may the code be written. */
     private fun saveStillValid(save: PendingSave): Boolean {
-        if (!store.isUnlocked()) return false
+        if (!store.isUnlocked() || save.session != VaultSession.sessionIdentity()) return false
         // A new enrollment (or the confirm step) replaced the code on screen: this result is stale.
-        if (recoveryFlow.code != save.code) return false
+        if (recoveryFlow.code != save.code || recoveryFlow.saveEpoch != save.epoch) return false
         val identity = store.vaultIdentity() ?: return false
         return identity == save.vaultIdentity
     }
 
-    private fun writeRecoveryCode(uri: Uri, code: String) {
+    private fun writeRecoveryCode(uri: Uri, save: PendingSave) {
+        val code = save.code
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     val out = contentResolver.openOutputStream(uri)
                         ?: throw IOException("The chosen file cannot be opened")
-                    out.use { it.write(recoveryFileText(code).toByteArray(Charsets.UTF_8)) }
+                    out.use {
+                        it.write(recoveryFileText(code).toByteArray(Charsets.UTF_8))
+                        it.flush()
+                        (it as? java.io.FileOutputStream)?.fd?.sync()
+                    }
+                }
+                if (!saveStillValid(save)) {
+                    deleteQuietly(uri)
+                    return@launch
+                }
+                recoveryFlow.savedProof = save
+                enrollmentSheet?.primaryButton?.apply {
+                    isEnabled = true
+                    alpha = 1f
                 }
                 Toast.makeText(this@VaultActivity, R.string.vault_recovery_file_done, Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
@@ -2202,7 +2261,10 @@ class VaultActivity : BaseActivity() {
                 // carry a provider path or a document name, so neither the message nor the
                 // throwable is logged; the fixed UI text below is all the user sees.
                 Log.w(TAG, "saving the recovery code file failed: ${e.javaClass.name}")
-                discardAndExplain(uri, R.string.vault_recovery_file_failed)
+                if (saveStillValid(save)) discardAndExplain(uri, R.string.vault_recovery_file_failed)
+                else deleteQuietly(uri)
+            } finally {
+                if (recoveryFlow.writingEpoch == save.epoch) recoveryFlow.writingEpoch = null
             }
         }
     }

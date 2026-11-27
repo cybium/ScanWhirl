@@ -209,6 +209,7 @@ class FixVault2Test {
 
         val recovery = reachRecoveryCode()
         val code = recovery.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        saveRecoveryFileForTest(controller!!.get(), recovery)
         recovery.need<View>(R.id.swSheetPrimary).performClick()
         idle()
         assertEquals("Type 4 characters", titleOf(sheet()))
@@ -436,6 +437,8 @@ class FixVault2Test {
 
         val recovery = reachRecoveryCode()
         assertSecure(recovery, "the recovery-code display sheet")
+
+        saveRecoveryFileForTest(controller!!.get(), recovery)
 
         recovery.need<View>(R.id.swSheetPrimary).performClick()
         idle()
