@@ -1140,7 +1140,10 @@ class VaultActivity : BaseActivity() {
             showUnlock()
             return
         }
-        if (!hasRecoverySaveProof(code)) {
+        // Never saved: back to the code sheet so the file can be saved first. A proof that exists
+        // but went stale (restore, re-unlock, new code) must NOT re-show this code for another
+        // Vault: the check below shows, and its Finish refuses it as stale (MUST-FIX 1 + S3).
+        if (recoveryFlow.savedProof == null) {
             showRecoveryCode(code, migrateLegacy)
             return
         }

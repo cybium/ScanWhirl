@@ -22,6 +22,13 @@ internal fun saveRecoveryFileForTest(activity: Activity, recovery: Dialog) {
     recovery.findViewById<View>(R.id.vaultRecoveryCopy).performClick()
     main.idle()
     val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+    assertTrue("the recovery Save opens the system create-document picker",
+        started.intent.action == Intent.ACTION_CREATE_DOCUMENT)
+    // startActivityForResult records the same intent in the plain started-activities queue too;
+    // consume it so later assertions about what the app starts never read this picker intent.
+    val plain = shadowOf(activity).nextStartedActivity
+    assertTrue("the consumed plain entry is this same picker intent",
+        plain != null && plain.action == Intent.ACTION_CREATE_DOCUMENT)
     shadowOf(activity).callOnActivityResult(started.requestCode, Activity.RESULT_OK, Intent().setData(uri))
     val primary = recovery.findViewById<View>(R.id.swSheetPrimary)
     val deadline = System.nanoTime() + 8_000_000_000L
