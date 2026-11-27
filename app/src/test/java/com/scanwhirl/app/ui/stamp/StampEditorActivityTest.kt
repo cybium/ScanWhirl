@@ -240,4 +240,51 @@ class StampEditorActivityTest {
         val screen = activity(id)
         assertTrue("the editor must close on a protected document", screen.isFinishing)
     }
+    @Test
+    fun drawnMarksKeepTheirExactGeometry() {
+        val id = DocFixtures.saved(repo, context, pages = 2)
+        val screen = activity(id)
+        val canvas = screen.findViewById<StampCanvasView>(R.id.canvas)
+        val seed = PageStamp.Mark.Text("Fixture", PageStamp.Box(0.1f, 0.05f, 0.4f, 0.09f))
+        screen.editor.add(seed)
+        val first = PageStamp.Box(0.1f, 0.2f, 0.4f, 0.25f)
+        val second = PageStamp.Box(0.8f, 0.8f, 0.98f, 0.99f)
+        val highlight = PageStamp.Box(0.2f, 0.4f, 0.6f, 0.45f)
+        val strokes = listOf(PageStamp.Stroke(listOf(PageStamp.Point(0.01f, 0.9f), PageStamp.Point(0.99f, 0.92f))))
+        canvas.listener!!.onBox(StampCanvasView.Tool.REDACT, first)
+        canvas.listener!!.onBox(StampCanvasView.Tool.REDACT, second)
+        canvas.listener!!.onBox(StampCanvasView.Tool.HIGHLIGHT, highlight)
+        canvas.listener!!.onFreehand(strokes)
+        val expected = listOf(seed, PageStamp.Mark.Redact(first), PageStamp.Mark.Redact(second),
+            PageStamp.Mark.Highlight(highlight), PageStamp.Mark.Freehand(strokes))
+        assertEquals(expected, screen.editor.marks())
+        screen.findViewById<android.view.View>(R.id.undo).performClick()
+        assertEquals(expected.dropLast(1), screen.editor.marks())
+        screen.findViewById<android.view.View>(R.id.redo).performClick()
+        assertEquals(expected, screen.editor.marks())
+        screen.findViewById<android.view.View>(R.id.nextPage).performClick()
+        canvas.listener!!.onBox(StampCanvasView.Tool.REDACT, second)
+        assertEquals(listOf(PageStamp.Mark.Redact(second)), screen.editor.marks())
+        val source = requireNotNull(repo.getDocument(id))
+        val originalPdf = source.pdfFile.readBytes()
+        val originalPages = source.pageFiles.map { it.readBytes() }
+        val copy = kotlinx.coroutines.runBlocking { repo.stampDocument(id, screen.editor.edits(), null) }
+        for ((pageIndex, boxes) in listOf(listOf(first, second), listOf(second)).withIndex()) {
+            val bitmap = requireNotNull(android.graphics.BitmapFactory.decodeFile(copy.pageFiles[pageIndex].path))
+            try {
+                for (box in boxes) {
+                    val color = bitmap.getPixel(((box.left + box.right) * bitmap.width / 2).toInt(),
+                        ((box.top + box.bottom) * bitmap.height / 2).toInt())
+                    assertTrue("the saved pixel at the drawn center is black",
+                        android.graphics.Color.red(color) < 20 &&
+                            android.graphics.Color.green(color) < 20 && android.graphics.Color.blue(color) < 20)
+                }
+                val outside = bitmap.getPixel((bitmap.width * 0.15f).toInt(), (bitmap.height * 0.65f).toInt())
+                assertTrue("adjacent unmarked quadrant remains blue", android.graphics.Color.blue(outside) > 150)
+            } finally { bitmap.recycle() }
+        }
+        assertTrue(originalPdf.contentEquals(source.pdfFile.readBytes()))
+        source.pageFiles.forEachIndexed { i, file -> assertTrue(originalPages[i].contentEquals(file.readBytes())) }
+    }
+
 }

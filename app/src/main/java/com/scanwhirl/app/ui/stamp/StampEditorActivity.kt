@@ -600,18 +600,9 @@ class StampEditorActivity : BaseActivity() {
             is PageStamp.Mark.Signature -> mark.copy(box = shiftedBox(mark.box))
             is PageStamp.Mark.Picture -> mark.copy(box = shiftedBox(mark.box))
             is PageStamp.Mark.Badge -> mark.copy(box = shiftedBox(mark.box))
-            is PageStamp.Mark.Redact -> mark.copy(box = shiftedBox(mark.box))
-            is PageStamp.Mark.Highlight -> mark.copy(box = shiftedBox(mark.box))
-            is PageStamp.Mark.Freehand -> mark.copy(
-                strokes = mark.strokes.map { stroke ->
-                    PageStamp.Stroke(stroke.points.map {
-                        PageStamp.Point(
-                            (it.x + step).coerceIn(0f, 1f),
-                            (it.y + step).coerceIn(0f, 1f)
-                        )
-                    })
-                }
-            )
+            // Drawn geometry already specifies the exact intended position.
+            is PageStamp.Mark.Redact, is PageStamp.Mark.Highlight,
+            is PageStamp.Mark.Freehand -> mark
             is PageStamp.Mark.Watermark, is PageStamp.Mark.PageNumber -> mark
         }
     }
