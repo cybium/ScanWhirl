@@ -1,5 +1,5 @@
 <resources>
-    <string name="backup_password_repeat">बैकअप पासवर्ड दोबारा डालें</string>
+    <string name="backup_password_repeat">प्रति का पासवर्ड दोबारा डालें</string>
     <string name="backup_password_mismatch">दोनों पासवर्ड एक जैसे नहीं हैं।</string>
-    <string name="backup_new_file_required">नई, खाली फ़ाइल चुनें। पुराने बैकअप को न बदलें।</string>
+    <string name="backup_new_file_required">नई, खाली फ़ाइल चुनें। पुरानी प्रति को न बदलें।</string>
 </resources>
