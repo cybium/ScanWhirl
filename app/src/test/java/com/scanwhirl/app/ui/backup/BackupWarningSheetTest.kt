@@ -153,6 +153,7 @@ class BackupWarningSheetTest {
             .findViewById<TextView>(R.id.swSheetSecondary).performClick()
         val passwordSheet = awaitSheet(app.getString(R.string.backup_password_title))
         passwordSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+        passwordSheet.findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
         passwordSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
         return awaitSheet(app.getString(R.string.backup_ready))
     }

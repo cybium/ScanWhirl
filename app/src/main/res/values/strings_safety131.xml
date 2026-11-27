@@ -1,0 +1,6 @@
+<resources>
+    <string name="backup_password_repeat">Repeat backup password</string>
+    <string name="backup_password_mismatch">The passwords do not match.</string>
+    <string name="backup_new_file_required">Choose a new, empty file. Do not replace a previous backup.</string>
+    <item type="id" name="backupPasswordConfirm"/>
+</resources>

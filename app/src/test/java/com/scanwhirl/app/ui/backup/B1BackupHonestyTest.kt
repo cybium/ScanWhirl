@@ -178,6 +178,8 @@ class B1BackupHonestyTest {
         awaitSheet(app.getString(R.string.backup_password_title))
             .findViewById<EditText>(R.id.backupPassword).setText(password)
         awaitSheet(app.getString(R.string.backup_password_title))
+            .findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
+        awaitSheet(app.getString(R.string.backup_password_title))
             .findViewById<TextView>(R.id.swSheetPrimary).performClick()
         return awaitSheet(app.getString(R.string.backup_ready))
     }
@@ -236,6 +238,7 @@ class B1BackupHonestyTest {
     fun `a failed Save to device keeps the cached file and offers retry or share`() {
         createBackup()
         val uri = Uri.parse("content://scanwhirl-test/full-disk-b1.swbackup")
+        shadowOf(app.contentResolver).registerInputStream(uri, java.io.ByteArrayInputStream(byteArrayOf()))
         shadowOf(app.contentResolver).registerOutputStream(uri, object : OutputStream() {
             override fun write(b: Int) = throw java.io.IOException("simulated full disk")
             override fun write(b: ByteArray, off: Int, len: Int) = throw java.io.IOException("simulated full disk")
@@ -399,4 +402,41 @@ class B1BackupHonestyTest {
         )
         archive.delete()
     }
+    @Test
+    fun backupPasswordMismatchBlocksArchive() {
+        val activity = launch()
+        activity.findViewById<TextView>(R.id.backupNow).performClick()
+        awaitSheet(app.getString(R.string.backup_choose)).findViewById<TextView>(R.id.swSheetPrimary).performClick()
+        val sheet = awaitSheet(app.getString(R.string.backup_password_title))
+        sheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+        val repeat = sheet.findViewById<EditText>(R.id.backupPasswordConfirm)
+        repeat.setText("different-password")
+        sheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
+        idle()
+        assertTrue("mismatch keeps the password sheet open", sheet.isShowing)
+        repeat.setText(password)
+        sheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
+        awaitSheet(app.getString(R.string.backup_ready))
+    }
+
+    @Test
+    fun backupExistingDestinationRefusedWithoutWriting() {
+        val ready = createBackup()
+        val uri = Uri.parse("content://scanwhirl-test/existing.swbackup")
+        val sentinel = byteArrayOf(1, 2, 3, 4)
+        val sink = java.io.ByteArrayOutputStream()
+        shadowOf(app.contentResolver).registerInputStream(uri, java.io.ByteArrayInputStream(sentinel))
+        shadowOf(app.contentResolver).registerOutputStream(uri, sink)
+        ready.findViewById<TextView>(R.id.swSheetPrimary).performClick()
+        idle()
+        val activity = controller!!.get()
+        val request = shadowOf(activity).nextStartedActivityForResult
+        ShadowToast.reset()
+        shadowOf(activity).receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(uri))
+        await(5_000) { ShadowToast.getTextOfLatestToast() != null }
+        assertEquals(app.getString(R.string.backup_new_file_required), ShadowToast.getTextOfLatestToast())
+        assertEquals("existing destination is not written", 0, sink.size())
+        awaitSheet(app.getString(R.string.backup_ready), 5_000)
+    }
+
 }

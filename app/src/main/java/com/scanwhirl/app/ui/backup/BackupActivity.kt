@@ -178,6 +178,11 @@ class BackupActivity : BaseActivity() {
         // result, and it is never used as proof of anything.
         val destination = displayName(uri)
         lifecycleScope.launch {
+            if (!withContext(Dispatchers.IO) { destinationIsEmpty(uri) }) {
+                toast(R.string.backup_new_file_required)
+                offerSaving(file)
+                return@launch
+            }
             val ok = withContext(Dispatchers.IO) {
                 runCatching { writeDurably(file, uri) }.getOrDefault(false)
             }
@@ -559,15 +564,31 @@ class BackupActivity : BaseActivity() {
             editText.hint = getString(R.string.backup_password_hint)
             editText.id = R.id.backupPassword
         }
+        val repeat = PasswordField(this).apply {
+            editText.hint = getString(R.string.backup_password_repeat)
+            editText.id = R.id.backupPasswordConfirm
+            showStrength = false
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(field)
+            addView(repeat)
+        }
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.backup_password_title)
             .setMessage(getString(R.string.backup_password_note, FullBackup.MIN_PASSWORD))
-            .setContent(field)
+            .setContent(content)
             .build()
         sheet.setPrimaryStayOpen(R.string.backup_continue) {
             val secret = field.text()
+            field.setError(null)
+            repeat.setError(null)
             if (secret.length < FullBackup.MIN_PASSWORD) {
                 field.setError(getString(R.string.backup_password_short, FullBackup.MIN_PASSWORD))
+                return@setPrimaryStayOpen
+            }
+            if (secret != repeat.text()) {
+                repeat.setError(getString(R.string.backup_password_mismatch))
                 return@setPrimaryStayOpen
             }
             sheet.dismiss()
@@ -651,7 +672,13 @@ class BackupActivity : BaseActivity() {
      * cannot be opened makes this false, so the screen says the backup could not be written
      * instead of "Saved to ...".
      */
+    private fun destinationIsEmpty(uri: Uri): Boolean = runCatching {
+        contentResolver.openInputStream(uri)?.use { it.read() == -1 } ?: false
+    }.getOrDefault(false)
+
     private fun writeDurably(file: File, uri: Uri): Boolean {
+        // Provider name/metadata is not proof of an empty file. Recheck before opening.
+        if (!destinationIsEmpty(uri)) return false
         val expected = file.length()
         if (expected <= 0L) return false
         val stream = contentResolver.openOutputStream(uri, "w") ?: return false

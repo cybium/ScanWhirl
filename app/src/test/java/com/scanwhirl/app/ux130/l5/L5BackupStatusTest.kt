@@ -157,6 +157,7 @@ class L5BackupStatusTest {
         idle()
         val passwordSheet = sheet(app.getString(R.string.backup_password_title))
         passwordSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+        passwordSheet.findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
         passwordSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
         idle()
 
@@ -193,6 +194,7 @@ class L5BackupStatusTest {
             idle()
             val passwordSheet = sheet(app.getString(R.string.backup_password_title))
             passwordSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+            passwordSheet.findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
             passwordSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
             idle()
             // Let the launched coroutine start, hit the injected throw and run its cleanup.

@@ -135,6 +135,7 @@ class R1BackupInterruptionTest {
                 app.getString(R.string.backup_password_title)
         }
         pass.findViewById<EditText>(R.id.backupPassword).setText(password)
+        pass.findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
         pass.findViewById<TextView>(R.id.swSheetPrimary).performClick()
         idle()
         return c to gate

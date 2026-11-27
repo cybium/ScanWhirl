@@ -131,6 +131,7 @@ class BackupHonestyTest {
             .findViewById<TextView>(R.id.swSheetPrimary).performClick()
         val passwordSheet = awaitSheet(app.getString(R.string.backup_password_title))
         passwordSheet.findViewById<EditText>(R.id.backupPassword).setText(password)
+        passwordSheet.findViewById<EditText>(R.id.backupPasswordConfirm).setText(password)
         passwordSheet.findViewById<TextView>(R.id.swSheetPrimary).performClick()
         return awaitSheet(app.getString(R.string.backup_ready))
     }
@@ -173,6 +174,7 @@ class BackupHonestyTest {
         val ready = createBackup()
         val uri = Uri.parse("content://scanwhirl-test/chosen-backup.swbackup")
         val sink = java.io.ByteArrayOutputStream()
+        shadowOf(app.contentResolver).registerInputStream(uri, java.io.ByteArrayInputStream(byteArrayOf()))
         shadowOf(app.contentResolver).registerOutputStream(uri, sink)
         assertEquals("nothing is recorded before the save", 0L, lastBackupPref())
 
@@ -225,6 +227,7 @@ class BackupHonestyTest {
     fun `a failed write keeps the screen honest`() {
         val ready = createBackup()
         val uri = Uri.parse("content://scanwhirl-test/full-disk.swbackup")
+        shadowOf(app.contentResolver).registerInputStream(uri, java.io.ByteArrayInputStream(byteArrayOf()))
         shadowOf(app.contentResolver).registerOutputStream(uri, object : OutputStream() {
             override fun write(b: Int) = throw java.io.IOException("simulated full disk")
             override fun write(b: ByteArray, off: Int, len: Int): Unit =
