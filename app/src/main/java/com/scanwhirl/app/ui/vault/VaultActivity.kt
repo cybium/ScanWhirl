@@ -1037,6 +1037,17 @@ class VaultActivity : BaseActivity() {
             showUnlock()
             return
         }
+        // S3 (1.3.1): a retained code belongs to the Vault it was made for. If the Vault changed
+        // underneath it (restore, re-create), never re-bind this old code to the new Vault: the
+        // user could save a recovery file that does not open their Vault. Drop it; the owner
+        // starts the recovery step again for the current Vault.
+        if (recoveryFlow.code == code && recoveryFlow.vaultIdentity != null &&
+            recoveryFlow.vaultIdentity != store.vaultIdentity()
+        ) {
+            dropRetainedSecrets()
+            showError(getString(R.string.vault_code_stale))
+            return
+        }
         // The flow is retained in memory so a rotation brings this exact sheet (and the check it
         // leads to) back; nothing about it is saved to disk. A new flow invalidates older sheets.
         if (recoveryFlow.code != code || recoveryFlow.vaultIdentity != store.vaultIdentity()) {
@@ -1196,9 +1207,18 @@ class VaultActivity : BaseActivity() {
             recoveryFlow.dispatched = true
             // H2: the replacement wrap is written only now, after the check, and atomically.
             // The pending marker is cleared only after that write succeeded.
+            val proof = recoveryFlow.savedProof
             keyWorkOffMain(sheet.primaryButton) {
                 val error = runCatching {
                     withContext(Dispatchers.Default) {
+                        // S3: re-check the save proof at the commit boundary, so a relock or a
+                        // changed Vault between the tap and this worker cannot complete setup.
+                        // (Narrows, but does not fully close, the window: full store/session
+                        // serialisation is a follow-up outside 1.3.1.)
+                        if (proof == null || !store.isUnlocked() ||
+                            proof.session != VaultSession.sessionIdentity() ||
+                            proof.vaultIdentity == null || proof.vaultIdentity != store.vaultIdentity()
+                        ) throw VaultStaleReplacementException()
                         candidate?.let { store.commitRecoveryCode(it) }
                         store.markConfirmationPassed()
                     }

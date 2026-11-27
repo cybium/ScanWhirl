@@ -289,6 +289,35 @@ class FixVault2FinalTest {
         store.openDocument(other.docId)
     }
 
+    /**
+     * S3 (1.3.1, second review): harm prevented: after a restore replaced the Vault, a rotation
+     * re-bound the OLD on-screen code to the NEW Vault, so the owner could save a recovery file
+     * that does not open their Vault and then finish setup with it.
+     */
+    @Test
+    fun `a retained code is never re-shown for a Vault that was restored underneath it`() {
+        val other = buildOtherVault("Restored statement")
+        store = newStore(app)
+        VaultActivity.storeOverride = store
+        store.setup("246810")
+        store.markConfirmationPassed()
+        val activity = launch()
+
+        val codeSheet = startReplacement(activity)
+        val oldCode = codeSheet.need<TextView>(R.id.vaultRecoveryCode).text.toString()
+        assertTrue(store.importBackup(other.backup, other.recoveryCode).isNotEmpty())
+
+        val beforeRotate = shownCount()
+        controller!!.recreate()
+        idle()
+        val repainted = openedSince(beforeRotate).filter {
+            it.findViewById<TextView>(R.id.vaultRecoveryCode)?.text?.toString() == oldCode
+        }
+        assertTrue("the old code must not be shown again for the restored Vault", repainted.isEmpty())
+        VaultSession.close()
+        assertTrue("the restored credential still opens the Vault", store.unlockWithRecovery(other.recoveryCode))
+    }
+
     @Test
     fun `dismissing the code sheet lets the recovery step start again`() {
         store.setup("246810")
