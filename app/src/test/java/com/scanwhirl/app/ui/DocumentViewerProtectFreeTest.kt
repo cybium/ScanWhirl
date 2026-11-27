@@ -107,4 +107,37 @@ class DocumentViewerProtectFreeTest {
             }
         }
     }
+    @Test
+    fun selectionShareExtractRefusedForLockedAndVaulted() {
+        for (kind in listOf("ordinary", "locked", "vaulted")) {
+            val id = if (kind == "locked") DocFixtures.locked(repo, app) else DocFixtures.saved(repo, app)
+            if (kind == "vaulted") repo.setVaulted(id, true)
+            ActivityScenario.launch<DocumentViewerActivity>(DocumentViewerActivity.intent(app, id)).use { scenario ->
+                assertTrue(pollUntil {
+                    var ready = false
+                    scenario.onActivity { a -> ready = a.findViewById<TextView>(R.id.pageCount)?.text?.isNotEmpty() == true }
+                    ready
+                })
+                scenario.onActivity { a ->
+                    a.findViewById<View>(R.id.ux130_l4_select_pages).performClick()
+                    a.findViewById<View>(R.id.btnSelAll).performClick()
+                    for (button in listOf(R.id.btnSelShare, R.id.btnSelExtract)) {
+                        val v = a.findViewById<View>(button)
+                        assertTrue("selection export policy: $kind", v.isEnabled == (kind == "ordinary"))
+                    }
+                    if (kind != "ordinary") {
+                        val before = repo.listDocuments(true).map { it.id }.toSet()
+                        val shadow = shadowOf(a)
+                        val started = shadow.peekNextStartedActivity()
+                        for (method in listOf("shareSelectedPages", "extractSelected")) {
+                            DocumentViewerActivity::class.java.getDeclaredMethod(method).apply { isAccessible = true }.invoke(a)
+                        }
+                        assertTrue(shadow.peekNextStartedActivity() == started)
+                        assertTrue(repo.listDocuments(true).map { it.id }.toSet() == before)
+                    }
+                }
+            }
+        }
+    }
+
 }

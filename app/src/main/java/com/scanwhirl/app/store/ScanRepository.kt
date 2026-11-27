@@ -1713,6 +1713,7 @@ class ScanRepository(private val context: Context) {
             val doc = loadDocument(File(docsDir, id))
                 ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
+            if (doc.isVaulted) throw IOException(context.getString(R.string.doc_actions_vault_reason))
             val indices = pageIndices.distinct().sorted()
             require(indices.isNotEmpty()) { "No pages selected" }
             require(indices.all { it in doc.pageFiles.indices }) { "No such page" }
@@ -5248,6 +5249,9 @@ class ScanRepository(private val context: Context) {
         indices: List<Int>? = null
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = draftEditDoc(id)
+        if (indices != null && doc.isVaulted) {
+            throw IOException(context.getString(R.string.doc_actions_vault_reason))
+        }
         val draft = synchronized(DRAFT_LOCK) { drafts.load(id) }
             ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
         val selected = indices?.distinct()?.sorted() ?: draft.entries.indices.toList()

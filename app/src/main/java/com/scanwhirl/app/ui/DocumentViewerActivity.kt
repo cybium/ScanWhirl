@@ -803,6 +803,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.draftBar.isVisible = !selectMode && (draft?.changes ?: 0) > 0
         binding.selCount.text = resources.getQuantityString(R.plurals.selected_count, count, count)
         binding.btnSelAll.isEnabled = count < visiblePages.size
+        val reason = document?.let(::protectedReason)
+        if (reason != null) binding.selCount.append("\n" + reason)
+        for (button in listOf(binding.btnSelShare, binding.btnSelExtract)) {
+            button.isEnabled = count > 0 && document != null && reason == null
+            button.alpha = if (button.isEnabled) 1f else 0.45f
+            button.contentDescription = listOfNotNull(button.text.toString(), reason).joinToString(". ")
+        }
         binding.pageList.checkboxesVisible = selectMode
         // The entry control is redundant (and costs height) once selection is open.
         findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode
@@ -932,8 +939,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     /** Share the ticked draft pages as images. */
+    private fun selectionExportSource(): ScanDocument? {
+        val shown = document ?: return null
+        val fresh = repo.getDocument(shown.id) ?: return null
+        val reason = protectedReason(shown) ?: protectedReason(fresh)
+        if (reason != null) {
+            Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
+            return null
+        }
+        return fresh
+    }
+
     private fun shareSelectedPages() {
-        val doc = document ?: return
+        val doc = selectionExportSource() ?: return
         val files = pages.filter { it.path in selected }
         if (files.isEmpty()) {
             Toast.makeText(this, R.string.select_pages_first, Toast.LENGTH_SHORT).show()
@@ -960,6 +978,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 extractSelected()
             }
         )
+        if (document?.let(::protectedReason) != null) {
+            actions.removeAll { it.label == R.string.draft_extract_new }
+        }
         if (visiblePages.size >= 10 && selected.size == 1) {
             actions.add(
                 3,
@@ -1428,6 +1449,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * this one keeps every page, its exports and its category.
      */
     private fun extractSelected() {
+        selectionExportSource() ?: return
         val paths = requireSelection() ?: return
         val id = docId ?: return
         lifecycleScope.launch {
@@ -1440,7 +1462,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     now.indices.filter { now[it].path in wanted }
                 }
                 if (indices.isEmpty()) return@launch
-                val doc = document ?: return@launch
+                val doc = selectionExportSource() ?: return@launch
                 withContext(Dispatchers.IO) {
                     if (repo.draftOf(id) == null) {
                         repo.extractPages(id, indices)
