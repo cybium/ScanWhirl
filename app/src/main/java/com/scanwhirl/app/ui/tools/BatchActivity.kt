@@ -31,6 +31,7 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.tools.L3FailureCopy
 import com.scanwhirl.app.tools.CompressTarget
 import com.scanwhirl.app.ui.BaseActivity
+import com.scanwhirl.app.ui.ProtectionDialogs
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,6 +41,7 @@ import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.util.ShareUtils
 import com.scanwhirl.app.util.StatusLine
 import kotlinx.coroutines.CancellationException
@@ -611,7 +613,43 @@ class BatchActivity : BaseActivity() {
 
     // ---- run / summary ----------------------------------------------------
 
+    /**
+     * R05 NEW-1: Batch is an export route, so it applies the same rule as a row's Share —
+     * a document with an inconsistent lock state is shown the repair sheet and never produces
+     * output (nor reaches "Share all"). LOCKED is allowed: that PDF is encrypted by design.
+     * Refuse the whole run, not just the bad row, before any file is written.
+     */
+    private fun firstUnsafeSelected(): ScanDocument? = selected.asSequence()
+        .mapNotNull { id -> repo.getDocument(id) }
+        .firstOrNull { doc ->
+            when (repo.protectionState(doc.id)) {
+                PdfProtection.State.NEEDS_REPAIR,
+                PdfProtection.State.UNKNOWN_PASSWORD -> true
+                else -> false
+            }
+        }
+
+    /** A successful repair can change a row's lock badge; re-read the library off the main thread. */
+    private fun refreshAfterRepair() {
+        lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { repo.listDocuments() }.getOrDefault(emptyList())
+            }
+            if (isFinishing || isDestroyed) return@launch
+            docs = fresh
+            renderList()
+        }
+    }
+
     private fun start(action: ScanRepository.BatchAction) {
+        // Refuse before the storage-permission prompt, the progress sheet and runBatch: nothing
+        // may be copied into the shared Documents folder or into a share intent on this route.
+        // Like guardExport on the single-row path, these few file stats run on the click thread.
+        val unsafe = firstUnsafeSelected()
+        if (unsafe != null) {
+            ProtectionDialogs.showFor(this, repo, unsafe, onResolved = { refreshAfterRepair() })
+            return
+        }
         // H2-4: "Export as PDF" is the batch action that writes into public Documents. Before
         // Android 10 that needs the runtime storage grant, so it is asked for first, with a plain
         // reason, instead of every document failing with a raw EACCES line.

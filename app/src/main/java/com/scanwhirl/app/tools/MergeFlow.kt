@@ -47,7 +47,9 @@ class MergeFlow(
 
     /** Merge tool: tick 2+ scans, then name the merged document. */
     private fun showMergePicker() {
-        val all = docs()
+        // R07 NEW-2: never offer a source this tool refuses — Vault pages are PIN-gated and locked
+        // sources would only produce an unprotected copy. mergeDocuments enforces both rules too.
+        val all = docs().filter { !it.isVaulted && !it.isLocked }
         if (all.size < 2) {
             host.toast(R.string.merge_needs_two)
             return

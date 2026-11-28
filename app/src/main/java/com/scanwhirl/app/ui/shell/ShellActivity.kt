@@ -53,6 +53,7 @@ import com.scanwhirl.app.ui.kit.ToolHost
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.launchTool
 import com.scanwhirl.app.util.PdfImport
+import com.scanwhirl.app.util.PdfProtection
 import com.scanwhirl.app.ui.tools.DevicePdfGate
 import com.scanwhirl.app.util.ShareUtils
 import kotlinx.coroutines.Dispatchers
@@ -1121,6 +1122,22 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     /** v2 UI: 03_tools_hub — share every selected document's PDF at once. */
     private fun shareDocuments(docs: List<ScanDocument>) {
+        // R06 F1: selection Share is an export just like the row's Share, so it needs the same
+        // protection policy. A NEEDS_REPAIR / UNKNOWN_PASSWORD document has a plaintext PDF behind
+        // a stale lock label (or vice versa); sharing it would leak it. Show the repair sheet for
+        // the first offender and share nothing at all — same call as guardExport uses for one row.
+        // LOCKED is deliberately allowed: its PDF is encrypted and is shared by design.
+        val unsafe = docs.firstOrNull { doc ->
+            when (repo.protectionState(doc.id)) {
+                PdfProtection.State.NEEDS_REPAIR,
+                PdfProtection.State.UNKNOWN_PASSWORD -> true
+                else -> false
+            }
+        }
+        if (unsafe != null) {
+            ProtectionDialogs.showFor(this, repo, unsafe, onResolved = { library.reload() })
+            return
+        }
         if (docs.size == 1) {
             ShareUtils.share(this, docs.single())
             return

@@ -1758,6 +1758,12 @@ class ScanRepository(private val context: Context) {
             loadDocument(dir) ?: throw IllegalStateException("Scan not found: $id")
         }
         refuseLockedSources(sources)
+        // R07 NEW-2: Vault pages are PIN-gated JPEGs. Copying them into a normal library document
+        // would leave an unprotected copy behind after leaving Vault mode, exactly like extractPages
+        // refuses to do (same reason string, same IOException).
+        sources.firstOrNull { it.isVaulted }?.let {
+            throw IOException(context.getString(R.string.doc_actions_vault_reason))
+        }
 
         val pages = sources.flatMap { d -> d.pageFiles.filter { it.exists() && it.length() > 0 } }
         if (pages.isEmpty()) throw IllegalStateException("No pages to merge")
