@@ -13,7 +13,7 @@
     <color name="tok_text">#13252a</color>
     <color name="tok_text_2">#566d74</color>
     <color name="tok_text_3">#87999e</color>
-    <!-- Derived from tokens.css --line: a functional boundary must clear 3:1 on --surface. -->
+    <!-- Derived from the tokens.css line role: a functional boundary clears 3:1 on surface. -->
     <color name="tok_boundary">#6b7c82</color>
 
     <color name="tok_accent">#007884</color>
