@@ -1,6 +1,10 @@
 package com.scanwhirl.app.store
 
 import com.scanwhirl.app.util.Durable
+import com.scanwhirl.app.util.Sha256
+import com.scanwhirl.app.model.ScanDocument
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -31,7 +35,8 @@ internal class DraftStore(filesDir: File) {
         val source: String?,
         val sourceSha: String?,
         val replacement: String? = null,
-        val replacementOrig: String? = null
+        val replacementOrig: String? = null,
+        val pageId: String = source ?: UUID.randomUUID().toString()
     )
 
     data class Draft(
@@ -41,8 +46,23 @@ internal class DraftStore(filesDir: File) {
         val updated: Long,
         val changes: Int,
         val next: Int,
-        val entries: List<Entry>
+        val entries: List<Entry>,
+        val moved: Set<String> = emptySet(),
+        val selection: Set<String> = emptySet(),
+        val history: List<Snapshot> = emptyList(),
+        val revision: Long = 0,
+        /** In-memory baseline; copy() carries it through the repository's raster edits. */
+        val checkpoint: Snapshot? = null
     )
+
+    data class Snapshot(
+        val entries: List<Entry>,
+        val changes: Int,
+        val moved: Set<String>,
+        val selection: Set<String>
+    )
+
+    private fun Draft.snapshot() = Snapshot(entries, changes, moved, selection)
 
     private val root = File(filesDir, DIR)
 
@@ -63,11 +83,11 @@ internal class DraftStore(filesDir: File) {
      * Reads the manifest, validates it and prunes unreferenced `r_*` files. Returns null when no
      * draft exists. A damaged draft throws [DraftDamaged]; a partial one is never returned.
      */
-    fun load(id: String): Draft? {
+    fun load(id: String): Draft? = synchronized(LOCK) {
         loadProbe?.invoke()
         if (!SAFE_ID.matches(id)) throw DraftDamaged("Bad draft id")
         val file = manifest(id)
-        if (!file.isFile) return null
+        if (!file.isFile) return@synchronized null
         val lines = try {
             // SEC1 1.3.0: a hostile backup cannot make draft recovery read unbounded text.
             OcrStore.readBoundedLines(file, MAX_MANIFEST_BYTES)
@@ -81,12 +101,14 @@ internal class DraftStore(filesDir: File) {
         var updated = 0L
         var changes = -1
         var next = -1
+        var revision = 0L
+        var metadata: JSONObject? = null
         val entries = ArrayList<Entry>()
         for (line in lines.drop(1)) {
             if (line.isBlank()) continue
             if (line.startsWith("p=")) {
                 val parts = line.removePrefix("p=").split('\t')
-                if (parts.size != 4) throw DraftDamaged("Draft entry")
+                if (parts.size !in 4..5) throw DraftDamaged("Draft entry")
                 val inserted = parts[0] == "-"
                 val source: String?
                 val sha: String?
@@ -107,7 +129,11 @@ internal class DraftStore(filesDir: File) {
                     if (!REPLICA_ORIG_NAME.matches(it)) throw DraftDamaged("Draft original name")
                 }
                 if (inserted && replacement == null) throw DraftDamaged("Inserted page has no file")
-                entries += Entry(source, sha, replacement, replacementOrig)
+                val pageId = parts.getOrNull(4) ?: source ?: replacement!!
+                if (!SAFE_ID.matches(pageId) && !SOURCE_NAME.matches(pageId) && !REPLICA_NAME.matches(pageId)) {
+                    throw DraftDamaged("Draft page identity")
+                }
+                entries += Entry(source, sha, replacement, replacementOrig, pageId)
                 continue
             }
             val eq = line.indexOf('=')
@@ -121,6 +147,11 @@ internal class DraftStore(filesDir: File) {
                 "updated" -> updated = value.toLongOrNull() ?: throw DraftDamaged("Draft updated")
                 "changes" -> changes = value.toIntOrNull() ?: throw DraftDamaged("Draft changes")
                 "next" -> next = value.toIntOrNull() ?: throw DraftDamaged("Draft next")
+                "revision" -> revision = value.toLongOrNull()?.takeIf { it >= 0 }
+                    ?: throw DraftDamaged("Draft revision")
+                "organize" -> metadata = try { JSONObject(value) } catch (_: Exception) {
+                    throw DraftDamaged("Draft organize state")
+                }
                 else -> Unit
             }
         }
@@ -134,13 +165,65 @@ internal class DraftStore(filesDir: File) {
                 if (!File(folder(id), name).isFile) throw DraftDamaged("Draft replacement missing")
             }
         }
-        val draft = Draft(id, basePages, created, updated, changes, next, entries)
+        val moved = metadata?.optJSONArray("moved").strings()
+        val selection = metadata?.optJSONArray("selection").strings()
+        val history = ArrayList<Snapshot>()
+        try {
+            val snapshots = metadata?.optJSONArray("undo") ?: JSONArray()
+            for (i in 0 until snapshots.length()) {
+                val s = snapshots.getJSONObject(i)
+                val restored = s.getJSONArray("entries")
+                val savedEntries = (0 until restored.length()).map { j ->
+                    val e = restored.getJSONObject(j)
+                    Entry(e.nullable("source"), e.nullable("sha"), e.nullable("replacement"),
+                        e.nullable("orig"), e.getString("id")).also { validateEntry(id, it) }
+                }
+                if (savedEntries.isEmpty()) throw DraftDamaged("Empty undo")
+                history += Snapshot(savedEntries, s.getInt("changes").also {
+                    if (it < 0) throw DraftDamaged("Undo changes")
+                }, s.optJSONArray("moved").strings(), s.optJSONArray("selection").strings())
+            }
+        } catch (e: Exception) {
+            throw DraftDamaged("Draft undo state")
+        }
+        val snapshot = Snapshot(entries, changes, moved, selection)
+        val draft = Draft(id, basePages, created, updated, changes, next, entries,
+            moved, selection, history, revision, snapshot)
         prune(id, draft)
-        return draft
+        draft
+    }
+
+    private fun JSONObject.nullable(key: String): String? =
+        if (isNull(key)) null else getString(key)
+
+    private fun JSONArray?.strings(): Set<String> =
+        if (this == null) emptySet() else (0 until length()).map { getString(it) }.toSet()
+
+    private fun validateEntry(id: String, e: Entry) {
+        if (e.source != null && (!SOURCE_NAME.matches(e.source) || e.sourceSha?.let(SHA::matches) != true)) {
+            throw DraftDamaged("Undo source")
+        }
+        if (e.source == null && (e.sourceSha != null || e.replacement == null)) throw DraftDamaged("Undo inserted page")
+        if (!SAFE_ID.matches(e.pageId) && !SOURCE_NAME.matches(e.pageId) && !REPLICA_NAME.matches(e.pageId)) {
+            throw DraftDamaged("Undo identity")
+        }
+        listOf(e.replacement to REPLICA_NAME, e.replacementOrig to REPLICA_ORIG_NAME).forEach { (name, pattern) ->
+            if (name != null && (!pattern.matches(name) || !fileOf(id, name).isFile)) {
+                throw DraftDamaged("Undo replacement")
+            }
+        }
     }
 
     /** Writes the manifest atomically (`draft.txt.tmp` + fsync + rename). */
-    fun save(draft: Draft) {
+    fun save(draft: Draft) = synchronized(LOCK) {
+        // Compare-and-swap also protects the repository's existing load/copy/save callers
+        // from a concurrent organized edit. Never let an older manifest overwrite newer work.
+        val existing = manifest(draft.baseId)
+        val diskRevision = if (existing.isFile) OcrStore.readBoundedLines(existing, MAX_MANIFEST_BYTES)
+            .firstOrNull { it.startsWith("revision=") }?.substringAfter('=')?.toLongOrNull() ?: 0L else 0L
+        if (diskRevision != draft.revision) throw DraftStale("Draft changed during the edit")
+        val history = if (draft.checkpoint != null && draft.checkpoint.entries != draft.entries)
+            draft.history + draft.checkpoint else draft.history
         val dir = folder(draft.baseId).apply { mkdirs() }
         val text = buildString {
             append(HEADER).append('\n')
@@ -150,15 +233,98 @@ internal class DraftStore(filesDir: File) {
             append("updated=").append(draft.updated).append('\n')
             append("changes=").append(draft.changes).append('\n')
             append("next=").append(draft.next).append('\n')
+            append("revision=").append(diskRevision + 1).append('\n')
+            val state = JSONObject().put("moved", JSONArray(draft.moved.toList()))
+                .put("selection", JSONArray(draft.selection.toList()))
+                .put("undo", JSONArray(history.map { s ->
+                    JSONObject().put("changes", s.changes)
+                        .put("moved", JSONArray(s.moved.toList()))
+                        .put("selection", JSONArray(s.selection.toList()))
+                        .put("entries", JSONArray(s.entries.map { e ->
+                            JSONObject().put("source", e.source ?: JSONObject.NULL)
+                                .put("sha", e.sourceSha ?: JSONObject.NULL)
+                                .put("replacement", e.replacement ?: JSONObject.NULL)
+                                .put("orig", e.replacementOrig ?: JSONObject.NULL).put("id", e.pageId)
+                        }))
+                }))
+            append("organize=").append(state.toString()).append('\n')
             draft.entries.forEach { entry ->
                 append("p=").append(entry.source ?: "-")
                     .append('\t').append(entry.sourceSha ?: "-")
                     .append('\t').append(entry.replacement ?: "-")
                     .append('\t').append(entry.replacementOrig ?: "-")
+                    .append('\t').append(entry.pageId)
                     .append('\n')
             }
         }
+        if (text.toByteArray(Charsets.UTF_8).size > MAX_MANIFEST_BYTES) {
+            throw IOException("Draft history is full")
+        }
         Durable.atomicWriteText(File(dir, MANIFEST), text)
+    }
+
+    /** Called only for an explicit edit, never on open. Raster writers keep their safety checks. */
+    fun prepareOrganize(doc: ScanDocument, selectedPaths: Set<String>): Draft = synchronized(LOCK) {
+        checkEditable(doc)
+        val current = load(doc.id) ?: run {
+            val now = System.currentTimeMillis()
+            Draft(doc.id, SaveFormat.pagesDigest(doc.pageFiles), now, now, 0, 0,
+                doc.pageFiles.map { Entry(it.name, Sha256.of(it)) })
+        }
+        if (SaveFormat.pagesDigest(doc.pageFiles) != current.basePages) throw DraftStale("Base changed")
+        val selection = current.entries.filter { fileFor(doc, it).path in selectedPaths }.map { it.pageId }.toSet()
+        // Save selection in the checkpoint so Undo restores exactly the pre-edit selection.
+        save(current.copy(selection = selection, checkpoint = null))
+        load(doc.id)!!
+    }
+
+    fun fileFor(doc: ScanDocument, entry: Entry): File =
+        entry.replacement?.let { fileOf(doc.id, it) }
+            ?: File(doc.pageFiles.first().parentFile, requireNotNull(entry.source))
+
+    /** Group reorder/delete is one durable manifest replacement and one history entry. */
+    fun organizeOrder(
+        doc: ScanDocument, expected: List<File>, order: List<File>,
+        explicitlyMoved: List<File>, selectedPaths: Set<String>
+    ): Draft = synchronized(LOCK) {
+        checkEditable(doc)
+        val d = prepareOrganize(doc, selectedPaths)
+        val byPath = d.entries.associateBy { fileFor(doc, it).path }
+        if (expected.map { it.path } != d.entries.map { fileFor(doc, it).path }) {
+            throw DraftStale("Displayed pages changed")
+        }
+        require(order.isNotEmpty()) { "Can't delete the last page" }
+        require(order.distinct().size == order.size && order.all { it.path in byPath }) { "Invalid order" }
+        val entries = order.map { byPath.getValue(it.path) }
+        if (entries == d.entries) return@synchronized d
+        val moved = d.moved + explicitlyMoved.mapNotNull { byPath[it.path]?.pageId }
+        save(d.copy(entries = entries, changes = d.changes + 1,
+            updated = System.currentTimeMillis(), moved = moved))
+        load(doc.id)!!
+    }
+
+    /** Collapse a multi-page raster operation to one undo unit, retaining all prior page files. */
+    fun finishOrganizeBatch(doc: ScanDocument, before: Draft): Draft = synchronized(LOCK) {
+        val after = load(doc.id) ?: throw DraftDamaged("Draft missing")
+        save(after.copy(history = before.history + before.snapshot(), checkpoint = null,
+            changes = before.changes + 1))
+        load(doc.id)!!
+    }
+
+    fun undoOrganize(doc: ScanDocument): Draft? = synchronized(LOCK) {
+        checkEditable(doc)
+        val d = load(doc.id) ?: return@synchronized null
+        if (SaveFormat.pagesDigest(doc.pageFiles) != d.basePages) throw DraftStale("Base changed")
+        val previous = d.history.lastOrNull() ?: return@synchronized d
+        // Never rewind next: replacement names are never reused, including after Undo.
+        save(d.copy(entries = previous.entries, changes = previous.changes, moved = previous.moved,
+            selection = previous.selection, history = d.history.dropLast(1), checkpoint = null,
+            updated = System.currentTimeMillis()))
+        load(doc.id)
+    }
+
+    private fun checkEditable(doc: ScanDocument) {
+        if (doc.isLocked || doc.isVaulted) throw IOException("Protected document")
     }
 
     /** Deletes one draft. The folder is renamed aside first, so recovery can finish it. */
@@ -180,13 +346,15 @@ internal class DraftStore(filesDir: File) {
     }
 
     private fun prune(id: String, draft: Draft) {
-        val referenced = draft.entries.flatMap { listOfNotNull(it.replacement, it.replacementOrig) }.toSet()
+        val referenced = (draft.entries + draft.history.flatMap { it.entries })
+            .flatMap { listOfNotNull(it.replacement, it.replacementOrig) }.toSet()
         folder(id).listFiles { f -> REPLICA_NAME.matches(f.name) || REPLICA_ORIG_NAME.matches(f.name) }
             ?.filter { it.name !in referenced }
             ?.forEach { it.delete() }
     }
 
     internal companion object {
+        private val LOCK = Any()
         /** Test seam: counts manifest parses. Null in production (L5-2 measurement). */
         internal var loadProbe: (() -> Unit)? = null
 

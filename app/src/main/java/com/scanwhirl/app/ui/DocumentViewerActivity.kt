@@ -47,6 +47,10 @@ import com.scanwhirl.app.tools.ScanLauncher
 import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.kit.SwMotion
+import com.scanwhirl.app.ui.result.ResultSpec
+import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.ui.stamp.StampEditorActivity
 import com.scanwhirl.app.ui.tools.PhotoCropFlowActivity
 import com.scanwhirl.app.util.DownloadSaver
@@ -94,6 +98,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** The open page draft, or null. The first page edit creates it; opening writes nothing. */
     private var draft: DraftStore.Draft? = null
+    private val draftStore by lazy { DraftStore(filesDir) }
+    private var organize = false
+    private var editBusy = false
+    private var resultShown = false
+    private var undoButton: TextView? = null
 
     /** Pages shown in the grid (document pages minus any pending Undo deletes). */
     private var visiblePages: List<java.io.File> = emptyList()
@@ -308,6 +317,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        organize = intent.getBooleanExtra(EXTRA_ORGANIZE, false)
         // B2: a storage-permission answer may be re-delivered here after a rotation. The token
         // carries only the action kind and document id, never the document's bytes or text.
         PendingSaveAction.restore(savedInstanceState, ACTION_SAVE_PDF)?.let { (kind, target) ->
@@ -360,7 +370,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         })
 
         binding.pageList.onTap = { index ->
-            if (selectMode) {
+            if (selectMode || organize) {
                 toggleSelected(index)
             } else {
                 docId?.let { id ->
@@ -377,6 +387,27 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             selected.contains(visiblePages.getOrNull(i)?.path)
         }
         binding.pageList.onDropped = { from, to -> reorderPages(from, to) }
+        if (organize) {
+            binding.pageList.onOrderDropped = { order, moved -> commitOrganizedOrder(order, moved) }
+        }
+        binding.pageList.onMoveSelected = { promptGroupMove() }
+        binding.pageList.onRotate = { index ->
+            selectOnly(index)
+            rotateSelected(true)
+        }
+        binding.pageList.onDelete = { index ->
+            selectOnly(index)
+            deleteSelectedPages()
+        }
+        binding.pageList.identityFor = { file ->
+            draft?.entries?.getOrNull(pages.indexOf(file))?.pageId ?: file.name
+        }
+        binding.pageList.provenanceFor = { file, position ->
+            val entry = draft?.entries?.getOrNull(pages.indexOf(file))
+            val original = document?.pageFiles?.indexOfFirst { it.name == entry?.source } ?: -1
+            if (entry != null && entry.pageId in draft!!.moved && original >= 0 && original != position)
+                original + 1 else null
+        }
 
         // V3: the dock is one compact row — Edit & crop, OCR, Share and Actions — each bound to
         // the document this screen shows. Compress, Sign and Save-copy now live in the Actions
@@ -465,6 +496,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // Checkboxes stay hidden until Select pages is tapped (§4.5, D-D), unless a
         // restored selection means the person was already selecting before rotation.
         binding.pageList.checkboxesVisible = selectMode
+        if (organize) buildOrganizeWorkspace()
+        else addPersistentUndo()
 
         // First load (off the main thread). Opening a document writes no draft (G14).
         lifecycleScope.launch {
@@ -475,6 +508,269 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 startInsertPages()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Result Adjust resumes this exact workspace; the draft and its immutable pages remain.
+        resultShown = false
+        updateDraftBar()
+    }
+
+    private fun action(label: Int, run: () -> Unit): TextView =
+        SwStyle.quietAction(this, SwStyle.text(this, SwType.BODY_SP,
+            SwStyle.color(this, R.color.text_hologram_hi), bold = true)).apply {
+            setText(label)
+            gravity = Gravity.CENTER
+            setOnClickListener { run() }
+        }
+
+    private fun addPersistentUndo() {
+        val undo = action(R.string.undo) { undoOrganize() }.apply { tag = "j5-undo" }
+        undoButton = undo
+        binding.docHeader.addView(undo, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun buildOrganizeWorkspace() {
+        binding.docName.textSize = SwType.TITLE_SP
+        binding.docName.typeface = SwType.bold(this)
+        binding.toolbar.contentDescription = getString(R.string.j5_title)
+        addPersistentUndo()
+        val hint = SwStyle.text(this, SwType.BODY_SP,
+            SwStyle.color(this, R.color.text_hologram_mid)).apply {
+            setText(R.string.j5_hold_hint)
+            tag = "j5-hold-hint"
+        }
+        binding.docHeader.addView(hint)
+        binding.btnDraftDiscard.isVisible = false
+        binding.btnDraftReplace.isVisible = false
+        binding.draftHeader.isVisible = false
+        binding.btnDraftSave.textSize = SwType.BODY_SP
+        binding.btnDraftSave.maxLines = Int.MAX_VALUE
+        binding.btnDraftSave.typeface = SwType.bold(this)
+        binding.btnSelShare.setText(R.string.j5_move)
+        binding.btnSelShare.setCompoundDrawablesRelativeWithIntrinsicBounds(
+            0, R.drawable.ic_sw_move_page, 0, 0)
+        binding.btnSelShare.setOnClickListener { promptGroupMove() }
+        binding.btnSelShare.contentDescription = getString(R.string.j5_move_selected)
+        val bar = binding.selectionActionBar
+        val actions = listOf(binding.btnSelRotate, binding.btnSelShare,
+            binding.btnSelExtract, binding.btnSelDelete, binding.btnSelMore)
+        actions.forEach { (it.parent as? ViewGroup)?.removeView(it) }
+        bar.removeAllViews()
+        bar.orientation = LinearLayout.HORIZONTAL
+        val narrow = resources.configuration.fontScale >= 1.6f ||
+            resources.configuration.screenWidthDp < 360
+        actions.forEach { button ->
+            button.textSize = SwType.BODY_SP
+            button.typeface = SwType.medium(this)
+            button.maxLines = Int.MAX_VALUE
+            button.minHeight = dp(SwStyle.TOUCH_MIN_DP)
+            button.isVisible = !(narrow && button == binding.btnSelExtract)
+            bar.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        binding.pageList.spanCount = if (resources.configuration.screenWidthDp <= 320 ||
+            resources.configuration.fontScale >= 2f) 2 else 3
+        // The grid stays the sole scroll owner, including at font 2.0.
+        moveActionPanel(false)
+    }
+
+    private fun selectOnly(index: Int) {
+        val path = visiblePages.getOrNull(index)?.path ?: return
+        selected.clear()
+        selected.add(path)
+        selectMode = true
+        updateSelectionUi()
+        binding.pageList.refresh()
+    }
+
+    private fun updateUndoAvailability() {
+        if (!::binding.isInitialized) return
+        val available = draft?.history?.isNotEmpty() == true
+        undoButton?.apply {
+            isVisible = organize || available
+            isEnabled = available && !editBusy
+            alpha = if (isEnabled) 1f else 0.45f
+        }
+        binding.pageList.dragEnabled = !editBusy && document?.let(::protectedReason) == null
+        if (organize) {
+            binding.btnDraftSave.isEnabled = (draft?.changes ?: 0) > 0 && !editBusy && !resultShown
+            binding.btnDraftSave.alpha = if (binding.btnDraftSave.isEnabled) 1f else 0.45f
+        }
+    }
+
+    private fun restoreSelection(identities: Set<String>) {
+        val doc = document ?: return
+        selected.clear()
+        draft?.entries?.filter { it.pageId in identities }?.forEach {
+            selected.add(draftStore.fileFor(doc, it).path)
+        }
+        selectMode = selected.isNotEmpty()
+        updateSelectionUi()
+        binding.pageList.refresh()
+    }
+
+    private fun commitOrganizedOrder(
+        order: List<File>, moved: List<File>, feedback: Int = R.string.j5_moved
+    ) {
+        if (editBusy || order == visiblePages) return
+        val doc = docId?.let(repo::getDocument) ?: return
+        val before = visiblePages.toList()
+        val selection = selected.toSet()
+        editBusy = true
+        resultShown = false
+        updateSelectionUi()
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    draftStore.organizeOrder(doc, before, order, moved, selection)
+                }
+                noteImportUsed()
+                reloadDocument()
+                showEditUndo(feedback)
+                moved.firstOrNull()?.let { file ->
+                    val position = order.indexOf(file)
+                    binding.pageList.scrollToPage(position)
+                    binding.pageList.post {
+                        binding.pageList.findViewHolderForAdapterPosition(position)?.itemView?.let {
+                            it.requestFocus()
+                            it.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+                        }
+                    }
+                    binding.pageList.announceForAccessibility(
+                        getString(R.string.a11y_moved_to, position + 1, order.size))
+                }
+            } catch (e: Exception) {
+                showDraftError(e)
+                reloadDocument()
+            } finally {
+                editBusy = false
+                updateSelectionUi()
+                updateDraftBar()
+            }
+        }
+    }
+
+    internal fun undoOrganize() {
+        if (editBusy) return
+        val doc = docId?.let(repo::getDocument) ?: return
+        editBusy = true
+        updateSelectionUi()
+        lifecycleScope.launch {
+            try {
+                val restored = withContext(Dispatchers.IO) { draftStore.undoOrganize(doc) }
+                reloadDocument()
+                restoreSelection(restored?.selection.orEmpty())
+            } catch (e: Exception) {
+                showDraftError(e)
+            } finally {
+                editBusy = false
+                updateSelectionUi()
+                updateDraftBar()
+            }
+        }
+    }
+
+    private fun showEditUndo(message: Int) {
+        val manager = getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        val duration = if (Build.VERSION.SDK_INT >= 29) manager.getRecommendedTimeoutMillis(
+            6_000, android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT or
+                android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS) else 6_000
+        Snackbar.make(binding.root, message, duration)
+            .setAnchorView(if (binding.draftBar.isShown) binding.draftBar else binding.selectionActionBar)
+            .setAction(R.string.undo) { undoOrganize() }.show()
+    }
+
+    /** Destination by document position, not visual row; preview keeps selected order. */
+    private fun promptGroupMove() {
+        if (selected.isEmpty() || editBusy) return
+        val moving = visiblePages.filter { it.path in selected }
+        val before = visiblePages.toList()
+        val sheet = SwSheet.builder(this)
+            .setTitle(R.string.j5_move_selected)
+            .setInput(initial = "1", hint = getString(R.string.draft_move_to_hint),
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER)
+            .setPrimary(R.string.j5_move)
+            .setSecondary(R.string.draft_keep_editing)
+            .build()
+        val input = sheet.inputView!!
+        (input.parent as ViewGroup).removeView(input)
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val choices = android.widget.RadioGroup(this)
+        val beforeChoice = android.widget.RadioButton(this).apply {
+            id = View.generateViewId()
+            setText(R.string.j5_before)
+            minHeight = dp(SwStyle.TOUCH_MIN_DP)
+        }
+        val afterChoice = android.widget.RadioButton(this).apply {
+            id = View.generateViewId()
+            setText(R.string.j5_after)
+            minHeight = dp(SwStyle.TOUCH_MIN_DP)
+        }
+        choices.addView(beforeChoice)
+        choices.addView(afterChoice)
+        choices.check(beforeChoice.id)
+        val preview = SwStyle.text(this, SwType.BODY_SP,
+            SwStyle.color(this, R.color.text_hologram_mid)).apply { tag = "j5-move-preview" }
+        column.addView(choices)
+        column.addView(input)
+        column.addView(preview)
+        sheet.setContent(column)
+        fun proposed(): List<File>? {
+            val number = input.text.toString().toIntOrNull() ?: return null
+            val target = before.getOrNull(number - 1) ?: return null
+            if (target in moving) return null
+            val rest = before.filterNot { it in moving }.toMutableList()
+            val at = rest.indexOf(target) + if (afterChoice.isChecked) 1 else 0
+            rest.addAll(at, moving)
+            return rest
+        }
+        fun updatePreview() {
+            val order = proposed()
+            preview.text = if (order == null) getString(R.string.j5_choose_other_page)
+                else getString(R.string.j5_order_preview,
+                    order.joinToString(", ") { (before.indexOf(it) + 1).toString() })
+            sheet.primaryButton.isEnabled = order != null
+        }
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updatePreview()
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
+        choices.setOnCheckedChangeListener { _, _ -> updatePreview() }
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            proposed()?.let { order ->
+                sheet.dismiss()
+                commitOrganizedOrder(order, moving)
+            }
+        }
+        sheet.show()
+        updatePreview()
+    }
+
+    private fun changeSummary(): String {
+        val doc = document ?: return ""
+        val d = draft ?: return ""
+        val moved = d.entries.count { entry ->
+            entry.pageId in d.moved && doc.pageFiles.indexOfFirst { it.name == entry.source } !=
+                d.entries.indexOf(entry)
+        }
+        val edited = d.entries.count { it.source != null && it.replacement != null }
+        val deleted = doc.pageFiles.count { base -> d.entries.none { it.source == base.name } }
+        return getString(R.string.j5_change_summary, pages.size, moved, edited, deleted)
+    }
+
+    private fun showOrganizeResult(copy: ScanDocument) {
+        resultShown = true
+        updateDraftBar()
+        startActivity(ToolResultActivity.intent(this, ResultSpec(
+            toolId = "organize_pages", docIds = listOf(copy.id), mime = "application/pdf",
+            note = changeSummary(), sourceKept = true,
+            facts = ResultSpec.Facts(copy.pdfFile.length(), pages = copy.pageFiles.size),
+            adjustIntent = organizeIntent(this, requireNotNull(docId))
+        )))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -556,6 +852,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         )
         pages = state.pages
         draft = state.draft
+        binding.pageList.dragEnabled = protectedReason(doc) == null && !editBusy
         val damage = state.damage
         // T44: the record, not only this screen's flag, decides whether the import is the user's.
         // A saved copy in Documents/ScanWhirl or any page change means the import was acted on.
@@ -589,10 +886,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         )
         binding.docCategoryChip.isVisible = true
         binding.docCategoryTouch.isVisible = true
+        if (organize) {
+            binding.docCategoryTouch.isVisible = false
+            binding.pageList.spanCount = if (resources.configuration.screenWidthDp <= 320 ||
+                resources.configuration.fontScale >= 2f) 2 else 3
+        }
         refreshGrid()
         updateDraftBar()
         applyActionAvailability(doc)
         binding.btnShare.isVisible = doc.pdfFile.exists() || doc.pageFiles.isNotEmpty()
+        updateUndoAvailability()
         return true
     }
 
@@ -650,6 +953,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 ).apply { if (rowIndex > 0) topMargin = dp(6f) }
             )
             chunk.forEachIndexed { index, item ->
+                // U2: icon above the label, not a 24dp icon stealing a narrow text column.
+                item.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_TOP
+                item.iconPadding = dp(SwStyle.SPACE_1_DP)
+                item.insetTop = 0
+                item.insetBottom = 0
+                item.maxLines = Int.MAX_VALUE
                 val params = if (large && chunk.size == 1) {
                     // One action left in a two-column grid grows across both columns.
                     LinearLayout.LayoutParams(
@@ -839,20 +1148,30 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         supportActionBar?.subtitle = null
         binding.selectionTopBar.isVisible = selectMode
         binding.selectionActionBar.isVisible = selectMode
-        binding.bottomDock.isVisible = !selectMode
-        binding.draftBar.isVisible = !selectMode && (draft?.changes ?: 0) > 0
+        binding.bottomDock.isVisible = !selectMode && !organize
+        binding.draftBar.isVisible = organize || (!selectMode && (draft?.changes ?: 0) > 0)
         binding.selCount.text = resources.getQuantityString(R.plurals.selected_count, count, count)
-        binding.btnSelAll.isEnabled = count < visiblePages.size
+        binding.btnSelAll.isEnabled = visiblePages.isNotEmpty() && !editBusy
+        binding.btnSelAll.setText(if (count == visiblePages.size && count > 0)
+            R.string.j5_deselect_all else R.string.draft_select_all)
         val reason = document?.let(::protectedReason)
         if (reason != null) binding.selCount.append("\n" + reason)
-        for (button in listOf(binding.btnSelShare, binding.btnSelExtract)) {
-            button.isEnabled = count > 0 && document != null && reason == null
+        val allActions = listOf(binding.btnSelRotate, binding.btnSelDelete,
+            binding.btnSelShare, binding.btnSelExtract, binding.btnSelMore)
+        for (button in allActions) {
+            button.isEnabled = count > 0 && !editBusy && document != null &&
+                (reason == null || button == binding.btnSelMore) &&
+                (button != binding.btnSelDelete || count < visiblePages.size)
             button.alpha = if (button.isEnabled) 1f else 0.45f
-            button.contentDescription = listOfNotNull(button.text.toString(), reason).joinToString(". ")
+            button.contentDescription = listOfNotNull(button.text.toString(),
+                reason.takeIf { !button.isEnabled }).joinToString(". ")
+            button.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(
+                SwStyle.color(this, R.color.text_hologram_mid))
         }
         binding.pageList.checkboxesVisible = selectMode
         // The entry control is redundant (and costs height) once selection is open.
-        findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode
+        findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode && !organize
+        updateUndoAvailability()
     }
 
     /**
@@ -951,11 +1270,16 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     internal fun toggleSelected(index: Int) {
         val path = visiblePages.getOrNull(index)?.path ?: return
         if (!selected.remove(path)) selected.add(path)
+        if (organize && selected.isNotEmpty()) selectMode = true
         if (selected.isEmpty()) exitSelectMode() else updateSelectionUi()
         binding.pageList.refresh()
     }
 
     private fun selectAllPages() {
+        if (selected.size == visiblePages.size) {
+            exitSelectMode()
+            return
+        }
         visiblePages.mapTo(selected) { it.path }
         if (selected.isNotEmpty() && !selectMode) {
             selectMode = true
@@ -967,6 +1291,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Delete asks first (owner revision): an SwSheet, then the draft delete with Undo. */
     private fun confirmDeleteSelected() {
+        if (organize) {
+            deleteSelectedPages()
+            return
+        }
         val count = selected.size
         if (count == 0) return
         SwSheet.builder(this)
@@ -1021,10 +1349,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (document?.let(::protectedReason) != null) {
             actions.removeAll { it.label == R.string.draft_extract_new }
         }
-        if (visiblePages.size >= 10 && selected.size == 1) {
+        if (organize || (visiblePages.size >= 10 && selected.size == 1)) {
             actions.add(
                 3,
-                Action(R.drawable.ic_sw_move_page, R.string.draft_move_to) { promptMoveTo() }
+                Action(R.drawable.ic_sw_move_page, R.string.draft_move_to) {
+                    if (organize) promptGroupMove() else promptMoveTo()
+                }
             )
         }
         val list = LinearLayout(this).apply {
@@ -1130,6 +1460,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     internal fun moveSelectedPage(to: Int) {
+        if (organize) {
+            val moving = visiblePages.filter { it.path in selected }
+            val rest = visiblePages.filterNot { it.path in selected }.toMutableList()
+            rest.addAll(to.coerceIn(0, rest.size), moving)
+            commitOrganizedOrder(rest, moving)
+            return
+        }
         val id = docId ?: return
         val path = selected.singleOrNull() ?: return
         lifecycleScope.launch {
@@ -1399,6 +1736,32 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     internal fun rotateSelected(clockwise: Boolean) {
         val paths = requireSelection() ?: return
         val id = docId ?: return
+        if (organize) {
+            if (editBusy) return
+            val doc = repo.getDocument(id) ?: return
+            editBusy = true
+            updateSelectionUi()
+            lifecycleScope.launch {
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        val before = draftStore.prepareOrganize(doc, selected.toSet())
+                        val indices = pages.indices.filter { pages[it].path in paths }
+                        indices.forEach { repo.draftRotate(id, it, clockwise) }
+                        draftStore.finishOrganizeBatch(doc, before)
+                    }
+                    reloadDocument()
+                    restoreSelection(result.selection)
+                    showEditUndo(R.string.j5_rotated)
+                } catch (e: Exception) {
+                    showDraftError(e)
+                    reloadDocument()
+                } finally {
+                    editBusy = false
+                    updateSelectionUi()
+                }
+            }
+            return
+        }
         lifecycleScope.launch {
             try {
                 val rotated = withContext(Dispatchers.IO) {
@@ -1437,6 +1800,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         document ?: return
         if (paths.size >= visiblePages.size) {
             Toast.makeText(this, R.string.last_page_guard, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (organize) {
+            commitOrganizedOrder(visiblePages.filterNot { it.path in paths }, emptyList(),
+                R.string.page_deleted)
             return
         }
         // This snackbar replaces any previous one: the old Undo window is over.
@@ -1586,6 +1954,13 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Persists a finished drag: the grid's new order becomes the draft order. */
     internal fun reorderPages(from: Int, to: Int) {
+        if (organize) {
+            val order = visiblePages.toMutableList()
+            val moved = order.getOrNull(from) ?: return
+            order.add(to.coerceIn(0, order.lastIndex), order.removeAt(from))
+            commitOrganizedOrder(order, listOf(moved))
+            return
+        }
         val id = docId ?: return
         // The grid's pre-drag base order is exactly `visiblePages` (snapshot).
         val baseFile = visiblePages.getOrNull(from) ?: return
@@ -1782,6 +2157,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     // ------------------------------------------------------------------
 
     private fun handleEditorBack() {
+        if (binding.pageList.cancelDrag()) return
+        if (editBusy) return
+        if (resultShown) { finish(); return }
         if (importDiscardInProgress) return
         // T44: the question only exists for an import the user has not touched. Once acted on
         // (a saved copy, a share, an edit) the import is kept, never offered for Discard here.
@@ -1804,6 +2182,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setMessage(R.string.draft_back_msg)
             .setPrimary(R.string.draft_save_new) { saveDraftFlow() }
             .setSecondary(R.string.draft_discard) { discardNow() }
+            .setOptions(listOf(getString(R.string.draft_keep_editing))) { _, _ -> }
             .build()
             .show()
     }
@@ -1965,7 +2344,12 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     /** `Draft · N pages · K changes`, visible only while K > 0. */
     private fun updateDraftBar() {
         val changes = draft?.changes ?: 0
-        binding.draftBar.isVisible = !selectMode && changes > 0
+        binding.draftBar.isVisible = organize || (!selectMode && changes > 0)
+        if (organize) {
+            binding.btnDraftSave.isEnabled = changes > 0 && !editBusy && !resultShown
+            binding.btnDraftSave.alpha = if (binding.btnDraftSave.isEnabled) 1f else 0.45f
+        }
+        updateUndoAvailability()
         val pagesText = resources.getQuantityString(R.plurals.draft_pages, pages.size, pages.size)
         val changesText = resources.getQuantityString(R.plurals.draft_changes, changes, changes)
         binding.draftHeader.text = getString(R.string.draft_header, pagesText, changesText)
@@ -2062,7 +2446,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     lifecycleScope.launch {
                         try {
                             val copy = withContext(Dispatchers.IO) {
-                                repo.saveDraftAsNew(id, name)
+                                // An explicit full-index copy leaves the exact workspace available
+                                // to Result Adjust; no page re-import or guessed reconstruction.
+                                repo.saveDraftAsNew(id, name,
+                                    if (organize && onSaved == null) pages.indices.toList() else null)
                             }
                             Toast.makeText(
                                 this@DocumentViewerActivity,
@@ -2070,7 +2457,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                                 Toast.LENGTH_LONG
                             ).show()
                             if (onSaved == null) {
-                                finish()
+                                if (organize) showOrganizeResult(copy) else finish()
                             } else {
                                 reloadDocument()
                                 continueAfterSave(onSaved, copy)
@@ -2192,9 +2579,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private fun promptDraftName(initial: String, onOk: (String) -> Unit) {
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.draft_save_new)
-            .setInput(initial = initial)
+            .setInput(initial = initial, hint = getString(R.string.review_name_hint))
             .setPrimary(R.string.save)
             .build()
+        if (organize) sheet.setMessage(changeSummary())
         sheet.keepOpenOnPrimary()
         sheet.primaryButton.setOnClickListener {
             sheet.dismiss()
@@ -2233,6 +2621,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         private const val ACTION_SAVE_PDF = "viewer_save_pdf"
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
+        private const val EXTRA_ORGANIZE = "organize"
 
         /**
          * Test seam: proves which document each panel action is about to act on. Null in
@@ -2259,6 +2648,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         fun intent(context: Context, docId: String): Intent =
             Intent(context, DocumentViewerActivity::class.java).putExtra(EXTRA_DOC_ID, docId)
+
+        fun organizeIntent(context: Context, docId: String): Intent =
+            intent(context, docId).putExtra(EXTRA_ORGANIZE, true)
 
         /** An import that just landed: Back offers Keep / Discard before anything is deleted. */
         fun intent(context: Context, docId: String, freshImport: Boolean): Intent =
@@ -2289,7 +2681,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             }
             FlowUtil.pickScan(activity, R.string.tool_pick_document, docs) { doc ->
                 activity.startActivity(
-                    if (insert) insertIntent(activity, doc.id) else intent(activity, doc.id)
+                    if (insert) insertIntent(activity, doc.id) else organizeIntent(activity, doc.id)
                 )
             }
         }

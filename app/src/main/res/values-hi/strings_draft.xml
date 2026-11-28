@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- L5 wave 2 Hindi draft: review before release. -->
 <resources>
+    <!-- review: J5 physical page organization -->
+    <string name="j5_title">पेज व्यवस्थित करें</string>
+    <string name="j5_hold_hint">क्रम बदलने के लिए दबाकर खींचें।</string>
+    <string name="j5_was_page">पहले पेज %1$d</string>
+    <string name="j5_original_page">पहले पेज %1$d था</string>
+    <string name="j5_move_first">सबसे पहले ले जाएँ</string>
+    <string name="j5_move_last">सबसे अंत में ले जाएँ</string>
+    <string name="j5_move_selected">चुने हुए पेज ले जाएँ…</string>
+    <string name="j5_delete_page">पेज हटाएँ</string>
+    <string name="j5_move">ले जाएँ</string>
+    <string name="j5_moved">पेजों का क्रम बदला</string>
+    <string name="j5_rotated">पेज घुमाए गए</string>
+    <string name="j5_deselect_all">सभी का चयन हटाएँ</string>
+    <string name="j5_before">इस पेज से पहले</string>
+    <string name="j5_after">इस पेज के बाद</string>
+    <string name="j5_choose_other_page">जो पेज नहीं चुना है, उसका नंबर डालें।</string>
+    <string name="j5_order_preview">नया क्रम: %1$s</string>
+    <string name="j5_change_summary">%1$d पेज · %2$d का क्रम बदला · %3$d बदले · %4$d हटाए</string>
     <!-- Engine -->
     <string name="draft_open_refused">पहले बिना सहेजे पन्नों के बदलाव सहेजें या हटाएँ।</string>
     <string name="draft_stale">ये बदलाव शुरू होने के बाद दस्तावेज़ बदल गया। इन्हें सिर्फ़ हटाया जा सकता है।</string>

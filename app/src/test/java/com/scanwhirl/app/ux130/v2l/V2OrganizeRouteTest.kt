@@ -54,7 +54,7 @@ class V2OrganizeRouteTest {
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     @Test(timeout = 30_000)
-    fun `organize pages is a ready tile that opens the document picker then the viewer`() {
+    fun `organize pages opens its standalone workspace after the picker`() {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Organize me")
         assertEquals(ToolStatus.READY, ToolRegistry.byId("organize_pages")?.status)
         val controller = Robolectric.buildActivity(ShellActivity::class.java).setup()
@@ -81,6 +81,7 @@ class V2OrganizeRouteTest {
                 next!!.component?.className
             )
             assertEquals(id, next.getStringExtra("doc_id"))
+            assertTrue("J5 is a page workspace, not the reader dock", next.getBooleanExtra("organize", false))
         } finally {
             controller.pause().stop().destroy()
         }

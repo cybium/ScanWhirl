@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- L5 wave 2: Organize page draft (PM-2.2b engine messages, PM-2.2c draft bar and prompts). -->
 <resources>
+    <string name="j5_title">Organize pages</string>
+    <string name="j5_hold_hint">Hold and drag to reorder.</string>
+    <string name="j5_was_page">was p.%1$d</string>
+    <string name="j5_original_page">originally page %1$d</string>
+    <string name="j5_move_first">Move to first</string>
+    <string name="j5_move_last">Move to last</string>
+    <string name="j5_move_selected">Move selected pages…</string>
+    <string name="j5_delete_page">Delete page</string>
+    <string name="j5_move">Move</string>
+    <string name="j5_moved">Pages moved</string>
+    <string name="j5_rotated">Pages rotated</string>
+    <string name="j5_deselect_all">Deselect all</string>
+    <string name="j5_before">Before page</string>
+    <string name="j5_after">After page</string>
+    <string name="j5_choose_other_page">Choose a page outside your selection.</string>
+    <string name="j5_order_preview">New order: %1$s</string>
+    <string name="j5_change_summary">%1$d pages · %2$d moved · %3$d edited · %4$d deleted</string>
     <!-- Engine -->
     <string name="draft_open_refused">Finish or discard the unsaved page edits first.</string>
     <string name="draft_stale">This document changed after the edits started. They can only be discarded.</string>

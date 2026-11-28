@@ -639,7 +639,7 @@ def recover(reason):
 
 
 # ----------------------------------------------------------------- capture step
-def capture(area, slug, path, note=None):
+def capture(area, slug, path, note=None, image_bytes=None):
     global N, LAST_SCREEN
     N += 1
     name = "%03d-%s" % (N, slugify(slug))
@@ -652,7 +652,8 @@ def capture(area, slug, path, note=None):
     else:
         xml_path.write_text("<!-- uiautomator dump unavailable -->\n", encoding="utf-8")
     try:
-        png_path.write_bytes(adb("exec-out", "screencap", "-p", binary=True, timeout=30))
+        png_path.write_bytes(image_bytes if image_bytes is not None else
+                             adb("exec-out", "screencap", "-p", binary=True, timeout=30))
     except Exception as exc:  # noqa: BLE001
         print("screencap failed for %s: %s" % (name, exc), flush=True)
         png_path.write_bytes(b"")
@@ -1085,6 +1086,82 @@ def walk_viewer():
     recover("after viewer walk")
 
 
+def walk_j5_organize():
+    """Additive J5 coverage through the real tool picker; never launch an internal activity."""
+    def journey():
+        launch()
+        if not tap({"rid": "swNavTools"}, timeout=10):
+            raise AssertionError("J5 Tools entry missing")
+        tap({"rid": "swToolsSearch"}, timeout=8)
+        type_text("Reorder")
+        back()
+        root = hierarchy()
+        tile = find(root, regex=r"Reorder|क्रम|व्यवस्थित", cls="Button")
+        if tile is None:
+            raise AssertionError("J5 reorder search result missing")
+        tap_node(root, tile)
+        if wait_for({"rid": "docPickerList"}, timeout=12) is None:
+            raise AssertionError("J5 document picker missing")
+        if not tap({"regex": FIXTURE}, timeout=8):
+            raise AssertionError("J5 fictional fixture missing")
+        if wait_for({"rid": "btnDraftSave"}, timeout=15) is None:
+            raise AssertionError("J5 workspace missing")
+        path = ["Tools", "Reorder", FIXTURE, "Organize pages"]
+        capture("j5", "j5-grid", path)
+
+        root = hierarchy()
+        third = find(root, rid="pageNum", text="3")
+        first = find(root, rid="pageNum", text="1")
+        if third is None or first is None:
+            raise AssertionError("J5 real page identities unavailable")
+        a = parse_bounds(clickable_ancestor(root, third).get("bounds"))
+        b = parse_bounds(clickable_ancestor(root, first).get("bounds"))
+        grid = parse_bounds(find(root, rid="pageList").get("bounds"))
+        sx = (a[0] + a[2]) // 2
+        sy = min((a[1] + a[3]) // 2, grid[3] - int(24 * DENSITY))
+        tx = b[0] + int((b[2] - b[0]) * 0.35)
+        ty = max(grid[1] + int(24 * DENSITY), b[1] + int((b[3] - b[1]) * 0.35))
+        command = ["adb", "-s", SERIAL, "shell", "input", "draganddrop",
+                   str(sx), str(sy), str(tx), str(ty), "12000"]
+        drag = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            time.sleep(1.2)
+            # Capture pixels immediately: waiting for uiautomator's idle dump can miss a lift.
+            lifted = adb("exec-out", "screencap", "-p", binary=True, timeout=15)
+            capture("j5", "j5-lifted-mid-drag", path + ["Hold page 3"],
+                    "Pixels captured during the live 12s drag; hierarchy sampled afterwards.",
+                    image_bytes=lifted)
+            drag.communicate(timeout=25)
+        finally:
+            if drag.poll() is None:
+                drag.kill()
+                drag.communicate(timeout=5)
+        time.sleep(1)
+        root = hierarchy()
+        if find(root, regex=r"was p\.3|पहले पेज 3") is None:
+            raise AssertionError("J5 drop did not put page 3 first with provenance")
+        capture("j5", "j5-after-drop-was-p3", path + ["Drop page 3 first"])
+        tap({"rid": "pageNum", "text": "2"}, timeout=5)
+        if wait_for({"rid": "selectionActionBar"}, timeout=5) is None:
+            raise AssertionError("J5 selection bar missing")
+        capture("j5", "j5-selection-bar", path + ["Select page"])
+        tap({"rid": "btnSelRotate"}, timeout=5)
+        time.sleep(1)
+        capture("j5", "j5-rotated", path + ["Rotate"])
+        tap({"rid": "btnDraftSave"}, timeout=5)
+        if wait_for({"rid": "swSheetInput"}, timeout=8) is None:
+            raise AssertionError("J5 save name sheet missing")
+        back()  # keyboard only
+        capture("j5", "j5-save-name-sheet", path + ["Save copy", "Name"])
+        tap({"rid": "swSheetPrimary"}, timeout=5)
+        if wait_for({"rid": "toolResultShare"}, timeout=40) is None:
+            raise AssertionError("J5 verified result missing")
+        capture("j5", "j5-result", path + ["Save copy", "Result"])
+        return "J5 grid, lift, provenance, selection, save sheet and result captured"
+    step("j5", "j5-complete-organize", ["Tools", "Reorder"], journey)
+    recover("after J5")
+
+
 def walk_vault():
     def action():
         launch()
@@ -1363,6 +1440,7 @@ def main():
         walk_library()
         walk_tabs()
         walk_results()
+        walk_j5_organize()
         walk_tools()
         walk_viewer()
         walk_vault()
