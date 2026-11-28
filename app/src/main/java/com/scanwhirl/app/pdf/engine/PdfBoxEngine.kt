@@ -466,8 +466,7 @@ class PdfBoxEngine(
         }
         check(roundTrip.isNotEmpty())
         checkOutput(out)
-        val target = File(destination)
-        atomicReplace(out, target)
+        atomicReplace(out, destination)
         Unit
     }
 

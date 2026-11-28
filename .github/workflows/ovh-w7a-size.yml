@@ -39,7 +39,8 @@ jobs:
         run: |
           set -e
           ./gradlew :app:assembleRelease -PciUnsignedRelease --no-daemon --stacktrace > r8-build.log 2>&1 || {
-            tail -n 100 r8-build.log
+            grep -n "e: " r8-build.log | head -n 40 || true
+            tail -n 60 r8-build.log
             exit 1
           }
           tail -n 20 r8-build.log
