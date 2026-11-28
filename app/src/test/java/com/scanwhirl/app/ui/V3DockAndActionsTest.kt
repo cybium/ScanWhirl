@@ -187,7 +187,8 @@ class V3DockAndActionsTest {
         val xml = sourceOf("src/main/res/layout/item_page_grid.xml")
         assertTrue("the page host uses sw_cc_canvas", xml.contains("@color/sw_cc_canvas"))
         assertTrue("the page host keeps its 8 dp inset", xml.contains("android:padding=\"8dp\""))
-        assertEquals(0xFF1E252A.toInt(), canvas)
+        // W5a: the canvas is a theme token; the old literal was dark-only.
+        assertEquals(app.getColor(R.color.tok_canvas), canvas)
     }
 
     // --- actions sheet ------------------------------------------------------

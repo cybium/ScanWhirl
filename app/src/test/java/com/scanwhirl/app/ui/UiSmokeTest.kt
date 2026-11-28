@@ -551,11 +551,29 @@ class UiSmokeTest {
     }
 
     @Test(timeout = 60_000)
-    fun `dark mode is the app default`() {
+    fun `follow system applies the system night state under both qualifiers`() {
+        // B2: the DELEGATE's applied mode is asserted, not just the pref mapping.
         assertEquals(
-            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES,
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
             androidx.appcompat.app.AppCompatDelegate.getDefaultNightMode()
         )
+        assertEquals(com.scanwhirl.app.util.Prefs.THEME_SYSTEM,
+            com.scanwhirl.app.util.Prefs.themeMode(app))
+        try {
+            for (night in listOf(false, true)) {
+                org.robolectric.RuntimeEnvironment.setQualifiers(
+                    "en-rUS-w360dp-h800dp-${if (night) "night" else "notnight"}-xhdpi"
+                )
+                val expected = if (night) android.content.res.Configuration.UI_MODE_NIGHT_YES
+                else android.content.res.Configuration.UI_MODE_NIGHT_NO
+                assertEquals("system night=$night is applied to the configuration",
+                    expected,
+                    app.resources.configuration.uiMode and
+                        android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+            }
+        } finally {
+            org.robolectric.RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xhdpi")
+        }
     }
 
     @Test(timeout = 60_000)

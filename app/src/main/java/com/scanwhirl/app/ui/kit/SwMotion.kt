@@ -13,6 +13,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.Interpolator
+import androidx.core.view.animation.PathInterpolatorCompat
 import android.widget.FrameLayout
 import android.widget.ImageView
 import com.scanwhirl.app.R
@@ -20,17 +22,36 @@ import com.scanwhirl.app.R
 /**
  * v2 UI: 74_motion — one place for movement, used by every kit component.
  *
- * Tokens: [SHORT] 120 ms (press, chips), [MEDIUM] 220 ms (tabs, sheets, list
- * items), [LONG] 320 ms (drill-in, success). Every duration is multiplied by the
+ * Tokens: [SHORT] 100 ms (press, chips), [MEDIUM] 150 ms (reflow), [SETTLE] 200 ms
+ * (settle), [LONG] 300 ms (sheets, drill-in). Every duration is multiplied by the
  * system animator scale and becomes 0 when the user turned animations off
  * (Settings > Accessibility > Remove animations): all helpers then skip the
  * animation entirely, so nothing moves for those users.
  */
 object SwMotion {
 
-    const val SHORT = 120L
-    const val MEDIUM = 220L
-    const val LONG = 320L
+    /**
+     * W5a: the one motion scale, from frontend-v09/research/UX_EVIDENCE.md §"Global rules"
+     * and M3 legacy duration tokens. The old kit names remain aliases so existing callers
+     * and tests keep working; their values now match the spec tokens:
+     *  - [SHORT] 100 ms – tap/selection feedback;
+     *  - [MEDIUM] 150 ms – displacement / neighbour reflow;
+     *  - [SETTLE] 200 ms – settle and cancel/return (no bounce);
+     *  - [LONG] 300 ms – app-owned sheet enter / drill-in.
+     */
+    const val SHORT = 100L
+    const val MEDIUM = 150L
+    const val SETTLE = 200L
+    const val LONG = 300L
+
+    /** M3 standard easing (0.2, 0, 0, 1): the default for selection and settle. */
+    fun standard(): Interpolator = PathInterpolatorCompat.create(0.2f, 0f, 0f, 1f)
+
+    /** M3 emphasized decelerate (0.05, 0.7, 0.1, 1): the 300 ms sheet enter. */
+    fun emphasized(): Interpolator = PathInterpolatorCompat.create(0.05f, 0.7f, 0.1f, 1f)
+
+    /** M3 emphasized accelerate (0.3, 0, 0.8, 0.15): the 200 ms sheet exit. */
+    fun emphasizedExit(): Interpolator = PathInterpolatorCompat.create(0.3f, 0f, 0.8f, 0.15f)
 
     /** System animator duration scale (1 = normal, 0 = "Remove animations"). */
     fun animatorScale(context: Context): Float = runCatching {

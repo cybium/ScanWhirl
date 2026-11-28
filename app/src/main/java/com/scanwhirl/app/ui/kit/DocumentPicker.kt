@@ -142,8 +142,8 @@ class DocumentPicker private constructor(
             setPadding(padH, (10 * density).toInt(), padH, (18 * density).toInt())
             background = SwStyle.rounded(
                 context,
-                0xFF161D21.toInt(),
-                radiusDp = 28f,
+                SwStyle.color(context, R.color.tok_surface_2),
+                radiusDp = SwStyle.RADIUS_SHEET_DP,
                 stroke = SwStyle.color(context, R.color.sw_cyan_hair_strong)
             )
         }

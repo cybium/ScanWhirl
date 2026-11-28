@@ -573,10 +573,25 @@ class HomeSlice2Test {
             assertTrue("${app.resources.getResourceEntryName(fg)} on " +
                 "${app.resources.getResourceEntryName(bg)} = $r", r >= 4.5)
         }
-        for (cat in listOf(CategoryRules.STUDY, CategoryRules.RECEIPTS, CategoryRules.IDS,
-            CategoryRules.FORMS, CategoryRules.OTHER)) {
-            val r = contrast(com.scanwhirl.app.util.CategoryStyle.color(cat), c(R.color.rv_bg))
-            assertTrue("$cat label contrast $r", r >= 4.5)
+        // W5a: CategoryStyle's pure-Kotlin constants are the shipped dark identity hues.
+        // The painted category colour now comes from theme-aware cat_* token aliases, so
+        // check the token actually used by the light/dark palette (still AA >= 4.5).
+        val categoryRes = mapOf(
+            CategoryRules.STUDY to R.color.cat_study,
+            CategoryRules.RECEIPTS to R.color.cat_receipts,
+            CategoryRules.IDS to R.color.cat_ids,
+            CategoryRules.FORMS to R.color.cat_forms,
+            CategoryRules.OTHER to R.color.cat_other
+        )
+        for ((cat, res) in categoryRes) {
+            val tokenRatio = contrast(c(res), c(R.color.rv_bg))
+            assertTrue("$cat token contrast $tokenRatio", tokenRatio >= 4.5)
+            // The call sites paint CategoryStyle.color(cat, context); check that
+            // the colour actually used is the token, not the frozen dark literal.
+            val painted = com.scanwhirl.app.util.CategoryStyle.color(cat, app)
+            assertEquals("call sites use the themed $cat token", c(res), painted)
+            assertTrue("$cat painted contrast ${contrast(painted, c(R.color.rv_bg))}",
+                contrast(painted, c(R.color.rv_bg)) >= 4.5)
         }
         assertTrue("Scan label on the cyan pill", contrast(c(R.color.sw_on_scan), c(R.color.sw_scan)) >= 4.5)
         assertTrue("Add label on the ink pill", contrast(c(R.color.rv_on_commit), c(R.color.rv_commit)) >= 4.5)

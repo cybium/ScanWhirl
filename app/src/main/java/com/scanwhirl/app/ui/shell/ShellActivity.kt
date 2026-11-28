@@ -512,7 +512,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             minimumHeight = SwStyle.dp(this@ShellActivity, 64f)
             background = SwStyle.rounded(
                 this@ShellActivity,
-                0xF2161D21.toInt(),
+                // W5a: the nav is a themed surface, not a navy literal.
+                SwStyle.color(this@ShellActivity, R.color.void_abyss),
                 radiusDp = 24f,
                 stroke = SwStyle.color(this@ShellActivity, R.color.sw_cyan_hair)
             )

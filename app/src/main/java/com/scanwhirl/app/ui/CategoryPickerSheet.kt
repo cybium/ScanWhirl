@@ -51,7 +51,7 @@ object CategoryPickerSheet {
     ): View {
         val d = activity.resources.displayMetrics.density
         fun dp(v: Int) = (v * d).toInt()
-        val color = CategoryStyle.color(cat)
+        val color = CategoryStyle.color(cat, activity)
 
         val dot = View(activity).apply {
             background = GradientDrawable().apply {

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a: the DARK values of frontend-v09/core/tokens.css. This mirrors the shipped 1.3.0
+     ink look, so an explicit Dark choice is unchanged and Follow system resolves here. -->
+<resources>
+    <color name="tok_bg">#0d1315</color>
+    <color name="tok_surface">#162024</color>
+    <color name="tok_surface_2">#1d2a2f</color>
+    <color name="tok_surface_3">#243338</color>
+    <color name="tok_line">#2a3b41</color>
+
+    <color name="tok_text">#e8f1f3</color>
+    <color name="tok_text_2">#9db2b8</color>
+    <!-- tokens.css dark text-3 #6f878e is only 3.45:1 on surface_3; the original
+         shipped #9db2b8 clears 5.91:1 there and remains the body-safe value. -->
+    <color name="tok_text_3">#9db2b8</color>
+    <color name="tok_boundary">#9db2b8</color>
+
+    <color name="tok_accent">#2fd3e3</color>
+    <color name="tok_on_accent">#05252a</color>
+    <color name="tok_accent_soft">#242fd3e3</color>
+    <color name="tok_accent_line">#732fd3e3</color>
+
+    <color name="tok_ok">#53d991</color>
+    <color name="tok_ok_soft">#2453d991</color>
+    <color name="tok_warn">#ffc861</color>
+    <color name="tok_warn_soft">#24ffc861</color>
+    <color name="tok_danger">#ff7a70</color>
+    <color name="tok_danger_soft">#24ff7a70</color>
+
+    <color name="tok_scrim">#8c000000</color>
+    <color name="tok_canvas">#0a0f11</color>
+    <color name="tok_pro">#f5c04a</color>
+    <color name="tok_pro_soft">#29f5c04a</color>
+
+    <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
+    <color name="tok_on_paper">#13252a</color>
+    <color name="tok_on_scrim">#ffffff</color>
+    <color name="tok_badge_fill">#243338</color>
+    <color name="tok_preview_backdrop">#162024</color>
+    <color name="tok_nav_bar_dark">#0d1315</color>
+    <color name="tok_switch_track_off">#7c8a91</color>
+    <color name="tok_switch_thumb_off">#e8f1f3</color>
+
+    <!-- The shipped dark category hues. -->
+    <color name="tok_cat_study">#38ef7d</color>
+    <color name="tok_cat_receipts">#ff8a4c</color>
+    <color name="tok_cat_ids">#5b9dff</color>
+    <color name="tok_cat_forms">#b07cff</color>
+    <color name="tok_cat_other">#94a3b8</color>
+</resources>

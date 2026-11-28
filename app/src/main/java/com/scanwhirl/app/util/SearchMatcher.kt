@@ -21,8 +21,8 @@ object SearchMatcher {
 
     private val WHITESPACE = Regex("\\s+")
 
-    /** The colour used for matched terms inside snippets (cyan_primary = #00F0FF). */
-    private val snippetColor by lazy { Color.parseColor("#00F0FF") }
+    /** Legacy dark-theme highlight; production callers pass the resolved token colour. */
+    const val LEGACY_SNIPPET_COLOR: Int = 0xFF00F0FF.toInt()
 
     /**
      * Normalises [s] for matching: lower-case, then NFD-decompose and keep
@@ -92,7 +92,10 @@ object SearchMatcher {
         docs: List<ScanDocument>,
         includeVaulted: Boolean,
         normalizedText: (String) -> String,
-        originalText: (String) -> String
+        originalText: (String) -> String,
+        /** Resolved `@color/tok_accent` from a Context in UI callers; the default is
+         *  the old dark-only cyan for pure-JVM callers. */
+        highlightColor: Int = LEGACY_SNIPPET_COLOR
     ): List<Hit> {
         val terms = normalize(query).split(WHITESPACE).filter { it.isNotBlank() }
         val visible = if (includeVaulted) docs else docs.filter { !it.isVaulted }
@@ -126,7 +129,7 @@ object SearchMatcher {
             val score = 1000 * nameTerms + minOf(textOccurrences, 999)
 
             // A snippet only when the text itself matches the whole query.
-            val snippet = if (!doc.isLocked && textTerms == terms.size) buildSnippet(originalText(doc.id), terms) else null
+            val snippet = if (!doc.isLocked && textTerms == terms.size) buildSnippet(originalText(doc.id), terms, highlightColor) else null
 
             Hit(doc, kind, snippet, score)
         }
@@ -155,9 +158,9 @@ object SearchMatcher {
     /**
      * Builds a snippet from [text]: about 60 characters around the first
      * term hit (newlines → spaces), with ellipsis at cut ends, every term
-     * occurrence inside the slice bold and coloured [snippetColor].
+     * occurrence inside the slice bold and coloured [highlightColor].
      */
-    private fun buildSnippet(text: String, terms: List<String>): CharSequence {
+    private fun buildSnippet(text: String, terms: List<String>, highlightColor: Int): CharSequence {
         val flat = text.replace("\n", " ").replace("\r", " ")
         val norm = normalize(flat)
 
@@ -199,7 +202,7 @@ object SearchMatcher {
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                     spanned.setSpan(
-                        ForegroundColorSpan(snippetColor),
+                        ForegroundColorSpan(highlightColor),
                         absIdx,
                         absIdx + term.length,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE

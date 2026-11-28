@@ -1,8 +1,16 @@
 package com.scanwhirl.app.util
 
+import android.content.Context
+import androidx.core.content.ContextCompat
+import com.scanwhirl.app.R
+
 /**
  * Visual styling tokens for document categories.
- * Pure Kotlin — no Android dependencies so it can be tested in pure JVM unit tests.
+ *
+ * W5a: UI callers use [color] with a Context, which reads the theme-aware `cat_*`
+ * token aliases (AA contrast in light and dark). The COLOR_* constants below are
+ * the frozen dark identity hues kept for pure-JVM callers and legacy tests; they
+ * must not be used to paint a UI surface.
  *
  * Display names live in [CategoryLabels.display] only; this object never
  * invents a second naming system. The ring-index helpers that used to live
@@ -27,5 +35,21 @@ object CategoryStyle {
         CategoryRules.FORMS -> COLOR_FORMS
         CategoryRules.UNSORTED -> COLOR_UNSORTED
         else -> COLOR_OTHER
+    }
+
+    /**
+     * W5a: the colour actually painted by UI callers. Reads the theme-aware `cat_*`
+     * token aliases (AA >= 4.5 in either theme). The constants above stay as the
+     * frozen dark identities for pure-JVM callers and legacy tests.
+     */
+    fun color(category: String, context: Context): Int {
+        val res = when (category) {
+            CategoryRules.STUDY -> R.color.cat_study
+            CategoryRules.RECEIPTS -> R.color.cat_receipts
+            CategoryRules.IDS -> R.color.cat_ids
+            CategoryRules.FORMS -> R.color.cat_forms
+            else -> R.color.cat_other
+        }
+        return ContextCompat.getColor(context, res)
     }
 }

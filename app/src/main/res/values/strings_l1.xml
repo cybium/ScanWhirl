@@ -152,11 +152,11 @@
     <string name="me_pro">ScanWhirl Pro</string>
     <string name="me_pro_summary">All Pro tools</string>
     <string name="me_settings">Settings</string>
-    <string name="me_settings_summary">Look, language, privacy</string>
+    <string name="me_settings_summary">Look &amp; language</string>
     <string name="me_trash">Trash</string>
-    <string name="me_trash_summary">Deleted documents, 30 days</string>
+    <string name="me_trash_summary">Deleted, 30d</string>
     <string name="me_about">About ScanWhirl</string>
-    <string name="me_about_summary">Version, privacy, licences</string>
+    <string name="me_about_summary">Version &amp; privacy</string>
 
     <string name="vault_tab_title">Vault</string>
     <string name="vault_tab_encrypted">Encrypted on this phone</string>
@@ -296,8 +296,8 @@
     <string name="quick_add_tools">Add tools</string>
     <string name="quick_max_reached">Twelve quick tools is the maximum</string>
     <string name="a11y_back">Back</string>
-    <string name="me_pro_active">ScanWhirl Pro is active</string>
-    <string name="me_pro_active_summary">Thank you. Every Pro tool is unlocked.</string>
+    <string name="me_pro_active">Pro active</string>
+    <string name="me_pro_active_summary">Pro tools unlocked.</string>
     <string name="pro_active_sub">Every Pro tool is unlocked. Thank you!</string>
     <string name="pro_sub_compact">Every Pro tool, one payment, no subscription.</string>
     <string name="pro_more_tools">See all %1$d Pro tools</string>
