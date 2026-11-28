@@ -1,10 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a-2 (V089): three solid dots with clear spacing. Visibility comes from the
+     sw_sheet_grab / sw_drag_handle tokens, not from a translucent literal. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
-    android:viewportHeight="24"
-    android:tint="?attr/colorControlNormal">
+    android:viewportHeight="24">
     <path
-        android:fillColor="@android:color/white"
-        android:pathData="M20,9H4v2h16V9zM4,15h16v-2H4V15z" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6,7.4a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3zM12,7.4a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3zM18,7.4a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3z" />
 </vector>

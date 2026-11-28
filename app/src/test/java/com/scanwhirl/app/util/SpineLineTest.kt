@@ -131,36 +131,8 @@ class SpineLineTest {
         assertEquals(g.ratio, m.mirrored().ratio, 1e-4f)
     }
 
-    @Test
-    fun `the Book pages line keeps its tilt when dragged and passes under the finger`() {
-        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
-        val view = com.scanwhirl.app.ui.book.BookSpreadView(context)
-        val photo = Bitmap.createBitmap(900, 600, Bitmap.Config.ARGB_8888)
-        view.setSpread(photo, BookSplit.Gutter(ratio = 0.43f, found = true, topRatio = 0.40f, bottomRatio = 0.46f))
-        view.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(900, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(600, android.view.View.MeasureSpec.EXACTLY)
-        )
-        view.layout(0, 0, 900, 600)
-        view.draw(Canvas(Bitmap.createBitmap(900, 600, Bitmap.Config.ARGB_8888))) // lays out the photo rect
-
-        val before = view.gutter()
-        assertEquals("the tilt reaches the split", 0.40f, before.topRatio!!, 0.002f)
-        assertEquals(0.46f, before.bottomRatio!!, 0.002f)
-
-        // Grab the line near the bottom (y = 540 of 600: line at x = (0.43 + 0.06*0.4) * 900) and drag 90 px right.
-        val y = 540f
-        val xOnLine = (0.43f + 0.06f * (y / 600f - 0.5f)) * 900f
-        fun ev(action: Int, x: Float) = android.view.MotionEvent.obtain(0L, 0L, action, x, y, 0)
-        view.onTouchEvent(ev(android.view.MotionEvent.ACTION_DOWN, xOnLine))
-        view.onTouchEvent(ev(android.view.MotionEvent.ACTION_MOVE, xOnLine + 90f))
-        view.onTouchEvent(ev(android.view.MotionEvent.ACTION_UP, xOnLine + 90f))
-
-        val after = view.gutter()
-        assertEquals("dragging keeps the tilt", 0.06f, after.bottomRatio!! - after.topRatio!!, 0.002f)
-        val underFinger = after.topRatio!! + (after.bottomRatio!! - after.topRatio!!) * (y / 600f)
-        assertEquals("the line passes under the finger", (xOnLine + 90f) / 900f, underFinger, 0.003f)
-    }
+    // W8: the BookSpreadView drag test was deleted with the unreachable Book pages screen.
+    // BookSplit's geometry/split assertions below stay: the engine still has unit callers.
 
     @Test
     fun `split along a tilted spine keeps each page on its own side`() {

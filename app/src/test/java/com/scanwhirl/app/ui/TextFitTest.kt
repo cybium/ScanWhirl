@@ -22,7 +22,6 @@ import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.OcrEditorActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -30,7 +29,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.shadows.ShadowDialog
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -327,83 +325,11 @@ class TextFitTest {
         assertTrue(message, problems.isEmpty())
     }
 
-    /**
-     * T3.11 (complaint #16): a tile label may wrap onto a second line but
-     * must never break **inside a word** (`Compres` / `s` happened on device
-     * while every check above stayed green — ellipsis/height checks cannot
-     * see a mid-word line break). Every `tile_*` label's longest word must
-     * fit between the view's paddings, measured with the label's own TextPaint
-     * at the current font scale. Zero width is reported, never passed.
-     */
-    private fun collectTileWordProblems(root: View, name: String) {
-        val scale = RuntimeEnvironment.getFontScale()
-        val label = "$name words @ scale $scale"
-        fun walk(v: View) {
-            if (v is TextView && v.id != View.NO_ID) {
-                val entry = try {
-                    v.resources.getResourceEntryName(v.id)
-                } catch (_: Exception) {
-                    ""
-                }
-                // All tile labels share the id `tileLabel` (the container ids
-                // are tile_edit, tile_ocr … — matching those on a TextView
-                // never fires; the forced-narrow red-proof caught exactly that).
-                if (entry == "tileLabel" && v.isShown) {
-                    if (v.width == 0) {
-                        problems += "$label: ${describe(v)} has zero width — longest-word check would be vacuous"
-                    } else {
-                        val avail = v.width - v.totalPaddingLeft - v.totalPaddingRight
-                        val longest = v.text.toString()
-                            .split(Regex("\\s+")).filter { it.isNotEmpty() }
-                            .maxOfOrNull { v.paint.measureText(it) } ?: 0f
-                        if (longest > avail + 0.5f) {
-                            problems +=
-                                "$label: ${describe(v)} longest word needs ${longest.toInt()}px but only " +
-                                "${avail}px fit between paddings (word would break across lines)"
-                        }
-                    }
-                }
-            }
-            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
-        }
-        walk(root)
-    }
-
     // --- screens ------------------------------------------------------------
 
-    @Test(timeout = 60_000)
-    fun `home screen text fits`() {
-        atBothFontScales {
-            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                scenario.onActivity { checkScreen(it, "Home") }
-            }
-        }
-        assertNoProblems()
-    }
-
-    /**
-     * T3.6: the Tools sheet lives in its own dialog window, so it gets its own
-     * decor walk. Owner-approved to join the known-red list if it fails for a
-     * genuine fit reason (never `@Ignore`).
-     */
-    @Test(timeout = 60_000)
-    fun `tools sheet text fits`() {
-        atBothFontScales {
-            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                scenario.onActivity { activity ->
-                    activity.findViewById<View>(R.id.btnTools).performClick()
-                    val sheet = ShadowDialog.getLatestDialog()
-                    assertNotNull("tools sheet should open", sheet)
-                    val decor = sheet!!.window!!.decorView
-                    checkView(activity, decor, "ToolsSheet")
-                    // T3.11: no tile label may break a word across lines.
-                    collectTileWordProblems(decor, "ToolsSheet")
-                    sheet.dismiss()
-                }
-            }
-        }
-        assertNoProblems()
-    }
+    // W8: "home screen text fits" and "tools sheet text fits" were deleted with
+    // MainActivity. The live equivalents are ShellLookTest / AccessibilityAuditTest
+    // (shell tabs, Tools hub and their 200% text checks).
 
     @Test(timeout = 60_000)
     fun `document screen text fits`() {

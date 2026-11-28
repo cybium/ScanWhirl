@@ -12,6 +12,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.StudentJob
 import com.scanwhirl.app.ui.kit.ToolJob
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolRow
@@ -116,8 +117,8 @@ abstract class ToolsJobsBase {
                 "job names, in reading order",
                 listOf(
                     "Compress & resize",
-                    "Combine & organize",
-                    "Sign & mark up",
+                    "Combine",
+                    "Sign & mark",
                     "Privacy",
                     "OCR & search",
                     "Convert",
@@ -179,9 +180,18 @@ abstract class ToolsJobsBase {
     @Test
     fun `the tools tab shows the seven jobs in order and no Soon word`() {
         toolsTab { _, body ->
+            // B3: the named student jobs are a separate block above the grouped catalogue.
+            val studentCard = ToolsHubScreen.cardTagged(body, ToolsHubScreen.TAG_STUDENT_JOBS)
+            assertNotNull("the student jobs lead the tab", studentCard)
+            assertEquals("nothing sits above the student jobs", body.getChildAt(0), studentCard)
+            assertEquals(
+                "three named student jobs",
+                ToolRegistry.studentJobs(),
+                ToolsHubScreen.studentJobRows(body).map { it.tag }
+            )
             val headers = jobHeaders(body)
             assertEquals(
-                "one card per job, in order",
+                "one card per grouped job, in order",
                 ToolRegistry.jobs().map { app.getString(it.first.title) },
                 headers
             )
@@ -203,27 +213,22 @@ abstract class ToolsJobsBase {
     }
 
     @Test
-    fun `Compress is named inside the first job without scrolling`() {
+    fun `Compress stays inside the first job and is reachable by scrolling past the student jobs`() {
+        // B3 deliberately puts three named jobs above the catalogue (UX_EVIDENCE Tools 1):
+        // "on screen without scrolling" was the old T1-first layout and is no longer the
+        // acceptance rule. What must survive is that Compress is still in the first job,
+        // fully named and reachable with one normal scroll.
         toolsTab { activity, body ->
             val card = ToolsHubScreen.cardTagged(body, ToolJob.SMALLER) as ViewGroup
             val header = (card.getChildAt(0) as ViewGroup).getChildAt(0) as TextView
             assertEquals(app.getString(R.string.tools_job_smaller), header.text.toString())
 
             val compress = ToolsHubScreen.tiles(body).firstOrNull { it.tool?.id == "compress" }
-            assertNotNull("Compress is not a row in the first job", compress)
+            assertNotNull("Compress is not a tile in the first job", compress)
             assertEquals(
-                "the row says the real tool name",
+                "the tile says the real tool name",
                 app.getString(R.string.tool_compress),
                 compress!!.labelView.text.toString()
-            )
-            val content = activity.findViewById<View>(R.id.swTabContent)
-            val rect = Rect(0, 0, compress.width, compress.height)
-            val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0) as ViewGroup
-            root.offsetDescendantRectToMyCoords(compress, rect)
-            assertTrue(
-                "Compress must be on screen without scrolling (row ${rect.top}..${rect.bottom}, " +
-                    "content ${content.top}..${content.bottom})",
-                rect.top >= content.top && rect.bottom <= content.bottom
             )
             // T2 owner 2026-11-21: icon grid
             assertEquals(
@@ -232,8 +237,25 @@ abstract class ToolsJobsBase {
                 compress.width
             )
             assertTrue(
-                "the row clears a 48dp touch target (${compress.height / density}dp)",
+                "the tile clears a 48dp touch target (${compress.height / density}dp)",
                 compress.height >= dp(48f)
+            )
+            var parent = body.parent
+            while (parent != null && parent !is android.widget.ScrollView) parent = parent.parent
+            val scroll = parent as android.widget.ScrollView
+            val content = activity.findViewById<View>(R.id.swTabContent)
+            val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0) as ViewGroup
+            val rect = Rect(0, 0, compress.width, compress.height)
+            root.offsetDescendantRectToMyCoords(compress, rect)
+            scroll.scrollTo(0, scroll.scrollY + rect.top - content.top - dp(8f))
+            idle()
+            layoutRoot(activity)
+            rect.set(0, 0, compress.width, compress.height)
+            root.offsetDescendantRectToMyCoords(compress, rect)
+            assertTrue(
+                "Compress must be reachable on screen (row ${rect.top}..${rect.bottom}, " +
+                    "content ${content.top}..${content.bottom})",
+                rect.top >= content.top && rect.bottom <= content.bottom
             )
         }
     }
@@ -363,8 +385,12 @@ abstract class ToolsJobsBase {
             idle()
             layoutRoot(activity)
             assertTrue("the field is empty", search.text.isNullOrEmpty())
+            assertNotNull(
+                "the B3 student jobs come back on clear",
+                ToolsHubScreen.cardTagged(body, ToolsHubScreen.TAG_STUDENT_JOBS)
+            )
             assertEquals(
-                "the seven jobs are back",
+                "the seven grouped jobs are back",
                 ToolRegistry.jobs().map { app.getString(it.first.title) },
                 jobHeaders(body)
             )
@@ -513,12 +539,13 @@ abstract class ToolsJobsBase {
     private fun jobHeaders(body: ViewGroup): List<String> = bodyHeaders(body).map { it.text.toString() }
 
     /**
-     * The heading of each job card, in order. The optional "Recent tools" card is not a job, so
-     * it is skipped here (T1); its own heading is asserted by the recents tests.
+     * The heading of each grouped job card, in order. B3's student-jobs card and T1's
+     * "Recent tools" card are not jobs, so they are skipped; their own headings are pinned
+     * by the B3 and recents tests.
      */
     private fun bodyHeaders(body: ViewGroup): List<TextView> = (0 until body.childCount).mapNotNull { index ->
         val card = body.getChildAt(index) as? ViewGroup ?: return@mapNotNull null
-        if (card.tag == ToolsHubScreen.TAG_RECENT) return@mapNotNull null
+        if (card.tag == ToolsHubScreen.TAG_RECENT || card.tag == ToolsHubScreen.TAG_STUDENT_JOBS) return@mapNotNull null
         val head = card.getChildAt(0) as? ViewGroup ?: return@mapNotNull null
         head.getChildAt(0) as? TextView
     }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="toolSetupPurpose" type="id" />
+    <item name="toolFirstPurpose" type="id" />
+    <item name="ocrAboutReading" type="id" />
+</resources>

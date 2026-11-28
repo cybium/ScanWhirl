@@ -52,13 +52,21 @@ jobs:
       - name: Prefetch Robolectric android-all jars (retry)
         run: |
           set -euo pipefail
-          base=https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented
+          # Google's Maven Central mirror first (many parallel lanes made repo1 answer HTTP 429),
+          # Maven Central second. Integrity is still proven by the sha512 check below.
+          mirrors="https://maven-central.storage-download.googleapis.com/maven2 https://repo1.maven.org/maven2"
+          path=org/robolectric/android-all-instrumented
           for v in 15-robolectric-12650502-i7 12.1-robolectric-8229987-i7 9-robolectric-4913185-2-i7 8.1.0-robolectric-4611349-i7; do
             dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/$v"
             mkdir -p "$dir"
             for f in "android-all-instrumented-$v.pom" "android-all-instrumented-$v.pom.sha512" "android-all-instrumented-$v.jar.sha512" "android-all-instrumented-$v.jar"; do
               if [ ! -s "$dir/$f" ]; then
-                curl -fsSL --retry 10 --retry-delay 15 --retry-all-errors --connect-timeout 30 -o "$dir/$f.part" "$base/$v/$f"
+                ok=0
+                for m in $mirrors; do
+                  if curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors --connect-timeout 30 -o "$dir/$f.part" "$m/$path/$v/$f"; then ok=1; break; fi
+                  echo "::warning::$m failed for $f, trying next mirror"
+                done
+                [ "$ok" = 1 ] || { echo "::error::all mirrors failed for $f"; exit 1; }
                 mv "$dir/$f.part" "$dir/$f"
               fi
             done
@@ -178,6 +186,9 @@ jobs:
           path: |
             gate-result.txt
             app/build/test-results/testDebugUnitTest/*.xml
+            app/build/test-results/testDebugUnitTest/w5e-renders/*.png
+            app/build/test-results/testDebugUnitTest/w5e-renders/manifest.txt
+            app/build/test-results/testDebugUnitTest/w5e-renders/tool-manifest.txt
             app/build/reports/lint-results-debug.txt
           retention-days: 7
 

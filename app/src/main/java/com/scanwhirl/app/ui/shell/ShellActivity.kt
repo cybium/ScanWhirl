@@ -1434,7 +1434,11 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             // Create sheet's row. No intermediate chooser.
             "import_pdf" -> {
                 pickerReturnFocus = true
-                pickImportPdf.launch(arrayOf("application/pdf"))
+                // W5e: the fourth import door (Tools hub / Tools search) gets the same D1 notice.
+                // W5b owns this file; this one helper call is the whole W5e diff here.
+                com.scanwhirl.app.ui.ImportRasterNotice.show(this, onContinue = {
+                    pickImportPdf.launch(arrayOf("application/pdf"))
+                })
             }
             "merge" -> mergeFlow.showMergeChooser()
             "compress" -> compressFlow.start()

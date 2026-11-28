@@ -45,10 +45,12 @@ import kotlin.math.abs
 class FormF2UiCritiqueTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
+    private val async = FormAsyncIdle()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     @Before
     fun setUp() {
+        async.install()
         app.getSharedPreferences(FormPresets.PREFS_SAVED_PRESET, 0).edit().clear().commit()
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-w360dp-h800dp-xhdpi")
@@ -59,18 +61,11 @@ class FormF2UiCritiqueTest {
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-w360dp-h800dp-xhdpi")
         app.getSharedPreferences(FormPresets.PREFS_SAVED_PRESET, 0).edit().clear().commit()
+        async.reset()
     }
 
-    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            idle()
-            if (condition()) return true
-            Thread.sleep(25)
-        }
-        idle()
-        return condition()
-    }
+    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean =
+        async.waitUntil(timeoutMs, condition)
 
     private fun controller(): ActivityController<FormReadyActivity> =
         Robolectric.buildActivity(FormReadyActivity::class.java).setup()

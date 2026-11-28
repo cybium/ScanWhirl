@@ -24,7 +24,7 @@ import com.scanwhirl.app.store.vault.VaultPasswords
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.tools.LockFlow
-import com.scanwhirl.app.ui.MainActivity
+import com.scanwhirl.app.ui.shell.ShellActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -110,11 +110,12 @@ class VaultPasswordsWiringTest {
         assertTrue("setup leaves the Vault unlocked", VaultSession.isUnlocked())
     }
 
-    private fun waitForHome(scenario: ActivityScenario<MainActivity>, docs: Int) {
-        assertTrue("home list loads", pollUntil {
+    /** W8: the live Library shell renders cards into swDocList (no legacy scanList adapter). */
+    private fun waitForHome(scenario: ActivityScenario<ShellActivity>, docs: Int) {
+        assertTrue("library loads", pollUntil {
             var ok = false
             scenario.onActivity { a ->
-                ok = (a.findViewById<RecyclerView>(R.id.scanList).adapter?.itemCount ?: 0) >= docs
+                ok = (a.findViewById<ViewGroup>(R.id.swDocList)?.childCount ?: 0) >= docs
             }
             ok
         })
@@ -142,14 +143,14 @@ class VaultPasswordsWiringTest {
         idle()
     }
 
-    private fun openProtect(activity: MainActivity, docId: String) {
+    private fun openProtect(activity: ShellActivity, docId: String) {
         val doc = requireNotNull(repo.getDocument(docId))
         LockFlow(activity, repo, activity, { listOf(doc) }, { _ -> }).protectDocument(doc)
         idle()
     }
 
     /** Tools → Lock → Saved scan → the document → the Unlock sheet. */
-    private fun openUnlock(activity: MainActivity, docId: String) {
+    private fun openUnlock(activity: ShellActivity, docId: String) {
         val doc = requireNotNull(repo.getDocument(docId))
         LockFlow(activity, repo, activity, { listOf(doc) }, { _ -> }).chooseLockSource()
         idle()
@@ -159,7 +160,7 @@ class VaultPasswordsWiringTest {
     }
 
     /** Tools → Lock → Saved scan → the document → Password (change). */
-    private fun openChangePassword(activity: MainActivity, docId: String) {
+    private fun openChangePassword(activity: ShellActivity, docId: String) {
         val doc = requireNotNull(repo.getDocument(docId))
         LockFlow(activity, repo, activity, { listOf(doc) }, { _ -> }).chooseLockSource()
         idle()
@@ -219,7 +220,7 @@ class VaultPasswordsWiringTest {
     @Test(timeout = 60_000)
     fun `Remember row is shown and ON only when a Vault is set up`() {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
 
             scenario.onActivity { openProtect(it, id) }
@@ -251,7 +252,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
         val password = "zQ7-remember-me-42"
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openProtect(it, id) }
             val sheet = latestSheetWith(R.id.protectPassword)
@@ -285,7 +286,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
         val password = "locked-vault-pw-9"
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openProtect(it, id) }
             val sheet = latestSheetWith(R.id.protectPassword)
@@ -325,7 +326,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.saved(repo, app, pages = 1, name = "Book scan")
         val password = "declined-vault-pw"
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openProtect(it, id) }
             val sheet = latestSheetWith(R.id.protectPassword)
@@ -355,7 +356,7 @@ class VaultPasswordsWiringTest {
     fun `Vault button appears only when a password is saved`() {
         setUpVault()
         val id = DocFixtures.locked(repo, app, password = "1234")
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
 
             scenario.onActivity { openUnlock(it, id) }
@@ -387,7 +388,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.locked(repo, app, password = "1234")
         VaultPasswords.of(app).save(id, "1234")
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openUnlock(it, id) }
             val sheet = latestSheetWith(R.id.unlockPassword)
@@ -420,7 +421,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.locked(repo, app, password = "1234")
         VaultPasswords.of(app).save(id, "0000") // saved, but wrong
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openUnlock(it, id) }
             val sheet = latestSheetWith(R.id.unlockPassword)
@@ -444,7 +445,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.locked(repo, app, password = "1234")
         VaultPasswords.of(app).save(id, "1234")
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openUnlock(it, id) }
             val sheet = latestSheetWith(R.id.unlockPassword)
@@ -486,7 +487,7 @@ class VaultPasswordsWiringTest {
         val id = DocFixtures.locked(repo, app, password = "1234")
         VaultPasswords.of(app).save(id, "1234")
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
             scenario.onActivity { openChangePassword(it, id) }
             val current = latestSheetWith(R.id.unlockPassword)

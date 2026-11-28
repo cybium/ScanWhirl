@@ -1,9 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Rounded 'translate', Apache License 2.0, Google. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="960" android:viewportHeight="960">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
     <group android:translateY="960">
-        <path android:fillColor="@android:color/white" android:pathData="m603-202-34 97q-4 11-14 18t-22 7q-20 0-32.5-16.5T496-133l152-402q5-11 15-18t22-7h30q12 0 22 7t15 18l152 403q8 19-4 35.5T868-80q-13 0-22.5-7T831-106l-34-96H603ZM362-401 188-228q-11 11-27.5 11.5T132-228q-11-11-11-28t11-28l174-174q-35-35-63.5-80T190-640h84q20 39 40 68t48 58q33-33 68.5-92.5T484-720H80q-17 0-28.5-11.5T40-760q0-17 11.5-28.5T80-800h240v-40q0-17 11.5-28.5T360-880q17 0 28.5 11.5T400-840v40h240q17 0 28.5 11.5T680-760q0 17-11.5 28.5T640-720h-76q-21 72-63 148t-83 116l96 98-30 82-122-125Zm266 129h144l-72-204-72 204Z" />
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M3.4,6.2h9M8,3.6v2.6M11.2,6.2c-0.9,5.2 -3.1,8.4 -7.1,10.6M5.2,9.2c1.4,3.3 3.8,5.7 7.8,7.2M13.2,20.4l4,-9 4,9M14.7,17.2h5"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+        </group>
     </group>
 </vector>

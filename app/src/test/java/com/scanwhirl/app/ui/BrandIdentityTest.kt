@@ -5,11 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.AnimatedVectorDrawable
-import android.view.View
-import android.widget.ImageView
 import androidx.core.content.ContextCompat
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.BrandWhirl
@@ -28,9 +24,9 @@ import kotlin.math.hypot
 
 /**
  * Brand slice 3 — one ScanWhirl mark: the adaptive launcher (with its own flat
- * monochrome layer), the API 24/25 PNG fallbacks and the Home header all carry
- * the same whirl rings + paper page, inside the safe zone, and the header's
- * whirl only fires when the library really gained a document.
+ * monochrome layer) and the API 24/25 PNG fallbacks carry the same whirl rings +
+ * paper page inside the safe zone. The legacy Home header assertion was deleted
+ * with MainActivity (W8); the shell header mark is covered by ShellLookTest.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -149,33 +145,5 @@ class BrandIdentityTest {
         assertFalse("switching to Private is not a gain", w.onLibraryLoaded(setOf("p"), vault = true))
         assertTrue("a document moved into Private", w.onLibraryLoaded(setOf("p", "q"), vault = true))
         assertFalse("switching back resets", w.onLibraryLoaded(setOf("a", "c", "d"), vault = false))
-    }
-
-    @Test
-    fun `home header carries the same mark, static, decorative and same size`() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                val mark = activity.findViewById<ImageView>(R.id.brandMark)
-                val avd = mark.drawable as AnimatedVectorDrawable
-                assertFalse("no motion at rest or under tests", avd.isRunning)
-                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, mark.importantForAccessibility)
-                val dp = activity.resources.displayMetrics.density
-                assertEquals((30 * dp).toInt(), mark.layoutParams.width)
-
-                // The header mark draws the launcher's two colours.
-                val bmp = Bitmap.createBitmap(132, 132, Bitmap.Config.ARGB_8888)
-                avd.setBounds(0, 0, 132, 132)
-                avd.draw(Canvas(bmp))
-                val scan = ContextCompat.getColor(activity, R.color.sw_scan)
-                val paper = ContextCompat.getColor(activity, R.color.sw_paper)
-                var ring = 0; var page = 0
-                for (y in 0 until 132) for (x in 0 until 132) {
-                    val c = bmp.getPixel(x, y)
-                    if (Color.alpha(c) == 255 && near(c, scan)) ring++
-                    if (Color.alpha(c) == 255 && near(c, paper)) page++
-                }
-                assertTrue("header mark rings ($ring) and page ($page)", ring > 300 && page > 300)
-            }
-        }
     }
 }

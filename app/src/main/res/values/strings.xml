@@ -8,9 +8,6 @@
     <string name="empty_first_scan">Scan your first document</string>
     <!-- test26 T3.13: muted line under the title — names the call to action. -->
     <string name="empty_first_scan_hint">Everything stays on this phone.</string>
-    <string name="empty_category">No %1$s documents yet</string>
-    <string name="empty_no_match">No documents match your search</string>
-    <string name="show_all">Show all</string>
     <string name="name_hint">Document name</string>
     <string name="save">Save</string>
     <string name="review_save_pdf">Save as PDF</string>
@@ -53,7 +50,6 @@
     <string name="share_pdf">Share</string>
     <string name="delete">Delete</string>
     <string name="delete_title">Delete scan?</string>
-    <string name="delete_selected_title">Delete selected scans?</string>
     <!-- test26 T4.8: deleting a document can remove its exported copies too. -->
     <plurals name="delete_copies">
         <item quantity="one">Also delete %1$d saved copy in Documents/ScanWhirl</item>
@@ -146,9 +142,7 @@
     <string name="compress_target_missed">Couldn\'t reach %1$s. This is the smallest honest result.</string>
 
     <string name="pdf_rasterize_note">Pages become images, so text is no longer selectable. Editing works the same.</string>
-    <string name="edit_pdf_note_title">Import PDF</string>
     <string name="continue_label">Continue</string>
-    <string name="badge_free">FREE</string>
     <string name="badge_pro">PRO</string>
     <string name="pdf_protected">This PDF is password-protected. Remove the password first, then import.</string>
 
@@ -173,7 +167,6 @@
     <!-- T3.11 (§4.3): the tile says just "Lock" — it toggles by state and
          "Lock / Unlock" broke across lines in the sheet (complaint #16).
          LockFlow's dialog titles keep btn_lock_unlock. -->
-    <string name="tool_lock">Lock</string>
     <string name="tool_compress">Compress</string>
     <string name="tool_compress_sub">Shrink the file (small quality loss)</string>
     <string name="tool_edit">Edit</string>
@@ -195,36 +188,25 @@
     <string name="remove">Remove</string>
     <string name="preview">Preview</string>
 
-    <string name="search_hint">Search names and text</string>
-    <string name="sort">Sort</string>
-    <string name="sort_name">Name</string>
-    <string name="sort_date">Date created</string>
-    <string name="sort_modified">Last modified</string>
-    <string name="sort_category">Category</string>
     <!-- test26 T3.5: the chip rail's "show everything" chip. -->
-    <string name="chip_all">All</string>
     <!-- test26 T3.5: search bar + list header. -->
-    <string name="search_clear">Clear search</string>
     <string name="select">Select</string>
     <!-- test26 T3.12: selection header — picks every visible card. -->
-    <string name="select_all">Select all</string>
     <!-- test26 T3.6: bottom bar + Tools sheet (bar_tools doubles as the sheet title). -->
     <string name="bar_tools">Tools</string>
-    <string name="bar_scan">Scan</string>
-    <string name="bar_add">Add</string>
-    <string name="bar_import">Import</string>
-    <string name="bar_vault">Vault</string>
     <string name="import_title">Import</string>
     <string name="import_photos">Photos</string>
     <string name="import_pdf">PDF file</string>
     <string name="import_subtitle">Choose where the pages are coming from.</string>
     <string name="import_photos_desc">From your gallery</string>
-    <string name="import_pdf_desc">Each page becomes an editable page</string>
+    <!-- VQA: no false promise that pages can be edited; D1 notice comes from ImportRasterNotice. -->
+    <string name="import_pdf_desc">From a PDF on this phone</string>
+    <string name="import_raster_notice_title">Before you import</string>
+    <string name="import_raster_notice">Importing turns pages into images; text won\'t be selectable.</string>
+    <string name="import_raster_notice_continue">Continue</string>
     <string name="import_order_note">The photo picker may change page order. Check it in Review before saving.</string>
-    <string name="empty_scan_button">Scan a document</string>
     <string name="empty_import_button">Import photos or a PDF</string>
     <string name="empty_no_match_hint">Names and text inside your scans were searched.</string>
-    <string name="list_count_category">%1$d in %2$s</string>
     <plurals name="list_count">
         <item quantity="one">%1$d document</item>
         <item quantity="other">%1$d documents</item>
@@ -266,10 +248,7 @@
     <string name="privacy_open_failed">No browser available</string>
     <string name="settings_pro">ScanWhirl Pro</string>
     <string name="settings_pro_summary">All Pro tools</string>
-    <string name="settings_pro_title">ScanWhirl Pro</string>
     <string name="pro_panel_note">Scanning, text recognition, search, export, merge and compress are free and stay free.</string>
-    <string name="pro_status_test">Unlocked in this test build</string>
-    <string name="pro_status_unavailable">Not available yet</string>
     <string name="pro_feat_password">Password-protect a PDF</string>
     <string name="pro_feat_id_sizes">ID / passport photo sizes</string>
     <string name="pro_feat_zip">Batch export ZIP</string>
@@ -290,15 +269,9 @@
     <string name="doc_row_desc">%1$s, %2$d pages, %3$s</string>
     <string name="doc_more_options">More options for %1$s</string>
     <string name="state_selected">Selected</string>
-    <string name="edit_pages">Edit pages</string>
     <string name="badge_vault">Vault</string>
-    <string name="pro_suite_title">Pro Suite</string>
     <string name="pro_suite_sub">Vault · OCR · Lock</string>
     <string name="vault_title">Hidden Vault</string>
-    <string name="vault_banner_title">Hidden Vault (Unlocked)</string>
-    <string name="vault_banner_sub">Hidden from the main list. Not encrypted.</string>
-    <string name="vault_exit">Lock</string>
-    <string name="vault_change_pin">PIN</string>
     <string name="vault_set_pin_title">Set 4-Digit Vault PIN</string>
     <string name="vault_set_pin_msg">Choose a 4-digit PIN. It hides private scans from the list. Files are not encrypted.</string>
     <string name="vault_enter_pin_title">Unlock Hidden Vault</string>
@@ -310,8 +283,6 @@
     <string name="vault_moved_in">Moved to Hidden Vault</string>
     <string name="vault_moved_out">Restored from Hidden Vault</string>
     <string name="vault_new_unavailable">Adding to Hidden Vault is unavailable. Existing vault items stay accessible.</string>
-    <string name="vault_empty_title">Vault is empty</string>
-    <string name="vault_empty_subtitle">Tap Add to move a saved scan here or import a PDF. Scans stay hidden until you enter your PIN.</string>
     <string name="unlock_pdf_title">Password-Protected PDF</string>
     <string name="unlock_pdf_msg">Enter password for \"%1$s\":</string>
     <string name="unlock_pdf_remove">Unlock permanently</string>
@@ -361,7 +332,6 @@
     <string name="share_text">Share text</string>
     <string name="export_zip">Export ZIP</string>
     <string name="ocr_note">Text search works best on printed pages.</string>
-    <string name="signal_reading_text">Reading text on your scans</string>
     <string name="settings_auto_enhance">Auto enhance scans</string>
     <string name="settings_auto_enhance_summary">Cleans up scans. Off keeps the photo as taken.</string>
     <string name="settings_searchable_pdf">Searchable PDFs</string>
@@ -452,7 +422,6 @@
 
     <!-- New pages: camera or a straight gallery import (no scanner crop). -->
     <string name="source_saved_scan">Saved scan</string>
-    <string name="source_device_pdf">Device PDF</string>
     <string name="source_gallery_image">Gallery image</string>
     <string name="add_from_gallery">Add from gallery</string>
 
@@ -467,15 +436,11 @@
     <string name="unlock_device_note">Your scan in ScanWhirl keeps its password; this exported copy is open. Use Lock / Unlock → Saved scan to remove the password from the scan itself.</string>
 
     <!-- Hidden Vault: add via the FAB. -->
-    <string name="vault_add_title">Add to Hidden Vault</string>
     <string name="vault_add_scan">Move a saved scan here</string>
     <string name="vault_add_pdf">Import a device PDF</string>
     <string name="vault_imported">Imported into Hidden Vault</string>
 
     <!-- Pro panel: pitch when free + test-only Free/Pro preview. -->
-    <string name="preview_free_ui">Preview Free UI</string>
-    <string name="preview_pro_ui">Preview Pro UI</string>
-    <string name="preview_changed">Showing the %1$s UI (test preview)</string>
 
     <!-- test26 T5.2 (§4.5): document dock labels, More sheet, Select pages bar. -->
     <string name="btn_text">Text</string>
@@ -503,12 +468,8 @@
     <string name="category_picker_title">Choose a category</string>
     <!-- test26 T4.3: Home quick-actions sheet + bulk Move toast -->
     <string name="move_to_category">Move to category</string>
-    <string name="moved_n_to_cat">Moved %1$d to %2$s</string>
     <!-- test26 T4.4: Quick Sort — nudge, sheet header, Tools tile, end state -->
-    <string name="quick_sort">Quick sort</string>
     <string name="quick_sort_nudge">%1$d to organize · Quick sort ›</string>
-    <string name="qs_progress">%1$d of %2$d</string>
-    <string name="all_sorted">All sorted</string>
     <string name="skip">Skip</string>
 
     <!-- Pro Feature Dossier -->
@@ -577,15 +538,11 @@
     <string name="review_film_page_current">Page %1$d, shown</string>
     <!-- Home slice 2: the Index. Status copy is evidence-based (ocr_pending marker,
          stored page text, live indexer state); search is document-level, never a page jump. -->
-    <string name="empty_home_title">Scan. Search. Keep control.</string>
-    <string name="empty_home_body">Scan paper or import photos. Text is recognised on this phone, so search any word.</string>
-    <string name="empty_home_note">No account. Files leave ScanWhirl only when you share or export them.</string>
     <string name="text_status_ready">Search ready</string>
     <string name="text_status_partial">Text on %1$d of %2$d pages</string>
     <string name="text_status_waiting">Waiting to read text</string>
     <string name="text_status_reading">Reading text %1$d/%2$d</string>
     <string name="doc_category_action">Category %1$s. Change category</string>
-    <string name="home_pro_tag_desc">%1$s. Open ScanWhirl Pro details</string>
     <!-- Retrieval slice 5: page-level evidence from stored per-page OCR text only.
          A "Page N" link needs every search word on that same page; links open the
          ScanWhirl reader because external viewers cannot be sent to a page. -->
@@ -644,13 +601,10 @@
         <item quantity="other">Text read on %1$d more pages</item>
     </plurals>
     <!-- M06: newly saved document on Home. -->
-    <string name="home_new_doc_shown">Saved: %1$s</string>
-    <string name="home_new_doc_hidden">Saved %1$s, but your search or filter hides it.</string>
     <!-- M07 P1: Trash (reversible delete) -->
     <string name="trash_title">Trash</string>
     <string name="trash_navigate_up">Back</string>
     <string name="trash_move">Move to Trash</string>
-    <string name="trash_move_short">Trash</string>
     <string name="trash_moved_one">Moved “%1$s” to Trash</string>
     <plurals name="trash_moved_many">
         <item quantity="one">Moved %1$d document to Trash</item>
@@ -704,23 +658,15 @@
     <string name="settings_library">Library</string>
     <string name="delete_copies_unproven_note">Copies ScanWhirl cannot prove came from this document stay in Documents/ScanWhirl.</string>
     <string name="delete_vault_message">Vault items don’t go to Trash. “%1$s” and all its pages will be permanently deleted.</string>
-    <plurals name="delete_vault_selected_message">
-        <item quantity="one">Vault items don’t go to Trash. %1$d scan and all its pages will be permanently deleted.</item>
-        <item quantity="other">Vault items don’t go to Trash. %1$d scans and all their pages will be permanently deleted.</item>
-    </plurals>
     <!-- M07 P2: PDF import -->
-    <string name="import_pdf_progress">Importing PDF…</string>
     <plurals name="import_pdf_done">
         <item quantity="one">Imported %1$d page</item>
         <item quantity="other">Imported %1$d pages</item>
     </plurals>
-    <string name="import_pdf_cancelled">Import cancelled. Nothing was added.</string>
-    <string name="import_failed_title">Couldn’t import this PDF</string>
     <string name="import_failed_password">This PDF is protected with a password. ScanWhirl can’t open protected PDFs, so nothing was imported. Remove the password in the app that made it, or save an unprotected copy, then import that.</string>
     <string name="import_failed_damaged">This file is damaged or isn’t a PDF, so nothing was imported.</string>
     <string name="import_failed_page">Couldn’t read page %1$d (of %2$d), so nothing was imported. The PDF may be damaged.</string>
     <string name="import_failed_empty">This PDF has no pages, so nothing was imported.</string>
-    <string name="import_failed_too_large">This PDF is larger than %1$d MB. Split it into smaller PDFs and import those.</string>
     <string name="import_failed_too_many">This PDF has %1$d pages; the most ScanWhirl imports at once is %2$d. Split it first.</string>
     <string name="import_failed_no_space">Not enough free storage, so nothing was added. Free some space and try again.</string>
     <string name="import_failed_no_access">ScanWhirl cannot read this file any more. It may have moved or lost its permission.</string>
@@ -728,7 +674,6 @@
     <string name="import_failed_save">ScanWhirl couldn’t save the imported pages, so nothing was added. Try again.</string>
     <!-- M08: Google scanner Done saves directly to Home. -->
     <string name="scan_saved_named">Saved “%1$s”</string>
-    <string name="scan_saved_named_export">Saved “%1$s”. %2$s</string>
     <string name="scan_save_failed_review">Couldn’t save the scan (%1$s). Your pages are kept here. Check them and save again.</string>
     <!-- T15: a camera session returned exactly ScanWhirl's page cap (60). -->
     <string name="cap_scan_message">You reached the limit of %1$d pages in one scan. Add more pages to this document?</string>

@@ -1,18 +1,24 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Rounded 400, "rotate_right" — 24dp glyph in the 960 viewport grammar.
-     Apache 2.0. y_final = 960 + 40 * (y - 24) = 40 * y. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="960"
     android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
     <group android:translateY="960">
-        <group android:scaleX="40" android:scaleY="40">
-            <group android:translateY="-24">
-                <path
-                    android:fillColor="#FFFFFFFF"
-                    android:pathData="M15.55,5.55L11,1v3.07C7.06,4.56 4,7.92 4,12s3.05,7.44 7,7.93v-2.02c-2.84,-0.48 -5,-2.94 -5,-5.91s2.16,-5.43 5,-5.91V10l4.55,-4.45zM19.93,11c-0.17,-1.39 -0.72,-2.73 -1.62,-3.89l-1.42,1.42c0.54,0.75 0.88,1.6 1.02,2.47h2.02zM13,17.9v2.02c1.39,-0.17 2.74,-0.71 3.9,-1.61l-1.44,-1.44c-0.75,0.54 -1.59,0.88 -2.46,1.03zM16.89,15.48l1.42,1.41c0.9,-1.16 1.45,-2.5 1.62,-3.89h-2.02c-0.14,0.87 -0.48,1.72 -1.02,2.48z" />
-            </group>
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M19.2,11.2a7.4,7.4 0 1,0 -2.4,6.6"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M19.4,5.6v5.8h-5.8"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
         </group>
     </group>
 </vector>

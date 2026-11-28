@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a-2 (U7/V062): App language owns a TRANSLATE glyph. W5d wires this into the
+     App language row; OCR language uses ic_sw_ocr_language instead. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3.4,6.2h9M8,3.6v2.6M11.2,6.2c-0.9,5.2 -3.1,8.4 -7.1,10.6M5.2,9.2c1.4,3.3 3.8,5.7 7.8,7.2M13.2,20.4l4,-9 4,9M14.7,17.2h5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

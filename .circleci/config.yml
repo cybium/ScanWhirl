@@ -1,0 +1,267 @@
+# ScanWhirl screen atlas on CircleCI: EXTRA emulator capacity alongside GitHub Actions.
+#
+# Triggered ONLY by branches cc/atlas-* (GitHub Actions owns ci/atlas-*), so the
+# two providers never atlas the same commit. No Gradle, emulator or adb ever runs
+# on a developer PC: the Docker job compiles once, four machine-executor legs
+# install that one APK and walk it on throwaway emulators. Fixtures are fictional.
+#
+# Free-plan notes: android:default is the gen1 Android machine image and
+# resource_class: large (4 vCPU / 15 GB, 20 credits/min) is available on Free;
+# gen2 machine classes are paid-only. medium would be too small for the emulator.
+version: 2.1
+
+executors:
+  atlas-machine:
+    machine:
+      image: android:default
+    resource_class: large
+
+commands:
+  atlas-leg:
+    description: "One screen-atlas leg: APK from the workspace, one emulator, artefacts"
+    parameters:
+      leg:
+        type: string
+      api:
+        type: string
+      arch:
+        type: string
+      profile:
+        type: string
+      setup:
+        type: string
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+
+      - run:
+          name: Verify the APK from the build job
+          command: |
+            set -euo pipefail
+            ls -l test-apk/
+            test -s test-apk/app-debug.apk
+            sha256sum -c <(sed 's#app/build/outputs/apk/debug/app-debug.apk#test-apk/app-debug.apk#' test-apk/apk-sha256.txt)
+
+      - run:
+          name: Prepare API << parameters.api >> (<< parameters.arch >>) system image and << parameters.profile >> AVD
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            SYSTEM_IMAGE="system-images;android-<< parameters.api >>;google_apis;<< parameters.arch >>"
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+            echo "system image: $SYSTEM_IMAGE"
+            if ! sdkmanager --list_installed 2>/dev/null | grep -qF "$SYSTEM_IMAGE"; then
+              yes | sdkmanager --licenses >/dev/null 2>&1 || true
+              sdkmanager --install "$SYSTEM_IMAGE"
+            fi
+            sdkmanager --list_installed | grep -qF "$SYSTEM_IMAGE"
+            avdmanager delete avd -n sw-atlas 2>/dev/null || true
+            # profiles match .github/workflows/atlas.yml: pixel_6 and Nexus 4.
+            if avdmanager list device 2>/dev/null | grep -qiF '<< parameters.profile >>'; then
+              echo no | avdmanager create avd --force -n sw-atlas -k "$SYSTEM_IMAGE" -d '<< parameters.profile >>'
+            else
+              echo no | avdmanager create avd --force -n sw-atlas -k "$SYSTEM_IMAGE"
+            fi
+
+      - run:
+          name: Boot the emulator (hardware-accelerated machine executor)
+          command: |
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+            # No -delay-adb: the wait step polls adb until sys.boot_completed.
+            emulator -avd sw-atlas -verbose -no-window -gpu swiftshader_indirect \
+              -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          background: true
+
+      - run:
+          name: Wait for the emulator to finish booting
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+            adb kill-server >/dev/null 2>&1 || true
+            BOOTED=""
+            for i in $(seq 1 450); do
+              STATE=$(adb get-state 2>/dev/null || true)
+              if [ "$STATE" = "device" ]; then
+                BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+                [ "$BOOTED" = "1" ] && break
+              fi
+              if [ $((i % 15)) -eq 0 ]; then
+                echo "waiting for emulator boot ($i/450) state=$STATE boot=$BOOTED"
+              fi
+              sleep 2
+            done
+            test "$BOOTED" = "1"
+            adb devices
+            test "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = "1"
+
+      - run:
+          name: Screen atlas - << parameters.leg >> (API << parameters.api >>)
+          no_output_timeout: 50m
+          command: |
+            set -euo pipefail
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+            # atlas.sh/atlas.py guard on GITHUB_ACTIONS to refuse local adb. Set it
+            # only INSIDE this CI job; the emulator-only guards still apply:
+            # ANDROID_SERIAL=emulator-N, ro.kernel.qemu=1, exactly one device.
+            export GITHUB_ACTIONS=true
+            export GITHUB_SHA="$CIRCLE_SHA1"  # report's commit field, not a guard
+            export CI=true
+            export CIRCLECI=true
+            export LEG='<< parameters.leg >>'
+            export API_LEVEL='<< parameters.api >>'
+            export LEG_SETUP='<< parameters.setup >>'
+            export ATLAS_MAX_MINUTES=42
+            export APK="$PWD/test-apk/app-debug.apk"
+            export OUT="$PWD/artifacts/<< parameters.leg >>"
+            bash tools/e2e/atlas.sh
+
+      - store_artifacts:
+          path: artifacts/<< parameters.leg >>
+          destination: atlas/<< parameters.leg >>
+
+jobs:
+  build:
+    docker:
+      - image: cimg/android:2026.11
+    resource_class: medium
+    working_directory: ~/project
+    steps:
+      - checkout
+
+      - run:
+          name: Select JDK 17
+          command: |
+            set -euo pipefail
+            if [ ! -x /usr/lib/jvm/java-17-openjdk-amd64/bin/java ]; then
+              sudo apt-get update
+              sudo apt-get install -y openjdk-17-jdk-headless
+            fi
+            echo 'export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64' >> "$BASH_ENV"
+            echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> "$BASH_ENV"
+
+      - restore_cache:
+          keys:
+            - gradle-v1-{{ arch }}-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}
+
+      - run:
+          name: Harness safety, selector and atlas helper tests (no device)
+          command: |
+            set -euo pipefail
+            bash -n tools/e2e/smoke.sh tools/e2e/flows.sh tools/e2e/atlas.sh
+            python3 -m unittest discover -s tools/e2e -p test_flow_driver.py -v
+            python3 -m unittest discover -s tools/e2e -p test_atlas.py -v
+
+      - run:
+          name: Assemble the test APK (com.scanwhirl.app.test)
+          no_output_timeout: 25m
+          command: ./gradlew :app:assembleDebug -PtestBuild --no-daemon -q
+
+      - run:
+          name: Verify the test APK and record its hash
+          command: |
+            set -euo pipefail
+            APK=app/build/outputs/apk/debug/app-debug.apk
+            test -f "$APK"
+            AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -n1)
+            "$AAPT2" dump badging "$APK" > badging-full.txt
+            head -n 3 badging-full.txt | tee badging.txt
+            grep -q "package: name='com.scanwhirl.app.test'" badging.txt
+            sha256sum "$APK" | tee apk-sha256.txt
+            mkdir -p test-apk
+            cp "$APK" apk-sha256.txt test-apk/
+
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - test-apk/app-debug.apk
+            - test-apk/apk-sha256.txt
+
+      - save_cache:
+          key: gradle-v1-{{ arch }}-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}
+          paths:
+            - ~/.gradle/caches
+            - ~/.gradle/wrapper
+
+  atlas-light:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: light
+          api: "35"
+          arch: x86_64
+          profile: pixel_6
+          setup: "true"
+
+  atlas-dark:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: dark
+          api: "35"
+          arch: x86_64
+          profile: pixel_6
+          setup: "adb shell cmd uimode night yes"
+
+  atlas-font200:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: font200
+          api: "35"
+          arch: x86_64
+          profile: pixel_6
+          setup: "adb shell settings put system font_scale 2.0"
+
+  atlas-small24:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: small24
+          api: "24"
+          arch: x86
+          profile: Nexus 4
+          setup: "true"
+
+workflows:
+  atlas:
+    jobs:
+      - build:
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-light:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-dark:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-font200:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-small24:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
