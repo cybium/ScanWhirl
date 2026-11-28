@@ -98,6 +98,10 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger
+          sudo usermod -aG kvm "$USER"
+          # The action checks /dev/kvm access at startup; make it writable now.
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+          ls -l /dev/kvm || true
 
       - name: Run connected tests on API ${{ matrix.api }} (x86_64, 2048M RAM)
         uses: reactivecircus/android-emulator-runner@v2
@@ -109,6 +113,7 @@ jobs:
           ram-size: 2048M
           sdcard-path-or-size: 1024M
           disable-animations: true
+          disable-linux-hw-accel: false
           emulator-boot-timeout: 600
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
