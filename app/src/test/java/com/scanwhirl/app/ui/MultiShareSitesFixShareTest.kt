@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui
 import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 
+import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -81,6 +82,16 @@ class MultiShareSitesFixShareTest {
         return condition()
     }
 
+    /** R09 F3: the chooser is posted after the IO copies; a single idle() races it. */
+    private fun chooserAfterCopy(activity: Activity): Intent? {
+        var chooser: Intent? = null
+        waitUntil {
+            chooser = shadowOf(activity).nextStartedActivity
+            chooser != null
+        }
+        return chooser
+    }
+
     @Suppress("DEPRECATION")
     private fun assertMultiShare(chooser: Intent, expectedType: String, expectedSize: Int) {
         assertEquals(Intent.ACTION_CHOOSER, chooser.action)
@@ -142,10 +153,9 @@ class MultiShareSitesFixShareTest {
                 while (shadowOf(activity).nextStartedActivity != null) Unit
                 val summary = ShadowDialog.getLatestDialog()
                 summary.findViewById<View>(R.id.swSheetPrimary).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share all opens the sharesheet", chooser)
-                assertMultiShare(chooser, "application/pdf", expectedSize = 2)
+                assertMultiShare(chooser!!, "application/pdf", expectedSize = 2)
             }
         }
     }
@@ -170,10 +180,9 @@ class MultiShareSitesFixShareTest {
                 // Drop anything the shell started while loading.
                 while (shadowOf(activity).nextStartedActivity != null) Unit
                 activity.findViewById<View>(R.id.swSelShare).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
-                assertMultiShare(chooser, "application/pdf", expectedSize = 2)
+                assertMultiShare(chooser!!, "application/pdf", expectedSize = 2)
             }
         }
     }

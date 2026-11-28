@@ -1145,7 +1145,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         }
         // H2-1: every PDF goes out under its document's own name (never the stored scan.pdf),
         // copied into one fresh share folder. fixshare: the helper's intent carries every Uri in
-        // ClipData too, so the Android 10+ grant covers all of them.
+        // ClipData too, so the Android 10+ grant covers all of them. The guard above returns
+        // before shareDocuments launches the IO copies — no unsafe PDF is ever read/copied.
         ShareUtils.shareDocuments(this, docs)
     }
 

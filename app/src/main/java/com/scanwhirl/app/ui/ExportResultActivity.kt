@@ -33,6 +33,31 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
+ * B2: ActivityResultRegistry re-delivers a pending result to the recreated screen, but a Kotlin
+ * lambda cannot survive a Bundle. A screen that is waiting on a result therefore persists a small
+ * token — what to do and the output path/target id, never document text or secrets — and rebuilds
+ * the pending action in onCreate, before the result arrives on ON_START. Mirrors the
+ * GalleryCrop.saveState/restoreState pattern in BaseActivity.
+ */
+internal object PendingSaveAction {
+    private const val KEY_KIND = "sw_pending_save_kind"
+    private const val KEY_TARGET = "sw_pending_save_target"
+
+    internal fun save(outState: Bundle, kind: String?, target: String?) {
+        if (kind == null) return
+        outState.putString(KEY_KIND, kind)
+        outState.putString(KEY_TARGET, target)
+    }
+
+    /** Returns the stored (kind, target) only when it belongs to this screen's action set. */
+    internal fun restore(saved: Bundle?, vararg expectedKinds: String): Pair<String, String>? {
+        val kind = saved?.getString(KEY_KIND) ?: return null
+        if (kind !in expectedKinds) return null
+        return kind to saved.getString(KEY_TARGET).orEmpty()
+    }
+}
+
+/**
  * Lane RS: the compact result for a file export (Resize / Protect / Unlock). The tool name is the
  * title, one measured hero line replaces the old "Before X → After Y + stats" pile, the proof is a
  * stacked zoom pair (or nothing at all for state-only tools), and Open / Share / More are pinned.
@@ -53,11 +78,17 @@ class ExportResultActivity : BaseActivity() {
     private var alreadyCompact = false
 
     private var pendingSave: (() -> Unit)? = null
+    private var pendingSaveKind: String? = null
+    private var pendingSaveTarget: String? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) pendingSave?.invoke()
-            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+            // B2: clear first, so a second delivery can never run the save twice.
+            val action = pendingSave
             pendingSave = null
+            pendingSaveKind = null
+            pendingSaveTarget = null
+            if (granted) action?.invoke()
+            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +102,15 @@ class ExportResultActivity : BaseActivity() {
         mime = intent.getStringExtra(EXTRA_MIME) ?: "image/jpeg"
         displayName = intent.getStringExtra(EXTRA_NAME) ?: "ScanWhirl"
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // B2: the answer to a storage prompt can arrive on this new instance. Rebuild the
+        // save from the token (output path only) and ignore a token for another output.
+        PendingSaveAction.restore(savedInstanceState, ACTION_SAVE)?.let { (kind, target) ->
+            if (target == outputPath) {
+                pendingSaveKind = kind
+                pendingSaveTarget = target
+                pendingSave = { saveExport() }
+            }
+        }
         // SECURITY_JUDGE 1.3.0: resolve a protected document's policy before any preview.
         com.scanwhirl.app.util.SecureView.applyForDocumentId(this, window, docId)
         beforeBytes = intent.getStringExtra(EXTRA_BEFORE_PREVIEW)?.let { File(it) }
@@ -298,49 +338,53 @@ class ExportResultActivity : BaseActivity() {
             Toast.makeText(this, R.string.resize_failed, Toast.LENGTH_LONG).show()
             return
         }
-        withStoragePermission {
-            lifecycleScope.launch {
-                try {
-                    if (isPdf) {
-                        val saved = withContext(Dispatchers.IO) {
-                            DownloadSaver.savePdfFile(
-                                this@ExportResultActivity, file, displayName
-                            ).also {
-                                docId?.let { id ->
-                                    try {
-                                        ScanRepository(this@ExportResultActivity).addExport(id, it)
-                                    } catch (_: Exception) {
-                                    }
+        withStoragePermission(ACTION_SAVE, outputPath.orEmpty()) { saveExport() }
+    }
+
+    /** B2: the save itself, separate from the permission gate so a recreated screen can re-run it. */
+    private fun saveExport() {
+        val file = outputPath?.let { File(it) } ?: return
+        lifecycleScope.launch {
+            try {
+                if (isPdf) {
+                    val saved = withContext(Dispatchers.IO) {
+                        DownloadSaver.savePdfFile(
+                            this@ExportResultActivity, file, displayName
+                        ).also {
+                            docId?.let { id ->
+                                try {
+                                    ScanRepository(this@ExportResultActivity).addExport(id, it)
+                                } catch (_: Exception) {
                                 }
                             }
                         }
-                        SavedSnackbar.showExport(
-                            this@ExportResultActivity, binding.root, saved,
-                            R.string.result_saved_documents, docId
-                        )
-                        binding.btnSaveResult.setText(R.string.rs_saved_documents)
-                        binding.btnSaveResult.isEnabled = false
-                    } else {
-                        val finalName = withContext(Dispatchers.IO) {
-                            DownloadSaver.saveJpeg(
-                                this@ExportResultActivity, file, displayName, subdir = "Resize"
-                            )
-                        }
-                        Toast.makeText(
-                            this@ExportResultActivity,
-                            getString(R.string.result_saved_downloads, finalName),
-                            Toast.LENGTH_LONG
-                        ).show()
-                        binding.btnSaveResult.setText(R.string.rs_saved_documents)
-                        binding.btnSaveResult.isEnabled = false
                     }
-                } catch (e: Exception) {
+                    SavedSnackbar.showExport(
+                        this@ExportResultActivity, binding.root, saved,
+                        R.string.result_saved_documents, docId
+                    )
+                    binding.btnSaveResult.setText(R.string.rs_saved_documents)
+                    binding.btnSaveResult.isEnabled = false
+                } else {
+                    val finalName = withContext(Dispatchers.IO) {
+                        DownloadSaver.saveJpeg(
+                            this@ExportResultActivity, file, displayName, subdir = "Resize"
+                        )
+                    }
                     Toast.makeText(
                         this@ExportResultActivity,
-                        getString(R.string.result_save_failed, e.message),
+                        getString(R.string.result_saved_downloads, finalName),
                         Toast.LENGTH_LONG
                     ).show()
+                    binding.btnSaveResult.setText(R.string.rs_saved_documents)
+                    binding.btnSaveResult.isEnabled = false
                 }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@ExportResultActivity,
+                    getString(R.string.result_save_failed, e.message),
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -365,7 +409,7 @@ class ExportResultActivity : BaseActivity() {
         }
     }
 
-    private fun withStoragePermission(action: () -> Unit) {
+    private fun withStoragePermission(kind: String, target: String, action: () -> Unit) {
         val granted = Build.VERSION.SDK_INT >= 29 ||
             ContextCompat.checkSelfPermission(
                 this, Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -374,11 +418,20 @@ class ExportResultActivity : BaseActivity() {
             action()
         } else {
             pendingSave = action
+            pendingSaveKind = kind
+            pendingSaveTarget = target
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // B2: keep only the token. The lambda belongs to the old screen and cannot be restored.
+        PendingSaveAction.save(outState, pendingSaveKind, pendingSaveTarget)
+    }
+
     companion object {
+        private const val ACTION_SAVE = "export_result_save"
         private const val EXTRA_OUTPUT = "output_path"
         private const val EXTRA_PREVIEW = "preview_path"
         private const val EXTRA_MIME = "mime"

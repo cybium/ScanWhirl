@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -255,8 +256,80 @@ class BookPagesActivity : BaseActivity() {
         )
 
         setContentView(root)
-        renderEmpty()
+        restoreState(savedInstanceState)
         updateControls()
+    }
+
+    // ---- configuration changes ------------------------------------------
+
+    /**
+     * R06 NEW-1: a configuration change must not throw away the picked spreads. Only the small
+     * immutable description of each card is saved; the preview bitmaps are rebuilt from the
+     * source photos by [loadImages], which also re-applies the owner's adjustments.
+     *
+     * The gallery picker's read grant already covers a rotation of this activity, so a fresh
+     * pick needs no new permission. [takePersistableUriPermission] would widen a one-shot
+     * gallery grant into indefinite access to the photo — it is only re-asserted below for
+     * spreads that were already used in the previous instance.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val saved = items.map { item ->
+            val gutter = item.view.gutter()
+            Bundle().apply {
+                putParcelable(KEY_ITEM_URI, item.uri)
+                putBoolean(KEY_ITEM_KEEP, item.keepAsOnePage)
+                putFloat(KEY_ITEM_RATIO, gutter.ratio)
+                putFloat(
+                    KEY_ITEM_TILT,
+                    if (gutter.topRatio != null && gutter.bottomRatio != null) {
+                        gutter.bottomRatio - gutter.topRatio
+                    } else 0f
+                )
+                putBoolean(KEY_ITEM_HORIZONTAL, gutter.horizontal)
+                putBoolean(KEY_ITEM_FOUND, gutter.found)
+                putFloat(KEY_ITEM_CONFIDENCE, gutter.confidence)
+                putBoolean(KEY_ITEM_SINGLE, gutter.singlePage)
+                putInt(KEY_ITEM_ROTATION, item.analysis.rotation)
+            }
+        }
+        outState.putParcelableArrayList(KEY_ITEMS, ArrayList(saved))
+    }
+
+    private fun restoreState(state: Bundle?) {
+        val bundles = state?.let { BundleCompat.getParcelableArrayList(it, KEY_ITEMS, Bundle::class.java) }
+            .orEmpty()
+        val saved = bundles.mapNotNull { bundle ->
+            val uri = BundleCompat.getParcelable(bundle, KEY_ITEM_URI, Uri::class.java) ?: return@mapNotNull null
+            SavedItem(
+                uri = uri,
+                keepAsOnePage = bundle.getBoolean(KEY_ITEM_KEEP),
+                ratio = bundle.getFloat(KEY_ITEM_RATIO, 0.5f),
+                tilt = bundle.getFloat(KEY_ITEM_TILT, 0f),
+                horizontal = bundle.getBoolean(KEY_ITEM_HORIZONTAL),
+                found = bundle.getBoolean(KEY_ITEM_FOUND),
+                confidence = bundle.getFloat(KEY_ITEM_CONFIDENCE, 0f),
+                singlePage = bundle.getBoolean(KEY_ITEM_SINGLE),
+                rotation = bundle.getInt(KEY_ITEM_ROTATION, 0)
+            )
+        }
+        if (saved.isEmpty()) {
+            renderEmpty()
+            return
+        }
+        container.removeAllViews()
+        for (item in saved) {
+            // These spreads were already decoded by the previous instance: re-asserting their
+            // grant keeps the saved Uri readable even if the process died with the state.
+            try {
+                contentResolver.takePersistableUriPermission(
+                    item.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+                // A provider may refuse persistence; the picker grant still covers rotation.
+            }
+        }
+        loadImages(saved.map { it.uri }, saved)
     }
 
     // ---- picking and previewing ------------------------------------------
@@ -265,7 +338,10 @@ class BookPagesActivity : BaseActivity() {
      * Decodes every picked photo at preview size, scans its gutter and adds a draggable card.
      * Kept internal so a Robolectric test can feed content URIs without the system picker.
      */
-    internal fun loadImages(uris: List<Uri>) {
+    internal fun loadImages(uris: List<Uri>) = loadImages(uris, emptyList())
+
+    /** [saved] holds the per-spread adjustments restored after a configuration change. */
+    private fun loadImages(uris: List<Uri>, saved: List<SavedItem>) {
         if (busy) return
         busy = true
         statusView.text = getString(R.string.book_loading)
@@ -273,7 +349,8 @@ class BookPagesActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val loaded = withContext(Dispatchers.IO) {
-                    uris.mapNotNull { uri ->
+                    uris.mapIndexedNotNull { index, uri ->
+                        val override = saved.getOrNull(index)
                         try {
                             val bytes = readBytes(uri)
                             val bitmap = BookSplit.decode(bytes, PREVIEW_MAX_DIM)
@@ -282,9 +359,18 @@ class BookPagesActivity : BaseActivity() {
                             if (confirmed != null && confirmed != analysis.rotation) {
                                 analysis = BookSplit.analyseUpright(bitmap, confirmed)
                             }
-                            val preview = BookSplit.rotate(bitmap, analysis.rotation)
+                            var preview = BookSplit.rotate(bitmap, analysis.rotation)
+                            if (override != null && override.rotation != analysis.rotation) {
+                                // "Flip pages" rotated the preview by 180 degrees after detection;
+                                // rebuild that orientation before re-applying the saved gutter.
+                                val turned = BookSplit.rotate(
+                                    preview, (override.rotation - analysis.rotation + 360) % 360
+                                )
+                                if (preview !== bitmap) preview.recycle()
+                                preview = turned
+                            }
                             if (preview !== bitmap) bitmap.recycle()
-                            Loaded(uri, preview, analysis)
+                            Loaded(uri, preview, analysis, override)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -317,7 +403,9 @@ class BookPagesActivity : BaseActivity() {
     private fun addPreview(loaded: Loaded) {
         val uri = loaded.uri
         val bitmap = loaded.preview
-        val analysis = loaded.analysis
+        val analysis = if (loaded.saved == null) loaded.analysis else {
+            loaded.analysis.copy(rotation = loaded.saved.rotation, gutter = loaded.saved.gutter())
+        }
         val gutter = analysis.gutter
         if (items.isEmpty()) container.removeAllViews()
         val card = LinearLayout(this).apply {
@@ -357,7 +445,7 @@ class BookPagesActivity : BaseActivity() {
                 note.setTextColor(SwStyle.color(this@BookPagesActivity, R.color.gold_pro_primary))
             }
         }
-        val item = Item(uri, spread, gutter.singlePage, analysis)
+        val item = Item(uri, spread, loaded.saved?.keepAsOnePage ?: gutter.singlePage, analysis)
         if (gutter.lowConfidence && !gutter.singlePage) spread.pulseLine()
         card.addView(
             spread,
@@ -391,7 +479,7 @@ class BookPagesActivity : BaseActivity() {
         if (gutter.singlePage) {
             val onePage = SwitchCompat(this).apply {
                 text = getString(R.string.book_keep_one_page)
-                isChecked = true
+                isChecked = item.keepAsOnePage
                 setTextColor(SwStyle.color(this@BookPagesActivity, R.color.text_hologram_hi))
                 minHeight = SwStyle.dp(this@BookPagesActivity, 44f)
                 setOnCheckedChangeListener { _, checked ->
@@ -400,7 +488,7 @@ class BookPagesActivity : BaseActivity() {
                 }
             }
             item.onePageSwitch = onePage
-            spread.lineVisible = false
+            spread.lineVisible = !item.keepAsOnePage
             card.addView(onePage)
         }
 
@@ -520,6 +608,30 @@ class BookPagesActivity : BaseActivity() {
         super.onDestroy()
     }
 
+    /** The immutable description of one card that survives a configuration change. */
+    private data class SavedItem(
+        val uri: Uri,
+        val keepAsOnePage: Boolean,
+        val ratio: Float,
+        val tilt: Float,
+        val horizontal: Boolean,
+        val found: Boolean,
+        val confidence: Float,
+        val singlePage: Boolean,
+        val rotation: Int
+    ) {
+        /** Rebuild the owner-adjusted line, including a tilted spine and a flipped photo. */
+        fun gutter(): BookSplit.Gutter = BookSplit.Gutter(
+            ratio = ratio,
+            found = found,
+            confidence = confidence,
+            singlePage = singlePage,
+            horizontal = horizontal,
+            topRatio = if (tilt != 0f && !horizontal) (ratio - tilt / 2f).coerceIn(0.02f, 0.98f) else null,
+            bottomRatio = if (tilt != 0f && !horizontal) (ratio + tilt / 2f).coerceIn(0.02f, 0.98f) else null
+        )
+    }
+
     private class Item(
         val uri: Uri,
         val view: BookSpreadView,
@@ -538,12 +650,24 @@ class BookPagesActivity : BaseActivity() {
     private class Loaded(
         val uri: Uri,
         val preview: android.graphics.Bitmap,
-        val analysis: BookSplit.Analysis
+        val analysis: BookSplit.Analysis,
+        val saved: SavedItem? = null
     )
 
     companion object {
         /** Previews are decodes for the screen only; the create path decodes at 3000 px. */
         private const val PREVIEW_MAX_DIM = 900
+
+        private const val KEY_ITEMS = "book_saved_items"
+        private const val KEY_ITEM_URI = "book_item_uri"
+        private const val KEY_ITEM_KEEP = "book_item_keep"
+        private const val KEY_ITEM_RATIO = "book_item_ratio"
+        private const val KEY_ITEM_TILT = "book_item_tilt"
+        private const val KEY_ITEM_HORIZONTAL = "book_item_horizontal"
+        private const val KEY_ITEM_FOUND = "book_item_found"
+        private const val KEY_ITEM_CONFIDENCE = "book_item_confidence"
+        private const val KEY_ITEM_SINGLE = "book_item_single"
+        private const val KEY_ITEM_ROTATION = "book_item_rotation"
 
         fun intent(context: Context): Intent = Intent(context, BookPagesActivity::class.java)
     }

@@ -25,15 +25,25 @@ object ZipExporter {
     fun exportFiles(entries: List<Pair<File, String>>, outFile: File) {
         outFile.parentFile?.mkdirs()
         val names = ExportNames.Allocator()
-        ZipOutputStream(outFile.outputStream()).use { zip ->
-            for ((file, displayName) in entries) {
-                if (!file.isFile) continue
-                val name = names.file(ExportNames.sanitizeFileName(displayName))
-                zip.putNextEntry(ZipEntry(name))
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
+        var written = 0
+        try {
+            ZipOutputStream(outFile.outputStream()).use { zip ->
+                for ((file, displayName) in entries) {
+                    if (!file.isFile) continue
+                    val name = names.file(ExportNames.sanitizeFileName(displayName))
+                    zip.putNextEntry(ZipEntry(name))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                    written++
+                }
             }
+            // NEW-1: a closed empty ZipOutputStream still writes a 22-byte END record, so a
+            // length check can never detect "nothing exported". Count the entries instead.
+            require(written > 0) { "ZIP export produced no entries" }
+        } catch (e: Exception) {
+            // No empty archive is left behind for a caller to report as a success.
+            outFile.delete()
+            throw e
         }
-        require(outFile.length() > 0) { "ZIP export produced an empty file" }
     }
 }

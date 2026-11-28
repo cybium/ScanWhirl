@@ -1451,12 +1451,18 @@ class ToolResultActivity : BaseActivity() {
 
     /** H2-1: [items] are (stored file, outgoing name); the receiver sees the names, numbered if equal. */
     private fun shareUris(items: List<Pair<File, String>>, type: String) {
-        val uris = ShareUtils.namedUris(this, items)
-        if (uris.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
-        // so a ClipData with only the first file shared one file from a batch.
-        val intent = ShareUtils.multiShareIntent(this, uris, type, toolName)
-        startActivity(Intent.createChooser(intent, getString(R.string.tools_result_share)))
+        // R09 F3: copy on IO in the activity scope; the chooser is posted back on main later.
+        ShareUtils.launchShare(this) {
+            val uris = ShareUtils.namedUris(this@ToolResultActivity, items)
+            if (uris.isEmpty()) {
+                fail(getString(R.string.tools_result_nothing))
+                return@launchShare
+            }
+            // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
+            // so a ClipData with only the first file shared one file from a batch.
+            val intent = ShareUtils.multiShareIntent(this@ToolResultActivity, uris, type, toolName)
+            ShareUtils.startChooser(this@ToolResultActivity, intent, R.string.tools_result_share)
+        }
     }
 
     private fun save() {

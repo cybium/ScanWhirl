@@ -105,6 +105,9 @@ class OcrEditorActivity : BaseActivity() {
     /** Suppresses recording while the activity sets text programmatically. */
     private var applyingHistory = false
     private var saving = false
+    /** Test seam: temp-text writes started on this instance (a count, never user text). */
+    internal var textWriteStartsForTest: Int = 0
+        private set
     /** v2 UI: 08_text_ocr — Text is the default pane; Page shows the scan. */
     private var pageMode = false
     /**
@@ -195,6 +198,49 @@ class OcrEditorActivity : BaseActivity() {
         // Recompute dirty from restored state.
         isDirty = pageTexts.any { (k, v) -> v != (originalTexts[k] ?: "") }
 
+        // B2: a storage answer may be re-delivered after a rotation. Rebuild the export from
+        // the token (kind + file name only); the text itself comes from the restored pageTexts,
+        // never from the Bundle. This keeps secrets out of saved state.
+        PendingSaveAction.restore(
+            savedInstanceState,
+            ACTION_TEMP_TXT, ACTION_TEMP_TXT_FINISH, ACTION_TEMP_TXT_ALL,
+            ACTION_DOC_TXT_RETRY, ACTION_DOC_TXT_RETRY_FINISH
+        )?.let { (kind, fileName) ->
+            pendingKind = kind
+            pendingTarget = fileName
+            when (kind) {
+                ACTION_TEMP_TXT, ACTION_TEMP_TXT_FINISH, ACTION_TEMP_TXT_ALL -> {
+                    // The answer is already in hand: go straight to the write, never through
+                    // exportText's gate again (the OS grant need not be visible to this instance).
+                    val finishAfterSave = kind == ACTION_TEMP_TXT_FINISH
+                    pendingExport = {
+                        val text = if (kind == ACTION_TEMP_TXT_ALL) {
+                            renderAllPages()
+                        } else {
+                            pageTexts[currentPageKey] ?: ""
+                        }
+                        performTextExport(text, fileName) {
+                            originalTexts = pageTexts.toMap()
+                            isDirty = false
+                            updateWordCount()
+                            if (finishAfterSave) finish()
+                        }
+                    }
+                }
+                else -> {
+                    // The document text was already stored before the permission was asked.
+                    saving = true
+                    pendingExport = {
+                        writeDocumentTxt(fileName, kind == ACTION_DOC_TXT_RETRY_FINISH, retried = true)
+                    }
+                    pendingDenied = {
+                        showTxtFailure()
+                        finishSaveAttempt()
+                    }
+                }
+            }
+        }
+
         setupToolbar()
         setupPageTabs()
         setupEditText()
@@ -230,6 +276,8 @@ class OcrEditorActivity : BaseActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        // B2: persist only the operation token, before the rereading early return below.
+        PendingSaveAction.save(outState, pendingKind, pendingTarget)
         outState.putString("currentPageKey", currentPageKey)
         // The person explicitly confirmed replacing OCR corrections. During our own
         // re-read/recreate, NEVER persist the old text baseline into the new screen:
@@ -1415,7 +1463,13 @@ class OcrEditorActivity : BaseActivity() {
         } else {
             // Temp mode: save as .txt via DownloadSaver (M06 transaction).
             val title = docTitle ?: "Document"
-            exportText(text, "${sanitizeTitle(title)}.txt") {
+            val fileName = "${sanitizeTitle(title)}.txt"
+            // exportText owns the permission gate and the operation token (B2).
+            exportText(
+                text,
+                fileName,
+                if (finishAfterSave) ACTION_TEMP_TXT_FINISH else ACTION_TEMP_TXT
+            ) {
                 originalTexts = pageTexts.toMap()
                 isDirty = false
                 updateWordCount()
@@ -1522,12 +1576,14 @@ class OcrEditorActivity : BaseActivity() {
                 ) {
                     // Pre-Android-10 public storage: ask, then retry the same write.
                     withStoragePermission(
-                        action = { writeDocumentTxt(fileName, finishAfterSave, retried = true) },
+                        if (finishAfterSave) ACTION_DOC_TXT_RETRY_FINISH else ACTION_DOC_TXT_RETRY,
+                        fileName,
                         onDenied = {
                             reportTxtFailure(e)
                             showTxtFailure()
                             finishSaveAttempt()
-                        }
+                        },
+                        action = { writeDocumentTxt(fileName, finishAfterSave, retried = true) }
                     )
                 } else {
                     reportTxtFailure(e)
@@ -1564,60 +1620,78 @@ class OcrEditorActivity : BaseActivity() {
      * transaction. An earlier .txt is never overwritten, and an identical one
      * is reported as already saved. A failure is shown and never crashes the
      * editor; edits stay in place. [onSaved] runs only after a verified save.
+     *
+     * B2: this is the single permission gate for temp-text exports. Every caller supplies its
+     * operation kind, so a result re-delivered after rotation can rebuild the right action.
      */
-    private fun exportText(text: String, fileName: String, onSaved: () -> Unit = {}) {
+    private fun exportText(
+        text: String,
+        fileName: String,
+        kind: String,
+        onSaved: () -> Unit = {}
+    ) {
         if (saving) return
-        withStoragePermission {
-            saving = true
-            findViewById<View>(R.id.btnSave).isEnabled = false
-            lifecycleScope.launch {
-                try {
-                    val saved = withContext(NonCancellable + Dispatchers.IO) {
-                        DownloadSaver.saveText(this@OcrEditorActivity, text, fileName)
-                    }
-                    val message = when {
-                        !saved.created -> getString(R.string.export_already_saved, saved.name)
-                        saved.keptEarlier -> getString(R.string.export_saved_new_copy, saved.name)
-                        else -> getString(R.string.text_saved_docs, saved.name)
-                    }
-                    com.scanwhirl.app.util.SavedSnackbar.show(
-                        binding.root,
-                        message,
-                        onOpen = { com.scanwhirl.app.util.PdfOpener.open(this@OcrEditorActivity, saved.uri) },
-                        onUndo = null
-                    )
-                    // The outcome is also a toast so it is reported even when a
-                    // snackbar cannot show (and existing export tests read it).
-                    Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
-                    hideTxtFailure()
-                    saving = false
-                    findViewById<View>(R.id.btnSave).isEnabled = true
-                    onSaved()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    saving = false
-                    findViewById<View>(R.id.btnSave).isEnabled = true
-                    Toast.makeText(
-                        this@OcrEditorActivity,
-                        getString(R.string.text_save_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    // W5: temp text stays on screen; the failure is actionable with Retry.
-                    showTxtFailure()
+        withStoragePermission(kind, fileName) {
+            performTextExport(text, fileName, onSaved)
+        }
+    }
+
+    /** B2: the write itself, separated from the gate so a recreated screen can run it once. */
+    private fun performTextExport(text: String, fileName: String, onSaved: () -> Unit) {
+        textWriteStartsForTest++
+        saving = true
+        findViewById<View>(R.id.btnSave).isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val saved = withContext(NonCancellable + Dispatchers.IO) {
+                    DownloadSaver.saveText(this@OcrEditorActivity, text, fileName)
                 }
+                val message = when {
+                    !saved.created -> getString(R.string.export_already_saved, saved.name)
+                    saved.keptEarlier -> getString(R.string.export_saved_new_copy, saved.name)
+                    else -> getString(R.string.text_saved_docs, saved.name)
+                }
+                com.scanwhirl.app.util.SavedSnackbar.show(
+                    binding.root,
+                    message,
+                    onOpen = { com.scanwhirl.app.util.PdfOpener.open(this@OcrEditorActivity, saved.uri) },
+                    onUndo = null
+                )
+                // The outcome is also a toast so it is reported even when a
+                // snackbar cannot show (and existing export tests read it).
+                Toast.makeText(this@OcrEditorActivity, message, Toast.LENGTH_LONG).show()
+                hideTxtFailure()
+                saving = false
+                findViewById<View>(R.id.btnSave).isEnabled = true
+                onSaved()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                saving = false
+                findViewById<View>(R.id.btnSave).isEnabled = true
+                Toast.makeText(
+                    this@OcrEditorActivity,
+                    getString(R.string.text_save_failed, V2vFailureCopy.message(this@OcrEditorActivity, e)),
+                    Toast.LENGTH_LONG
+                ).show()
+                // W5: temp text stays on screen; the failure is actionable with Retry.
+                showTxtFailure()
             }
         }
     }
 
     private var pendingExport: (() -> Unit)? = null
     private var pendingDenied: (() -> Unit)? = null
+    private var pendingKind: String? = null
+    private var pendingTarget: String? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             val action = pendingExport
             val denied = pendingDenied
             pendingExport = null
             pendingDenied = null
+            pendingKind = null
+            pendingTarget = null
             if (granted) {
                 action?.invoke()
             } else {
@@ -1631,12 +1705,19 @@ class OcrEditorActivity : BaseActivity() {
      * [onDenied] lets a caller release its own in-progress state when the person
      * refuses; the temporary-text save keeps the old behaviour of just saying so.
      */
-    private fun withStoragePermission(onDenied: (() -> Unit)? = null, action: () -> Unit) {
+    private fun withStoragePermission(
+        kind: String,
+        target: String,
+        onDenied: (() -> Unit)? = null,
+        action: () -> Unit
+    ) {
         if (!needsStoragePermission()) {
             action()
         } else {
             pendingExport = action
             pendingDenied = onDenied
+            pendingKind = kind
+            pendingTarget = target
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
@@ -1670,8 +1751,11 @@ class OcrEditorActivity : BaseActivity() {
     private fun saveAllAsTxt() {
         val title = docTitle ?: "Document"
         val fileName = "${sanitizeTitle(title)}.txt"
-        exportText(renderAllPages(), fileName)
+        exportText(renderAllPages(), fileName, ACTION_TEMP_TXT_ALL)
     }
+
+    /** Test seam: the overflow "Save all as .txt" action without opening the menu. */
+    internal fun saveAllAsTxtForTest() = saveAllAsTxt()
 
     /** Renders all pages with localized "Page N" headings. Omits headings for a single page. */
     private fun renderAllPages(): String {
@@ -1769,6 +1853,12 @@ class OcrEditorActivity : BaseActivity() {
         private const val STATE_PROBLEM = "readProblem"
         /** D9-1: the text this session was loaded against, kept across a rotation. */
         private const val STATE_BASELINE = "baselineTexts"
+        /** B2: pending storage-permission operations (kind only; never the user's text). */
+        private const val ACTION_TEMP_TXT = "ocr_temp_txt"
+        private const val ACTION_TEMP_TXT_FINISH = "ocr_temp_txt_finish"
+        private const val ACTION_TEMP_TXT_ALL = "ocr_temp_txt_all"
+        private const val ACTION_DOC_TXT_RETRY = "ocr_doc_txt_retry"
+        private const val ACTION_DOC_TXT_RETRY_FINISH = "ocr_doc_txt_retry_finish"
 
         fun problemOf(report: OcrIndexer.IndexReport): String? = when {
             report.unavailable -> PROBLEM_UNAVAILABLE

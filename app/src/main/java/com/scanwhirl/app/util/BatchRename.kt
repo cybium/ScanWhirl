@@ -27,7 +27,9 @@ object BatchRename {
         dateFormat: String = "yyyy-MM-dd"
     ): List<String> {
         if (items.isEmpty()) return emptyList()
-        val fmt = SimpleDateFormat(dateFormat, Locale.getDefault())
+        // R09 F2: a document name is data, not locale-formatted UI. th-TH would write a Buddhist
+        // year and ar-EG Arabic-Indic digits; every other name/date formatter here pins ROOT.
+        val fmt = SimpleDateFormat(dateFormat, Locale.ROOT)
         return items.mapIndexed { index, item ->
             val expanded = pattern
                 .replace("{name}", item.name)

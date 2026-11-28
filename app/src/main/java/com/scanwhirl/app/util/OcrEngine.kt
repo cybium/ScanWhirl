@@ -170,7 +170,10 @@ object OcrEngine {
         language: OcrLanguage = OcrLanguage.ENGLISH
     ): String = withContext(Dispatchers.IO) {
         require(bytes.isNotEmpty()) { "Image is empty" }
-        val bitmap = ImageTools.decodeSampled(bytes, OCR_MAX_DIM)
+        // R08 F2: BitmapFactory never applies EXIF. The gallery-crop fallback hands this path
+        // raw provider bytes, so a sideways photo must be turned upright before ML Kit sees it —
+        // the same tag/transform recognizeFile and the main OCR path already honour.
+        val bitmap = ImageTools.decodeUpright(bytes, OCR_MAX_DIM, ImageTools.exifOrientation(bytes))
         try {
             recognizeBitmap(bitmap, language)
         } finally {
