@@ -305,7 +305,7 @@ class MeScreen(
             SwStyle.text(context, SwType.CAPTION_SP,
                 SwStyle.color(context, R.color.text_hologram_dim)).apply {
                 text = summary
-                if (summaryId != View.NO_ID) id = summaryId
+                if (summaryId != View.NO_ID) setId(summaryId)
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 3f) }
