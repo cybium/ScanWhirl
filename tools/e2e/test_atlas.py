@@ -249,6 +249,28 @@ class DeepCoverageTest(unittest.TestCase):
             atlas.confirm_picker()
         self.assertEqual(tap.call_args.args[1].get("text"), "Add (2)")
 
+    def test_a_lone_language_chip_is_not_a_hindi_ui(self):
+        chip = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swLanguageChip" text="A/अ"/>'
+            '</hierarchy>')
+        self.assertEqual(atlas.hindi_node_count(chip), 0)
+        self.assertFalse(atlas.hindi_active(chip))
+        real = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swLanguageChip" text="A/अ"/>'
+            + ''.join('<node text="हिन्दी %d लाइब्रेरी" />' % i for i in range(6))
+            + '</hierarchy>')
+        self.assertTrue(atlas.hindi_active(real))
+
+    def test_tool_capture_with_focused_search_is_detected(self):
+        focused = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swToolsSearch" focused="true" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertTrue(atlas.tool_search_focused(focused))
+        opened = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/toolSetupRun" focused="false" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertFalse(atlas.tool_search_focused(opened))
+
     def test_redact_alias_does_not_open_id_card(self):
         # "aadhaar" is also an ID-card keyword; "confidential" is unique.
         self.assertEqual(atlas.TOOL_ALIASES["redact"], "confidential")

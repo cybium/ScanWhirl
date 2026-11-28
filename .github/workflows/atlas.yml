@@ -145,7 +145,7 @@ jobs:
           LEG: ${{ matrix.leg }}
           API_LEVEL: ${{ matrix.api }}
           LEG_SETUP: ${{ matrix.setup }}
-          ATLAS_MAX_MINUTES: "40"
+          ATLAS_MAX_MINUTES: "45"
           APK: ${{ github.workspace }}/test-apk/app-debug.apk
           OUT: ${{ github.workspace }}/artifacts/${{ matrix.leg }}
 

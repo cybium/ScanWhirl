@@ -101,6 +101,7 @@ LAST_SCREEN = None
 ANRS = []
 CRASHES = []
 HINDI_NODES = 0
+HINDI_MIN_CHARS = 20  # the always-visible "A/अ" chip is one character, not a Hindi UI
 DENSITY = 1.0
 WIDTH = 1080
 HEIGHT = 2400
@@ -391,6 +392,14 @@ def classify_capture(payload, stats, secure, attempts=1):
                             "detail": "non-secure capture is all black or undecodable"},
                 "secure": False}
     return {"status": "ok", "label": "ok", "failure": None, "secure": False}
+
+
+def tool_search_focused(root):
+    """W5e self-check: a tool capture still sitting in the focused search box."""
+    if root is None:
+        return False
+    return any(rid_name(node) == "swToolsSearch" and node.get("focused") == "true"
+               for node in root.iter("node"))
 
 
 def display_dimensions(rotation):
@@ -688,11 +697,16 @@ HINDI_TEXT_RE = re.compile(r"[\u0900-\u097f]")
 
 
 def hindi_node_count(root):
-    """How many visible labels are actually in Hindi (locale evidence)."""
+    """Devanagari characters in real labels (not the persistent A/अ chip)."""
     if root is None:
         return 0
-    return sum(1 for node in root.iter("node")
-               if HINDI_TEXT_RE.search(node.get("text") or ""))
+    return sum(len(HINDI_TEXT_RE.findall(node.get("text") or ""))
+               for node in root.iter("node")
+               if rid_name(node) != "swLanguageChip")
+
+
+def hindi_active(root):
+    return hindi_node_count(root) >= HINDI_MIN_CHARS
 
 
 def ensure_hindi_locale():
@@ -700,8 +714,9 @@ def ensure_hindi_locale():
     global HINDI_NODES
     path = ["Library"]
     launch()
-    HINDI_NODES = hindi_node_count(hierarchy())
-    if HINDI_NODES == 0:
+    first = hierarchy()
+    HINDI_NODES = hindi_node_count(first)
+    if not hindi_active(first):
         # The Home A/अ chip is the shortest human route to the app language.
         if tap({"rid": "swLanguageChip"}, timeout=7):
             path += ["A/अ language", "हिन्दी"]
@@ -712,7 +727,7 @@ def ensure_hindi_locale():
                 tap_node(root, node)
                 time.sleep(2.5)
                 HINDI_NODES = hindi_node_count(hierarchy())
-        if HINDI_NODES == 0:  # older build: Settings > App language
+        if not hindi_active(hierarchy()):  # older build: Settings > App language
             tap({"rid": "swNavMe"}, timeout=8)
             tap({"rid": "swMeSettings"}, timeout=7)
             if tap({"rid": "rowLanguage"}, timeout=7):
@@ -724,8 +739,8 @@ def ensure_hindi_locale():
                     time.sleep(2.5)
                     HINDI_NODES = hindi_node_count(hierarchy())
     capture("shell", "hindi-locale", path,
-            "Hindi labels visible: %d" % HINDI_NODES)
-    return "Hindi labels: %d" % HINDI_NODES
+            "Hindi label characters: %d" % HINDI_NODES)
+    return "Hindi characters: %d" % HINDI_NODES
 
 
 def open_create_sheet():
@@ -832,6 +847,14 @@ def capture(area, slug, path, note=None):
             root = ET.fromstring(data)
         except ET.ParseError:
             pass
+    if (not secure and area == "tools" and slug.startswith("tool-")
+            and tool_search_focused(root)):
+        # W5e: a "tool screen" that is really the search box is a failed capture.
+        verdict = {"status": "capture-failed", "label": "capture failed (tool search focused)",
+                   "failure": {"kind": "tool-search-focused", "attempts": attempts,
+                               "detail": "tool capture still shows the focused Tools search field"},
+                   "secure": False}
+        note = ((note + "; ") if note else "") + "FAILED: tool did not open"
     width, height = display_dimensions(root.get("rotation") if root is not None else None)
     flags = analyze(root, DENSITY, width, height)
     score = sum(len(v) if isinstance(v, list) else 1 for v in flags.values() if v)
@@ -1109,8 +1132,20 @@ def walk_tools():
                 capture("tools", "tool-" + tool_id + "-missing",
                         ["Library", "Tools", "Search: " + detail], "Search result tile not found")
                 return detail
-            capture("tools", "tool-" + tool_id, ["Library", "Tools", "Search: " + title, title],
-                    "Tile opened; first screen after launch")
+            root = hierarchy()
+            picker = root is not None and (
+                find(root, desc="Show roots") is not None
+                or find(root, rid="picker_tab_recyclerview") is not None
+                or find(root, rid="docPickerSheetRoot") is not None
+                or find(root, text="Open from") is not None)
+            if picker:
+                capture("tools", "tool-" + tool_id + "-picker",
+                        ["Library", "Tools", "Search: " + title, title, "Picker"],
+                        "Tile opened the system picker (labelled picker)")
+            else:
+                capture("tools", "tool-" + tool_id,
+                        ["Library", "Tools", "Search: " + title, title],
+                        "Tile opened; first screen after launch")
             COVERAGE["tools_visited"].append(tool_id)
             dismiss_sheet()
             back()
@@ -1740,13 +1775,13 @@ def main():
         walk_library()
         walk_tabs()
         walk_tools()
+        walk_rotation()  # before the deadline-sensitive deep flows
         walk_deep_tools()
         walk_viewer()
         walk_vault()
         walk_me()
         walk_create()
         walk_photos()
-        walk_rotation()
         capture("shell", "final", ["Library"], "Final state after the full walk")
     finally:
         try:
