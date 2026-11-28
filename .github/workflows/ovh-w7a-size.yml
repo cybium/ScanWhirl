@@ -171,5 +171,8 @@ jobs:
             ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PciUnsignedRelease --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/release/app-release.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w -e class com.scanwhirl.app.pdf.engine.PdfEngineMinifiedSmokeTest com.scanwhirl.app.test/androidx.test.runner.AndroidJUnitRunner | tee minified-instrument.log
+            adb shell pm list instrumentation | grep -i scanwhirl || true
+            adb shell am instrument -w -e class com.scanwhirl.app.pdf.engine.PdfEngineMinifiedSmokeTest com.scanwhirl.app.test/androidx.test.runner.AndroidJUnitRunner | tee minified-instrument.log || true
+            cat minified-instrument.log
+            adb logcat -d -t 200 | grep -i instrumentation || true
             grep -q "OK (1 test)" minified-instrument.log
