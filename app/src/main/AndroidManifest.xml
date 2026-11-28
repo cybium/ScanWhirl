@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- No INTERNET or ACCESS_NETWORK_STATE permission: offline-only spike. -->
+    <application
+        android:allowBackup="false"
+        android:label="PDF engine spike" />
+</manifest>

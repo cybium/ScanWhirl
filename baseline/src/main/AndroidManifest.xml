@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Same shell as :app but without the PDF engine dependency: size baseline. -->
+    <application
+        android:allowBackup="false"
+        android:label="PDF engine spike baseline" />
+</manifest>
