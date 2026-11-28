@@ -115,12 +115,17 @@ jobs:
           disable-animations: true
           disable-linux-hw-accel: false
           emulator-boot-timeout: 600
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          script: |
+            set +e
+            ./gradlew :app:connectedDebugAndroidTest --stacktrace
+            RC=$?
+            # Pull while the emulator is still up, even when a check fails.
+            adb exec-out run-as com.scanwhirl.spike.pdf cat files/pdf_spike_results.json > results-api-${{ matrix.api }}.json || true
+            exit $RC
 
-      - name: Pull JSON results from the app
+      - name: Verify and show JSON results
         if: always()
         run: |
-          adb exec-out run-as com.scanwhirl.spike.pdf cat files/pdf_spike_results.json > results-api-${{ matrix.api }}.json
           test -s results-api-${{ matrix.api }}.json
           cat results-api-${{ matrix.api }}.json
 

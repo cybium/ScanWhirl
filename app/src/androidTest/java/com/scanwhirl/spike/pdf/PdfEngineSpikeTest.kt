@@ -240,13 +240,18 @@ class PdfEngineSpikeTest {
 
         // 2. Reorder, rotate, delete; text must survive on the remaining page.
         val edited = File(work, "edited.pdf")
-        PDDocument.load(copy).use { doc ->
-            val first = doc.getPage(0)
-            doc.getPages().remove(0)
-            doc.getPages().add(first) // order [page 3, page 1]
-            doc.getPage(0).rotation = 90
-            doc.removePage(1)
-            doc.save(edited)
+        // Rebuild in the order [page 3, page 1, page 2] from vetted page objects,
+        // rotate the new first page, then delete the other two.
+        PDDocument.load(base).use { src ->
+            PDDocument().use { doc ->
+                doc.importPage(src.getPage(2))
+                doc.importPage(src.getPage(0))
+                doc.importPage(src.getPage(1))
+                doc.getPage(0).rotation = 90
+                doc.removePage(1)
+                doc.removePage(1)
+                doc.save(edited)
+            }
         }
         var editedOk = false
         var editedRotation = -1
