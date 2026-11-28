@@ -359,7 +359,33 @@ object VaultKeyWrap {
         return out.toByteArray()
     }
 
+    /**
+     * R03 NEW-1: the structural checks of [open] (size, magic, iterations, salt and wrapped
+     * lengths) without deriving a key. A wrap that fails here can never open with any secret,
+     * so a restore must not adopt it as this phone's only recovery wrap.
+     */
+    fun isWellFormed(blob: ByteArray): Boolean = try {
+        parse(blob)
+        true
+    } catch (e: VaultAuthException) {
+        false
+    }
+
     fun open(blob: ByteArray, secret: String): ByteArray {
+        val (iterations, salt, wrapped) = parse(blob)
+        val derived = VaultCrypto.deriveKey(secret, salt, iterations)
+        return try {
+            VaultCrypto.decryptBytes(wrapped, derived, VaultCrypto.KEY_BYTES.toLong())
+        } catch (e: VaultAuthException) {
+            throw e
+        } catch (e: IOException) {
+            throw VaultAuthException("The Vault key file is incomplete", e)
+        } finally {
+            derived.fill(0)
+        }
+    }
+
+    private fun parse(blob: ByteArray): Triple<Int, ByteArray, ByteArray> {
         if (blob.size > VaultControlBlobs.MAX_WRAP_BYTES) throw VaultAuthException("Damaged Vault key file")
         val data = DataInputStream(ByteArrayInputStream(blob))
         return try {
@@ -382,13 +408,7 @@ object VaultKeyWrap {
             if ((wrappedLength != expectedWrappedLength && wrappedLength != legacyWrappedLength) ||
                 data.available() != wrappedLength) throw VaultAuthException("Damaged Vault key file")
             val wrapped = ByteArray(wrappedLength).also { data.readFully(it) }
-
-            val derived = VaultCrypto.deriveKey(secret, salt, iterations)
-            try {
-                VaultCrypto.decryptBytes(wrapped, derived, VaultCrypto.KEY_BYTES.toLong())
-            } finally {
-                derived.fill(0)
-            }
+            Triple(iterations, salt, wrapped)
         } catch (e: VaultAuthException) {
             throw e
         } catch (e: IOException) {

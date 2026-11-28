@@ -724,12 +724,29 @@ class VaultStore(
                 // Portable state: the key wrapped by the code. The fingerprint wrap is created
                 // separately (it needs a prompt), by beginKeystoreWrap/completionKeystoreWrap.
                 Durable.atomicWrite(File(vaultDir, RECOVERY_FILE), contents.recoveryBlob)
-                File(vaultDir, PASSCODE_FILE).delete()
+                // R02 NEW-1: a local passwords.bin is sealed by the OLD key. A v1 backup has no
+                // extras, so it would survive and break every later save/get. Drop it only now,
+                // after the new key is published: a restore that fails earlier keeps the old
+                // Vault's remembered passwords intact.
+                if (contents.extras.none { it.name == VaultPasswords.FILE_NAME }) {
+                    File(vaultDir, VaultPasswords.FILE_NAME).delete()
+                }
+                // R02 F1: every local wrap holds the OLD key. A stale keystore.bin would let a
+                // later fingerprint unlock open the old key over the restored entries, so drop
+                // it (and any half-written sibling) with the passcode wrap, as FullBackup does.
+                listOf(PASSCODE_FILE, KEYSTORE_FILE).forEach { name ->
+                    File(vaultDir, name).delete()
+                    File(vaultDir, "$name.tmp").delete()
+                }
             } catch (e: Exception) {
                 moved.forEach { it.deleteRecursively() }
                 throw e
             }
 
+            // R02 F2: the user just typed this Vault's recovery code, so a marker left by an
+            // interrupted setup is not owed any more (as FullBackup's adoption does). Fail closed:
+            // markConfirmationPassed throws if the marker cannot be cleared.
+            markConfirmationPassed()
             VaultSession.open(key)
             listEntries()
         } finally {
@@ -902,6 +919,9 @@ class VaultStore(
             File(vaultDir, name).delete()
             File(vaultDir, "$name.tmp").delete()
         }
+        // R02 F2: its pending marker belongs to no Vault either. Best effort: the marker only
+        // counts while a Vault is set up, and every restore path clears it again on adoption.
+        if (Prefs.vaultSetupConfirmPending(context)) Prefs.setVaultSetupConfirmPending(context, false)
     }
 
     /**

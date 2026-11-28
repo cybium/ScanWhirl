@@ -772,7 +772,20 @@ class FullBackup(
         } else if (restoredVault.isDirectory) {
             val checkedVaultKey = checkNotNull(oldVaultKey)
             val targetSetUp = File(vaultDir, "recovery.bin").let { it.isFile && it.length() > 0 }
-            if (!targetSetUp) {
+            // R03 NEW-1: keystore.bin never travels, so an adopted recovery.bin is this phone's
+            // only lasting wrap. One that cannot even be parsed would mark the Vault "set up"
+            // while no code could ever open it: check it structurally first (the same rules
+            // VaultKeyWrap.open applies) and, if it fails, reject the whole Vault part before
+            // touching vaultDir.
+            val restoredWrap = restoredVault.resolve("recovery.bin")
+            val wrapUnusable = !targetSetUp && restoredWrap.isFile && !runCatching {
+                VaultKeyWrap.isWellFormed(VaultControlBlobs.read(restoredWrap, VaultControlBlobs.MAX_WRAP_BYTES))
+            }.getOrDefault(false)
+            if (wrapUnusable) {
+                c.warnings.add(
+                    context.getString(R.string.backup_vault_entries_rejected, restoredVault.listFiles().orEmpty().size)
+                )
+            } else if (!targetSetUp) {
                 vaultDir.mkdirs()
                 // Leftovers of a setup that never published its "set up" blob belong to no Vault
                 // and must never shadow the backup's own wraps (review MUST-FIX 2).

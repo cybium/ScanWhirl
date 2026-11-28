@@ -38,6 +38,7 @@ import com.scanwhirl.app.store.vault.VaultCrypto
 import com.scanwhirl.app.store.vault.VaultKeyChallenge
 import com.scanwhirl.app.store.vault.VaultKeyInvalidatedException
 import com.scanwhirl.app.store.vault.VaultLockedException
+import com.scanwhirl.app.store.vault.VaultPendingException
 import com.scanwhirl.app.store.vault.VaultStaleReplacementException
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.store.vault.VaultSession
@@ -1994,6 +1995,9 @@ class VaultActivity : BaseActivity() {
                     // A restore replaces the Vault identity: a prepared code or a confirmation
                     // from before it must not survive (review MUST-FIX 1).
                     dropRetainedSecrets()
+                    // R02 F1: the restore dropped the old fingerprint wrap, so the new-passcode
+                    // step must be able to offer building one for the restored key.
+                    fingerprintSetupAsked = false
                     restoreJob = null
                     sheet.dismiss()
                     com.scanwhirl.app.util.BoundedCopy.release(file)
@@ -2150,6 +2154,13 @@ class VaultActivity : BaseActivity() {
                         withContext(Dispatchers.Default) { store.changePasscode(code) }
                     } catch (e: VaultLockedException) {
                         pass.setError(getString(R.string.vault_unlock_first))
+                        return@keyWorkOffMain
+                    } catch (e: VaultPendingException) {
+                        // R02 F2: a setup check still owed must never crash this coroutine
+                        // (keyWorkOffMain has no handler); say why and offer the way out.
+                        sheet.dismiss()
+                        render()
+                        showPendingNotice()
                         return@keyWorkOffMain
                     }
                     sheet.dismiss()
