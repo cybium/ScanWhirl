@@ -1,4 +1,4 @@
-package com.scanwhirl.app.pdf.engine;
+﻿package com.scanwhirl.app.pdf.engine;
 
 import android.app.Instrumentation;
 import android.graphics.Bitmap;
@@ -82,16 +82,16 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
             PdfHandle merged = engine.merge(java.util.Arrays.asList(a, b),
                 new File(dir, "merged.pdf").getPath());
             if (merged.getPageCount() != 2) throw new AssertionError("merge page count");
-            if (!engine.verifyText(merged.getFile()).contains("MINIFIED_MARKER_A")) {
+            if (!engine.verifyText(merged.getFile(), null).contains("MINIFIED_MARKER_A")) {
                 throw new AssertionError("A text missing");
             }
-            if (!engine.verifyText(merged.getFile()).contains("MINIFIED_MARKER_B")) {
+            if (!engine.verifyText(merged.getFile(), null).contains("MINIFIED_MARKER_B")) {
                 throw new AssertionError("B text missing");
             }
 
             engine.overlay(merged, 0, signaturePng(), new PdfRect(300f, 60f, 120f, 60f),
                 "MINIFIED_SIGNATURE", "2026-11-28");
-            if (!engine.verifyText(merged.getFile()).contains("MINIFIED_SIGNATURE")) {
+            if (!engine.verifyText(merged.getFile(), null).contains("MINIFIED_SIGNATURE")) {
                 throw new AssertionError("overlay text missing");
             }
 
@@ -107,7 +107,7 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
                 java.util.Collections.singletonList(new PdfRect(0f, 620f, 400f, 160f)),
                 new File(dir, "redacted.pdf").getPath());
             if (redacted.getPageCount() != 2) throw new AssertionError("redact page count");
-            if (engine.verifyText(redacted.getFile()).contains("MINIFIED_MARKER_A")) {
+            if (engine.verifyText(redacted.getFile(), null).contains("MINIFIED_MARKER_A")) {
                 throw new AssertionError("redacted text survived");
             }
             result.putString("detail", "minified engine workflow OK");
