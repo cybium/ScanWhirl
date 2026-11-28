@@ -147,8 +147,8 @@ class W5dBackupRenderTest {
      * being rendered. No sheet is submitted and no secret is ever typed.
      */
     private fun renderState(
-        tag: String, dark: Boolean, scale: Float, action: (BackupActivity) -> Unit,
-        narrow: Boolean = false
+        tag: String, dark: Boolean, scale: Float, narrow: Boolean = false,
+        action: (BackupActivity) -> Unit
     ) {
         ShadowDialog.reset()
         RuntimeEnvironment.setQualifiers(
@@ -202,7 +202,7 @@ class W5dBackupRenderTest {
         }
         // D2: the two captions must be whole at the narrowest phone and both text scales.
         for (scale in listOf(1f, 2f)) {
-            renderState("password-sheet-320", false, scale, { activity ->
+            renderState("password-sheet-320", false, scale, true) { activity ->
                 activity.findViewById<View>(R.id.backupNow).performClick()
                 idle()
                 ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetSecondary).performClick()
@@ -229,7 +229,7 @@ class W5dBackupRenderTest {
                                 label.totalPaddingRight + 1f)
                     }
                 }
-            }, narrow = true)
+            }
         }
         assertAllRenders()
     }
