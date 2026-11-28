@@ -117,7 +117,7 @@ jobs:
           emulator-boot-timeout: 600
           script: |
             ./gradlew :app:connectedDebugAndroidTest --stacktrace || echo failed > gradle-failed.txt
-            adb exec-out run-as com.scanwhirl.spike.pdf cat files/pdf_spike_results.json > results-api-${{ matrix.api }}.json || true
+            adb pull /sdcard/Android/data/com.scanwhirl.spike.pdf/files/pdf_spike_results.json results-api-${{ matrix.api }}.json || true
             test ! -f gradle-failed.txt
 
       - name: Verify and show JSON results
