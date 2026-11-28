@@ -201,4 +201,25 @@ class J5OrganizeIntegrityTest {
                 HapticFeedbackConstants.VIRTUAL_KEY), haptics)
         }
     }
+
+    @Test fun `edge scrolling is proportional and stops outside its band and after cancel`() {
+        val id = DocFixtures.saved(repo, app, pages = 30)
+        open(id) { _, grid ->
+            val before = grid.pageOrder()
+            assertTrue(grid.startDragAt(2))
+            val x = grid.width / 2f
+            val band = 48 * grid.resources.displayMetrics.density
+            val bottom = grid.height.toFloat()
+            val middleSpeed = grid.dragFrameForTest(x, bottom - band / 2f, 0.032f)
+            assertEquals(300 * grid.resources.displayMetrics.density, middleSpeed, 0.1f)
+            val maxSpeed = grid.dragFrameForTest(x, bottom, 0.032f)
+            assertEquals(600 * grid.resources.displayMetrics.density, maxSpeed, 0.1f)
+            assertEquals(0f, grid.dragFrameForTest(x, bottom / 2f, 0.032f), 0f)
+            assertEquals(0f, grid.dragFrameForTest(-1f, bottom, 0.032f), 0f)
+            grid.cancelDrag()
+            assertEquals(0f, grid.dragFrameForTest(x, bottom, 0.032f), 0f)
+            assertEquals(before, grid.pageOrder())
+            assertNull(runBlocking { repo.draftOf(id) })
+        }
+    }
 }

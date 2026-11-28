@@ -1096,7 +1096,7 @@ def walk_j5_organize():
         type_text("Reorder")
         back()
         root = hierarchy()
-        tile = find(root, regex=r"Reorder|क्रम|व्यवस्थित", cls="Button")
+        tile = find(root, rid="swToolLabel", regex=r"Reorder|क्रम|व्यवस्थित")
         if tile is None:
             raise AssertionError("J5 reorder search result missing")
         tap_node(root, tile)

@@ -1721,7 +1721,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
     internal fun insertFiles(files: List<File>, position: Int) {
-        if (organize && editBusy) return
+        if (organize && editBusy) {
+            files.firstOrNull()?.parentFile?.takeIf { it.name.startsWith("insert_") }
+                ?.deleteRecursively()
+            return
+        }
         val id = docId ?: return
         insertHere = null
         val chosen = selected.toSet()

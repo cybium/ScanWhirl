@@ -136,6 +136,9 @@ class PageGridView @JvmOverloads constructor(
     private var fingerY = 0f
     private var lastFrame = 0L
     private var edgeRemainder = 0f
+    // Paused Robolectric loopers must not drain an endless frame source. Tests drive
+    // the identical edgeScrollFrame deterministically; real Android always schedules frames.
+    private val pausedTestLooper = Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
     private var settling = false
     private var selectionHoldConsumed = false
     private var settlingPages: List<File> = emptyList()
@@ -148,23 +151,35 @@ class PageGridView @JvmOverloads constructor(
             val now = SystemClock.uptimeMillis()
             val dt = (now - lastFrame).coerceIn(0, 32) / 1000f
             lastFrame = now
-            val band = px(48f)
-            val velocity = when {
-                fingerX !in 0f..width.toFloat() || fingerY !in 0f..height.toFloat() -> 0f
-                fingerY < band -> -((band - fingerY) / band).coerceIn(0f, 1f)
-                fingerY > height - band ->
-                    ((fingerY - height + band) / band).coerceIn(0f, 1f)
-                else -> 0f
-            } * px(600f)
-            if (velocity != 0f) {
-                val travel = velocity * dt + edgeRemainder
-                val pixels = travel.toInt()
-                edgeRemainder = travel - pixels
-                scrollBy(0, pixels)
-                updateTarget()
-            } else edgeRemainder = 0f
-            postOnAnimation(this)
+            edgeScrollFrame(dt)
+            if (!pausedTestLooper) postOnAnimation(this)
         }
+    }
+
+    private fun edgeScrollFrame(seconds: Float): Float {
+        if (drag == null) return 0f
+        val band = px(48f)
+        val velocity = when {
+            fingerX !in 0f..width.toFloat() || fingerY !in 0f..height.toFloat() -> 0f
+            fingerY < band -> -((band - fingerY) / band).coerceIn(0f, 1f)
+            fingerY > height - band -> ((fingerY - height + band) / band).coerceIn(0f, 1f)
+            else -> 0f
+        } * px(600f)
+        if (velocity != 0f) {
+            val travel = velocity * seconds + edgeRemainder
+            val pixels = travel.toInt()
+            edgeRemainder = travel - pixels
+            scrollBy(0, pixels)
+            updateTarget()
+        } else edgeRemainder = 0f
+        return velocity
+    }
+
+    internal fun dragFrameForTest(x: Float, y: Float, seconds: Float): Float {
+        fingerX = x
+        fingerY = y
+        followFinger()
+        return edgeScrollFrame(seconds)
     }
 
     private fun px(dp: Float) = SwStyle.dp(context, dp).toFloat()
@@ -290,7 +305,7 @@ class PageGridView @JvmOverloads constructor(
         parent?.requestDisallowInterceptTouchEvent(true)
         stopScroll()
         lastFrame = SystemClock.uptimeMillis()
-        postOnAnimation(edgeScroll)
+        if (!pausedTestLooper) postOnAnimation(edgeScroll)
         return true
     }
 
