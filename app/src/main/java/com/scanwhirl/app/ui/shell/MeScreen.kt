@@ -223,7 +223,10 @@ class MeScreen(
                 SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply { text = title }
         )
         info.addView(
-            SwStyle.text(context, SwType.CAPTION_SP,
+            SwStyle.text(context,
+                // 2.0x on 320dp needs a slightly tighter summary to wrap inside the
+                // card instead of overhanging its 1px border (MeRowFit).
+                if (largeFont) SwType.CAPTION_SP - 0.5f else SwType.CAPTION_SP,
                 SwStyle.color(context, R.color.text_hologram_dim)).apply { text = summary },
             // WRAP_CONTENT sized one long line past the card at 2.0x; constrain to the
             // info column so it wraps instead of overflowing (MeRowFit).
@@ -304,7 +307,10 @@ class MeScreen(
             ).apply { text = title }
         )
         info.addView(
-            SwStyle.text(context, SwType.CAPTION_SP,
+            SwStyle.text(context,
+                // 2.0x on 320dp needs a slightly tighter summary to wrap inside the
+                // card instead of overhanging its 1px border (MeRowFit).
+                if (largeFont) SwType.CAPTION_SP - 0.5f else SwType.CAPTION_SP,
                 SwStyle.color(context, R.color.text_hologram_dim)).apply {
                 text = summary
                 if (summaryId != View.NO_ID) setId(summaryId)

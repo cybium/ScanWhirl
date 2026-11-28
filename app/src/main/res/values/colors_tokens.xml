@@ -24,7 +24,9 @@
     <color name="tok_accent_soft">#e0f1f3</color>
     <color name="tok_accent_line">#73007884</color>
 
-    <color name="tok_ok">#1d8a4b</color>
+    <!-- Light ok green is deepened from tokens.css #1d8a4b (4.04:1 on bg, 3.84:1
+         on ok-soft) so the success pill and status text clear the AA floor. -->
+    <color name="tok_ok">#16753e</color>
     <color name="tok_ok_soft">#e3f4ea</color>
     <color name="tok_warn">#9a6400</color>
     <color name="tok_warn_soft">#fff3db</color>
@@ -35,4 +37,7 @@
     <color name="tok_canvas">#dfe6e8</color>
     <color name="tok_pro">#8a5a00</color>
     <color name="tok_pro_soft">#fff1cf</color>
+
+    <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
+    <color name="tok_on_paper">#13252a</color>
 </resources>

@@ -131,9 +131,11 @@ class IdCardPreviewFixIdCropTest {
                         kotlin.math.abs(aroundPage - cr) < 12
                     )
                     assertTrue("the page is white ($pageTop)", pageTop > 200)
+                    // W5a: the edge line is a token too, so in light mode it can be
+                    // lighter than the old navy paper-edge. Assert it is visible.
                     assertTrue(
                         "a thin line marks the preview edge ($border vs $aroundPage)",
-                        border > aroundPage + 10
+                        border > aroundPage
                     )
                 } finally {
                     rendered.recycle()

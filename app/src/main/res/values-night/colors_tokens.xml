@@ -29,4 +29,7 @@
     <color name="tok_canvas">#0a0f11</color>
     <color name="tok_pro">#f5c04a</color>
     <color name="tok_pro_soft">#29f5c04a</color>
+
+    <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
+    <color name="tok_on_paper">#13252a</color>
 </resources>
