@@ -182,7 +182,7 @@ class ResultLocationSafetyTest {
         val original = sourceFile.readBytes()
         // A file outside our cache is never decoded into a preview: the type card must
         // stay honest instead of pretending the output is in the library.
-        val output = java.io.File(app.externalFilesDir, "result-preview.pdf").apply {
+        val output = java.io.File(app.cacheDir.parentFile, "result-preview.pdf").apply {
             parentFile?.mkdirs()
             writeBytes(original)
         }
