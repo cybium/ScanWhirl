@@ -56,9 +56,14 @@ class W5dBackupRenderTest {
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
         VaultSession.close()
-        // Gate's upload-artifact step publishes gate-result/**; write the renders there so
-        // the lead can actually review the pixels without reproducing this test locally.
-        outDir = File(System.getProperty("user.dir") ?: ".", "gate-result/w5d-renders").apply { mkdirs() }
+        // Gate's upload-artifact step publishes gate-result/**. Gradle runs test workers with
+        // user.dir = the app module, so walk up to the repo root before writing the renders.
+        var root = File(System.getProperty("user.dir") ?: ".")
+        for (i in 0 until 5) {
+            if (File(root, "settings.gradle.kts").exists() || File(root, ".git").exists()) break
+            root = root.parentFile ?: break
+        }
+        outDir = File(root, "gate-result/w5d-renders").apply { mkdirs() }
         names.clear()
     }
 
