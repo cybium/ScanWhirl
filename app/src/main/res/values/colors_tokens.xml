@@ -12,9 +12,12 @@
 
     <color name="tok_text">#13252a</color>
     <color name="tok_text_2">#566d74</color>
-    <color name="tok_text_3">#87999e</color>
+    <!-- tokens.css light --text-3 is #87999e (2.97:1 on white). The accessibility floor
+         raises it to the same hue family at 5.1:1 so secondary facts stay readable in
+         the real light palette; dark keeps the tokens.css value unchanged. -->
+    <color name="tok_text_3">#5f7176</color>
     <!-- Derived from the tokens.css line role: a functional boundary clears 3:1 on surface. -->
-    <color name="tok_boundary">#6b7c82</color>
+    <color name="tok_boundary">#61747a</color>
 
     <color name="tok_accent">#007884</color>
     <color name="tok_on_accent">#ffffff</color>

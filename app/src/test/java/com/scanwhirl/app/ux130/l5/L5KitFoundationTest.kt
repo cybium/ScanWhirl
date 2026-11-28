@@ -180,7 +180,10 @@ class L5KitFoundationTest {
             Regex("""<item name="android:textSize">1[246]sp</item>""").containsMatchIn(dock)
         )
         val colors = source("colors.xml")
-        assertTrue("functional boundary has a 3:1 ink value", colors.contains("#8D979E"))
+        // W5a: the boundary is a semantic token alias, not a literal. values/ (light)
+        // and values-night/ (dark) supply the theme-aware value.
+        assertTrue("functional boundary resolves through tok_boundary",
+            colors.contains("<color name=\"sw_boundary_functional\">@color/tok_boundary</color>"))
         val dimens = source("dimens_ux130.xml")
         assertTrue("body token is 16sp", dimens.contains("ux_l5_text_body\">16sp"))
         assertTrue("Hindi meta token is 14sp", dimens.contains("ux_l5_text_meta_hi\">14sp"))

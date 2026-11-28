@@ -225,7 +225,9 @@ class MeScreen(
         info.addView(
             SwStyle.text(context, SwType.CAPTION_SP,
                 SwStyle.color(context, R.color.text_hologram_dim)).apply { text = summary },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            // WRAP_CONTENT sized one long line past the card at 2.0x; constrain to the
+            // info column so it wraps instead of overflowing (MeRowFit).
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 3f) }
         )
         card.addView(info, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
@@ -307,7 +309,9 @@ class MeScreen(
                 text = summary
                 if (summaryId != View.NO_ID) setId(summaryId)
             },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            // WRAP_CONTENT sized one long line past the card at 2.0x; constrain to the
+            // info column so it wraps instead of overflowing (MeRowFit).
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 3f) }
         )
         card.addView(info, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))

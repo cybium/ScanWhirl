@@ -551,10 +551,13 @@ class UiSmokeTest {
     }
 
     @Test(timeout = 60_000)
-    fun `dark mode is the app default`() {
+    fun `the app defaults to following the system theme`() {
+        // B2: follow system; an explicit Light/Dark choice is stored as before.
         assertEquals(
-            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES,
-            androidx.appcompat.app.AppCompatDelegate.getDefaultNightMode()
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
+            com.scanwhirl.app.util.Prefs.nightMode(
+                com.scanwhirl.app.util.Prefs.themeMode(app)
+            )
         )
     }
 

@@ -69,6 +69,8 @@ class SettingsActivity : BaseActivity() {
         // B2: the theme is a real choice again — System (default) / Light / Dark.
         // The row stays in the grouped Appearance card; its summary follows the pref.
         binding.rowTheme.visibility = android.view.View.VISIBLE
+        // A clickable row must carry its own name: the label lives on child TextViews.
+        binding.rowTheme.contentDescription = getString(R.string.settings_theme)
 
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }

@@ -74,7 +74,8 @@ class W5aFoundationsTest {
 
     @Test
     fun `light qualifier resolves the light tokens and the legacy aliases`() {
-        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xhdpi-notnight")
+        // Android qualifier order puts uiMode (notnight) before density (xhdpi).
+        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-notnight-xhdpi")
         val surface = ContextCompat.getColor(app, R.color.tok_surface)
         val text = ContextCompat.getColor(app, R.color.tok_text)
         assertEquals("light surface is the paired white", 0xFFFFFFFF.toInt(), surface)
@@ -91,7 +92,7 @@ class W5aFoundationsTest {
 
     @Test
     fun `night qualifier resolves the shipped dark tokens and the legacy aliases`() {
-        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xhdpi-night")
+        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-night-xhdpi")
         val surface = ContextCompat.getColor(app, R.color.tok_surface)
         val text = ContextCompat.getColor(app, R.color.tok_text)
         assertEquals("dark surface is tokens.css --surface", 0xFF162024.toInt(), surface)

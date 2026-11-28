@@ -120,7 +120,16 @@ class IdCardPreviewFixIdCropTest {
                     val aroundPage = luminance(rendered.getPixel(SwStyle.dp(activity, 5f), middle))
                     val pageTop = luminance(rendered.getPixel(width / 2, SwStyle.dp(activity, 12f)))
 
-                    assertTrue("the backdrop around the page is dark ($aroundPage)", aroundPage < 70)
+                    // W5a: the backdrop is a theme token, so it is the light canvas when
+                    // Follow system resolves to light. Compare pixels to the resolved token.
+                    val expectedBackdrop = SwStyle.color(activity, R.color.void_abyss)
+                    val cr = (expectedBackdrop shr 16 and 0xFF) * 0.2126 +
+                        (expectedBackdrop shr 8 and 0xFF) * 0.7152 +
+                        (expectedBackdrop and 0xFF) * 0.0722
+                    assertTrue(
+                        "the backdrop around the page uses the theme token ($aroundPage vs $cr)",
+                        kotlin.math.abs(aroundPage - cr) < 12
+                    )
                     assertTrue("the page is white ($pageTop)", pageTop > 200)
                     assertTrue(
                         "a thin line marks the preview edge ($border vs $aroundPage)",

@@ -193,12 +193,12 @@ class LaneKCardCanvasTest {
     @Test(timeout = 30_000)
     fun `every owned page host uses sw_canvas and no white or paper background`() {
         fun src(path: String) = File("src/main/$path").readText()
-        // One canvas token for the whole app: lane C already owns sw_cc_canvas, so
-        // lane K reuses it instead of adding a second #1E252A resource.
+        // One canvas token for the whole app: lane C owns sw_cc_canvas and W5a points
+        // it at the semantic canvas token (light and dark variants, no second palette).
         val canvas = src("res/values/colors_cc.xml")
         assertTrue(
-            "sw_cc_canvas is #1E252A",
-            canvas.contains("sw_cc_canvas") && canvas.contains("1E252A")
+            "sw_cc_canvas is the shared canvas token",
+            canvas.contains("<color name=\"sw_cc_canvas\">@color/tok_canvas</color>")
         )
         assertFalse(
             "there is exactly one canvas color resource",
