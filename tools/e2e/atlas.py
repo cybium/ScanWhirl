@@ -48,7 +48,6 @@ SECURE_LABEL = "secure (by design)"
 # FLAG_SECURE even when `dumpsys window windows` does not spell the flag out
 # (notably on the API 24 image). They are evidence, never a reason to bypass it.
 SECURE_ACTIVITIES = ("VaultActivity", "BackupActivity")
-ROTATION_LEG = "light"
 DEEP_TOOLS = ("form_ready", "compress", "sign", "redact", "organize_pages")
 # English search aliases live in ToolRegistry.keywords, so the same query finds
 # the same tile in the English and Hindi legs (resource ids are locale-free).
@@ -59,6 +58,66 @@ TOOL_ALIASES = {
     "redact": "confidential",
     "organize_pages": "organize pages reorder",
 }
+
+# Positive tool-opened gate (ATLAS2 review §2): a tile only counts as reached when
+# the top activity/root is that tool's own screen. This map is hand-written per
+# tool so a renamed or new tile cannot pass silently; a test proves it covers
+# every id in TOOLS.
+#   activities    our activities that are this tool's first screen
+#   roots         resource-id anchors for an in-app sheet / tab over the shell
+#   picker        the app's own document-picker sheet is the tool's first step
+#   system_picker a system document / photo picker is the tool's first step
+#   system        an external package whose own UI is the tool's screen
+# "scan" is the ML Kit document scanner: its UI is delivered by Play services, so
+# a GMS module-download/error page is a failed capture, never the Scan screen.
+TOOL_SCREENS = {
+    "scan": {"system": ("com.google.android.gms",)},
+    "id_card": {"activities": ("IdCardActivity",)},
+    "import_pdf": {"system_picker": True},
+    "passport": {"activities": ("PassportActivity",), "system_picker": True},
+    "qr_code": {"activities": ("QrActivity",)},
+    "merge": {"activities": ("ToolSetupActivity",)},
+    "split": {"activities": ("ToolSetupActivity",)},
+    "extract": {"activities": ("ToolSetupActivity",)},
+    "organize_pages": {"activities": ("DocumentViewerActivity",), "picker": True},
+    "insert_pages": {"activities": ("DocumentViewerActivity",), "picker": True},
+    "folders": {"roots": ("swFolderSheet",)},
+    "batch_tools": {"activities": ("BatchActivity",)},
+    "compress": {"activities": ("ToolSetupActivity",)},
+    "resize": {"system_picker": True},
+    "form_ready": {"activities": ("FormReadyActivity",)},
+    "pdf_to_images": {"activities": ("ToolSetupActivity",)},
+    "long_image": {"activities": ("ToolSetupActivity",)},
+    "to_word": {"activities": ("ToolSetupActivity",)},
+    "to_powerpoint": {"activities": ("ToolSetupActivity",)},
+    "to_excel": {"activities": ("ToolSetupActivity",)},
+    "zip": {"activities": ("ToolSetupActivity",)},
+    "searchable_pdf": {"picker": True},
+    "pdfa": {"picker": True},
+    "sign": {"activities": ("StampEditorActivity",), "picker": True},
+    "add_text": {"activities": ("StampEditorActivity",), "picker": True},
+    "draw": {"activities": ("StampEditorActivity",), "picker": True},
+    "highlight": {"activities": ("StampEditorActivity",), "picker": True},
+    "watermark": {"activities": ("StampEditorActivity",), "picker": True},
+    "page_numbers": {"activities": ("StampEditorActivity",), "picker": True},
+    "stamp": {"activities": ("StampEditorActivity",), "picker": True},
+    "redact": {"activities": ("StampEditorActivity",), "picker": True},
+    "protect": {"activities": ("LockToolsActivity",)},
+    "unlock": {"activities": ("LockToolsActivity",)},
+    "vault": {"activities": ("VaultActivity",)},
+    "remove_metadata": {"activities": ("ToolSetupActivity",)},
+    "read_text": {"picker": True},
+    "link_index": {"activities": ("LinkIndexActivity",)},
+}
+# The app's own document chooser: DocumentPicker (docPickerSheetRoot) and the
+# older searchable sheet (swDocPickerList). Both are in-app, never system screens.
+PICKER_ROOTS = ("docPickerSheetRoot", "docPickerName", "swDocPickerList")
+SYSTEM_PICKER_PACKAGES = frozenset({
+    "com.google.android.documentsui", "com.android.documentsui",
+    "com.google.android.providers.media.module",
+    "com.android.providers.media.module",
+    "com.android.providers.downloads.ui",
+})
 
 BOUNDS_RE = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
 PRIMARY_RE = re.compile(
@@ -101,7 +160,9 @@ LAST_SCREEN = None
 ANRS = []
 CRASHES = []
 HINDI_NODES = 0
+HINDI_RATIO = 0.0
 HINDI_MIN_CHARS = 20  # the always-visible "A/अ" chip is one character, not a Hindi UI
+HINDI_MIN_RATIO = 0.25  # Devanagari share of letters in real labels (English UI is 0)
 DENSITY = 1.0
 WIDTH = 1080
 HEIGHT = 2400
@@ -400,6 +461,102 @@ def tool_search_focused(root):
         return False
     return any(rid_name(node) == "swToolsSearch" and node.get("focused") == "true"
                for node in root.iter("node"))
+
+
+def top_screen(window):
+    """(package, simple activity name) from a `dumpsys activity` line, or ("", "")."""
+    match = re.search(r"([A-Za-z][A-Za-z0-9_.]*)/([A-Za-z0-9_.$]+)", window or "")
+    if not match:
+        return "", ""
+    return match.group(1), match.group(2).rsplit(".", 1)[-1]
+
+
+def _tool_failure(kind, detail):
+    return {"screen": None,
+            "failure": {"kind": kind, "attempts": 1, "detail": detail}}
+
+
+def tool_screen_verdict(tool_id, window, root):
+    """Positive tool gate: is the top screen this tool's own first screen?
+
+    Pure (no adb) so the offline gate can prove that a GMS error page, another
+    tool's activity (QrActivity for add_text), or the Tools search results are
+    failed captures, while a real activity/picker for the right tool counts.
+    """
+    contract = TOOL_SCREENS.get(tool_id)
+    if contract is None:
+        return _tool_failure("unknown-tool-contract",
+                             "no expected screen is declared for %s" % tool_id)
+    if tool_search_focused(root):
+        return _tool_failure("tool-search-focused",
+                             "tool capture still shows the focused Tools search field")
+    package, activity = top_screen(window)
+    rids = {rid_name(node) for node in root.iter("node")} if root is not None else set()
+    text = " ".join(node.get("text") or "" for node in root.iter("node")) \
+        if root is not None else ""
+    if package == PKG:
+        if activity in contract.get("activities", ()):
+            return {"screen": "own screen", "failure": None}
+        if contract.get("roots") and rids.intersection(contract["roots"]):
+            return {"screen": "own screen", "failure": None}
+        if contract.get("picker") and rids.intersection(PICKER_ROOTS):
+            return {"screen": "picker", "failure": None}
+        if "swToolsSearch" in rids or "swToolLabel" in rids:
+            return _tool_failure("tool-search-screen",
+                                 "still on the Tools search results, not the tool")
+        if activity:
+            return _tool_failure("wrong-activity",
+                                 "top activity %s is not this tool's screen" % activity)
+    if contract.get("system_picker") and package in SYSTEM_PICKER_PACKAGES:
+        return {"screen": "system picker", "failure": None}
+    if package and package in contract.get("system", ()):
+        if "moduledownload" in activity.lower() or "something went wrong" in text.lower():
+            return _tool_failure(
+                "gms-module",
+                "Play services module download failed (%s); the tool screen never opened"
+                % (activity or package))
+        return {"screen": "system screen", "failure": None}
+    if package and package != PKG:
+        return _tool_failure("system-screen",
+                             "top package %s is not this tool's screen" % package)
+    return _tool_failure("tool-not-opened", "the tool screen did not open")
+
+
+def capture_succeeded(record):
+    """Only a real capture (own screen or secure by design) counts as reached."""
+    return (record is not None
+            and record.get("capture_status") in ("ok", "secure-by-design"))
+
+
+def normalize_query(text):
+    return " ".join((text or "").split()).casefold()
+
+
+def search_query_matches(root, alias):
+    """The search field must hold exactly the alias before a result is tapped."""
+    node = find(root, rid="swToolsSearch") if root is not None else None
+    return (node is not None
+            and normalize_query(node.get("text")) == normalize_query(alias))
+
+
+def focused_text(root):
+    """Text/description of the focused node and its children (API 24 TAB focus)."""
+    if root is None:
+        return ""
+    for node in root.iter("node"):
+        if node.get("focused") != "true":
+            continue
+        parts = [node.get("text") or "", node.get("content-desc") or ""]
+        for child in node.iter("node"):
+            parts.append(child.get("text") or "")
+            parts.append(child.get("content-desc") or "")
+        return " ".join(part for part in parts if part)
+    return ""
+
+
+def focused_matches(root, name):
+    """True only when the focused row is exactly the file we mean to open."""
+    return name in focused_text(root)
 
 
 def display_dimensions(rotation):
@@ -736,17 +893,43 @@ def hindi_node_count(root):
                if rid_name(node) != "swLanguageChip")
 
 
+def hindi_ratio(root):
+    """Devanagari share of all letters in real labels; an English UI scores 0."""
+    if root is None:
+        return 0.0
+    letters = devanagari = 0
+    for node in root.iter("node"):
+        if rid_name(node) == "swLanguageChip":
+            continue
+        for char in node.get("text") or "":
+            if char.isalpha():
+                letters += 1
+                if HINDI_TEXT_RE.match(char):
+                    devanagari += 1
+    return round(devanagari / letters, 3) if letters else 0.0
+
+
 def hindi_active(root):
-    return hindi_node_count(root) >= HINDI_MIN_CHARS
+    """Hindi leg passes only with enough real Devanagari text in the UI."""
+    return (hindi_node_count(root) >= HINDI_MIN_CHARS
+            and hindi_ratio(root) >= HINDI_MIN_RATIO)
 
 
 def ensure_hindi_locale():
-    """Verify the fifth leg really renders Hindi; fall back to the app setting."""
-    global HINDI_NODES
+    """Make the Hindi leg Hindi and verify it in the first dump.
+
+    Order: the workflow's per-app locale (`cmd locale set-app-locales`) first,
+    then the app's own A/अ language setting, then Settings > App language. The
+    locale is deliberately NOT restored: this leg's emulator is thrown away and
+    the whole leg is supposed to be Hindi. Main() fails the leg when the UI is
+    still not Hindi, so this can never be a silent English false green.
+    """
+    global HINDI_NODES, HINDI_RATIO
     path = ["Library"]
     launch()
     first = hierarchy()
     HINDI_NODES = hindi_node_count(first)
+    HINDI_RATIO = hindi_ratio(first)
     if not hindi_active(first):
         # The Home A/अ chip is the shortest human route to the app language.
         if tap({"rid": "swLanguageChip"}, timeout=7):
@@ -758,6 +941,7 @@ def ensure_hindi_locale():
                 tap_node(root, node)
                 time.sleep(2.5)
                 HINDI_NODES = hindi_node_count(hierarchy())
+                HINDI_RATIO = hindi_ratio(hierarchy())
         if not hindi_active(hierarchy()):  # older build: Settings > App language
             tap({"rid": "swNavMe"}, timeout=8)
             tap({"rid": "swMeSettings"}, timeout=7)
@@ -769,9 +953,11 @@ def ensure_hindi_locale():
                     tap_node(root, node)
                     time.sleep(2.5)
                     HINDI_NODES = hindi_node_count(hierarchy())
+                    HINDI_RATIO = hindi_ratio(hierarchy())
     capture("shell", "hindi-locale", path,
-            "Hindi label characters: %d" % HINDI_NODES)
-    return "Hindi characters: %d" % HINDI_NODES
+            "Hindi label characters: %d, Devanagari ratio %.2f"
+            % (HINDI_NODES, HINDI_RATIO))
+    return "Hindi characters: %d ratio %.2f" % (HINDI_NODES, HINDI_RATIO)
 
 
 def open_create_sheet():
@@ -813,11 +999,6 @@ def wait_for_any(wants, timeout=12.0):
     return None
 
 
-def secure_capture_context(window):
-    """True when a black/empty frame is expected and must never be a defect."""
-    return has_secure_flag() or secure_activity(window) is not None
-
-
 def read_screencap(path, secure=False):
     """Retry a transient screencap race; never bypass FLAG_SECURE.
 
@@ -841,7 +1022,7 @@ def read_screencap(path, secure=False):
     return payload, attempts
 
 
-def capture(area, slug, path, note=None):
+def capture(area, slug, path, note=None, tool_id=None):
     global N, LAST_SCREEN
     N += 1
     name = "%03d-%s" % (N, slugify(slug))
@@ -878,14 +1059,18 @@ def capture(area, slug, path, note=None):
             root = ET.fromstring(data)
         except ET.ParseError:
             pass
-    if (not secure and area == "tools" and slug.startswith("tool-")
-            and tool_search_focused(root)):
-        # W5e: a "tool screen" that is really the search box is a failed capture.
-        verdict = {"status": "capture-failed", "label": "capture failed (tool search focused)",
-                   "failure": {"kind": "tool-search-focused", "attempts": attempts,
-                               "detail": "tool capture still shows the focused Tools search field"},
-                   "secure": False}
-        note = ((note + "; ") if note else "") + "FAILED: tool did not open"
+    if tool_id is not None:
+        # Positive tool gate: the captured tree itself must be the tool's screen,
+        # so a GMS error, another tool's activity or the search results fail.
+        gate = tool_screen_verdict(tool_id, window, root)
+        if gate["failure"] is not None:
+            verdict = {"status": "capture-failed",
+                       "label": "capture failed (%s)" % gate["failure"]["kind"],
+                       "failure": dict(gate["failure"], attempts=attempts),
+                       "secure": secure}
+            note = ((note + "; ") if note else "") + "FAILED: " + gate["failure"]["detail"]
+        elif gate["screen"] != "own screen":
+            note = ((note + "; ") if note else "") + "tool screen: " + gate["screen"]
     width, height = display_dimensions(root.get("rotation") if root is not None else None)
     flags = analyze(root, DENSITY, width, height)
     score = sum(len(v) if isinstance(v, list) else 1 for v in flags.values() if v)
@@ -982,6 +1167,21 @@ def choose_picker_root(labels):
     return None
 
 
+def tab_to_fixture(tries=10):
+    """TAB until the focused row is the fixture itself, then stop (bounded).
+
+    Blind "4 x TAB then ENTER" can activate another row or the drawer; the
+    mistake is only seen by the following long wait. Only ENTER when the focused
+    node's own text matches the fixture name.
+    """
+    for _ in range(tries):
+        adb("shell", "input", "keyevent", "KEYCODE_TAB")
+        time.sleep(0.2)
+        if focused_matches(hierarchy(), FIXTURE_PDF):
+            return True
+    return False
+
+
 def import_fixture():
     """Import the generated PDF through DocumentsUI, as a person would.
 
@@ -1021,14 +1221,12 @@ def import_fixture():
                   or wait_for({"rid": "btnMore"}, timeout=6) is not None)
         if opened:
             break
-        # Keyboard route that works on API 24: focus the row, then activate it.
-        for _ in range(4):
-            adb("shell", "input", "keyevent", "KEYCODE_TAB")
-            time.sleep(0.15)
-        adb("shell", "input", "keyevent", "KEYCODE_ENTER")
-        time.sleep(1.5)
-        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=20) is not None
-                  or wait_for({"rid": "btnMore"}, timeout=5) is not None)
+        # Keyboard route that works on API 24: focus the exact row, then activate it.
+        if tab_to_fixture():
+            adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+            time.sleep(1.5)
+            opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=20) is not None
+                      or wait_for({"rid": "btnMore"}, timeout=5) is not None)
         if opened:
             break
     if not opened:
@@ -1129,38 +1327,54 @@ def walk_tabs():
 
 
 def open_tool_tile(tool_id, title):
-    """Search the Tools hub and tap the real result row (not the search field).
+    """Search the Tools hub, verify the query, and tap the real result row.
 
     The row is the clickable ancestor of R.id.swToolLabel. The old regex match
     also hit the EditText containing the query, so the "tool" captures were
-    really search-result screens. IDs work in the Hindi leg too.
+    really search-result screens. IDs work in the Hindi leg too. The search
+    field's text is verified before the tap, so a lost keystroke cannot open a
+    different tool (the Hindi "text" -> QR-code sheet failure).
     """
     alias = TOOL_ALIASES.get(tool_id, title)
     launch()
     if not tap({"rid": "swNavTools"}, timeout=10):
         return False, "Tools tab missing"
-    wait_for({"rid": "swToolsSearch"}, timeout=12)
-    tap({"rid": "swToolsSearch"}, timeout=4)
-    type_text(alias)
-    back()  # keyboard only: the results stay, as in flow_driver F2
-    time.sleep(0.5)
-    node = wait_for({"rid": "swToolLabel"}, timeout=10)
-    if node is None:
-        # Hindi IME/search results can be slow; clear and retype once before
-        # recording a failed tool capture (W5e self-check).
-        if tap({"rid": "swToolsClear"}, timeout=2):
-            tap({"rid": "swToolsSearch"}, timeout=3)
-            type_text(alias)
-            back()
-            time.sleep(0.5)
-            node = wait_for({"rid": "swToolLabel"}, timeout=8)
-    if node is None:
-        return False, "no result for %s" % alias
-    root = hierarchy()  # fresh tree for the clickable ancestor lookup
-    if not tap_node(root, node):
-        return False, "result row not tappable"
-    time.sleep(1.4)
-    return True, alias
+    if wait_for({"rid": "swToolsSearch"}, timeout=12) is None:
+        return False, "Tools search missing"
+    root = None
+    for attempt in range(2):
+        if attempt:
+            tap({"rid": "swToolsClear"}, timeout=2)
+        tap({"rid": "swToolsSearch"}, timeout=4)
+        type_text(alias)
+        back()  # keyboard only: the results stay, as in flow_driver F2
+        time.sleep(0.5)
+        root = hierarchy()
+        if not search_query_matches(root, alias):
+            continue  # lost keystroke: clear and retype once
+        node = find(root, rid="swToolLabel")
+        if node is None:
+            node = wait_for({"rid": "swToolLabel"}, timeout=4)
+            root = hierarchy()
+        if node is None:
+            continue
+        if not tap_node(root, node):
+            return False, "result row not tappable"
+        time.sleep(1.0)  # let the activity/sheet start before the walk looks
+        return True, alias
+    if root is not None and not search_query_matches(root, alias):
+        return False, "search text did not become %r" % alias
+    return False, "no result for %s" % alias
+
+
+def wait_for_tool_screen(tool_id, timeout=10.0):
+    """Bounded wait for the tool's own screen; returns the last gate verdict."""
+    deadline = time.monotonic() + timeout
+    verdict = tool_screen_verdict(tool_id, current_window(), hierarchy())
+    while verdict["failure"] is not None and time.monotonic() < deadline:
+        time.sleep(0.5)
+        verdict = tool_screen_verdict(tool_id, current_window(), hierarchy())
+    return verdict
 
 
 def walk_tools():
@@ -1172,21 +1386,39 @@ def walk_tools():
                 capture("tools", "tool-" + tool_id + "-missing",
                         ["Library", "Tools", "Search: " + detail], "Search result tile not found")
                 return detail
-            root = hierarchy()
-            picker = root is not None and (
-                find(root, desc="Show roots") is not None
-                or find(root, rid="picker_tab_recyclerview") is not None
-                or find(root, rid="docPickerSheetRoot") is not None
-                or find(root, text="Open from") is not None)
+            gate = wait_for_tool_screen(tool_id)
+            if (tool_id == "scan" and gate["failure"] is not None
+                    and gate["failure"]["kind"] == "gms-module"):
+                # One bounded retry: a cold Play services module download can fail
+                # once and succeed after the app restarts.
+                back()
+                time.sleep(2.0)
+                retried, _detail = open_tool_tile(tool_id, title)
+                if retried:
+                    gate = wait_for_tool_screen(tool_id)
+            picker = gate["screen"] in ("picker", "system picker")
+            failed_kind = (gate["failure"] or {}).get("kind", "")
             if picker:
-                capture("tools", "tool-" + tool_id + "-picker",
-                        ["Library", "Tools", "Search: " + title, title, "Picker"],
-                        "Tile opened the system picker (labelled picker)")
+                suffix = "-picker"
+            elif failed_kind == "gms-module":
+                suffix = "-gms"
+            elif failed_kind == "system-screen":
+                suffix = "-system"
             else:
-                capture("tools", "tool-" + tool_id,
-                        ["Library", "Tools", "Search: " + title, title],
-                        "Tile opened; first screen after launch")
-            COVERAGE["tools_visited"].append(tool_id)
+                suffix = ""
+            record = capture(
+                "tools", "tool-" + tool_id + suffix,
+                ["Library", "Tools", "Search: " + title, title]
+                + (["Picker"] if picker else []),
+                "Tile opened its document picker first (labelled picker)" if picker
+                else "Tile opened; first screen after launch",
+                tool_id=tool_id)
+            # Coverage counts only a real capture of this tool's own screen.
+            if capture_succeeded(record):
+                COVERAGE["tools_visited"].append(tool_id)
+            else:
+                COVERAGE["tools_failed"].append(
+                    tool_id + " (" + record.get("capture_label", "not opened") + ")")
             dismiss_sheet()
             back()
             return title
@@ -1361,47 +1593,6 @@ def walk_deep_tools():
          lambda: picker_tool("organize_pages", "Reorder",
                              ("ux130_l4_select_pages", "btnMore", "pageDock"),
                              "tool-organize-pages-grid"))
-
-
-def walk_rotation():
-    """Landscape captures of five key screens in the light leg only."""
-    if LEG != ROTATION_LEG:
-        return
-    adb_ok("shell", "settings", "put", "system", "accelerometer_rotation", "0")
-    adb_ok("shell", "settings", "put", "system", "user_rotation", "1")
-    time.sleep(1.5)
-
-    def case(slug, anchor, action):
-        def run():
-            action()
-            if anchor and wait_for({"rid": anchor}, timeout=15) is None:
-                return "%s anchor missing" % anchor
-            capture("rotation", slug, ["Library", "Rotated", slug],
-                    "Landscape capture (light leg)")
-            return slug
-        step("rotation", slug, ["Library", "Rotated"], run)
-
-    case("rotated-library", "swHomeSearch", lambda: launch())
-    case("rotated-tools", "swToolsSearch",
-         lambda: (launch(), tap({"rid": "swNavTools"}, timeout=10)))
-    case("rotated-viewer", "btnMore", open_viewer)
-
-    def editor():
-        if not open_viewer():
-            return False
-        return tap({"rid": "btnEdit"}, timeout=8)
-    case("rotated-editor", "pageDock", editor)
-
-    def selection():
-        if not open_viewer():
-            return False
-        return tap({"rid": "ux130_l4_select_pages"}, timeout=8)
-    case("rotated-select-pages", "btnSelAll", selection)
-
-    adb_ok("shell", "settings", "put", "system", "user_rotation", "0")
-    adb_ok("shell", "settings", "put", "system", "accelerometer_rotation", "1")
-    time.sleep(1.0)
-    recover("after rotation walk")
 
 
 def walk_photos():
@@ -1677,7 +1868,7 @@ def write_outputs():
         "density": round(DENSITY, 3), "screen_size": [WIDTH, HEIGHT],
         "elapsed_minutes": round((time.monotonic() - STARTED) / 60, 1),
         "screens": SCREENS, "coverage": COVERAGE, "navigation_errors": ERRORS,
-        "hindi_labels": HINDI_NODES,
+        "hindi_labels": HINDI_NODES, "hindi_ratio": HINDI_RATIO,
         "anrs": [{k: v for k, v in item.items() if k != "_t"} for item in ANRS],
         "crashes": CRASHES,
         # A 0-byte / all-black NON-secure frame fails this leg's report (not the
@@ -1688,6 +1879,8 @@ def write_outputs():
                    "system_dialogs_dismissed": DIALOGS,
                    "anrs": len(ANRS), "crashes": len(CRASHES),
                    "capture_failures": len(CAPTURE_FAILURES),
+                   "tools_visited": len(COVERAGE["tools_visited"]),
+                   "tools_failed": len(COVERAGE["tools_failed"]),
                    "by_flag": by_flag, "worst": worst},
     }
     (OUT / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False),
@@ -1713,8 +1906,13 @@ def write_outputs():
                report["elapsed_minutes"], DENSITY, WIDTH, HEIGHT,
                html.escape(str(report["sha"])[:12])),
            "<p>Leg report: <b class='%s'>%s</b> - secure (by design) screens are "
-            "never defects; only 0-byte / all-black non-secure captures fail it.</p>" % (
+            "never defects; only 0-byte / all-black non-secure captures and a tool "
+             "that did not open its own screen fail it.</p>" % (
                 "failure" if verdict == "FAIL" else "secure", verdict),
+            "<p>Tool coverage: <b>%d/%d</b> reached%s</p>" % (
+                len(COVERAGE["tools_visited"]), COVERAGE["tools_total"],
+                ("" if not COVERAGE["tools_failed"] else " - failed: " + html.escape(
+                    ", ".join(COVERAGE["tools_failed"])))),
             "<h2>Capture failures (%d)</h2><ul>" % len(CAPTURE_FAILURES)]
     for failure in CAPTURE_FAILURES:
         doc.append("<li class='failure'>%s / %s: %s (%s attempts)</li>" % (
@@ -1778,11 +1976,13 @@ def write_outputs():
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
             handle.write("\n### Atlas %s\n\n- screens: %d\n- secure (by design): %d\n"
                          "- leg report: %s (%d capture failures)\n- flags: %s\n"
-                         "- tools visited: %d/%d\n- navigation errors: %d\n"
+                         "- tools reached: %d/%d%s\n- navigation errors: %d\n"
                          "- ANRs (recovered): %d\n- crashes: %d\n" % (
                              LEG, len(SCREENS), report["totals"]["secure"], verdict,
                              len(CAPTURE_FAILURES), by_flag,
                              len(COVERAGE["tools_visited"]), COVERAGE["tools_total"],
+                             ("" if not COVERAGE["tools_failed"] else
+                              " (failed: %s)" % "; ".join(COVERAGE["tools_failed"])),
                              len(ERRORS), len(ANRS), len(CRASHES)))
     print(json.dumps({"screens": len(SCREENS), "by_flag": by_flag,
                       "tools": len(COVERAGE["tools_visited"]),
@@ -1792,6 +1992,7 @@ def write_outputs():
 
 # ------------------------------------------------------------------------- main
 def main():
+    global HINDI_NODES, HINDI_RATIO
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise AssertionError("CI-only: atlas never runs on a local/physical device")
     if not SERIAL:
@@ -1808,16 +2009,32 @@ def main():
         LEG, API, adb("shell", "getprop", "ro.product.model"),
         WIDTH, HEIGHT, DENSITY), flush=True)
 
+    hindi_failed = False
     try:
         step("fixtures", "seed", [], lambda: seed())
         if LEG == "hindi":
             step("locale", "hindi", ["Library", "Me", "Settings", "Language"],
                  ensure_hindi_locale)
+            root = hierarchy()
+            HINDI_NODES = hindi_node_count(root)
+            HINDI_RATIO = hindi_ratio(root)
+            if not hindi_active(root):
+                # A Hindi leg that is not Hindi is a false green: fail the leg.
+                failure = {
+                    "kind": "hindi-not-active", "attempts": 1, "leg": LEG,
+                    "slug": "hindi-locale", "area": "locale", "png": "",
+                    "window": current_window(),
+                    "detail": ("UI is not Hindi after the app/per-app locale was set: "
+                               "%d Devanagari characters, ratio %.2f"
+                               % (HINDI_NODES, HINDI_RATIO)),
+                }
+                CAPTURE_FAILURES.append(failure)
+                hindi_failed = True
+                print("HINDI LEG FAILED: %s" % failure["detail"], flush=True)
         step("import", "fixture", ["Library", "Create", "Import PDF"], import_fixture)
         walk_library()
         walk_tabs()
         walk_tools()
-        walk_rotation()  # before the deadline-sensitive deep flows
         walk_deep_tools()
         walk_viewer()
         walk_vault()
@@ -1836,6 +2053,8 @@ def main():
         except Exception:  # noqa: BLE001
             traceback.print_exc()
         write_outputs()
+    if hindi_failed:
+        return 2  # the Hindi leg must be red when the UI is not Hindi
     return 0 if len(SCREENS) >= 10 else 1
 
 

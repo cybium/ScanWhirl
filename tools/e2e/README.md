@@ -14,7 +14,7 @@ shows up here.
 | `tools/e2e/make_pdf.py` | writes the two self-authored PDF fixtures at run time |
 | `tools/e2e/run_e2e.ps1` | push a worktree snapshot to `ci/e2e-<name>` and print the run URL |
 | `tools/e2e/atlas.py` / `atlas.sh` | CI-only screen atlas: walk every screen, screenshot + XML + quality flags |
-| `.github/workflows/atlas.yml` | build once, then four legs: light / dark / 200% font / API 24 small phone |
+| `.github/workflows/atlas.yml` | build once, then five legs: light / dark / 200% font / API 24 small phone / Hindi |
 
 ## How to run it
 
@@ -115,11 +115,26 @@ ANRs are still fatal - they come from logcat, not from the dialog.
 ## Screen atlas (separate workflow)
 
 Push any snapshot to `ci/atlas-<name>` (e.g. `ci/atlas-baseline`) or run the
-**atlas** workflow with a `workflow_dispatch` ref. Four legs run in parallel:
+**atlas** workflow with a `workflow_dispatch` ref. Five legs run in parallel:
 API 35 light, API 35 dark (`cmd uimode night yes`), API 35 at `font_scale=2.0`,
-and API 24 on the small `Nexus 4` profile. Each uploads `atlas-<leg>` with
-`index.html` (thumbnail grid + flags), `report.json`, numbered PNG/XML pairs and
-a logcat. The walk reuses the same emulator-only guards and ids; it generates
-two fictional PNGs and one PDF at run time, stops at the Vault passcode setup,
-and never enters a secret. Flags are findings for review, not job failures; a
-black FLAG_SECURE screenshot is marked secure rather than failed.
+API 24 on the small `Nexus 4` profile, and API 35 Hindi (`cmd locale
+set-app-locales ... --locales hi-IN`, which the app reads as its own language
+setting). Each uploads `atlas-<leg>` with `index.html` (thumbnail grid + flags),
+`report.json`, numbered PNG/XML pairs and a logcat. The walk reuses the same
+emulator-only guards and ids; it generates two fictional PNGs and one PDF at run
+time, stops at the Vault passcode setup, and never enters a secret. Flags are
+findings for review, not job failures; a black FLAG_SECURE screenshot is marked
+secure rather than failed.
+
+A tool tile counts as reached only when its own screen is the top activity/root
+(the expected activity/picker per tool is in `atlas.py`), so a GMS module error,
+another tool's activity or the search results fail the capture; `37/37` in
+`report.json` means 37 real tool screens. A green workflow run only means the
+walk completed and uploaded its evidence: read `report.json`'s
+`capture.verdict` and `coverage` (the leg report, not the green check, is the
+atlas verdict). The Hindi leg is red when the first dump is not Hindi.
+
+On the API 35 `google_apis` image the ML Kit document-scanner module cannot
+download, so `scan` is recorded as an environment finding (GMS "Something went
+wrong"), never as the Scan screen.
+

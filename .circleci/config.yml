@@ -2,8 +2,12 @@
 #
 # Triggered ONLY by branches cc/atlas-* (GitHub Actions owns ci/atlas-*), so the
 # two providers never atlas the same commit. No Gradle, emulator or adb ever runs
-# on a developer PC: the Docker job compiles once, four machine-executor legs
+# on a developer PC: the Docker job compiles once, five machine-executor legs
 # install that one APK and walk it on throwaway emulators. Fixtures are fictional.
+#
+# The fifth leg (hindi) sets the app's per-app locale and is thrown away with its
+# emulator, so the locale is deliberately not restored; the walk verifies Hindi
+# in the first dump and fails the leg when the UI is still English.
 #
 # Free-plan notes: android:default is the gen1 Android machine image and
 # resource_class: large (4 vCPU / 15 GB, 20 credits/min) is available on Free;
@@ -112,7 +116,8 @@ commands:
             export LEG='<< parameters.leg >>'
             export API_LEVEL='<< parameters.api >>'
             export LEG_SETUP='<< parameters.setup >>'
-            export ATLAS_MAX_MINUTES=42
+            # Same 45-minute walk deadline as .github/workflows/atlas.yml.
+            export ATLAS_MAX_MINUTES=45
             export APK="$PWD/test-apk/app-debug.apk"
             export OUT="$PWD/artifacts/<< parameters.leg >>"
             bash tools/e2e/atlas.sh
@@ -224,6 +229,18 @@ jobs:
           profile: Nexus 4
           setup: "true"
 
+  atlas-hindi:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: hindi
+          api: "35"
+          arch: x86_64
+          profile: pixel_6
+          # App-scoped locale only: `settings put system system_locales` is read at
+          # boot and never changes a running app. The walk verifies Hindi itself.
+          setup: "adb shell cmd locale set-app-locales com.scanwhirl.app.test --locales hi-IN"
+
 workflows:
   atlas:
     jobs:
@@ -258,6 +275,14 @@ workflows:
             branches:
               only: /^cc\/atlas-.*/
       - atlas-small24:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-hindi:
           requires:
             - build
           filters:

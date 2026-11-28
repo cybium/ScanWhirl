@@ -94,13 +94,20 @@ jobs:
             arch: x86
             setup: "true"
           # Fifth leg: natural Hindi strings (values-hi) on the API 35 phone.
+          # Per-app locale is the app's own documented switch (AppLanguage reads
+          # AppCompatDelegate.getApplicationLocales); the leg verifies Hindi in the
+          # first dump and fails when it is still English. Not restored: the
+          # emulator is thrown away and the whole leg is supposed to be Hindi.
           - leg: hindi
             api: 35
             profile: pixel_6
             arch: x86_64
-            setup: "adb shell cmd locale set-app-locales com.scanwhirl.app.test --locales hi-IN; adb shell settings put system system_locales hi-IN"
+            setup: "adb shell cmd locale set-app-locales com.scanwhirl.app.test --locales hi-IN"
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    # 45-minute walk deadline + up to 15 minutes of emulator boot + the artifact
+    # tail; 55 could cancel the job before the if: always() upload. Measured
+    # legs are 30-42 minutes total.
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
         with:

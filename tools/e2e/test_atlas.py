@@ -296,6 +296,147 @@ class DeepCoverageTest(unittest.TestCase):
         self.assertEqual(len(atlas.picker_items(root)), 2)
 
 
+class ToolScreenGateTest(unittest.TestCase):
+    """ATLAS2 review §2: a tile counts only when its own screen is the top one."""
+
+    WINDOW_SHELL = ("topResumedActivity=ActivityRecord{abc u0 com.scanwhirl.app.test/"
+                    "com.scanwhirl.app.ui.shell.ShellActivityCyan t10}")
+    WINDOW_SETUP = ("topResumedActivity=ActivityRecord{abc u0 com.scanwhirl.app.test/"
+                    "com.scanwhirl.app.ui.tools.ToolSetupActivity t16}")
+    WINDOW_QR = ("topResumedActivity=ActivityRecord{abc u0 com.scanwhirl.app.test/"
+                 "com.scanwhirl.app.ui.qr.QrActivity t15}")
+    WINDOW_GMS = ("topResumedActivity=ActivityRecord{abc u0 com.google.android.gms/"
+                  ".chimera.container.ui.ModuleDownloadActivity t11}")
+    WINDOW_DOCS = ("topResumedActivity=ActivityRecord{abc u0 "
+                   "com.google.android.documentsui/com.android.documentsui.picker.PickActivity t13}")
+
+    def test_every_tool_tile_has_an_explicit_expected_screen(self):
+        # Harm prevented: a new or renamed tile silently "passes" because no
+        # contract exists for it.
+        self.assertEqual(set(atlas.TOOL_SCREENS), {tool_id for tool_id, _ in atlas.TOOLS})
+
+    def test_own_activity_is_a_successful_tool_capture(self):
+        root = ET.fromstring('<hierarchy><node resource-id="pkg:id/toolSetupRun" '
+                             'bounds="[0,0][10,10]"/></hierarchy>')
+        verdict = atlas.tool_screen_verdict("compress", self.WINDOW_SETUP, root)
+        self.assertIsNone(verdict["failure"])
+        self.assertEqual(verdict["screen"], "own screen")
+
+    def test_another_tools_activity_is_a_failed_capture(self):
+        # Harm prevented: add_text opened QrActivity and was counted as reached.
+        root = ET.fromstring('<hierarchy><node resource-id="pkg:id/qrTitle" '
+                             'text="QR code" bounds="[0,0][10,10]"/></hierarchy>')
+        verdict = atlas.tool_screen_verdict("add_text", self.WINDOW_QR, root)
+        self.assertEqual(verdict["failure"]["kind"], "wrong-activity")
+
+    def test_gms_module_error_is_never_the_scan_screen(self):
+        # Harm prevented: "Something went wrong / Try again later" from Play
+        # services was recorded as the Scan tool and counted in coverage.
+        root = ET.fromstring('<hierarchy><node text="Something went wrong" '
+                             'bounds="[0,0][10,10]"/><node text="Try again later" '
+                             'bounds="[0,0][10,10]"/></hierarchy>')
+        verdict = atlas.tool_screen_verdict("scan", self.WINDOW_GMS, root)
+        self.assertEqual(verdict["failure"]["kind"], "gms-module")
+
+    def test_search_results_are_not_a_tool_screen(self):
+        # Harm prevented: the previous code tapped the search field/result list
+        # and recorded a "tool-*" capture there.
+        focused = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swToolsSearch" text="scan" '
+            'focused="true" bounds="[0,0][10,10]"/>'
+            '<node resource-id="pkg:id/swToolLabel" text="Scan" bounds="[0,0][10,10]"/>'
+            '</hierarchy>')
+        verdict = atlas.tool_screen_verdict("scan", self.WINDOW_SHELL, focused)
+        self.assertEqual(verdict["failure"]["kind"], "tool-search-focused")
+
+    def test_picker_sheet_counts_for_picker_tools_only(self):
+        # Harm prevented: any sheet over the shell counted as "the tool opened".
+        picker = ET.fromstring('<hierarchy><node resource-id="pkg:id/docPickerSheetRoot" '
+                               'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertIsNone(atlas.tool_screen_verdict(
+            "sign", self.WINDOW_SHELL, picker)["failure"])
+        self.assertEqual(atlas.tool_screen_verdict(
+            "compress", self.WINDOW_SHELL, picker)["failure"]["kind"],
+            "wrong-activity")
+
+    def test_system_picker_counts_only_where_the_tool_opens_one(self):
+        picker = ET.fromstring('<hierarchy><node text="Downloads" '
+                               'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertIsNone(atlas.tool_screen_verdict(
+            "import_pdf", self.WINDOW_DOCS, picker)["failure"])
+        verdict = atlas.tool_screen_verdict("compress", self.WINDOW_DOCS, picker)
+        self.assertEqual(verdict["failure"]["kind"], "system-screen")
+
+    def test_failed_capture_is_not_counted_as_reached(self):
+        self.assertTrue(atlas.capture_succeeded({"capture_status": "ok"}))
+        self.assertTrue(atlas.capture_succeeded({"capture_status": "secure-by-design"}))
+        self.assertFalse(atlas.capture_succeeded({"capture_status": "capture-failed"}))
+        self.assertFalse(atlas.capture_succeeded(None))
+
+    def test_search_query_must_equal_the_alias(self):
+        matched = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swToolsSearch" text="Add text" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        partial = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swToolsSearch" text="text" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertTrue(atlas.search_query_matches(matched, "Add text"))
+        self.assertFalse(atlas.search_query_matches(partial, "Add text"))
+        self.assertFalse(atlas.search_query_matches(None, "Add text"))
+
+    def test_top_screen_parses_relative_and_absolute_activities(self):
+        self.assertEqual(atlas.top_screen(self.WINDOW_SETUP),
+                         ("com.scanwhirl.app.test", "ToolSetupActivity"))
+        self.assertEqual(atlas.top_screen(
+            "mResumedActivity: ActivityRecord{1 u0 com.pkg/.ui.X t1}"),
+            ("com.pkg", "X"))
+        self.assertEqual(atlas.top_screen("unknown"), ("", ""))
+
+
+class HindiLegTest(unittest.TestCase):
+    def root(self, *texts):
+        return ET.fromstring(
+            "<hierarchy>" + "".join('<node text="%s" />' % t for t in texts)
+            + "</hierarchy>")
+
+    def test_english_ui_is_never_a_hindi_false_green(self):
+        # Harm prevented: an English leg reported PASS with hindi_labels 0.
+        english = self.root("Library", "Tools", "Recent documents", "Settings",
+                            "Backup and restore", "Open Vault")
+        self.assertFalse(atlas.hindi_active(english))
+        self.assertEqual(atlas.hindi_ratio(english), 0.0)
+
+    def test_hindi_ui_is_measured_as_devanagari_ratio(self):
+        hindi = self.root("पुस्तकालय", "औज़ार", "हाल के दस्तावेज़", "सेटिंग्स",
+                          "प्रति और पुनर्स्थापित करें", "तिजोरी खोलें")
+        self.assertTrue(atlas.hindi_active(hindi))
+        self.assertGreater(atlas.hindi_ratio(hindi), 0.9)
+
+    def test_language_chip_alone_is_not_hindi(self):
+        chip = ET.fromstring(
+            '<hierarchy><node resource-id="pkg:id/swLanguageChip" text="A/अ"/>'
+            '<node text="Library"/><node text="Tools"/></hierarchy>')
+        self.assertFalse(atlas.hindi_active(chip))
+
+
+class ImportFocusTest(unittest.TestCase):
+    def test_focused_row_text_includes_child_labels(self):
+        root = ET.fromstring(
+            '<hierarchy><node focused="true" text="" bounds="[0,0][10,10]">'
+            '<node text="atlas-qa-fixture.pdf" bounds="[0,0][10,10]"/>'
+            '</node><node focused="false" text="Downloads"/></hierarchy>')
+        self.assertTrue(atlas.focused_matches(root, atlas.FIXTURE_PDF))
+        self.assertIn("atlas-qa-fixture.pdf", atlas.focused_text(root))
+
+    def test_focus_on_another_row_never_presses_enter(self):
+        # Harm prevented: blind TAB x4 + ENTER opened the drawer/another file.
+        root = ET.fromstring(
+            '<hierarchy><node focused="true" text="Downloads" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertFalse(atlas.focused_matches(root, atlas.FIXTURE_PDF))
+        self.assertEqual(atlas.focused_text(None), "")
+
+
 class ScreenshotTest(unittest.TestCase):
     def test_black_frame_is_measurable(self):
         width, height = 32, 32
