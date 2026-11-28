@@ -241,7 +241,7 @@ class W5eHonestyTest {
             if (menu.findItem(R.id.ocrAboutReading) == null) activity.onCreateOptionsMenu(menu)
             val item = menu.findItem(R.id.ocrAboutReading)
             assertNotNull("the OCR overflow has About reading text", item)
-            item.performClick()
+            assertTrue("About reading text was handled", activity.onOptionsItemSelected(item))
             shadowOf(android.os.Looper.getMainLooper()).idle()
             val sheet = ShadowDialog.getLatestDialog()!!
             val text = screenText(sheet.window!!.decorView)
