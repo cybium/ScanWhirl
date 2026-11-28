@@ -90,7 +90,7 @@ class LockToolsActivity : BaseActivity(), HomeHost {
         // VQA V106: "Protect" and "Protect PDF" name the same action; "Unlock" must not reuse a
         // closed-padlock promise. This screen says what each one does before the chooser opens.
         ToolFirstScreenCopy.text(
-            this, if (mode == MODE_PROTECT) "protect" else "unlock"
+            this@LockToolsActivity, if (mode == MODE_PROTECT) "protect" else "unlock"
         )?.let { purpose ->
             addView(
                 SwStyle.text(
