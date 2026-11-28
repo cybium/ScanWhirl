@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.os.Bundle;
 
 import com.scanwhirl.app.util.PdfEncryptor;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
 import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.pdmodel.PDPage;
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream;
@@ -74,6 +75,8 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
             File dir = new File(getTargetContext().getCacheDir(),
                 "w7a-minified-" + System.nanoTime());
             if (!dir.mkdirs()) throw new IllegalStateException("no temp dir");
+            // Font metrics are assets in the AAR: initialise the loader before using PDType1Font.
+            PDFBoxResourceLoader.init(getTargetContext());
             engine = new PdfBoxEngine(getTargetContext(), new File(dir, "work"),
                 new PdfEngineBudgets(), false);
 
