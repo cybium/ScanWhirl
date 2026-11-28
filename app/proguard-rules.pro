@@ -90,3 +90,8 @@
 # minified release build so the runtime smoke test can start.
 -keep class kotlin.jvm.internal.** { *; }
 -keep class androidx.tracing.** { *; }
+
+# PDFBox-Android's JPX filter references the optional Gemalto JP2 decoder, which
+# is deliberately not shipped (no INTERNET/JCenter dependency). JPX input fails
+# closed at runtime; R8 must not fail the build on those unresolved references.
+-dontwarn com.gemalto.jp2.**
