@@ -130,6 +130,9 @@ class PdfEngineSpikeTest {
                 }
                 value("public_result_uri", uri?.toString() ?: "none")
             } else {
+                // API 24 needs a runtime grant; instrumentation can grant it via shell.
+                InstrumentationRegistry.getInstrumentation().uiAutomation
+                    .executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_EXTERNAL_STORAGE")
                 val publicFile = File(Environment.getExternalStorageDirectory(), "pdf_spike_results.json")
                 publicFile.writeText(report)
                 value("public_result_path", publicFile.absolutePath)
@@ -301,10 +304,11 @@ class PdfEngineSpikeTest {
             editedRotation = doc.getPage(0).rotation
             editedText = PDFTextStripper().getText(doc).trim()
         }
-        value("reorder_rotate_delete_text", editedText.take(120))
+        val normalizedText = editedText.replace(Regex("\\s+"), " ")
+        value("reorder_rotate_delete_text", normalizedText.take(120))
         editedOk = editedPages == 1 &&
             listOf("PUBLIC_ALPHA page 1", "PUBLIC_ALPHA page 2", "PUBLIC_ALPHA page 3")
-                .any { editedText.contains(it) }
+                .any { normalizedText.contains(it) }
         check(
             "reorder_rotate_delete", editedOk && editedRotation == 90,
             "pages=$editedPages rotation=$editedRotation"
