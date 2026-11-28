@@ -263,7 +263,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         navHost.minimumHeight = SwStyle.dp(this, 100f)
         // At 200 % the Scan disc is lifted above the pill; let it draw there while the pill
         // keeps its own hit area and the four labels keep their full-width cells.
-        navHost.clipChildren = false
+        (navHost as? ViewGroup)?.clipChildren = false
         root.clipChildren = false
         root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
