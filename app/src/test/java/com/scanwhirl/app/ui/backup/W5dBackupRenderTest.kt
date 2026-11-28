@@ -199,6 +199,6 @@ class W5dBackupRenderTest {
     private fun assertEquals16Renders() {
         assertTrue("20 renders expected (screen + four sheets x four looks), got ${names.size}",
             names.size == 20)
-        for (name in names) assertTrue("$name is present", File(outDir, "$name.png").length() > 0L)
+        for (name in names) assertTrue("$name is present", File(outDir, name).length() > 0L)
     }
 }
