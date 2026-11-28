@@ -3,5 +3,5 @@
 <resources>
     <string name="me_theme">रंग-रूप</string>
     <string name="me_also_save_to_documents">Documents में भी सहेजें</string>
-    <string name="me_also_save_to_documents_summary">Documents/ScanWhirl में</string>
+    <string name="me_also_save_to_documents_summary">प्रतियाँ Documents/ScanWhirl में</string>
 </resources>

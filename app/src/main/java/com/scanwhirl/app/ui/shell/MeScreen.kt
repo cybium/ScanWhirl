@@ -242,9 +242,12 @@ class MeScreen(
             minimumWidth = SwStyle.dp(context, SwStyle.TOUCH_MIN_DP)
             minimumHeight = SwStyle.dp(context, SwStyle.TOUCH_MIN_DP)
         }
+        // A fixed 48dp box clipped the switch's track and thumb (half-circle at
+        // the left edge). Let it measure its natural width; 48dp stays the touch
+        // floor, and the row's end padding then contains the whole control.
         card.addView(
             toggle,
-            LayoutParams(SwStyle.dp(context, SwStyle.TOUCH_MIN_DP), SwStyle.dp(context, SwStyle.TOUCH_MIN_DP))
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, SwStyle.TOUCH_MIN_DP))
         )
         toggle.setOnCheckedChangeListener { _, value -> onToggle(value) }
         card.isClickable = true
