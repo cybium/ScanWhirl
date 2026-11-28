@@ -168,12 +168,11 @@ jobs:
           script: |
             set -e
             set -o pipefail
-            printf "allprojects { p -> p.plugins.withId('com.android.application') { p.extensions.getByName('android').defaultConfig.testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner' } }\n" > w7a-init.gradle
-            ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PciUnsignedRelease -I w7a-init.gradle --no-daemon --stacktrace
+            ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PciUnsignedRelease --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/release/app-release.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell pm list instrumentation | grep -i scanwhirl || true
-            adb shell am instrument -w -e class com.scanwhirl.app.pdf.engine.PdfEngineMinifiedSmokeTest com.scanwhirl.app.test/androidx.test.runner.AndroidJUnitRunner | tee minified-instrument.log || true
+            adb shell am instrument -w -e class com.scanwhirl.app.pdf.engine.PdfEngineMinifiedSmokeTest com.scanwhirl.app.test/android.test.InstrumentationTestRunner | tee minified-instrument.log || true
             cat minified-instrument.log
             adb logcat -d | grep -i -E 'instrumentation|AndroidRuntime|FATAL|NoClassDef|Exception' | tail -n 80 || true
             python3 -c "import zipfile; z=zipfile.ZipFile('app/build/outputs/apk/release/app-release.apk'); print('release APK keeps kotlin Intrinsics:', any(b'Lkotlin/jvm/internal/Intrinsics;' in z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')))"
