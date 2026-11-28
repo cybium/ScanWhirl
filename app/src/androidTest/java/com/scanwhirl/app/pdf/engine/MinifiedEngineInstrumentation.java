@@ -113,7 +113,13 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
             result.putString("detail", "minified engine workflow OK");
             finish(0, result);
         } catch (Throwable t) {
-            result.putString("detail", String.valueOf(t));
+            StringBuilder detail = new StringBuilder();
+            Throwable cause = t;
+            while (cause != null) {
+                detail.append(cause).append('\n');
+                cause = cause.getCause();
+            }
+            result.putString("detail", detail.toString());
             finish(-1, result);
         } finally {
             if (engine != null) engine.close();
