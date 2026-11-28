@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -152,6 +153,22 @@ class W5a2KitFixesTest {
         assertEquals("Clear metadata no longer uses an eye", R.drawable.ic_sw_clear_metadata, icon("remove_metadata"))
     }
 
+    @Test
+    fun `Batch uses one glyph in the registry, the Pro tile and the selection chip`() {
+        // V099 acceptance: the tool hub/result fixed it, but three glyphs were still
+        // visible until the Pro and selection bindings were unified too.
+        val pro = source("java/com/scanwhirl/app/ui/shell/ProScreen.kt")
+        val selection = source("java/com/scanwhirl/app/ui/shell/LibraryScreen.kt")
+        assertTrue("Pro Batch tile must bind ic_sw_batch",
+            pro.contains("R.drawable.ic_sw_batch to R.string.pro_feat_batch"))
+        assertTrue("Selection Batch action must bind ic_sw_batch",
+            selection.contains("R.id.swSelBatch, R.drawable.ic_sw_batch"))
+        assertFalse("Pro Batch tile must not use the old check-circle glyph",
+            pro.contains("R.drawable.ic_sym_check_circle to R.string.pro_feat_batch"))
+        assertFalse("Selection Batch must not use the old page-grid glyph",
+            selection.contains("R.id.swSelBatch, R.drawable.ic_sym_view_module"))
+    }
+
     // ---- 3. composited contrast of UI affordances -----------------------------
 
     @Test
@@ -171,18 +188,31 @@ class W5a2KitFixesTest {
     }
 
     @Test
-    fun `functional hairline and sheet grab clear 3 to 1 on their surfaces`() {
+    fun `functional hairline clears 3 to 1 and the grab clears it on the real sheet`() {
+        // V089 acceptance: the cited dark screenshot is the Android platform photo
+        // picker, whose sheet is ~#2f3036 — NOT rv_surface (#162024). Compositing
+        // against rv_surface made the night assertion vacuous (old and new token
+        // were both #9db2b8). Test the dark token against the real dark sheet.
+        val platformDarkSheet = 0xFF2F3036.toInt()
         for (q in listOf("notnight", "night")) {
             RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
             val card = ContextCompat.getColor(app, R.color.tok_surface)
             val sheet = ContextCompat.getColor(app, R.color.rv_surface)
+            val worstGrabSurface = if (q == "night") platformDarkSheet else sheet
             for ((name, res, bg) in listOf(
                 Triple("hairline", R.color.tok_hairline_functional, card),
-                Triple("grab", R.color.tok_drag_handle, sheet)
+                Triple("grab", R.color.tok_drag_handle, worstGrabSurface)
             )) {
                 val fg = ContextCompat.getColor(app, res)
                 val value = ratio(composite(fg, bg), bg)
                 assertTrue("$q $name on surface = $value", value >= 3.0)
+            }
+            if (q == "night") {
+                val nightHandle = ContextCompat.getColor(app, R.color.tok_drag_handle)
+                assertNotEquals("night grab token must differ from the old #9db2b8",
+                    0xFF9DB2B8.toInt(), nightHandle)
+                assertTrue("night grab on the real platform sheet ${ratio(composite(nightHandle, platformDarkSheet), platformDarkSheet)}",
+                    ratio(composite(nightHandle, platformDarkSheet), platformDarkSheet) >= 3.0)
             }
         }
     }
