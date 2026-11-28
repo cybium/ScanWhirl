@@ -882,6 +882,63 @@ def walk_results():
     recover("after shared result walk")
 
 
+def pick_j1_photo():
+    """Pick the seeded fictional portrait from whatever system picker this API presents.
+
+    Every target comes from a fresh uiautomator dump: a labelled tile first, then the largest
+    clickable media tile in the picker window. Nothing uses a fixed coordinate.
+    """
+    def confirm_pick():
+        # The modern Photo Picker can ask for a second confirmation after a tile tap.
+        for label in ("Add", "OK", "Done", "Use"):
+            if tap({"text": label}, timeout=1):
+                return True
+        return False
+
+    time.sleep(1.2)
+    capture("j1", "picker", ["Tools", "Form photo", "Picker"],
+            "System picker for the seeded fictional portrait")
+    for want in (
+        {"regex": r"atlas-photo-1(?:\.png)?"},
+        {"regex": r"Photo taken on|atlas-photo"},
+        {"text_contains": "atlas-photo"},
+        {"desc": "Show roots"},
+        {"text": "Pictures"},
+    ):
+        if tap(want, timeout=4):
+            if want.get("desc") == "Show roots" or want.get("text") == "Pictures":
+                for label in ("Images", "Pictures", "Download", "Downloads"):
+                    if tap({"text": label}, timeout=2):
+                        break
+            if any(k in want for k in ("regex", "text_contains")):
+                confirm_pick()
+                return True
+    root = hierarchy()
+    if root is None:
+        return False
+    tiles = []
+    for node in root.iter("node"):
+        if node.get("clickable") != "true":
+            continue
+        pkg = node.get("package") or ""
+        if PKG in pkg:
+            continue
+        bounds = parse_bounds(node.get("bounds"))
+        area = rect_area(bounds)
+        if area < 8000:
+            continue
+        label = (node.get("text") or "") + " " + (node.get("content-desc") or "")
+        score = 2 if re.search(r"photo|image|atlas", label, re.I) else 1
+        tiles.append((score, area, node))
+    if not tiles:
+        return False
+    tiles.sort(key=lambda item: (-item[0], -item[1]))
+    tapped = tap_node(hierarchy(), tiles[0][2])
+    if tapped:
+        confirm_pick()
+    return tapped
+
+
 def walk_j1():
     """J1: rules -> photo -> whole-photo fit/bars -> explicit crop -> result -> saved.
 
@@ -915,16 +972,9 @@ def walk_j1():
     def pick():
         if not tap_reachable({"rid": "formReadyPick"}):
             return "Choose photo unavailable"
-        photo_tile = {"regex": r"Photo taken on|atlas-photo-1(?:\.png)?"}
-        if not tap(photo_tile, timeout=6):
-            tap({"text": "Files"}, timeout=1)
-            if tap({"desc": "Show roots"}, timeout=5):
-                if not tap({"text": "Images"}, timeout=3):
-                    tap({"text": "Pictures"}, timeout=2)
-            tap({"text": "Pictures"}, timeout=2)
-        if not tap(photo_tile, timeout=8):
+        if not pick_j1_photo():
             capture("j1", "picker-no-photo", ["Tools", "Form photo", "Picker"],
-                    "Seeded fictional portrait not listed")
+                    "Seeded fictional portrait not listed by this system picker")
             back()
             return "photo unavailable"
         if wait_for({"rid": "formReadyFitPreview"}, timeout=15) is None:
