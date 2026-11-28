@@ -28,7 +28,6 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.DocumentViewerActivity
 import com.scanwhirl.app.ui.ExportResultActivity
-import com.scanwhirl.app.ui.MainActivity
 import com.scanwhirl.app.ui.MergePdfActivity
 import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.ui.PageViewerActivity
@@ -37,7 +36,6 @@ import com.scanwhirl.app.ui.ScanReviewActivity
 import com.scanwhirl.app.ui.SettingsActivity
 import com.scanwhirl.app.ui.TrashActivity
 import com.scanwhirl.app.ui.backup.BackupActivity
-import com.scanwhirl.app.ui.book.BookPagesActivity
 import com.scanwhirl.app.ui.protect.LockToolsActivity
 import com.scanwhirl.app.ui.qr.QrActivity
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -526,18 +524,13 @@ class ScreenAtlasTest {
             ScreenSpec("scan_review", "Review", "Scan > photos > Review") {
                 launch(ScanReviewActivity.intent(app, stageDir.path, null, "Fiction notes"))
             },
-            ScreenSpec("book_pages", "Book pages", "Create > Book pages") {
-                launch(BookPagesActivity.intent(app))
-            },
             ScreenSpec("business_card", "Business card", "Create > Business card") {
                 launch(BusinessCardActivity.intent(app))
             },
             ScreenSpec("photo_crop", "Crop photo", "Insert pages > photos") {
                 launch(PhotoCropFlowActivity.intent(app, listOf(cropPhoto)))
-            },
-            ScreenSpec("legacy_home", "Home (legacy)", "unreachable; kept in the manifest") {
-                launch(Intent(app, MainActivity::class.java))
             }
+            // W8: legacy Home and Book pages slices removed with their unreachable screens.
         )
     }
 

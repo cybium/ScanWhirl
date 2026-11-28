@@ -5,7 +5,6 @@ import android.content.pm.ActivityInfo
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -60,24 +59,8 @@ class OrientationPolicyTest {
         )
     }
 
-    @Test
-    fun `book mode capture on a phone may rotate`() {
-        val orientation = requestedOrientationOf(
-            com.scanwhirl.app.ui.book.BookPagesActivity::class.java,
-            "en-rUS-sw360dp-w360dp-h800dp-xhdpi"
-        )
-        assertEquals("phone qualifier really is sw360", 360, smallestWidth())
-        assertNotEquals(
-            "BookPagesActivity is the allow-list exception and must not be locked",
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-            orientation
-        )
-        assertEquals(
-            "book mode keeps the system default",
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
-            orientation
-        )
-    }
+    // W8: the Book-pages rotation exception was deleted with that unreachable screen.
+    // ScanWhirlApp keeps the (now inert) allow-list string; no live activity uses it.
 
     @Test
     fun `a tablet activity keeps its unset orientation`() {

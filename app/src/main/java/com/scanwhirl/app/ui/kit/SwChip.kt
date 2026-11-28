@@ -62,6 +62,8 @@ class SwChip(context: Context) : LinearLayout(context) {
             maxLines = 1
             isSingleLine = true
             includeFontPadding = false
+            // W5a-2 (V017/V072): a clipped word gets an ellipsis, never a mid-word cut.
+            ellipsize = android.text.TextUtils.TruncateAt.END
             // L1-04: when a host relaxes this to two lines, wrap only at whole words.
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant

@@ -47,7 +47,7 @@
     <string name="home_protected">सुरक्षित</string>
 
     <string name="tools_title">काम</string>
-    <string name="tools_search_hint">काम खोजें, जैसे "OCR"</string>
+    <string name="tools_search_hint">काम खोजें</string>
     <string name="tools_no_match">“%1$s” के लिए कोई काम नहीं</string>
     <string name="tools_group_create">बनाएँ</string>
     <string name="tools_group_organize">व्यवस्थित करें</string>
@@ -59,7 +59,7 @@
 
     <!-- B4-TOOLS: सात काम (UI_PLAN §0b), पढ़ने के क्रम में -->
     <string name="tools_job_smaller">छोटा करें</string>
-    <string name="tools_job_organise">जोड़ें और सजाएँ</string>
+    <string name="tools_job_organise">जोड़ें</string>
     <string name="tools_job_markup">हस्ताक्षर और निशान</string>
     <string name="tools_job_private">निजता</string>
     <string name="tools_job_text">OCR और खोजें</string>
@@ -68,6 +68,11 @@
     <string name="tools_job_all">सभी %1$d काम</string>
     <string name="tools_job_fewer">कम दिखाएँ</string>
     <string name="tools_search_results">नतीजे</string>
+
+    <!-- B3: तीन नाम वाले छात्र काम, Tools के शीर्ष पर; एक छोटी पंक्ति प्रति काम। -->
+    <string name="student_job_form_ready">फ़ोटो को फ़ॉर्म में फिट करें</string>
+    <string name="student_job_sign">फ़ॉर्म पर हस्ताक्षर या जानकारी भरें</string>
+    <string name="student_job_hide_info">निजी जानकारी छिपाएँ</string>
 
     <string name="tool_scan">स्कैन</string>
     <string name="tool_id_card">पहचान पत्र</string>
@@ -154,8 +159,16 @@
     <string name="me_about_summary">संस्करण और निजता</string>
 
     <string name="vault_tab_title">तिजोरी</string>
-    <string name="vault_tab_encrypted">इस फ़ोन पर कोड के बिना नहीं पढ़ी जा सकतीं</string>
+    <!-- VQA V049/V050/V051: पुराने नाम परोक्ष रखे गए हैं; बिना सेटअप कोई सुरक्षा दावा नहीं। -->
+    <string name="vault_tab_encrypted">आपकी फ़ाइलों के लिए निजी जगह</string>
     <string name="vault_tab_open">तिजोरी खोलें</string>
+    <string name="vault_tab_note_not_setup">आपकी फ़ाइलों के लिए निजी जगह</string>
+    <string name="vault_tab_note_locked">इस फ़ोन पर ताला लगा है</string>
+    <string name="vault_tab_note_unlocked">इस फ़ोन पर खुली है</string>
+    <string name="vault_tab_setup">तिजोरी बनाएँ</string>
+    <string name="vault_tab_unlock">ताला खोलें</string>
+    <string name="vault_tab_fact_empty">अभी कुछ छिपाया नहीं गया</string>
+    <string name="vault_tab_fact_on_phone">फ़ाइलें इसी फ़ोन पर रहती हैं</string>
 
     <string name="sheet_cancel">रद्द करें</string>
     <string name="sheet_got_it">समझ गया</string>
@@ -259,7 +272,7 @@
     <string name="vault_tab_status_loading">देख रहे हैं…</string>
     <string name="vault_tab_not_setup">अभी बनी नहीं</string>
     <string name="vault_tab_locked">ताला लगा है</string>
-    <string name="vault_tab_aes">इस फ़ोन पर AES-256</string>
+    <string name="vault_tab_aes">फ़ाइलें इसी फ़ोन पर रहती हैं</string>
     <string name="vault_tab_relock">उँगली का निशान या गुप्त नंबर से खुलती है · 2 मिनट बाद ताला</string>
 
     <plurals name="vault_tab_unlocked">

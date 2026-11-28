@@ -12,7 +12,6 @@ import com.scanwhirl.app.store.PendingScans
 import com.scanwhirl.app.tools.V2cFailureMap
 import com.scanwhirl.app.tools.V2cReceiptStore
 import com.scanwhirl.app.ui.ScanReviewActivity
-import com.scanwhirl.app.ui.book.BookPagesActivity
 import com.scanwhirl.app.util.ImageTools
 import com.scanwhirl.app.util.ImportFixtures
 import org.junit.After
@@ -182,24 +181,8 @@ class C2ReviewReceiptsTest {
             first?.close()
         }
     }
-
-    @Test(timeout = 30_000)
-    fun `Book failures show a localized reason and a durable receipt`() {
-        var controller: ActivityController<BookPagesActivity>? = null
-        try {
-            controller = Robolectric.buildActivity(BookPagesActivity::class.java).setup()
-            val activity = controller.get()
-            activity.reportFailureForTest(IllegalArgumentException("fatal SecretException /private"))
-            idle()
-            val dialog = ShadowDialog.getLatestDialog()
-            assertNotNull(dialog)
-            val text = dialog!!.findViewById<View>(R.id.swSheetMessage) as? TextView
-            assertNotNull(text)
-            assertTrue("localized book failure: ${text!!.text}", text.text.contains(app.getString(R.string.v2c_error_unreadable)))
-            assertFalse("raw text leaked: ${text.text}", text.text.toString().contains("SecretException"))
-            assertNotNull(V2cReceiptStore.latest(app))
-        } finally {
-            controller?.close()
-        }
-    }
+    // W8: the Book-pages failure test was deleted with the unreachable activity.
+    // No raw exception text is still proven by the localized-reason assertion earlier in
+    // this class and by V1LocalizedErrorsTest / ImportFailureWordingTest; the durable
+    // receipt is proven by the receipt tests above and by V2cCleanupTest.
 }

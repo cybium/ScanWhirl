@@ -14,6 +14,14 @@
          shipped #9db2b8 clears 5.91:1 there and remains the body-safe value. -->
     <color name="tok_text_3">#9db2b8</color>
     <color name="tok_boundary">#9db2b8</color>
+    <!-- W5a-2: chevrons are controls, not decoration. #9db2b8 on tok_surface
+         #162024 = 7.5:1 (was #2a3b41 at 1.4:1). -->
+    <color name="tok_chevron">#9db2b8</color>
+    <color name="tok_hairline_functional">#9db2b8</color>
+    <!-- W5a-2 acceptance: #9db2b8 was identical to the old token (vacuous test).
+         #d3e2e6 is 9.9:1 on the real dark platform sheet (#2f3036) and 12.5:1
+         on our own tok_surface, so the handle is visible on either surface. -->
+    <color name="tok_drag_handle">#d3e2e6</color>
 
     <color name="tok_accent">#2fd3e3</color>
     <color name="tok_on_accent">#05252a</color>

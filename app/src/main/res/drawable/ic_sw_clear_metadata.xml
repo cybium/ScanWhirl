@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a-2 (V011): a document whose metadata lines are struck through. Distinct
+     from the eye/hide glyph so "Clear metadata" no longer reads as "hide". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5.5,3.6h8.4l4.1,4.1v12.7H5.5zM13.9,3.6v4.1h4.1M8.1,10.8h7M8.1,14h5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M6.4,19.4 19.2,6.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- test26 T8.1: signal dot — 3dp circle, cyan primary. Lit when background
-     work (OCR/merge/compress) runs; breathes only when SwMotion.ambientAllowed. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <size android:width="3dp" android:height="3dp" />
-    <solid android:color="@color/cyan_primary" />
-</shape>

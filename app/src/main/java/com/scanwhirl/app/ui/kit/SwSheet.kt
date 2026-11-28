@@ -330,23 +330,35 @@ class SwSheet private constructor(
                     )
                 }
                 row.addView(
-                    SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
-                        text = label
-                    },
+                    SwStyle.twoLineLabel(
+                        context, 15f, SwStyle.color(context, R.color.text_hologram_hi)
+                    ).apply { text = label },
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { marginEnd = SwStyle.dp(context, 12f) }
                 )
-                if (selected[index]) {
-                    row.addView(android.widget.ImageView(context).apply {
-                        setImageResource(R.drawable.ic_sym_check)
-                        imageTintList = android.content.res.ColorStateList.valueOf(
-                            SwStyle.color(context, R.color.cyan_primary)
+                // W5a-2 (V059): a real radio/checkbox is visible in BOTH states. A
+                // lone tick on the selected row gave no ON/OFF affordance at all.
+                val on = selected[index]
+                row.addView(android.widget.ImageView(context).apply {
+                    setImageResource(
+                        when {
+                            multi && on -> R.drawable.ic_sw_checkbox_on
+                            multi -> R.drawable.ic_sw_checkbox_off
+                            on -> R.drawable.ic_sw_radio_on
+                            else -> R.drawable.ic_sw_radio_off
+                        }
+                    )
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        SwStyle.color(
+                            context,
+                            if (on) R.color.cyan_primary else R.color.text_hologram_dim
                         )
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                        layoutParams = LinearLayout.LayoutParams(
-                            SwStyle.dp(context, 20f), SwStyle.dp(context, 20f)
-                        )
-                    })
-                }
+                    )
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    layoutParams = LinearLayout.LayoutParams(
+                        SwStyle.dp(context, 20f), SwStyle.dp(context, 20f)
+                    )
+                })
                 row.setOnClickListener {
                     SwHaptics.tick(row)
                     if (multi) {
@@ -361,6 +373,9 @@ class SwSheet private constructor(
                     }
                 }
                 SwMotion.press(row)
+                // Rows stay the ONLY children of swSheetItems: callers and tests address
+                // options by index. The inset hairline is available via SwStyle.divider()
+                // for hosts that lay out their own sections.
                 list.addView(row)
             }
         }
@@ -398,6 +413,13 @@ class SwSheet private constructor(
         setSecondary(text, null, onClick)
 
     fun setSecondary(text: CharSequence, iconRes: Int?, onClick: (() -> Unit)? = null): SwSheet = apply {
+        // W5a-2 (V065): when the footer is a Cancel action it is the ONE dismissal
+        // control. Keeping the header X as a second, identical exit was a duplicate.
+        val cancelLabels = setOf(
+            view.context.getString(R.string.sheet_cancel),
+            view.context.getString(android.R.string.cancel)
+        )
+        if (text.toString().trim() in cancelLabels) closeButton.isVisible = false
         secondaryFired = false
         secondaryButton.text = text
         setActionIcon(secondaryButton, iconRes)

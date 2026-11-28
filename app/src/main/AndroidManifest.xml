@@ -91,37 +91,31 @@
             android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity" />
 
-        <!-- The legacy home is kept until every flow has moved to the shell. -->
-        <activity
-            android:name=".ui.MainActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateHidden|adjustResize" />
-
         <activity
             android:name=".ui.DocumentViewerActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
             android:name=".ui.PdfViewerActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
             android:name=".ui.TrashActivity"
             android:exported="false"
             android:label="@string/trash_title"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName=".ui.shell.ShellActivity" />
 
         <activity
             android:name=".ui.MergePdfActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName=".ui.shell.ShellActivity" />
 
         <!-- v2 UI: 03_tools_hub — the L4 shared setup, result and passport-crop screens. -->
         <activity
@@ -178,12 +172,6 @@
         <activity
             android:name=".ui.ExportResultActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity" />
-
-        <!-- L3: Book pages — split a photographed two-page spread (Create group). -->
-        <activity
-            android:name=".ui.book.BookPagesActivity"
-            android:exported="false"
             android:parentActivityName=".ui.shell.ShellActivity" />
 
         <!-- L3: Tools/Home Protect PDF and Unlock PDF — document chooser, then the sheet. -->
@@ -202,20 +190,20 @@
         <activity
             android:name=".ui.stamp.StampEditorActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity"
+            android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.ScanReviewActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity"
+            android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="stateHidden|adjustResize" />
 
         <!-- test26 P6 OCR Editor (§4.7): adjustResize keeps the keyboard off the EditText. -->
         <activity
             android:name=".ui.OcrEditorActivity"
             android:exported="false"
-            android:parentActivityName=".ui.MainActivity"
+            android:parentActivityName=".ui.shell.ShellActivity"
             android:windowSoftInputMode="adjustResize" />
 
         <provider

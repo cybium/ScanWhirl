@@ -20,7 +20,7 @@ import com.scanwhirl.app.store.vault.VaultPasscodeGate
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.tools.VaultFlow
-import com.scanwhirl.app.ui.MainActivity
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.ui.backup.BackupActivity
 import com.scanwhirl.app.ui.vault.VaultActivity
 import com.scanwhirl.app.util.Prefs
@@ -88,7 +88,7 @@ class VaultCredentialThreadTest {
         return calls to { calls.add(Thread.currentThread() == Looper.getMainLooper().thread); Unit }
     }
 
-    private fun homeFlow(activity: MainActivity, onOpen: (Boolean) -> Unit = {}): VaultFlow =
+    private fun homeFlow(activity: ShellActivity, onOpen: (Boolean) -> Unit = {}): VaultFlow =
         VaultFlow(activity, repo, activity, {}, onOpen, {})
 
     private fun recoverySheet(activity: BackupActivity): Dialog {
@@ -130,9 +130,9 @@ class VaultCredentialThreadTest {
         return (scopeJob.children.toSet() - before).single()
     }
 
-    @Test(timeout = 60_000) fun `legacy Home verification derives once off main`() {
+    @Test(timeout = 60_000) fun `Home verification derives once off main`() {
         Prefs.setVaultPin(app, "2580")
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+        Robolectric.buildActivity(ShellActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             var opened = false
             val flow = VaultFlow(activity, repo, activity, {}, { opened = it }, {})
@@ -145,8 +145,8 @@ class VaultCredentialThreadTest {
         }
     }
 
-    @Test(timeout = 60_000) fun `legacy Home save derives once off main`() {
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+    @Test(timeout = 60_000) fun `Home save derives once off main`() {
+        Robolectric.buildActivity(ShellActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             var saved = false
             VaultFlow(activity, repo, activity, {}, {}, {}).promptSetVaultPin { saved = true }
@@ -199,7 +199,7 @@ class VaultCredentialThreadTest {
     @Test(timeout = 60_000) fun `an incorrect SHA-256 PIN is cheap and a correct one upgrades it once`() {
         val old = VaultPinHash.legacySha256("2580")
         prefs.edit().putString("vault_pin_sha256", old).apply()
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+        Robolectric.buildActivity(ShellActivity::class.java).setup().use { controller ->
             var opened = false
             val flow = homeFlow(controller.get()) { opened = it }
             val (calls, probe) = recorder()
@@ -231,7 +231,7 @@ class VaultCredentialThreadTest {
         Prefs.setVaultPin(app, "2580")
         val old = pinRecord
         val worker = HeldWorker()
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+        Robolectric.buildActivity(ShellActivity::class.java).setup().use { controller ->
             var saved = false
             val activity = controller.get()
             homeFlow(activity).promptSetVaultPin { saved = true }

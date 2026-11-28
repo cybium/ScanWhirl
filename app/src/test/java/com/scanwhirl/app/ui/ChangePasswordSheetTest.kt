@@ -16,6 +16,8 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.util.ProGate
+import com.scanwhirl.app.ui.shell.ShellActivity
+import com.scanwhirl.app.tools.LockFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,8 +34,8 @@ import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 
 /**
- * v2 UI: 09_unlock_sheet — "Change password" asks the current password in an SwSheet with the kit
- * PasswordField (not the old SwDialog.input card) and paces wrong tries like the Unlock sheet.
+ * W8 port: the live LockFlow change-password gate driven from ShellActivity.
+ * Asks the current password in an SwSheet with the kit PasswordField and paces wrong tries.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -81,22 +83,24 @@ class ChangePasswordSheetTest {
         idle()
     }
 
-    private fun waitForHome(scenario: ActivityScenario<MainActivity>, docs: Int) {
-        assertTrue("home list loads", pollUntil {
+    /** W8: the live Library shell renders cards into swDocList. */
+    private fun waitForHome(scenario: ActivityScenario<ShellActivity>, docs: Int) {
+        assertTrue("library loads", pollUntil {
             var ok = false
             scenario.onActivity { a ->
-                ok = (a.findViewById<RecyclerView>(R.id.scanList).adapter?.itemCount ?: 0) >= docs
+                ok = (a.findViewById<android.view.ViewGroup>(R.id.swDocList)?.childCount ?: 0) >= docs
             }
             ok
         })
     }
 
-    /** Tools → Lock → Saved scan → the only document → "Password" (change). */
-    private fun openChangePassword(activity: MainActivity) {
-        activity.findViewById<View>(R.id.btnTools).performClick()
-        val tools = ShadowDialog.getLatestDialog()
-        assertNotNull("Tools sheet opens", tools)
-        tools!!.findViewById<View>(R.id.tile_lock).performClick()
+    /**
+     * W8: the live Lock entry is the shell's Tools → Lock tile. Drive the same
+     * LockFlow route without the deleted Home host: chooser → document → Password.
+     */
+    private fun openChangePassword(activity: ShellActivity, docId: String) {
+        val doc = requireNotNull(repo.getDocument(docId))
+        LockFlow(activity, repo, activity, { listOf(doc) }, { _ -> }).chooseLockSource()
         idle()
         clickItem(0) // source_saved_scan
         clickItem(0) // the only document (FlowUtil.pickScan)
@@ -130,9 +134,9 @@ class ChangePasswordSheetTest {
     @Test
     fun `change password asks the current one in the kit sheet, wrong stays, right opens Protect`() {
         val id = DocFixtures.locked(repo, app, password = "1234")
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
-            scenario.onActivity { openChangePassword(it) }
+            scenario.onActivity { openChangePassword(it, id) }
 
             val sheet = currentPasswordSheet()
             assertNotNull("Change password asks for the current password", sheet)
@@ -177,10 +181,10 @@ class ChangePasswordSheetTest {
 
     @Test
     fun `five wrong current passwords pause the sheet like Unlock`() {
-        DocFixtures.locked(repo, app, password = "1234")
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        val id = DocFixtures.locked(repo, app, password = "1234")
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             waitForHome(scenario, 1)
-            scenario.onActivity { openChangePassword(it) }
+            scenario.onActivity { openChangePassword(it, id) }
             assertNotNull("the current-password sheet opens", currentPasswordSheet())
 
             repeat(5) { submit("0000") }

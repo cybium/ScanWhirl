@@ -18,6 +18,14 @@
     <color name="tok_text_3">#52646a</color>
     <!-- Derived from the tokens.css line role: a functional boundary clears 3:1 on surface. -->
     <color name="tok_boundary">#61747a</color>
+    <!-- W5a-2: UI affordances must clear 3:1 COMPOSITED on the card. The chevron
+         used to inherit sf_outline=tok_line (#d9e3e6 on white = 1.28:1), which is
+         why nearly every Settings row showed a faint arrow. -->
+    <color name="tok_chevron">#566d74</color>
+    <!-- Functional hairline for shared card/row outlines: visible in both themes,
+         unlike tok_accent_soft which disappeared on a dark sheet. -->
+    <color name="tok_hairline_functional">#61747a</color>
+    <color name="tok_drag_handle">#61747a</color>
 
     <color name="tok_accent">#007884</color>
     <color name="tok_on_accent">#ffffff</color>

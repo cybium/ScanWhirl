@@ -9,7 +9,6 @@ import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.Faults
 import com.scanwhirl.app.store.ScanRepository
-import com.scanwhirl.app.ui.MainActivity
 import com.scanwhirl.app.util.Durable
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -86,14 +85,9 @@ class StartupRecoveryTest {
         }
     }
 
-    @Test
-    fun legacyHomeStillRollsForwardInterruptedReplace() {
-        val (id, retainedPage) = interruptReplace()
-        ActivityScenario.launch(MainActivity::class.java).use {
-            await("legacy Home did not recover Replace") { repo.getDocument(id) != null }
-            assertArrayEquals(retainedPage, requireNotNull(repo.getDocument(id)).pageFiles.single().readBytes())
-        }
-    }
+    // W8: legacyHomeStillRollsForwardInterruptedReplace was deleted with MainActivity.
+    // The same interrupted-Replace roll-forward is asserted on the live shell above
+    // (shellColdStartRecoversReplaceAndExpiresOrdinaryTrashOffMain).
 
     private fun interruptReplace(): Pair<String, ByteArray> {
         val id = DocFixtures.saved(repo, app, pages = 2, name = "Interrupted Replace")

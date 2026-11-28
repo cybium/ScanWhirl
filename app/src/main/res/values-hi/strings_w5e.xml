@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VQA V103–V107 / V114: हर नाम वाले टूल की पहली स्क्रीन पर एक सरल पंक्ति कि काम क्या करता है।
+         फ़ॉन्ट 2.0 पर 320 dp में न कटने के लिए पंक्तियाँ छोटी रखी गई हैं। -->
+    <string name="w5e_purpose_split">PDF को पन्नों के अनुसार बाँटें।</string>
+    <string name="w5e_purpose_to_word">पन्नों को Word फ़ाइल में बदलें।</string>
+    <string name="w5e_purpose_to_excel">तालिकाओं को Excel शीट में बदलें।</string>
+    <string name="w5e_purpose_to_powerpoint">पन्नों को स्लाइडें बनाएँ।</string>
+    <string name="w5e_purpose_long_image">पन्नों को एक लंबी तस्वीर में जोड़ें।</string>
+    <string name="w5e_purpose_zip">दस्तावेज़ों को एक ZIP में रखें।</string>
+    <string name="w5e_purpose_pdfa">लंबे समय के लिए प्रति बनाएँ।</string>
+    <string name="w5e_purpose_batch_tools">कई दस्तावेज़ों पर एक काम करें।</string>
+    <string name="w5e_purpose_searchable_pdf">PDF में शब्द खोजने लायक बनाएँ।</string>
+    <string name="w5e_purpose_link_index">पन्नों की सूची बनाएँ।</string>
+    <string name="w5e_purpose_form_ready">फ़ोटो को फ़ॉर्म के माप में ढालें।</string>
+    <string name="w5e_purpose_remove_metadata">PDF से छिपी जानकारी हटाएँ।</string>
+    <string name="w5e_purpose_qr_code">कैमरे से कोड पढ़ें।</string>
+    <string name="w5e_purpose_protect">PDF पर पासवर्ड लगाएँ।</string>
+    <string name="w5e_purpose_unlock">PDF का पासवर्ड हटाएँ।</string>
+    <string name="w5e_purpose_read_text">पन्ने पर पहले से लिखे शब्द ढूँढ़ें और बदलें।</string>
+    <!-- V107: अंतर ओवरफ़्लो शीट में है, सीमा वाली OCR स्क्रीन पर नहीं। -->
+    <string name="w5e_ocr_about_title">पढ़ने के बारे में</string>
+    <string name="w5e_ocr_about_p1">पढ़ना पन्ने पर पहले से मौजूद शब्द ढूँढ़ता है और उन्हें चुनने या बदलने देता है।</string>
+    <string name="w5e_ocr_about_p2">खोजने लायक PDF उन शब्दों को फ़ाइल में जोड़ता है ताकि बाद में खोजा जा सके।</string>
+    <string name="w5e_ocr_about_p3">स्कैन की तस्वीर में शब्द तब तक नहीं होते जब तक उन्हें पढ़ा न जाए।</string>
+</resources>

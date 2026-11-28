@@ -39,6 +39,7 @@ import com.scanwhirl.app.store.OcrIndexer
 import com.scanwhirl.app.store.OcrReindex
 import com.scanwhirl.app.store.OcrTextEvents
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.util.DownloadSaver
 import com.scanwhirl.app.util.OcrCleanup
 import com.scanwhirl.app.util.OcrEngine
@@ -314,7 +315,25 @@ class OcrEditorActivity : BaseActivity() {
         R.id.ocr_copy_all -> { copyAllPages(); true }
         R.id.ocr_share_all -> { shareAllPages(); true }
         R.id.ocr_save_txt -> { saveAllAsTxt(); true }
+        // VQA V107: the plain-language distinction lives behind overflow. Nothing is added
+        // to the visible 62-word screen, so the word-budget and 320 dp text-fit gates hold.
+        R.id.ocrAboutReading -> { showAboutReading(); true }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    private fun showAboutReading() {
+        SwSheet.builder(this)
+            .setTitle(R.string.w5e_ocr_about_title)
+            .setMessage(
+                listOf(
+                    R.string.w5e_ocr_about_p1,
+                    R.string.w5e_ocr_about_p2,
+                    R.string.w5e_ocr_about_p3
+                ).joinToString("\n\n") { getString(it) }
+            )
+            .setPrimary(R.string.sheet_got_it)
+            .build()
+            .show()
     }
 
     // ------------------------------------------------------------------

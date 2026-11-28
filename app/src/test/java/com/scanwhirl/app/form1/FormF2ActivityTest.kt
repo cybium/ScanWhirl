@@ -52,6 +52,8 @@ class FormF2ActivityTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
+    private val async = FormAsyncIdle()
+
     @Before
     fun setUp() {
         app.getSharedPreferences(FormPresets.PREFS_SAVED_PRESET, 0).edit().clear().commit()
@@ -64,18 +66,11 @@ class FormF2ActivityTest {
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-w360dp-h800dp-xhdpi")
         app.getSharedPreferences(FormPresets.PREFS_SAVED_PRESET, 0).edit().clear().commit()
+        async.reset() // no-op unless a preview test installed the queued Main dispatcher
     }
 
-    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            idle()
-            if (condition()) return true
-            Thread.sleep(25)
-        }
-        idle()
-        return condition()
-    }
+    private fun waitUntil(timeoutMs: Long = 8_000, condition: () -> Boolean): Boolean =
+        async.waitUntil(timeoutMs, condition)
 
     private fun controller(): ActivityController<FormReadyActivity> =
         Robolectric.buildActivity(FormReadyActivity::class.java).setup()
@@ -364,6 +359,7 @@ class FormF2ActivityTest {
 
     @Test(timeout = 30_000)
     fun `cleanup shows original and processed preview before applying`() {
+        async.install()
         val c = controller()
         try {
             val a = c.get()
@@ -386,6 +382,7 @@ class FormF2ActivityTest {
             assertFalse("unchecking must hide the preview", a.previewVisibleForTest())
         } finally {
             c.pause().stop().destroy()
+            async.reset()
         }
     }
 
@@ -540,6 +537,7 @@ class FormF2ActivityTest {
 
     @Test(timeout = 30_000)
     fun `the form uses a dark preview canvas not a white page host`() {
+        async.install()
         val c = controller()
         try {
             val a = c.get()
@@ -555,6 +553,7 @@ class FormF2ActivityTest {
             }
         } finally {
             c.pause().stop().destroy()
+            async.reset()
         }
     }
 }

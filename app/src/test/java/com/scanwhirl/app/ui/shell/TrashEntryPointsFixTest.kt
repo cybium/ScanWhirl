@@ -288,8 +288,7 @@ class TrashEntryPointsFixTest {
             // Legacy Vault permanent delete (Vault content never enters Trash) — the one
             // documented purge of the shared document Actions sheet (B2).
             "DocumentActionsSheet.kt" to 1,
-            // Legacy Vault permanent delete inside the authenticated Vault.
-            "MainActivity.kt" to 1,
+            // W8: the legacy Vault purge site (MainActivity.kt) was deleted with that screen.
             // Result Undo removes only the generated result documents (no Trash promise).
             // Lane RS adds one more: the identity-guarded discard of OUR OWN freshly produced
             // size result that did not get smaller (the source is explicitly excluded).

@@ -5,6 +5,13 @@
     <!-- UX-L4-02: the three all-pages routes live under ONE named submenu instead
          of three parallel top-level actions. The activity hides the whole submenu
          on a one-page document; page-scoped Copy/Share/Save stay in the read row. -->
+    <!-- VQA V107: plain-language distinction, hidden behind overflow so the 62-word
+         baseline screen stays unchanged. -->
+    <item
+        android:id="@+id/ocrAboutReading"
+        android:title="@string/w5e_ocr_about_title"
+        app:showAsAction="never" />
+
     <item
         android:id="@id/ux130_l4_all_pages"
         android:title="@string/ux130_l4_all_pages"
