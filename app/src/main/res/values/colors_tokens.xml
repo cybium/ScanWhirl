@@ -41,4 +41,12 @@
 
     <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
     <color name="tok_on_paper">#13252a</color>
+
+    <!-- Category identity hues keep their hue family but are deep enough in light
+         mode to clear 4.5:1 on the light background (dark keeps the shipped hues). -->
+    <color name="tok_cat_study">#1b7339</color>
+    <color name="tok_cat_receipts">#a34a00</color>
+    <color name="tok_cat_ids">#145a9e</color>
+    <color name="tok_cat_forms">#6a3ab5</color>
+    <color name="tok_cat_other">#5f7176</color>
 </resources>

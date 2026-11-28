@@ -31,12 +31,12 @@
     <color name="chip_void">@color/tok_surface_2</color>
     <color name="scrim_deep">@color/tok_scrim</color>
 
-    <!-- Category Palette (D3 approved). Content identity, not a surface. -->
-    <color name="cat_study">#38EF7D</color>
-    <color name="cat_receipts">#FF8A4C</color>
-    <color name="cat_ids">#5B9DFF</color>
-    <color name="cat_forms">#B07CFF</color>
-    <color name="cat_other">#94A3B8</color>
+    <!-- Category Palette (D3 approved): same identities, theme-aware contrast. -->
+    <color name="cat_study">@color/tok_cat_study</color>
+    <color name="cat_receipts">@color/tok_cat_receipts</color>
+    <color name="cat_ids">@color/tok_cat_ids</color>
+    <color name="cat_forms">@color/tok_cat_forms</color>
+    <color name="cat_other">@color/tok_cat_other</color>
 
     <!-- Material3 theme mappings. -->
     <color name="sf_primary">@color/tok_accent</color>

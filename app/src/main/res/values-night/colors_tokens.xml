@@ -32,4 +32,11 @@
 
     <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
     <color name="tok_on_paper">#13252a</color>
+
+    <!-- The shipped dark category hues. -->
+    <color name="tok_cat_study">#38ef7d</color>
+    <color name="tok_cat_receipts">#ff8a4c</color>
+    <color name="tok_cat_ids">#5b9dff</color>
+    <color name="tok_cat_forms">#b07cff</color>
+    <color name="tok_cat_other">#94a3b8</color>
 </resources>
