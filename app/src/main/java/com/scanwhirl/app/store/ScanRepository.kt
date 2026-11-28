@@ -71,6 +71,67 @@ class ScanRepository(private val context: Context) {
     internal val docsDir: File
         get() = File(context.filesDir, "documents").apply { mkdirs() }
 
+    internal val digitalStorage: DigitalStorage get() = DigitalStorage(context)
+    internal val digitalTransaction: DigitalTransaction get() = DigitalTransaction(this)
+
+    /** Both namespaces are disjoint. A conflicting or unsafe ID is unavailable. */
+    internal fun resolveDocDir(id: String): File? {
+        if (!isSafeId(id)) return null
+        val raster = File(docsDir, id)
+        val digitalRoot = digitalStorage.existingRoot(DigitalStorage.LIVE)
+        val digital = File(digitalRoot, id)
+        if (raster.exists() && digitalStorage.hasLive(id)) return null
+        return when {
+            digitalStorage.hasLive(id) -> digital.takeIf { DigitalStorage.owned(digitalRoot) &&
+                DigitalStorage.owned(it) && it.isDirectory }
+            raster.exists() -> raster.takeIf { DigitalStorage.isDirectChild(docsDir, it) && it.isDirectory }
+            else -> null
+        }
+    }
+
+    internal fun iterateLiveDocs(): List<File> =
+        (docsDir.listFiles { f -> f.isDirectory }.orEmpty().toList() + digitalStorage.liveDirs())
+            .filter { resolveDocDir(it.name)?.canonicalFile == it.canonicalFile }
+
+    internal fun digitalIdReserved(id: String, ignoreStage: Boolean = false): Boolean =
+        !DigitalStorage.safeId(id) || File(docsDir, id).exists() ||
+            trashDir.listFiles().orEmpty().any { it.name == id || it.name.startsWith("$id~") } ||
+            id in escrowReservedIds() || File(context.filesDir, "drafts/$id").exists() ||
+            File(context.filesDir, "vault2/$id").exists() ||
+            File(context.filesDir, ".vault_pending_purge/$id").exists() ||
+            digitalStorage.reserves(id, ignoreStage)
+
+    /** Canonical PDF writers stay repository-owned; never overwrite a published PDF. */
+    internal fun copyDigitalStagePdf(source: File, dir: File) {
+        require(dir.parentFile == digitalStorage.existingRoot(DigitalStorage.STAGING) &&
+            DigitalStorage.owned(dir) && DigitalStorage.safeId(dir.name) && dir.isDirectory)
+        require(source.isFile && source.length() in 1..DigitalStorage.MAX_PDF_BYTES)
+        val pdf = File(dir, DigitalStorage.PDF)
+        if (dir.list()?.contains(DigitalStorage.PDF) == true || !DigitalStorage.owned(pdf))
+            throw IOException("Digital staging PDF already exists")
+        source.inputStream().use { input ->
+            FileOutputStream(pdf).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > DigitalStorage.MAX_PDF_BYTES) throw IOException("Digital PDF too large")
+                    output.write(buffer, 0, n)
+                }
+                Durable.syncStream(output, pdf)
+            }
+        }
+    }
+
+    /** Unsupported digital operations must not reach a JPEG builder. */
+    private fun rasterDir(id: String): File {
+        if (digitalStorage.hasLive(id)) throw IOException("This operation does not yet support digital PDFs")
+        return File(docsDir, id)
+    }
+
     internal val ocrStore: OcrStore
         get() = OcrStore(docsDir, enforceLiveDocument = true)
 
@@ -275,11 +336,9 @@ class ScanRepository(private val context: Context) {
 
     fun listDocuments(includeVaulted: Boolean = false): List<ScanDocument> {
         readProbe?.invoke(Thread.currentThread().name)
-        return docsDir.listFiles { f -> f.isDirectory }
-            ?.sortedByDescending { it.lastModified() }
-            ?.mapNotNull { dir -> loadDocument(dir) }
-            ?.filter { includeVaulted || !it.isVaulted }
-            ?: emptyList()
+        return iterateLiveDocs().sortedByDescending { it.lastModified() }
+            .mapNotNull { dir -> loadDocument(dir) }
+            .filter { includeVaulted || !it.isVaulted }
     }
 
     /** Documents hidden inside the 4-digit PIN Pro Vault. */
@@ -293,18 +352,25 @@ class ScanRepository(private val context: Context) {
 
     /** Finds a document by ID regardless of whether it is in the Vault. */
     fun getDocument(id: String): ScanDocument? =
-        loadDocument(File(docsDir, id))
+        resolveDocDir(id)?.let(::loadDocument)
 
     internal fun loadDocument(dir: File): ScanDocument? {
         if (!dir.exists() || !dir.isDirectory) return null
+        val parent = dir.parentFile?.canonicalFile
+        if (parent == digitalStorage.existingRoot(DigitalStorage.LIVE) ||
+            parent == digitalStorage.existingRoot(DigitalStorage.TRASH)) {
+            val doc = DigitalStorage.read(dir)
+            return doc?.takeUnless { File(dir, ImportDiscardStore.MARKER).exists() }
+        }
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null
         val lines = try { meta.readLines() } catch (_: IOException) { return null }
-        if (lines.isEmpty()) return null
+        if (lines.isEmpty() || File(dir, DigitalStorage.PAGES).exists() ||
+            lines.drop(3).any { it.startsWith("content_kind=") && it != "content_kind=raster" }) return null
         // Visibility rule (WP-05): meta.txt is read FIRST, the marker SECOND. meta.txt is
         // only ever written after the save's marker exists and its content is complete,
         // so "meta present + marker absent" can only mean a published document.
-        if (SaveFormat.isIncomplete(dir)) return null
+        if (SaveFormat.isIncomplete(dir) || File(dir, ImportDiscardStore.MARKER).exists()) return null
         val name = lines[0].ifBlank { "Untitled scan" }
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
@@ -379,9 +445,12 @@ class ScanRepository(private val context: Context) {
      * Returns false when the document has no meta.txt.
      */
     private fun updateMeta(dir: File, change: (MutableList<String>) -> Unit): Boolean = synchronized(META_LOCK) {
+        val isDigital = dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING)
+        if (isDigital && DigitalStorage.read(dir) == null) return@synchronized false
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return false
-        val lines = meta.readLines().toMutableList()
+        val lines = if (isDigital) DigitalStorage.boundedLines(meta, DigitalStorage.MAX_META_BYTES).toMutableList()
+            else meta.readLines().toMutableList()
         change(lines)
         Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
         true
@@ -395,14 +464,25 @@ class ScanRepository(private val context: Context) {
      * Trash and incomplete saves do not reserve names; they resolve afresh before publication.
      */
     private fun uniqueDocumentName(dir: File, proposed: String): String =
-        DocumentNames.unique(proposed, docsDir.listFiles { f -> f.isDirectory }.orEmpty()
+        DocumentNames.unique(proposed, iterateLiveDocs()
             .filter { it.absoluteFile != dir.absoluteFile }
-            .mapNotNull { loadDocument(it)?.name })
+            .mapNotNull { if (it.parentFile?.name == DigitalStorage.LIVE) DigitalStorage.recognizedName(it) else loadDocument(it)?.name })
 
     /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
-    internal fun resolveNameBeforePublish(dir: File) {
-        updateMeta(dir) { lines ->
-            if (lines.isNotEmpty()) lines[0] = uniqueDocumentName(dir, lines[0])
+    internal fun resolveNameBeforePublish(dir: File) = synchronized(META_LOCK) {
+        val isDigital = dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING)
+        val meta = File(dir, "meta.txt")
+        if (isDigital && DigitalStorage.read(dir) == null) throw IOException("Digital metadata unavailable")
+        if (!meta.isFile) return@synchronized
+        val lines = if (isDigital) DigitalStorage.boundedLines(meta, DigitalStorage.MAX_META_BYTES).toMutableList()
+            else meta.readLines().toMutableList()
+        if (lines.isEmpty()) return@synchronized
+        val name = uniqueDocumentName(dir, lines[0])
+        // A no-conflict Undo must preserve every byte (including legacy line endings).
+        if (name != lines[0]) {
+            lines[0] = name
+            Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
+            Durable.syncDir(dir)
         }
     }
 
@@ -418,7 +498,7 @@ class ScanRepository(private val context: Context) {
      * the whole file line-by-line, so it survives those.
      */
     fun addExport(id: String, uri: Uri, fingerprint: DownloadSaver.Fingerprint? = null) {
-        updateMeta(File(docsDir, id)) { lines -> recordSeen(lines, uri, fingerprint) }
+        updateMeta(resolveDocDir(id) ?: return) { lines -> recordSeen(lines, uri, fingerprint) }
     }
 
     /**
@@ -438,7 +518,7 @@ class ScanRepository(private val context: Context) {
         } else {
             null
         }
-        updateMeta(File(docsDir, id)) { lines ->
+        updateMeta(resolveDocDir(id) ?: return) { lines ->
             recordSeen(lines, saved.uri, fp)
             if (signature != null && fp != null) {
                 val made = listLine(lines, EXPORT_MADE_KEY)
@@ -463,7 +543,7 @@ class ScanRepository(private val context: Context) {
 
     /** M06: forgets a recorded copy (e.g. after Undo removed it), including its proof. */
     fun removeExport(id: String, uri: Uri) {
-        updateMeta(File(docsDir, id)) { lines ->
+        updateMeta(resolveDocDir(id) ?: return) { lines ->
             val key = uri.toString()
             if (lines.any { it.startsWith(EXPORTS_KEY) }) {
                 setListLine(lines, EXPORTS_KEY, listLine(lines, EXPORTS_KEY).filterNot { it == key })
@@ -482,7 +562,7 @@ class ScanRepository(private val context: Context) {
     /** A recorded copy plus, when known, the fingerprint it had when this document saved it. */
     data class ExportRecord(val uri: Uri, val fingerprint: DownloadSaver.Fingerprint?)
 
-    fun exportRecordsOf(id: String): List<ExportRecord> = exportRecordsIn(File(docsDir, id))
+    fun exportRecordsOf(id: String): List<ExportRecord> = resolveDocDir(id)?.let(::exportRecordsIn).orEmpty()
 
     private fun metaLines(dir: File): List<String>? {
         val meta = File(dir, "meta.txt")
@@ -511,7 +591,7 @@ class ScanRepository(private val context: Context) {
      * (pre-M07) records, adopted "already saved" files and title matches are never
      * included. The caller still re-checks each file's current bytes.
      */
-    fun provenExportsOf(id: String): List<ProvenExport> = provenExportsIn(File(docsDir, id), id)
+    fun provenExportsOf(id: String): List<ProvenExport> = resolveDocDir(id)?.let { provenExportsIn(it, id) }.orEmpty()
 
     internal fun provenExportsIn(dir: File, docId: String): List<ProvenExport> {
         val lines = metaLines(dir) ?: return emptyList()
@@ -529,11 +609,12 @@ class ScanRepository(private val context: Context) {
      * [exclude], including locked, vaulted and trashed ones. Deleting a document
      * must never remove a file another document also points at.
      */
-    fun exportsRecordedByOthers(id: String): Set<Uri> = exportsRecordedOutside(File(docsDir, id))
+    fun exportsRecordedByOthers(id: String): Set<Uri> = exportsRecordedOutside(resolveDocDir(id) ?: File(docsDir, id))
 
     internal fun exportsRecordedOutside(exclude: File): Set<Uri> {
         val dirs = (docsDir.listFiles { f -> f.isDirectory }.orEmpty().asList() +
-            trashDir.listFiles { f -> f.isDirectory }.orEmpty().asList())
+            trashDir.listFiles { f -> f.isDirectory }.orEmpty().asList() +
+            digitalStorage.liveDirs() + digitalStorage.dirs(DigitalStorage.TRASH))
             .filter { it.absoluteFile != exclude.absoluteFile }
         return dirs.flatMapTo(HashSet()) { dir -> exportRecordsIn(dir).map { it.uri } }
     }
@@ -554,7 +635,7 @@ class ScanRepository(private val context: Context) {
     /** User-chosen category override (editor → "Categorize"). */
     fun setCategory(id: String, category: String): ScanDocument? {
         require(CategoryRules.isValid(category)) { "Unknown category: $category" }
-        val dir = File(docsDir, id)
+        val dir = resolveDocDir(id) ?: return null
         val changed = updateMeta(dir) { lines ->
             padMeta(lines)
             lines[2] = category
@@ -768,7 +849,7 @@ class ScanRepository(private val context: Context) {
         val clean = LibraryMeta.normalizeFolder(folder)
         if (clean != null) createFolder(clean)
         for (id in ids.distinct()) {
-            updateMeta(File(docsDir, id)) { lines ->
+            updateMeta(resolveDocDir(id) ?: continue) { lines ->
                 val meta = LibraryMeta.read(lines)
                 LibraryMeta.write(lines, clean, meta.tags)
             }
@@ -776,7 +857,7 @@ class ScanRepository(private val context: Context) {
     }
 
     fun setTags(id: String, tags: List<String>) {
-        updateMeta(File(docsDir, id)) { lines ->
+        updateMeta(resolveDocDir(id) ?: return) { lines ->
             val meta = LibraryMeta.read(lines)
             LibraryMeta.write(lines, meta.folder, LibraryMeta.normalizeTags(tags))
         }
@@ -785,7 +866,7 @@ class ScanRepository(private val context: Context) {
     fun addTag(ids: List<String>, tag: String) {
         val clean = LibraryMeta.normalizeTags(listOf(tag)).firstOrNull() ?: return
         for (id in ids.distinct()) {
-            updateMeta(File(docsDir, id)) { lines ->
+            updateMeta(resolveDocDir(id) ?: continue) { lines ->
                 val meta = LibraryMeta.read(lines)
                 LibraryMeta.write(lines, meta.folder, meta.tags + clean)
             }
@@ -793,7 +874,7 @@ class ScanRepository(private val context: Context) {
     }
 
     fun removeTag(id: String, tag: String) {
-        updateMeta(File(docsDir, id)) { lines ->
+        updateMeta(resolveDocDir(id) ?: return) { lines ->
             val meta = LibraryMeta.read(lines)
             LibraryMeta.write(lines, meta.folder, meta.tags.filterNot { it.equals(tag, true) })
         }
@@ -816,8 +897,8 @@ class ScanRepository(private val context: Context) {
     }
 
     private inline fun forEachDocumentDir(action: (File) -> Unit) {
-        docsDir.listFiles { f -> f.isDirectory }?.forEach { dir ->
-            if (!SaveFormat.isIncomplete(dir)) action(dir)
+        iterateLiveDocs().forEach { dir ->
+            if (!SaveFormat.isIncomplete(dir) && !File(dir, ImportDiscardStore.MARKER).exists()) action(dir)
         }
     }
 
@@ -906,7 +987,18 @@ class ScanRepository(private val context: Context) {
         while (owned == null) {
             currentCoroutineContext().ensureActive()
             val candidate = File(docsDir, target)
-            if (candidate.mkdir()) {
+            val (crossRootConflict, reservedNow) = synchronized(TRASH_LOCK) {
+                val conflict = digitalStorage.reserves(target)
+                conflict to (!conflict && candidate.mkdir())
+            }
+            if (crossRootConflict) {
+                if (++attempts >= RESERVE_ATTEMPTS) throw IOException("Could not reserve a document")
+                journal = SaveFormat.Journal(SaveFormat.newToken(), SaveFormat.newDocId())
+                reviewDir?.let { SaveFormat.persistJournal(it, journal) }
+                target = journal.target
+                continue
+            }
+            if (reservedNow) {
                 owned = candidate
                 break
             }
@@ -924,8 +1016,14 @@ class ScanRepository(private val context: Context) {
                 is Existing.OwnedStale -> {
                     // Our own incomplete / unverifiable / superseded attempt (marker carries our
                     // token); the review staging still holds the source, so rebuild it.
-                    candidate.deleteRecursively()
-                    if (!candidate.exists() && candidate.mkdir()) {
+                    val reclaimed = synchronized(TRASH_LOCK) {
+                        if (digitalStorage.reserves(target)) false
+                        else {
+                            candidate.deleteRecursively()
+                            !candidate.exists() && candidate.mkdir()
+                        }
+                    }
+                    if (reclaimed) {
                         owned = candidate
                         break
                     }
@@ -1293,14 +1391,19 @@ class ScanRepository(private val context: Context) {
     }
 
     fun deleteDocument(id: String) {
-        val dir = File(docsDir, id)
         synchronized(PDF_LOCK) {
             OcrStore.locked {
                 synchronized(TRASH_LOCK) {
+                    val dir = resolveDocDir(id) ?: return@synchronized
                     if (!dir.exists()) return@synchronized
                     com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
-                    val hidden = File(trashDir, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
-                    if (dir.renameTo(hidden)) {
+                    val root = if (digitalStorage.hasLive(id)) digitalStorage.root(DigitalStorage.TRASH) else trashDir
+                    val hidden = File(root, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
+                    if (root != trashDir) {
+                        val proof = digitalStorage.beginPurge(dir, hidden)
+                        trashFault(TrashStage.PURGE_HIDDEN)
+                        if (!digitalStorage.finishPurge(hidden, proof)) throw IOException("Could not finish removing digital copy")
+                    } else if (dir.renameTo(hidden)) {
                         trashFault(TrashStage.PURGE_HIDDEN)
                         if (!hidden.deleteRecursively()) throw IOException("Could not finish removing the copy")
                     } else {
@@ -1357,7 +1460,7 @@ class ScanRepository(private val context: Context) {
         val key = synchronized(PDF_LOCK) {
             OcrStore.locked {
                 synchronized(TRASH_LOCK) {
-                    val src = File(docsDir, id)
+                    val src = resolveDocDir(id) ?: return@synchronized null
                     val doc = loadDocument(src) ?: return@synchronized null
                     if (doc.isVaulted) throw VaultItemNotTrashable()
                     trashUnderLocks(src, id, null)
@@ -1376,8 +1479,10 @@ class ScanRepository(private val context: Context) {
     private fun trashUnderLocks(src: File, id: String, previousToken: String?): String {
         val name = loadDocument(src)?.name ?: id
         trashFault(TrashStage.BEFORE_MOVE)
-        val key = freeTrashKey(id)
-        val dest = File(trashDir, key)
+        val digital = src.parentFile?.canonicalFile == digitalStorage.existingRoot(DigitalStorage.LIVE)
+        val root = if (digital) digitalStorage.root(DigitalStorage.TRASH) else trashDir
+        val key = freeTrashKey(id, root)
+        val dest = File(root, key)
         // F1 (hunt H1-2): the marker is written INSIDE the document before the move, so the
         // one rename carries the trash time with it. A crash right after the move can no longer
         // leave an entry whose only date is the folder's old modification time (which expiry
@@ -1395,9 +1500,9 @@ class ScanRepository(private val context: Context) {
             throw IOException("Could not move \"$name\" to Trash")
         }
         trashFault(TrashStage.MOVED)
-        Durable.syncDir(docsDir)
-        Durable.syncDir(trashDir)
-        return key
+        Durable.syncDir(src.parentFile!!)
+        Durable.syncDir(root)
+        return if (digital) "digital:$key" else key
     }
 
     private fun trashMarkerText(id: String, trashedAt: Long, previousToken: String?): String = buildString {
@@ -1413,7 +1518,10 @@ class ScanRepository(private val context: Context) {
      */
     private fun recordedTrashTime(dir: File): Long? {
         val lines = try {
-            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.let {
+                if (dir.parentFile?.name == DigitalStorage.TRASH) DigitalStorage.boundedLines(it, 512)
+                else it.readLines()
+            }
         } catch (_: IOException) {
             null
         } ?: return null
@@ -1423,7 +1531,8 @@ class ScanRepository(private val context: Context) {
 
     /** Trashed documents, most recently trashed first. Vault items never appear. */
     fun listTrash(): List<TrashedDocument> {
-        val dirs = trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") } ?: return emptyList()
+        val dirs = trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().toList() +
+            digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }
         return dirs.mapNotNull { dir -> trashedIn(dir) }
             .filterNot { it.document.isVaulted }
             .sortedByDescending { it.trashedAt }
@@ -1434,7 +1543,10 @@ class ScanRepository(private val context: Context) {
     private fun trashedIn(dir: File): TrashedDocument? {
         val doc = loadDocument(dir) ?: return null
         val marker = try {
-            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.let {
+                if (dir.parentFile?.name == DigitalStorage.TRASH) DigitalStorage.boundedLines(it, 512)
+                else it.readLines()
+            }
         } catch (_: IOException) {
             null
         }
@@ -1442,7 +1554,8 @@ class ScanRepository(private val context: Context) {
         val trashedAt = marker?.getOrNull(2)?.toLongOrNull() ?: dir.lastModified()
         val previousToken = marker?.firstOrNull { it.startsWith("previous=") }
             ?.removePrefix("previous=")?.takeIf { it.isNotBlank() }
-        return TrashedDocument(dir.name, originalId, trashedAt, doc, previousToken)
+        val key = if (dir.parentFile?.canonicalFile == digitalStorage.existingRoot(DigitalStorage.TRASH)) "digital:${dir.name}" else dir.name
+        return TrashedDocument(key, originalId, trashedAt, doc, previousToken)
     }
 
     /**
@@ -1453,16 +1566,20 @@ class ScanRepository(private val context: Context) {
      */
     fun restoreFromTrash(key: String): ScanDocument {
         val restored = synchronized(TRASH_LOCK) {
-            val src = File(trashDir, key)
+            val src = trashPath(key) ?: throw IOException("Invalid Trash key")
             val trashed = trashedIn(src) ?: throw IOException("This item is no longer in Trash")
             var id = trashed.originalId
             // The original id may still be waiting in UX-007's Undo escrow; reusing it would
             // make a later Undo throw "Cannot overwrite". The allocator checks the same set.
-            if (!isSafeId(id) || id in escrowReservedIds() || File(docsDir, id).exists()) {
+            if (!isSafeId(id) || id in escrowReservedIds() || File(docsDir, id).exists() || digitalStorage.hasLive(id) ||
+                digitalStorage.reserves(id, ignoreTrash = trashed.document.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL)) {
                 id = freeLibraryId()
             }
             trashFault(TrashStage.BEFORE_RESTORE)
-            val dest = File(docsDir, id)
+            val liveRoot = if (trashed.document.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL)
+                digitalStorage.root(DigitalStorage.LIVE) else docsDir
+            val dest = File(liveRoot, id)
+            if (dest.exists()) throw IOException("Document ID reserved")
             com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, trashed.originalId)
             if (id != trashed.originalId) {
                 com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
@@ -1471,8 +1588,8 @@ class ScanRepository(private val context: Context) {
             if (!src.renameTo(dest)) throw IOException("Could not restore \"${trashed.document.name}\"")
             trashFault(TrashStage.RESTORED)
             File(dest, TRASH_MARKER).delete()
-            Durable.syncDir(trashDir)
-            Durable.syncDir(docsDir)
+            Durable.syncDir(src.parentFile!!)
+            Durable.syncDir(liveRoot)
             loadDocument(dest) ?: throw IOException("Restored document could not be opened")
         }
         // A restored locked document is recognised again from its saved copies.
@@ -1487,10 +1604,17 @@ class ScanRepository(private val context: Context) {
      */
     fun deleteFromTrash(key: String) {
         synchronized(TRASH_LOCK) {
-            val src = File(trashDir, key)
+            val src = trashPath(key) ?: return
             if (!src.exists() || key.startsWith(".")) return
             val originalId = trashedIn(src)?.originalId
-            val hidden = File(trashDir, "$PURGE_PREFIX$key-${UUID.randomUUID().toString().take(8)}")
+            val hidden = File(src.parentFile, "$PURGE_PREFIX${src.name}-${UUID.randomUUID().toString().take(8)}")
+            if (key.startsWith("digital:")) {
+                val proof = digitalStorage.beginPurge(src, hidden)
+                trashFault(TrashStage.PURGE_HIDDEN)
+                if (!digitalStorage.finishPurge(hidden, proof)) throw IOException("Could not delete digital item")
+                originalId?.let { dropDerivedCaches(it) }
+                return
+            }
             if (!src.renameTo(hidden)) throw IOException("Could not delete this item")
             trashFault(TrashStage.PURGE_HIDDEN)
             // SEC1 1.3.0: a partial recursive delete is NOT a completed deletion.
@@ -1557,7 +1681,7 @@ class ScanRepository(private val context: Context) {
 
     /** Proven exported copies of a trashed document (see [provenExportsOf]). */
     fun provenExportsOfTrashed(item: TrashedDocument): List<ProvenExport> =
-        provenExportsIn(File(trashDir, item.key), item.originalId)
+        trashPath(item.key)?.let { provenExportsIn(it, item.originalId) }.orEmpty()
 
     /**
      * T44: every copy this Trash entry recorded, proven or not. The permanent-delete sheet names
@@ -1565,11 +1689,11 @@ class ScanRepository(private val context: Context) {
      * different saved file stays. Reading only; never used to delete.
      */
     fun exportRecordsOfTrashed(item: TrashedDocument): List<ExportRecord> =
-        exportRecordsIn(File(trashDir, item.key))
+        trashPath(item.key)?.let(::exportRecordsIn).orEmpty()
 
     /** Copies recorded by any document other than this Trash entry. */
     fun exportsRecordedByOthersThan(item: TrashedDocument): Set<Uri> =
-        exportsRecordedOutside(File(trashDir, item.key))
+        trashPath(item.key)?.let(::exportsRecordedOutside).orEmpty()
 
     /**
      * Startup recovery: finishes interrupted permanent deletes (hidden purge
@@ -1579,12 +1703,24 @@ class ScanRepository(private val context: Context) {
      * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
     fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
+        // Cold Trash proofs are established on the recovery worker, before taking Trash lock.
+        digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }.forEach {
+            if (DigitalStorage.read(it) == null) DigitalStorage.verify(it)
+        }
+        val digitalPurges = digitalStorage.dirs(DigitalStorage.TRASH).filter { it.name.startsWith(PURGE_PREFIX) }
+            .mapNotNull { dir ->
+                try { digitalStorage.verifyPurge(dir)?.let { dir to it } } catch (_: IOException) { null }
+            }
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
             }
-            trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.forEach { dir ->
+            digitalPurges.forEach { (dir, proof) ->
+                try { if (digitalStorage.finishPurge(dir, proof)) finished++ } catch (_: IOException) { /* retain */ }
+            }
+            (trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().toList() +
+                digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }).forEach { dir ->
                 val trashed = trashedIn(dir) ?: return@forEach
                 val recorded = recordedTrashTime(dir)
                 if (recorded == null) {
@@ -1601,21 +1737,37 @@ class ScanRepository(private val context: Context) {
                     return@forEach
                 }
                 if (trashed.previousToken == null && now - recorded >= TRASH_RETENTION_MS) {
-                    if (dir.deleteRecursively()) {
+                    val removed = if (trashed.document.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL) {
+                        try {
+                            val hidden = File(dir.parentFile, "$PURGE_PREFIX${dir.name}-${UUID.randomUUID().toString().take(8)}")
+                            val proof = digitalStorage.beginPurge(dir, hidden)
+                            digitalStorage.finishPurge(hidden, proof)
+                        } catch (_: IOException) { false }
+                    } else dir.deleteRecursively()
+                    if (removed) {
                         finished++
                         dropDerivedCaches(trashed.originalId)
                     }
                 }
             }
-            docsDir.listFiles { f -> f.isDirectory }?.forEach { dir -> File(dir, TRASH_MARKER).delete() }
+            iterateLiveDocs().forEach { dir -> File(dir, TRASH_MARKER).delete() }
         }
         return finished
     }
 
-    private fun freeTrashKey(id: String): String {
-        if (!File(trashDir, id).exists()) return id
+    private fun trashPath(key: String): File? {
+        val digital = key.startsWith("digital:")
+        val name = if (digital) key.removePrefix("digital:") else key
+        val base = name.substringBefore(TRASH_KEY_SEP)
+        if (!isSafeId(base) || (base != name && !name.substringAfter(TRASH_KEY_SEP).matches(Regex("[0-9]+")))) return null
+        val root = if (digital) digitalStorage.root(DigitalStorage.TRASH) else trashDir
+        return File(root, name).takeIf { DigitalStorage.isDirectChild(root, it) }
+    }
+
+    private fun freeTrashKey(id: String, root: File = trashDir): String {
+        if (!File(root, id).exists()) return id
         var n = 2
-        while (File(trashDir, "$id$TRASH_KEY_SEP$n").exists()) n++
+        while (File(root, "$id$TRASH_KEY_SEP$n").exists()) n++
         return "$id$TRASH_KEY_SEP$n"
     }
 
@@ -1634,7 +1786,7 @@ class ScanRepository(private val context: Context) {
         val reserved = escrowReservedIds()
         while (true) {
             val id = freshId()
-            if (id !in reserved && !File(docsDir, id).exists() && !File(trashDir, id).exists()) return id
+            if (id !in reserved && !digitalIdReserved(id)) return id
         }
     }
 
@@ -1646,13 +1798,15 @@ class ScanRepository(private val context: Context) {
         try {
             File(context.cacheDir, "preview_$id.pdf").delete()
             File(File(context.cacheDir, "documents"), "preview_$id.pdf").delete()
+            val digitalPreview = File(context.cacheDir.canonicalFile, "digital_previews/$id")
+            DigitalStorage.deleteOwnedTree(digitalPreview)
         } catch (_: Exception) {
         }
     }
 
     fun renameDocument(id: String, newName: String) {
         synchronized(TRASH_LOCK) {
-            val dir = File(docsDir, id)
+            val dir = resolveDocDir(id) ?: return
             updateMeta(dir) { lines ->
                 while (lines.size < 2) lines.add("")
                 val proposed = newName.trim().replace('\n', ' ').ifBlank { lines[0] }
@@ -1671,7 +1825,7 @@ class ScanRepository(private val context: Context) {
 
     suspend fun duplicateDocument(id: String, suggestedName: String?): ScanDocument =
         withContext(Dispatchers.IO) {
-            val src = File(docsDir, id)
+            val src = rasterDir(id)
             if (loadDocument(src) == null) throw IllegalStateException("Scan not found")
             val sourceDoc = loadDocument(src)
             val name = suggestedName?.trim()?.replace('\n', ' ')?.takeIf { it.isNotBlank() }
@@ -1710,7 +1864,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun extractPages(id: String, pageIndices: List<Int>): ScanDocument =
         withContext(Dispatchers.IO) {
-            val doc = loadDocument(File(docsDir, id))
+            val doc = loadDocument(rasterDir(id))
                 ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
             if (doc.isVaulted) throw IOException(context.getString(R.string.doc_actions_vault_reason))
@@ -1754,7 +1908,7 @@ class ScanRepository(private val context: Context) {
         require(sourceIds.size >= 2) { "Need at least 2 scans to merge" }
 
         val sources = sourceIds.map { id ->
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             loadDocument(dir) ?: throw IllegalStateException("Scan not found: $id")
         }
         refuseLockedSources(sources)
@@ -1823,7 +1977,7 @@ class ScanRepository(private val context: Context) {
 
     suspend fun deletePage(id: String, pageIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             requireEditable(dir)
             synchronized(PDF_LOCK) {
                 OcrStore.locked {
@@ -1849,7 +2003,7 @@ class ScanRepository(private val context: Context) {
 
     suspend fun rotatePage(id: String, pageIndex: Int, clockwise: Boolean = true): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             requireEditable(dir)
             synchronized(PDF_LOCK) {
                 OcrStore.locked {
@@ -1884,7 +2038,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun cropPage(id: String, pageIndex: Int, rect: android.graphics.RectF): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             requireEditable(dir)
             // Result Undo holds PDF_LOCK during byte verification and purge. Crop must
             // use the same writer lock for the *entire* image and PDF replacement.
@@ -1932,7 +2086,7 @@ class ScanRepository(private val context: Context) {
 
     suspend fun movePage(id: String, fromIndex: Int, toIndex: Int): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             requireEditable(dir)
             synchronized(PDF_LOCK) {
                 OcrStore.locked {
@@ -1970,6 +2124,8 @@ class ScanRepository(private val context: Context) {
         }
 
     internal fun pageFilesIn(dir: File): List<File> =
+        if (dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH,
+                DigitalStorage.STAGING, DigitalStorage.ESCROW, DigitalStorage.DRAFTS)) emptyList() else
         dir.listFiles { f -> f.extension.equals("jpg", true) && f.length() > 0 }
             ?.sortedWith(PageOrder.comparator)
             ?: emptyList()
@@ -2008,7 +2164,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun setPageFilter(id: String, pageIndex: Int, filter: ScanFilter): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             requireEditable(dir)
             synchronized(PDF_LOCK) {
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
@@ -2207,7 +2363,7 @@ class ScanRepository(private val context: Context) {
         }
         Durable.syncDir(docsDir)
         Durable.syncDir(OpStaging.root(context.filesDir))
-        return loadDocument(File(docsDir, id))
+        return loadDocument(rasterDir(id))
             ?: throw IllegalStateException("Published document could not be opened")
     }
 
@@ -2554,7 +2710,7 @@ class ScanRepository(private val context: Context) {
         maxDim: Int?,
         rejectNotSmaller: Boolean = false
     ): ScanDocument = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         val ctx = currentCoroutineContext()
         buildAndPublish(outputName(doc.name, "Compressed"), null, doc.pageFiles.sumOf { it.length() },
@@ -2584,7 +2740,7 @@ class ScanRepository(private val context: Context) {
         onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument = withContext(Dispatchers.IO) {
             require(targetBytes > 0) { "Target size must be positive" }
-            val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+            val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
             val ctx = currentCoroutineContext()
             val sizes = doc.pageFiles.map { it.length().coerceAtLeast(1L) }
@@ -2821,7 +2977,7 @@ class ScanRepository(private val context: Context) {
                 id
             }
             Durable.syncDir(docsDir)
-            loadDocument(File(docsDir, id))
+            loadDocument(rasterDir(id))
                 ?: throw PdfImport.ImportException(PdfImport.Reason.DAMAGED, "The imported document could not be opened")
         } finally {
             if (staging.exists()) staging.deleteRecursively()
@@ -3109,7 +3265,7 @@ class ScanRepository(private val context: Context) {
             if (!PdfProtection.isEncodable(password)) {
                 throw IllegalArgumentException(context.getString(R.string.password_charset))
             }
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             if (drafts.exists(id)) {
                 throw DraftStore.DraftOpen(context.getString(R.string.draft_open_refused))
@@ -3187,7 +3343,7 @@ class ScanRepository(private val context: Context) {
         withContext(Dispatchers.IO) { unlockVerified(id, grant) }
 
     private fun unlockVerified(id: String, grant: PdfPasswordGrant? = null): ScanDocument {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
         if (!doc.isLocked) return doc
         if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
@@ -3263,7 +3419,7 @@ class ScanRepository(private val context: Context) {
             if (!PdfProtection.isEncodable(new)) {
                 throw IllegalArgumentException(context.getString(R.string.password_charset))
             }
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             if (!doc.isLocked) throw IllegalStateException("Not protected")
             if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
@@ -3469,7 +3625,10 @@ class ScanRepository(private val context: Context) {
         }
     }
 
-    fun protectionState(id: String): PdfProtection.State = PdfProtection.state(File(docsDir, id))
+    fun protectionState(id: String): PdfProtection.State =
+        if (digitalStorage.hasLive(id)) {
+            if (getDocument(id) != null) PdfProtection.State.NONE else PdfProtection.State.UNREADABLE
+        } else PdfProtection.state(File(docsDir, id))
 
     /**
      * PM-3.1c (A5): `locked.meta` sits beside a plain `scan.pdf`. With the right [password] the PDF is
@@ -3478,7 +3637,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun repairProtection(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             check(PdfProtection.state(dir) == PdfProtection.State.NEEDS_REPAIR) { "Protection does not need repair" }
             if (!verifyPdfPassword(id, password)) {
                 throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
@@ -3501,7 +3660,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun removeProtectionLabel(id: String, password: String): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             check(PdfProtection.state(dir) == PdfProtection.State.NEEDS_REPAIR) { "Protection does not need repair" }
             if (!verifyPdfPassword(id, password)) {
                 throw PdfProtection.WrongPassword(context.getString(R.string.unlock_pdf_wrong))
@@ -3521,7 +3680,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun rebuildPlainPdf(id: String): ScanDocument =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             check(PdfProtection.state(dir) == PdfProtection.State.UNKNOWN_PASSWORD) { "PDF is not an unknown-password PDF" }
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             if (doc.pageFiles.isEmpty()) throw IllegalStateException(context.getString(R.string.locked_no_pages))
@@ -3580,6 +3739,7 @@ class ScanRepository(private val context: Context) {
             Triple(it.id, it.oldPdfSha256, it.newPdfSha256)
         } ?: return MarkerState.NONE
         val dir = File(docsDir, id)
+        if (digitalStorage.hasLive(id)) return MarkerState.UNKNOWN
         if (!dir.isDirectory) return MarkerState.STALE // truly missing document
         return when (checkPdfDigest(File(dir, PdfProtection.PDF_FILE), oldPdf, newPdf)) {
             DigestResult.MATCH_OLD, DigestResult.MATCH_NEW -> MarkerState.KEEP
@@ -3688,6 +3848,7 @@ class ScanRepository(private val context: Context) {
         val filesDir = context.filesDir
         var rolledForward = 0
         var swept = 0
+        recoveryStep("digital-storage") { rolledForward += digitalTransaction.recover() }
         // Do NOT reset recoveryIncomplete here: it accumulates across the whole startup pass.
 
         val stagingRoot = OpStaging.root(filesDir)
@@ -3703,7 +3864,7 @@ class ScanRepository(private val context: Context) {
         // 1. Roll forward. listTrash() reads every Trash entry's meta.txt; hoist it out of the
         // staging loop (S staging folders × T trash entries becomes one snapshot).
         recoveryStep("replace") {
-            val trashSnapshot = listTrash()
+            val trashSnapshot = listTrash().filter { it.document.contentKind == com.scanwhirl.app.model.ContentKind.RASTER }
             for (dir in stagingDirs()) {
                 val seal = OpStaging.readSeal(dir) ?: continue
                 val replaces = seal.replaces ?: continue
@@ -3817,7 +3978,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun checkPdfPassword(id: String, password: String): PdfPasswordGrant? =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             val lockFile = File(dir, LOCK_FILE)
             if (!lockFile.exists()) {
                 return@withContext if (PdfProtection.state(dir) == PdfProtection.State.NONE) {
@@ -3834,7 +3995,7 @@ class ScanRepository(private val context: Context) {
 
     /** Verifies a lock, upgrading an old verifier only after a successful password check. */
     fun verifyPdfPassword(id: String, password: String): Boolean {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         val lockFile = File(dir, LOCK_FILE)
         if (!lockFile.exists()) return PdfProtection.state(dir) == PdfProtection.State.NONE
         val stored = readPdfLock(lockFile) ?: return false
@@ -4088,7 +4249,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun unlockedPreviewPdf(id: String): File =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
             val preview = File(outDir, "preview_$id.pdf")
@@ -4103,7 +4264,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun unlockedPreviewPdf(id: String, grant: PdfPasswordGrant): File =
         withContext(Dispatchers.IO) {
-            val dir = File(docsDir, id)
+            val dir = rasterDir(id)
             val doc = loadDocument(dir) ?: throw IllegalStateException("Scan not found")
             synchronized(PDF_LOCK) { requireLockRecord(dir, grant) }
             val outDir = File(context.cacheDir, "documents").apply { mkdirs() }
@@ -4114,7 +4275,7 @@ class ScanRepository(private val context: Context) {
 
     /** Moves a scan into or out of the 4-digit PIN Hidden Vault (Pro). */
     fun setVaulted(id: String, vaulted: Boolean): ScanDocument? {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         if (!dir.exists()) return null
         val flag = File(dir, VAULT_FILE)
         if (vaulted) {
@@ -4140,7 +4301,7 @@ class ScanRepository(private val context: Context) {
      * the full updated page map, or null when the document does not exist.
      */
     fun updateOcrPage(id: String, pageKey: String, text: String): Map<String, String>? {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         if (!dir.isDirectory) return null
         return ocrStore.updateTexts(id, mapOf(pageKey to text))
     }
@@ -4151,7 +4312,7 @@ class ScanRepository(private val context: Context) {
      * document does not exist.
      */
     fun updateOcrPages(id: String, pages: Map<String, String>): Map<String, String>? {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         if (!dir.isDirectory) return null
         return ocrStore.updateTexts(id, pages)
     }
@@ -4162,7 +4323,7 @@ class ScanRepository(private val context: Context) {
         expected: Map<String, String?>,
         pages: Map<String, String>
     ): OcrStore.UpdateResult? {
-        if (!File(docsDir, id).isDirectory) return null
+        if (digitalStorage.hasLive(id) || !File(docsDir, id).isDirectory) return null
         return ocrStore.updatePagesIfUnchanged(id, expected, pages)
     }
 
@@ -4204,7 +4365,7 @@ class ScanRepository(private val context: Context) {
      * sheet then says so instead of pretending).
      */
     fun makeSearchable(id: String): Boolean {
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         if (!dir.isDirectory || File(dir, LOCK_FILE).exists()) return false
         val pages = pageFilesIn(dir)
         if (pages.isEmpty()) return false
@@ -4276,6 +4437,9 @@ class ScanRepository(private val context: Context) {
         geo: Map<String, OcrPage>,
         forceLayers: Boolean = false
     ): Boolean = synchronized(PDF_LOCK) {
+        if (dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH,
+                DigitalStorage.STAGING, DigitalStorage.ESCROW, DigitalStorage.DRAFTS))
+            throw IOException("Digital PDFs cannot be rebuilt from page images")
         val pages = pageFilesIn(dir)
         if (pages.isEmpty()) {
             false
@@ -4310,8 +4474,9 @@ class ScanRepository(private val context: Context) {
      * directory is gone — the lock must never be dropped.
      */
     fun refreshPdfAfterIndex(id: String) {
+        if (digitalStorage.hasLive(id)) return
         if (!Prefs.makeSearchable(context)) return
-        val dir = File(docsDir, id)
+        val dir = rasterDir(id)
         if (!dir.exists() || !dir.isDirectory) return
         if (File(dir, LOCK_FILE).exists()) return
         regeneratePdf(dir)
@@ -4354,7 +4519,7 @@ class ScanRepository(private val context: Context) {
      */
     suspend fun splitByRange(id: String, ranges: List<PageRanges.Span>): List<ScanDocument> =
         withContext(Dispatchers.IO) {
-            val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+            val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
             refuseLockedSources(listOf(doc))
             require(ranges.isNotEmpty()) { "No page ranges" }
             ranges.forEach {
@@ -4395,7 +4560,7 @@ class ScanRepository(private val context: Context) {
         quality: Int = 100,
         pageIndices: List<Int>? = null
     ): File = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         val chosen = pageIndices?.distinct()?.sorted() ?: doc.pageFiles.indices.toList()
@@ -4458,7 +4623,7 @@ class ScanRepository(private val context: Context) {
         outDir: File,
         baseName: String? = null
     ): List<File> = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         if (!outDir.exists() && !outDir.mkdirs()) throw IOException("Could not prepare the images")
@@ -4510,7 +4675,7 @@ class ScanRepository(private val context: Context) {
         includePictures: Boolean = false,
         onUnreadPages: (List<Int>) -> Unit = {}
     ): File = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         // N2: a document that has not been read yet is not an error here. Word is a text export,
         // so the pages that have no text are read now with the app's own on-device engine (the
@@ -4620,7 +4785,7 @@ class ScanRepository(private val context: Context) {
      * Pages are encoded one at a time.
      */
     suspend fun exportPowerPoint(id: String, outFile: File): File = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         val text = ocrStore.readText(id)
@@ -4718,7 +4883,7 @@ class ScanRepository(private val context: Context) {
         noTableNote: String? = null,
         unreadNote: String? = null
     ): ExcelExport = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         val storedText = ocrStore.readText(id)
@@ -4822,7 +4987,7 @@ class ScanRepository(private val context: Context) {
      * untouched.
      */
     suspend fun removeMetadata(id: String): ScanDocument = withContext(Dispatchers.IO) {
-        val doc = loadDocument(File(docsDir, id)) ?: throw IllegalStateException("Scan not found")
+        val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
         require(doc.pageFiles.isNotEmpty()) { "This document has no pages" }
         val texts = ocrStore.readText(id)
@@ -4879,7 +5044,7 @@ class ScanRepository(private val context: Context) {
         edits: List<PageStamp.PageEdits>,
         suggestedName: String?
     ): ScanDocument = withContext(Dispatchers.IO) {
-        val source = loadDocument(File(docsDir, id))
+        val source = loadDocument(rasterDir(id))
             ?: throw IllegalStateException(context.getString(R.string.stamp_not_found))
         refuseLockedSources(listOf(source))
 
@@ -5319,7 +5484,7 @@ class ScanRepository(private val context: Context) {
 
     /** The base, refusing a locked document before any draft folder is created. */
     private fun draftEditDoc(id: String): ScanDocument {
-        val doc = loadDocument(File(docsDir, id))
+        val doc = loadDocument(rasterDir(id))
             ?: throw DraftStore.DraftStale(context.getString(R.string.draft_stale))
         if (doc.isLocked) {
             throw PdfProtection.DocumentLocked(context.getString(R.string.locked_edit_refused))
@@ -5460,12 +5625,13 @@ class ScanRepository(private val context: Context) {
         for ((index, id) in unique.withIndex()) {
             if (cancelled()) break
             currentCoroutineContext().ensureActive()
-            val doc = loadDocument(File(docsDir, id))
-            val name = doc?.name ?: id
+            val digital = digitalStorage.hasLive(id)
+            val doc = if (digital) null else loadDocument(File(docsDir, id))
+            val name = doc?.name ?: getDocument(id)?.name ?: id
             onProgress(index + 1, unique.size, name)
             currentCoroutineContext().ensureActive()
             if (doc == null) {
-                results += BatchItem(id, name, ok = false, reason = "Document not found")
+                results += BatchItem(id, name, ok = false, reason = if (digital) "This operation does not yet support digital PDFs" else "Document not found")
                 continue
             }
             results += try {
@@ -5535,13 +5701,14 @@ class ScanRepository(private val context: Context) {
                 for ((index, id) in ids.withIndex()) {
                     if (cancelled()) break
                     currentCoroutineContext().ensureActive()
-                    val doc = loadDocument(File(docsDir, id))
-                    val name = doc?.name ?: id
+                    val digital = digitalStorage.hasLive(id)
+                    val doc = if (digital) null else loadDocument(File(docsDir, id))
+                    val name = doc?.name ?: getDocument(id)?.name ?: id
                     onProgress(index + 1, ids.size, name)
                     processed += id
                     currentCoroutineContext().ensureActive()
                     if (doc == null) {
-                        failures[id] = "Document not found"
+                        failures[id] = if (digital) "This operation does not yet support digital PDFs" else "Document not found"
                         continue
                     }
                     val temp = File(outDir, "one_${doc.id}.zip")
@@ -5578,8 +5745,9 @@ class ScanRepository(private val context: Context) {
             throw e
         }
         return processed.map { id ->
-            val doc = loadDocument(File(docsDir, id))
-            val name = doc?.name ?: id
+            val digital = digitalStorage.hasLive(id)
+            val doc = if (digital) null else loadDocument(File(docsDir, id))
+            val name = doc?.name ?: getDocument(id)?.name ?: id
             val reason = failures[id]
             if (reason == null) {
                 BatchItem(id, name, true, files = listOf(out))
