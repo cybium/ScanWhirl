@@ -386,8 +386,8 @@ class W7ToolsExpansionTest : W7CreateBase() {
                 root(activity).findFocus() === search
             )
             assertEquals(
-                "the seven job cards are back",
-                ToolRegistry.jobs().size,
+                "the B3 student-jobs card and the seven job cards are back",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
         }
@@ -569,8 +569,8 @@ abstract class W7ToolsStateBase : W7CreateBase() {
 
             assertTrue("the field is empty again", search.text.isNullOrEmpty())
             assertEquals(
-                "the seven job cards are back",
-                ToolRegistry.jobs().size,
+                "the B3 student-jobs card and the seven job cards are back",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
             assertTrue(
@@ -641,8 +641,8 @@ abstract class W7ToolsStateBase : W7CreateBase() {
             layoutRoot(activity)
 
             assertEquals(
-                "the jobs render after a retry",
-                ToolRegistry.jobs().size,
+                "the student jobs and the grouped jobs render after a retry",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
             assertNull(

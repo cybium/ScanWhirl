@@ -10,6 +10,8 @@ import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.kit.ToolRegistry
+import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.util.ProGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -80,6 +82,28 @@ class ToolEntryStatesTest {
                 sheetDialog.dismiss()
             }
         }
+    }
+
+    /**
+     * B3 count reconciliation: the registry has 38 entries, one of which is still Coming soon.
+     * The spec's "usual 37 tools" are the working ones. A SOON entry must never be offered as
+     * a working entry point — not even when someone searches its old name.
+     */
+    @Test
+    fun `Coming soon entry is not one of the 37 working tool entry points`() {
+        assertEquals(38, ToolRegistry.all.size)
+        assertEquals(37, ToolRegistry.shippingCount())
+        val soon = ToolRegistry.all.filter { it.status == ToolStatus.SOON }
+        assertEquals(listOf("batch_rename"), soon.map { it.id })
+        val entry = soon.single()
+        assertTrue(
+            "a Coming-soon entry is never a search result",
+            ToolRegistry.search(app, app.getString(entry.title)).none { it.id == entry.id }
+        )
+        assertTrue(
+            "a Coming-soon entry is never a search alias hit",
+            ToolRegistry.search(app, "rename").none { it.id == entry.id }
+        )
     }
 
     @Test

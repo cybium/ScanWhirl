@@ -105,13 +105,19 @@ abstract class T2ToolsGridBase {
                             }
                         }
                     }
-                    assertEquals(ToolJob.entries.size, body.childCount)
+                    // B3 adds one student-jobs card above the grouped catalogue.
+                    assertEquals(ToolJob.entries.size + 1, body.childCount)
+                    assertEquals(
+                        "the student jobs lead the tab in every font/width leg",
+                        ToolsHubScreen.TAG_STUDENT_JOBS,
+                        (body.getChildAt(0) as ViewGroup).tag
+                    )
                 }
             }
         }
     }
 
-    @Test fun `six recent tiles keep order in one scrollable row at double text`() {
+    @Test fun `six recent tiles keep order in one scrollable row below the student jobs`() {
         RuntimeEnvironment.setFontScale(2f)
         val ids = listOf("searchable_pdf", "add_text", "remove_metadata", "pdf_to_images", "batch_tools", "protect")
         ids.forEach { Prefs.recordRecentTool(app, it) }
@@ -131,7 +137,8 @@ abstract class T2ToolsGridBase {
                 }
                 val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
                 val card = ToolsHubScreen.cardTagged(body, ToolsHubScreen.TAG_RECENT) as ViewGroup
-                assertEquals("Recent above jobs", card, body.getChildAt(0))
+                // B3: three named student jobs lead; T1's Recent follows them, then the groups.
+                assertEquals("Recent below the student jobs", card, body.getChildAt(1))
                 val tiles = ToolsHubScreen.tiles(card)
                 assertEquals(ids.reversed(), tiles.map { it.tool!!.id })
                 assertEquals("all tiles on same row", setOf(0), tiles.map { it.top }.toSet())
