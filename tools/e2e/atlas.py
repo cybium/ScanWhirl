@@ -34,7 +34,8 @@ SHELL = PKG + "/com.scanwhirl.app.ui.shell.ShellActivityCyan"
 LEG = os.environ.get("LEG", "unknown")
 API = os.environ.get("API_LEVEL", "unknown")
 OUT = Path(os.environ.get("OUT", ROOT / "artifacts" / LEG))
-SERIAL = re.fullmatch(r"emulator-\d+", os.environ.get("ANDROID_SERIAL", "")) or None
+_SERIAL_MATCH = re.fullmatch(r"emulator-\d+", os.environ.get("ANDROID_SERIAL", ""))
+SERIAL = _SERIAL_MATCH.group(0) if _SERIAL_MATCH else None
 FIXTURE = "atlas-qa-fixture"
 FIXTURE_PDF = FIXTURE + ".pdf"
 
@@ -736,6 +737,7 @@ def walk_tools():
             wait_for({"rid": "swToolsSearch"}, timeout=12)
             tap({"rid": "swToolsSearch"}, timeout=4)
             type_text(title)
+            back()  # keyboard only: the results stay, as in flow_driver F2
             time.sleep(0.5)
             root = hierarchy()
             node = None

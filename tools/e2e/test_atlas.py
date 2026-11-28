@@ -2,6 +2,7 @@
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
@@ -110,6 +111,16 @@ class FlagTest(unittest.TestCase):
     def test_empty_or_broken_hierarchy_has_no_flags(self):
         self.assertTrue(all(not value for value in
                             atlas.analyze(None).values()))
+
+
+class AdbTest(unittest.TestCase):
+    def test_serial_is_passed_as_a_string(self):
+        with patch.object(atlas, "SERIAL", "emulator-5554"), \
+             patch.object(atlas.subprocess, "run") as run:
+            run.return_value.stdout = b"ok"
+            run.return_value.stderr = b""
+            atlas.adb("shell", "id")
+        self.assertEqual(run.call_args.args[0][:3], ["adb", "-s", "emulator-5554"])
 
 
 class ScreenshotTest(unittest.TestCase):
