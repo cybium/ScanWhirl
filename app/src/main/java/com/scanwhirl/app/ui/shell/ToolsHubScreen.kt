@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.HorizontalScrollView
@@ -29,6 +30,7 @@ import com.scanwhirl.app.ui.kit.ToolRow
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.ui.kit.ToolTile
 import com.scanwhirl.app.ui.kit.TrustPill
+import com.scanwhirl.app.ui.kit.launchTool
 import com.scanwhirl.app.util.Prefs
 
 /**
