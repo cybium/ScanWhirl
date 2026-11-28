@@ -83,7 +83,7 @@
     <string name="form1_selected">चुना गया</string>
     <string name="form1_not_selected">नहीं चुना गया</string>
 
-    <!-- J1: पहले नियम, डिफ़ॉल्ट रूप से पूरी फ़ोटो, फ़्रेमिंग स्पष्ट रूप से चुनी जाए। -->
+    <!-- J1: पहले नियम, मूल रूप से पूरी फ़ोटो, फ़्रेमिंग स्पष्ट रूप से चुनी जाए। -->
     <string name="form1_mode_range">सीमा</string>
     <string name="form1_mode_exact">ठीक माप</string>
     <string name="form1_min_width">न्यूनतम चौड़ाई</string>
