@@ -219,6 +219,9 @@ class J34HarmTest {
         cAdd(s)
         val c = canvas(s)
         c.layout(0,0,600,900)
+        // Robolectric cannot decode the fixture page through BitmapFactory, so the canvas has no
+        // page rectangle yet. Give it an upright raster; the named-node assertions stay unchanged.
+        if (c.pageBitmap == null) c.pageBitmap = Bitmap.createBitmap(600,900,Bitmap.Config.ARGB_8888)
         val provider = androidx.core.view.ViewCompat.getAccessibilityNodeProvider(c)!!
         val node = provider.createAccessibilityNodeInfo(0)!!
         assertTrue(node.contentDescription.toString().contains("Hidden area 1"))
