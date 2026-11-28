@@ -18,6 +18,8 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.scanwhirl.app.R
@@ -127,6 +129,9 @@ class LinkIndexActivity : BaseActivity() {
     private var createdCount = 0
     private var trialDialog: androidx.appcompat.app.AlertDialog? = null
 
+    /** R07 NEW-1: bind and decode only the page cards the strip actually shows. */
+    private val pageAdapter = PageStripAdapter()
+
     private val pickPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@registerForActivityResult
         lifecycleScope.launch {
@@ -146,6 +151,12 @@ class LinkIndexActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_link_index)
         v<View>(R.id.lxRoot).applySystemBarsPadding()
+        v<RecyclerView>(R.id.lxPageStrip).apply {
+            layoutManager = LinearLayoutManager(
+                this@LinkIndexActivity, LinearLayoutManager.HORIZONTAL, false
+            )
+            adapter = pageAdapter
+        }
 
         // A recreation after a successful use must still be able to show its receipt:
         // only a fresh launch is gated.
@@ -334,34 +345,54 @@ class LinkIndexActivity : BaseActivity() {
     // ---- pages and detection ------------------------------------------------
 
     private fun buildPageStrip() {
-        val host = v<LinearLayout>(R.id.lxPageStrip)
-        host.removeAllViews()
-        val doc = source ?: return
-        val density = resources.displayMetrics.density
-        doc.pageFiles.forEachIndexed { index, page ->
-            val item = layoutInflater.inflate(R.layout.item_lx_page, host, false)
-            val root = item.findViewById<View>(R.id.lxPageRoot)
-            val label = getString(R.string.lx_page_number, index + 1)
-            item.findViewById<TextView>(R.id.lxPageLabel).text = label
-            root.contentDescription = label
-            item.findViewById<CheckBox>(R.id.lxPageCheck).isChecked = indexPages.contains(index)
-            PageThumbLoader.load(
-                page, (72f * density * 2).toInt(), ScanFilter.ORIGINAL,
-                item.findViewById<ImageView>(R.id.lxPageThumb), fitExactly = true, skipStale = true
-            )
-            root.setOnClickListener {
-                val on = indexPages.add(index)
-                if (!on) indexPages.remove(index)
-                item.findViewById<CheckBox>(R.id.lxPageCheck).isChecked = on
-                renderPageCount()
-                if (indexPages.isNotEmpty()) refreshDetection() else {
-                    rows.clear()
-                    renderRows()
+        // R07 NEW-1: never inflate one card per page. The adapter binds only the pages the
+        // RecyclerView has attached, and PageThumbLoader's tag guard drops late decodes for
+        // cards that have since been recycled for another page.
+        pageAdapter.notifyDataSetChanged()
+    }
+
+    private inner class PageStripAdapter : RecyclerView.Adapter<PageStripAdapter.PageHolder>() {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageHolder {
+            val item = layoutInflater.inflate(R.layout.item_lx_page, parent, false)
+            val density = resources.displayMetrics.density
+            item.layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = (8 * density).toInt() }
+            return PageHolder(item)
+        }
+
+        override fun onBindViewHolder(holder: PageHolder, position: Int) = holder.bind(position)
+
+        override fun getItemCount(): Int = source?.pageFiles?.size ?: 0
+
+        inner class PageHolder(view: View) : RecyclerView.ViewHolder(view) {
+            private val root: View = view.findViewById(R.id.lxPageRoot)
+            private val check: CheckBox = view.findViewById(R.id.lxPageCheck)
+            private val thumb: ImageView = view.findViewById(R.id.lxPageThumb)
+            private val label: TextView = view.findViewById(R.id.lxPageLabel)
+
+            fun bind(index: Int) {
+                val page = source?.pageFiles?.getOrNull(index) ?: return
+                val text = getString(R.string.lx_page_number, index + 1)
+                label.text = text
+                root.contentDescription = text
+                check.isChecked = indexPages.contains(index)
+                PageThumbLoader.load(
+                    page, (72f * resources.displayMetrics.density * 2).toInt(), ScanFilter.ORIGINAL,
+                    thumb, fitExactly = true, skipStale = true
+                )
+                root.setOnClickListener {
+                    val on = indexPages.add(index)
+                    if (!on) indexPages.remove(index)
+                    check.isChecked = on
+                    renderPageCount()
+                    if (indexPages.isNotEmpty()) refreshDetection() else {
+                        rows.clear()
+                        renderRows()
+                    }
                 }
             }
-            host.addView(item, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = (8 * density).toInt() })
         }
     }
 
