@@ -121,6 +121,133 @@ class PdfBoxEngineDigitalPagesTest {
         PDFTextStripper().getText(doc)
     }
 
+    private fun iso(text: String): ByteArray = text.toByteArray(Charset.forName("ISO-8859-1"))
+
+    private fun iso(bytes: ByteArray): String = String(bytes, Charset.forName("ISO-8859-1"))
+
+    private fun startxrefOf(raw: String): Int =
+        Regex("startxref\\s+(\\d+)").findAll(raw).last().groupValues[1].toInt()
+
+    private fun rootRefOf(raw: String): String {
+        val match = Regex("/Root\\s+(\\d+)\\s+(\\d+)\\s+R").findAll(raw).last()
+        return "${match.groupValues[1]} ${match.groupValues[2]} R"
+    }
+
+    private fun xrefRow(offset: Int, generation: Int): String =
+        offset.toString().padStart(10, '0') + " " +
+            generation.toString().padStart(5, '0') + " n \n"
+
+    /** A plain PDF 1.5 whose only xref is an uncompressed /Type /XRef stream. */
+    private fun xrefStreamPdf(file: File, marker: String): File {
+        val out = ByteArrayOutputStream()
+        val offsets = HashMap<Int, Int>()
+        fun write(text: String) = out.write(iso(text))
+        fun objectAt(number: Int, body: String) {
+            offsets[number] = out.size()
+            write("$number 0 obj\n$body\nendobj\n")
+        }
+        write("%PDF-1.5\n%\u00E2\u00E3\u00CF\u00D3\n")
+        objectAt(1, "<< /Type /Catalog /Pages 2 0 R >>")
+        objectAt(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        objectAt(
+            3,
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
+                "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+        )
+        val content = "BT /F1 24 Tf 72 720 Td ($marker) Tj ET"
+        objectAt(4, "<< /Length ${iso(content).size} >>\nstream\n$content\nendstream")
+        objectAt(5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+        val xrefNumber = 6
+        val xrefOffset = out.size()
+        offsets[xrefNumber] = xrefOffset
+        val rows = ByteArray((xrefNumber + 1) * 7)
+        fun row(number: Int, type: Int, offset: Int, generation: Int) {
+            val base = number * 7
+            rows[base] = type.toByte()
+            rows[base + 1] = (offset ushr 24).toByte()
+            rows[base + 2] = (offset ushr 16).toByte()
+            rows[base + 3] = (offset ushr 8).toByte()
+            rows[base + 4] = offset.toByte()
+            rows[base + 5] = (generation ushr 8).toByte()
+            rows[base + 6] = generation.toByte()
+        }
+        row(0, 0, 0, 65535)
+        for (number in 1..xrefNumber) row(number, 1, offsets.getValue(number), 0)
+        write(
+            "$xrefNumber 0 obj\n<< /Type /XRef /Size ${xrefNumber + 1} /W [1 4 2] " +
+                "/Root 1 0 R /Length ${rows.size} >>\nstream\n"
+        )
+        out.write(rows)
+        write("\nendstream\nendobj\nstartxref\n$xrefOffset\n%%EOF\n")
+        file.writeBytes(out.toByteArray())
+        return file
+    }
+
+    /** A plain PDF with one appended incremental update section (/Prev), no new pages. */
+    private fun incrementalUpdatePdf(base: File, target: File): File {
+        val baseBytes = base.readBytes()
+        val raw = iso(baseBytes)
+        val out = ByteArrayOutputStream()
+        out.write(baseBytes)
+        if (!raw.endsWith("\n")) out.write('\n'.code)
+        val objectNumber = 90
+        val objectOffset = out.size()
+        out.write(iso("$objectNumber 0 obj\n<< /Title (Incremental update fixture) >>\nendobj\n"))
+        val xrefOffset = out.size()
+        out.write(iso("xref\n$objectNumber 1\n" + xrefRow(objectOffset, 0)))
+        out.write(
+            iso(
+                "trailer\n<< /Size ${objectNumber + 1} /Root ${rootRefOf(raw)} " +
+                    "/Info $objectNumber 0 R /Prev ${startxrefOf(raw)} >>\n" +
+                    "startxref\n$xrefOffset\n%%EOF\n"
+            )
+        )
+        target.writeBytes(out.toByteArray())
+        return target
+    }
+
+    /** A plain hybrid-reference PDF: a classic section whose trailer names an /XRefStm stream. */
+    private fun hybridXrefStmPdf(base: File, target: File): File {
+        val baseBytes = base.readBytes()
+        val raw = iso(baseBytes)
+        val out = ByteArrayOutputStream()
+        out.write(baseBytes)
+        if (!raw.endsWith("\n")) out.write('\n'.code)
+        val streamNumber = 91
+        val size = streamNumber + 1
+        val streamOffset = out.size()
+        val row = byteArrayOf(0, 0, 0, 0, 0, 0xFF.toByte(), 0xFF.toByte())
+        out.write(
+            iso(
+                "$streamNumber 0 obj\n<< /Type /XRef /Size $size /Index [0 1] " +
+                    "/W [1 4 2] /Length ${row.size} >>\nstream\n"
+            )
+        )
+        out.write(row)
+        out.write(iso("\nendstream\nendobj\n"))
+        val xrefOffset = out.size()
+        out.write(iso("xref\n$streamNumber 1\n" + xrefRow(streamOffset, 0)))
+        out.write(
+            iso(
+                "trailer\n<< /Size $size /Root ${rootRefOf(raw)} /Prev ${startxrefOf(raw)} " +
+                    "/XRefStm $streamOffset >>\nstartxref\n$xrefOffset\n%%EOF\n"
+            )
+        )
+        target.writeBytes(out.toByteArray())
+        return target
+    }
+
+    /** Adds one entry to the last trailer dictionary; xref offsets are all before it. */
+    private fun withTrailerEntry(source: File, target: File, entry: String): File {
+        val raw = iso(source.readBytes())
+        val trailer = raw.lastIndexOf("trailer")
+        check(trailer >= 0) { "fixture has no trailer" }
+        val dict = raw.indexOf("<<", trailer)
+        check(dict >= 0) { "fixture trailer has no dictionary" }
+        target.writeBytes(iso(raw.substring(0, dict + 2) + " $entry " + raw.substring(dict + 2)))
+        return target
+    }
+
     private fun signaturePng(): ByteArray {
         val bitmap = android.graphics.Bitmap.createBitmap(120, 60, android.graphics.Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(bitmap)
@@ -295,28 +422,29 @@ class PdfBoxEngineDigitalPagesTest {
             enforceWorkerThread = false
         )
         val handle = scoped.open(protected, "user-fictional")
-        val retainedCount = scoped.stagedTempPaths().size
-        assertTrue(retainedCount > 0) // the open() handle legitimately owns one decrypted temp
-        assertTrue(scoped.stagedTempPaths().all {
+        val retainedPaths = scoped.stagedTempPaths()
+        assertTrue(retainedPaths.isNotEmpty()) // the open() handle legitimately owns one decrypted temp
+        assertTrue(retainedPaths.all {
             it.parentFile == ApplicationProvider.getApplicationContext<Context>().filesDir
         })
         scoped.saveEncrypted(handle, File(dir, "private-save.pdf"), "user-fictional")
-        assertEquals("saveEncrypted leaked a plaintext temp", retainedCount, scoped.stagedTempPaths().size)
+        // Path equality, not just a count: one deleted plus one leaked must not pass.
+        assertEquals("saveEncrypted leaked a plaintext temp", retainedPaths, scoped.stagedTempPaths())
         scoped.verifyText(protected, "user-fictional")
-        assertEquals("verifyText leaked a plaintext temp", retainedCount, scoped.stagedTempPaths().size)
+        assertEquals("verifyText leaked a plaintext temp", retainedPaths, scoped.stagedTempPaths())
 
         // A second engine must not sweep the first engine's live handle temp.
         val other = PdfBoxEngine(
             ApplicationProvider.getApplicationContext(), File(dir, "other-work"),
             enforceWorkerThread = false
         )
-        assertEquals(retainedCount, scoped.stagedTempPaths().size)
+        assertEquals(retainedPaths, scoped.stagedTempPaths())
         other.close()
-        assertEquals(retainedCount, scoped.stagedTempPaths().size)
+        assertEquals(retainedPaths, scoped.stagedTempPaths())
 
         scoped.cancel()
         assertTrue(expectError { scoped.verifyText(protected, "user-fictional") } is PdfEngineError.Cancelled)
-        assertEquals(retainedCount, scoped.stagedTempPaths().size)
+        assertEquals(retainedPaths, scoped.stagedTempPaths())
         scoped.close()
         assertTrue(scoped.stagedTempPaths().isEmpty())
 
@@ -341,5 +469,53 @@ class PdfBoxEngineDigitalPagesTest {
         assertTrue(oracleText(decrypted).contains("ENCRYPTED_MARKER_7777"))
         assertTrue(engine.verifyText(protected, "user-fictional").contains("ENCRYPTED_MARKER_7777"))
         assertTrue(expectError { engine.open(protected, "wrong-password") } is PdfEngineError.InvalidPassword)
+    }
+
+    @Test
+    fun modernPlainPdfShapesOpenCopyAndKeepDigitalText() {
+        val xrefStream = xrefStreamPdf(File(dir, "xref-stream.pdf"), "XREF_STREAM_MARKER")
+        val incremental = incrementalUpdatePdf(
+            makePdf("incremental-base.pdf", 2, "INCREMENTAL_MARKER"),
+            File(dir, "incremental-update.pdf")
+        )
+        val hybrid = hybridXrefStmPdf(
+            makePdf("hybrid-base.pdf", 1, "HYBRID_XREFSTM_MARKER"),
+            File(dir, "hybrid-xrefstm.pdf")
+        )
+        val cases = listOf(
+            Triple(xrefStream, "XREF_STREAM_MARKER", 1),
+            Triple(incremental, "INCREMENTAL_MARKER", 2),
+            Triple(hybrid, "HYBRID_XREFSTM_MARKER", 1)
+        )
+        for ((source, marker, pages) in cases) {
+            // Harm prevented: a valid modern plain PDF must not be refused as encrypted.
+            val handle = engine.open(source)
+            assertEquals("${source.name} page count", pages, handle.pageCount)
+            assertTrue("${source.name} lost text", engine.verifyText(source).contains(marker))
+            val copy = engine.copyPages(handle, intArrayOf(0), File(dir, "copy-${source.name}").path)
+            assertEquals(1, copy.pageCount)
+            assertTrue("${source.name} copy lost digital text", oracleText(copy.file).contains(marker))
+        }
+    }
+
+    @Test
+    fun craftedTrailerStringCannotHideEncrypt() {
+        // A '%' inside a trailer literal string is content, not a comment: a plain PDF opens.
+        val plain = withTrailerEntry(
+            makePdf("string-plain-base.pdf", 1, "PUBLIC_ALPHA"),
+            File(dir, "string-plain.pdf"),
+            "/Note (a% b)"
+        )
+        assertEquals(1, engine.open(plain).pageCount)
+
+        // With a non-standard /Filter the decryptor refuses; the string must not hide /Encrypt
+        // from the engine's probe, or encrypted bytes would reach PDFBox.
+        val encrypted = File(dir, "string-encrypted.pdf")
+        PdfEncryptor.encrypt(makePdf("string-protected-base.pdf", 1, "PUBLIC_ALPHA"), encrypted, "pw-fictional")
+        val crafted = withTrailerEntry(encrypted, File(dir, "string-patched.pdf"), "/Note (a% b)")
+        crafted.writeBytes(iso(iso(crafted.readBytes()).replace("/Standard", "/NoStdFlt")))
+        assertTrue(
+            expectError { engine.open(crafted, "pw-fictional") } is PdfEngineError.UnsupportedFeature
+        )
     }
 }

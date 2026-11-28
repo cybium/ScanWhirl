@@ -153,8 +153,10 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm
 
-      # connectedReleaseAndroidTest installs the R8-minified release APK plus its
-      # test APK and runs PdfEngineMinifiedSmokeTest against the minified classes.
+      # Installs the R8-minified release APK plus the androidTest APK and runs the plain
+      # androidx Instrumentation MinifiedEngineInstrumentation against the minified
+      # classes. It runs the workflow on an instrumentation thread with the production
+      # main-thread guard disabled, then separately asserts the guard fires on Main.
       - name: Run engine smoke on the minified release build
         uses: reactivecircus/android-emulator-runner@v2
         with:
