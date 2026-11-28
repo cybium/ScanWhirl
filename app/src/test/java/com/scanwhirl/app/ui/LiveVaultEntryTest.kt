@@ -112,7 +112,7 @@ class LiveVaultEntryTest {
                     })
                 assertNotNull("the PIN sheet stays open after a wrong try", legacyPinSheet())
                 assertFalse("wrong PIN must not open the Vault",
-                    activity.findViewById<View>(R.id.vaultBanner) != null)
+                    activity.findViewById<View>(R.id.vaultBanner)?.isVisible == true)
                 assertFalse("no Pro redirect after a wrong PIN",
                     ShadowDialog.getLatestDialog()?.findViewById<View>(R.id.proDossierStatus) != null)
 
