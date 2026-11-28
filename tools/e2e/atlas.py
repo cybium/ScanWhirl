@@ -836,6 +836,44 @@ def accept_fixture_import_plan():
 
 
 # ------------------------------------------------------------------------ walks
+def apply_leg_language():
+    """The Hindi leg must actually prove the Hindi UI.
+
+    `cmd locale set-app-locales` is accepted by the shell on this image but the app
+    still draws English, so switch through the app's own Me > Settings > App language
+    path (the real user route) and refuse a leg that is still English afterwards.
+    """
+    if LEG != "hindi":
+        return True
+    launch()
+    if not tap({"rid": "swNavMe"}, timeout=12):
+        raise AssertionError("Hindi leg: Me tab missing")
+    root = hierarchy()
+    node = find(root, regex=r"Settings|सेटिंग", pkg=PKG)
+    if node is None or not tap_node(root, clickable_ancestor(root, node) or node):
+        raise AssertionError("Hindi leg: Settings row missing")
+    if not tap_reachable({"rid": "rowLanguage"}, swipes=3):
+        raise AssertionError("Hindi leg: App language row missing")
+    # Establish a known English state first: the shell may already claim `hi` while the
+    # app still draws English, and choosing an unchanged value would skip re-creation.
+    root = hierarchy()
+    english = find(root, text="English", pkg=PKG)
+    if english is not None:
+        tap_node(root, clickable_ancestor(root, english) or english)
+        time.sleep(1.5)
+        if not tap_reachable({"rid": "rowLanguage"}, swipes=3):
+            raise AssertionError("Hindi leg: App language row missing after English")
+    root = hierarchy()
+    node = find(root, regex=r"हिन्दी", pkg=PKG)
+    if node is None or not tap_node(root, clickable_ancestor(root, node) or node):
+        raise AssertionError("Hindi leg: हिन्दी option missing")
+    time.sleep(2.0)
+    launch()
+    if find(hierarchy(), regex=r"[\u0900-\u097F]", pkg=PKG) is None:
+        raise AssertionError("Hindi leg: UI is still English after choosing Hindi")
+    return True
+
+
 def tap_reachable(want, swipes=8):
     """Scroll actual visible containers, never guess coordinates of an offscreen control."""
     for _ in range(swipes + 1):
@@ -1494,6 +1532,7 @@ def main():
         WIDTH, HEIGHT, DENSITY), flush=True)
 
     try:
+        apply_leg_language()
         step("fixtures", "seed", [], lambda: seed())
         step("import", "fixture", ["Library", "Create", "Import PDF"], import_fixture)
         if not walk_j5_organize():
