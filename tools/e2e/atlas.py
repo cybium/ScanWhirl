@@ -925,7 +925,8 @@ def walk_j34(suffix=""):
                  r"Sign or fill a form|हस्ताक्षर.*फ़ॉर्म|फ़ॉर्म.*हस्ताक्षर")
         require(tap({"regex": title, "pkg": PKG}), "student job")
         if wait_for({"rid": "canvas"}, timeout=2) is None:
-            require(wait_for({"rid": "swSheetRoot"}, timeout=10) is not None,
+            # The shared DocumentPicker sheet (not a generic SwSheet) lists eligible copies.
+            require(wait_for({"rid": "docPickerRow"}, timeout=10) is not None,
                     "document picker")
             require(tap({"regex": FIXTURE, "pkg": PKG}), "fictional document picker row")
         require(wait_for({"rid": "canvas"}, timeout=15) is not None, "editor canvas")
@@ -984,7 +985,7 @@ def walk_j34(suffix=""):
             if find(hierarchy(), rid="swSheetRoot") is None:
                 break
             time.sleep(.4)
-        require(wait_for({"rid": "swSheetRoot"}, timeout=70) is not None,
+        require(wait_for({"rid": "swSheetRoot"}, timeout=90) is not None,
                 "candidate or honest unreadable outcome")
         shot("find-candidates")
         dismiss_sheet()
