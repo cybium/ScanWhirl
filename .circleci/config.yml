@@ -2,8 +2,9 @@
 #
 # Triggered ONLY by branches cc/atlas-* (GitHub Actions owns ci/atlas-*), so the
 # two providers never atlas the same commit. No Gradle, emulator or adb ever runs
-# on a developer PC: the Docker job compiles once, four machine-executor legs
-# install that one APK and walk it on throwaway emulators. Fixtures are fictional.
+# on a developer PC: the Docker job compiles once, five machine-executor legs
+# (light, dark, font 2.0, small API 24, Hindi) install that one APK and walk it
+# on throwaway emulators. Fixtures are fictional.
 #
 # Free-plan notes: android:default is the gen1 Android machine image and
 # resource_class: large (4 vCPU / 15 GB, 20 credits/min) is available on Free;
@@ -224,6 +225,16 @@ jobs:
           profile: Nexus 4
           setup: "true"
 
+  atlas-hindi:
+    executor: atlas-machine
+    steps:
+      - atlas-leg:
+          leg: hindi
+          api: "35"
+          arch: x86_64
+          profile: pixel_6
+          setup: "adb shell cmd locale set-app-locales com.scanwhirl.app.test --locales hi && adb shell cmd locale get-app-locales com.scanwhirl.app.test | grep -qi hi"
+
 workflows:
   atlas:
     jobs:
@@ -258,6 +269,14 @@ workflows:
             branches:
               only: /^cc\/atlas-.*/
       - atlas-small24:
+          requires:
+            - build
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only: /^cc\/atlas-.*/
+      - atlas-hindi:
           requires:
             - build
           filters:

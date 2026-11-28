@@ -219,6 +219,36 @@ class OrganizeDraftUiTest {
     }
 
     @Test(timeout = 60_000)
+    fun `organize save rejects a blank name without publishing a copy`() {
+        val id = DocFixtures.saved(repo, app, pages = 3, name = "Blank name")
+        SwActivitySession.launch<DocumentViewerActivity>(
+            DocumentViewerActivity.organizeIntent(app, id)
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.toggleSelected(0)
+                activity.rotateSelected(true)
+            }
+            assertTrue(pollUntil { draftChanges(id) == 1 })
+            scenario.onActivity {
+                it.findViewById<android.view.View>(R.id.btnDraftSave)!!.performClick()
+            }
+            assertTrue(pollUntil {
+                runCatching { sheet()?.findViewById<EditText>(R.id.swSheetInput) != null }
+                    .getOrDefault(false)
+            })
+            val input = sheet()!!.findViewById<EditText>(R.id.swSheetInput)!!
+            input.setText("")
+            primary()
+            assertEquals(
+                "the name sheet explains why it stayed open",
+                app.getString(R.string.j5_name_required), input.error.toString()
+            )
+            assertTrue("the name sheet is still showing", sheet()!!.isShowing)
+            assertEquals("no copy was published for a blank name", 1, repo.listDocuments().size)
+        }
+    }
+
+    @Test(timeout = 60_000)
     fun `Replace original asks to confirm and puts the previous version in Trash`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Draft replace")
         val doc = repo.getDocument(id)!!

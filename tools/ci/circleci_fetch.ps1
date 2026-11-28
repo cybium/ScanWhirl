@@ -14,7 +14,7 @@
   token is never printed, logged or written to disk.
 
   Each atlas leg's artefacts are stored under <outDir>/<leg>/ (light, dark,
-  font200, small24), including index.html, report.json and numbered PNG/XML.
+  font200, small24, hindi), including index.html, report.json and numbered PNG/XML.
 
   -Credits prints credits used by each workflow on a branch (and per atlas job)
   plus a month-to-date (last-30-days Insights) total across cc/atlas-* branches.
@@ -32,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 $Project = 'gh/cybium/ScanWhirl'
 $ApiBase = 'https://circleci.com/api/v2'
 $script:Token = $null
-$script:Legs = @('light', 'dark', 'font200', 'small24')
+$script:Legs = @('light', 'dark', 'font200', 'small24', 'hindi')
 
 function Resolve-CircleToken {
     $value = $env:CIRCLE_TOKEN

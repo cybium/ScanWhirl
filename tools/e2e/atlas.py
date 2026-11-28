@@ -1129,10 +1129,10 @@ def walk_j5_organize():
         if third is None:
             # At font 2.0 page 3's paper may be visible while its lower label is clipped
             # by the scrolling viewport. Its accessible page identity still names the card.
-            third = find(root, regex=r"^Page 3 of |^पेज 3", pkg=PKG)
+            third = find(root, regex=r"^Page 3 of |^पेज 3|^पन्ना 3", pkg=PKG)
         first = find(root, rid="pageNum", text="1")
         if first is None:
-            first = find(root, regex=r"^Page 1 of |^पेज 1", pkg=PKG)
+            first = find(root, regex=r"^Page 1 of |^पेज 1|^पन्ना 1", pkg=PKG)
         if third is None or first is None:
             raise AssertionError("J5 real page identities unavailable")
         a = parse_bounds(clickable_ancestor(root, third).get("bounds"))
