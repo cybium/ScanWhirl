@@ -80,6 +80,11 @@
 # names, not from bytecode references. Keep the font model intact.
 -keep class com.tom_roush.pdfbox.pdmodel.font.** { *; }
 
+# W7a engine is not yet called from any screen (W7b wiring is deferred), so R8
+# would remove the whole package from the minified APK. Keep it for the
+# instrumented runtime check and for the later UI integration.
+-keep class com.scanwhirl.app.pdf.engine.** { *; }
+
 # The AndroidX test runner (instrumented smoke test) is Kotlin-compiled and
 # resolves Intrinsics from the target APK's class loader. Keep it in the
 # minified release build so the runtime smoke test can start.
