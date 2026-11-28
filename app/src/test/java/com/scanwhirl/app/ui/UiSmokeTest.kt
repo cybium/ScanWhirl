@@ -562,7 +562,7 @@ class UiSmokeTest {
         try {
             for (night in listOf(false, true)) {
                 org.robolectric.RuntimeEnvironment.setQualifiers(
-                    "en-rUS-w360dp-h800dp-xhdpi-${if (night) "night" else "notnight"}"
+                    "en-rUS-w360dp-h800dp-${if (night) "night" else "notnight"}-xhdpi"
                 )
                 val expected = if (night) android.content.res.Configuration.UI_MODE_NIGHT_YES
                 else android.content.res.Configuration.UI_MODE_NIGHT_NO

@@ -24,7 +24,9 @@
                 android:width="42dp"
                 android:height="5dp" />
             <corners android:radius="3dp" />
-            <solid android:color="@color/tok_boundary" />
+            <!-- Decorative translucent grab: keep the shipped white alpha so it is
+                 never mistaken for the sheet surface by contrast sampling. -->
+            <solid android:color="#2EFFFFFF" />
         </shape>
     </item>
 </layer-list>

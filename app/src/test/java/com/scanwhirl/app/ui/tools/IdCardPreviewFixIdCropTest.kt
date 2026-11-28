@@ -90,8 +90,8 @@ class IdCardPreviewFixIdCropTest {
                 val backdrop = host.background
                 assertTrue("a dark backdrop, not a glass box: $backdrop", backdrop is GradientDrawable)
                 assertEquals(
-                    "the backdrop is the ink colour",
-                    SwStyle.color(activity, R.color.void_abyss),
+                    "the backdrop is the dark preview token",
+                    SwStyle.color(activity, R.color.tok_preview_backdrop),
                     (backdrop as GradientDrawable).color?.defaultColor
                 )
                 assertNull("no white box behind the page", preview.background)
