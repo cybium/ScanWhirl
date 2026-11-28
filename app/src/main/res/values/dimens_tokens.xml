@@ -12,7 +12,7 @@
     <!-- Shape tokens (dp). -->
     <dimen name="sw_radius_card">16dp</dimen>
     <dimen name="sw_radius_control">12dp</dimen>
-    <dimen name="sw_radius_sheet">24dp</dimen>
+    <!-- sw_radius_sheet lives in dimens_v2.xml and is 24dp there. -->
 
     <!-- The one accessibility touch floor for kit controls (dp). -->
     <dimen name="sw_touch_min">48dp</dimen>
