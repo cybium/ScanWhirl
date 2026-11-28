@@ -295,7 +295,8 @@ class ToolTile(context: Context) : FrameLayout(context) {
             SwStyle.dp(context, 4f), (2f * d).toInt(),
             SwStyle.dp(context, 4f), (2f * d).toInt()
         )
-        (iconSlot.layoutParams as LinearLayout.LayoutParams).height = (48f * d).toInt()
+        // Keep a 4dp band above the 48dp plate so the PRO word still clears the glyph.
+        (iconSlot.layoutParams as LinearLayout.LayoutParams).height = (52f * d).toInt()
         (labelView.layoutParams as LinearLayout.LayoutParams).topMargin = (2f * d).toInt()
     }
 

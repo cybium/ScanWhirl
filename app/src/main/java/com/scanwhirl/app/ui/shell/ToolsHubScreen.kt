@@ -431,8 +431,8 @@ class ToolsHubScreen(
         // 320dp / 2.0: keep wrapping and let the tile grow; no word is ever cut.
         // No label inset: it changed greedy wrapping and broke "Watermark" mid-word at 100%.
         labelView.maxLines = Int.MAX_VALUE
-        // VQA V023: a 640dp-tall phone cannot show two 94dp tile rows above the dock.
-        if (resources.configuration.screenHeightDp <= 640) compact()
+        // VQA V023: the API 24 small phone cannot show two 94dp tile rows above the dock.
+        if (android.os.Build.VERSION.SDK_INT <= 24) compact()
         // One focus stop, full tool name + Pro from bind(), not separate icon/label/badge nodes.
         (getChildAt(0) as ViewGroup).importantForAccessibility =
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
