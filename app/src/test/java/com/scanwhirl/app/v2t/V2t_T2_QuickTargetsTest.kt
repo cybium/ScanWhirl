@@ -106,16 +106,16 @@ class V2t_T2_QuickTargetsTest {
     }
 
     @Test
-    fun `result keeps Open primary and offers verified-copy secondary actions`() {
+    fun `result keeps Share primary and offers verified-copy secondary actions`() {
         val output = DocFixtures.saved(repo, app, pages = 1, name = "verified output")
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "compress", docIds = listOf(output))
         ).use { scenario ->
             scenario.onActivity { activity ->
-                val open = activity.findViewById<android.widget.TextView>(R.id.toolResultOpen)
-                assertEquals("Open is still primary",
+                val share = activity.findViewById<android.widget.TextView>(R.id.toolResultShare)
+                assertEquals("Share is the PDF primary",
                     com.scanwhirl.app.ui.kit.SwStyle.color(activity, R.color.sw_disc_ink),
-                    open.currentTextColor)
+                    share.currentTextColor)
                 activity.findViewById<View>(R.id.toolResultMore).performClick()
                 idle()
                 val compress = activity.findViewById<View>(R.id.v2t_compress_copy)

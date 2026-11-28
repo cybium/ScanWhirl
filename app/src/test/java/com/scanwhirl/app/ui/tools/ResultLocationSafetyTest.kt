@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.tools
 import android.app.Activity
 import android.app.Application
 import android.content.Intent
+import android.content.pm.ProviderInfo
 import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.view.View
@@ -14,6 +15,9 @@ import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.result.ResultSpec
+import com.scanwhirl.app.util.DownloadSaver
+import com.scanwhirl.app.util.FakeMediaStore
+import com.scanwhirl.app.util.Prefs
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +26,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -31,6 +36,83 @@ class ResultLocationSafetyTest {
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private fun imageIntent(): Intent = ToolResultActivity.intent(app,
         ResultSpec("form_ready", files = listOf(RsFixtures.jpeg("location", 413, 531, app)), mime = "image/jpeg"))
+
+    private fun media(): FakeMediaStore = FakeMediaStore().also {
+        it.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
+        ShadowContentResolver.registerProviderInternal("media", it)
+        DownloadSaver.resetForTests()
+    }
+
+    private fun await(condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < deadline) {
+            idle()
+            if (condition()) return true
+            Thread.sleep(20)
+        }
+        idle()
+        return condition()
+    }
+
+    @Test(timeout = 30_000)
+    fun `failed image export keeps input and unsaved location then Retry verifies one copy`() {
+        val media = media().apply { failOpenWrite = true }
+        val intent = imageIntent()
+        val input = ResultSpec.fromIntent(intent).files.single()
+        val original = input.readBytes()
+        val controller = Robolectric.buildActivity(ToolResultActivity::class.java, intent).setup()
+        try {
+            val activity = controller.get()
+            val primary = activity.window.decorView.findViewWithTag<TextView>("result-primary")
+            val location = activity.findViewById<TextView>(R.id.toolResultName)
+            val before = location.text.toString()
+            primary.performClick()
+            assertTrue("failure is visible", await {
+                activity.findViewById<View>(R.id.toolResultError).visibility == View.VISIBLE && primary.isEnabled
+            })
+            assertEquals(before, location.text.toString())
+            assertArrayEquals(original, input.readBytes())
+            assertTrue(media.scanwhirlPdfs().isEmpty())
+            media.failOpenWrite = false
+            activity.window.decorView.findViewWithTag<View>("result-retry").performClick()
+            assertTrue("verified save updates the persistent location", await {
+                location.text.contains(app.getString(R.string.rs_where_documents)) && !primary.isEnabled
+            })
+            assertEquals(1, media.scanwhirlPdfs().size)
+            assertArrayEquals(original, media.scanwhirlPdfs().single().bytes())
+        } finally {
+            controller.destroy()
+            DownloadSaver.resetForTests()
+            media.close()
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun `failed automatic Documents copy never hides library success or changes the original`() {
+        val media = media().apply { failOpenWrite = true }
+        val repo = ScanRepository(app)
+        val source = DocFixtures.saved(repo, app, 1, "Untouched source")
+        val out = DocFixtures.saved(repo, app, 1, "New PDF")
+        val original = requireNotNull(repo.getDocument(source)).pdfFile.readBytes()
+        Prefs.setAutoCopyToDocuments(app, true)
+        val controller = Robolectric.buildActivity(ToolResultActivity::class.java,
+            ToolResultActivity.intent(app, ResultSpec("split", docIds = listOf(out), receiptSourceId = source))).setup()
+        try {
+            val activity = controller.get()
+            assertTrue(await { activity.findViewById<View>(R.id.toolResultError).visibility == View.VISIBLE })
+            val where = activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+            assertTrue(where.contains(app.getString(R.string.rs_library_as, "New PDF")))
+            assertFalse(where.contains(app.getString(R.string.rs_where_documents)))
+            assertNotNull(repo.getDocument(out))
+            assertArrayEquals(original, requireNotNull(repo.getDocument(source)).pdfFile.readBytes())
+            assertTrue(media.scanwhirlPdfs().isEmpty())
+        } finally {
+            controller.destroy()
+            Prefs.setAutoCopyToDocuments(app, false)
+            DownloadSaver.resetForTests()
+            media.close()
+        }
+    }
 
     @Test(timeout = 30_000)
     fun `image result never says saved before the write`() {

@@ -35,7 +35,7 @@
     <string name="rs_try_strong">Try Strong</string>
 
     <!-- The comparison zoom. -->
-    <string name="rs_zoom_caption">Zoomed to check sharpness</string>
+    <string name="rs_zoom_caption">Zoomed preview</string>
     <string name="rs_before_size_label">Before · %1$s</string>
     <string name="rs_after_size_label">After · %1$s</string>
     <string name="rs_after_label">After</string>

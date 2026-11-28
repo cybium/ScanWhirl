@@ -598,7 +598,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         // V2L device reflow: at 200 % a 86dp disc gap starves "Library" and "Tools" into
         // mid-word breaks on a 393-411dp phone. Reclaim most of it for the four cells.
-        val discGap = if (resources.configuration.fontScale >= 1.6f) 0f else 86f
+        val discGap = if (resources.configuration.fontScale >= 1.6f) 68f else 86f
         bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, discGap), 1))
         bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -611,14 +611,12 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ).apply {
                 gravity = Gravity.BOTTOM
                 val m = SwStyle.dp(this@ShellActivity, 12f)
-                // At 200% the Scan action has its own row, never a hit area over tab labels.
-                val scanRow = if (resources.configuration.fontScale >= 1.6f)
-                    SwStyle.dp(this@ShellActivity, 84f) else 0
-                setMargins(m, scanRow, m, SwStyle.dp(this@ShellActivity, 12f))
+                setMargins(m, 0, m, SwStyle.dp(this@ShellActivity, 12f))
             }
         )
+        val discSize = if (resources.configuration.fontScale >= 1.6f) 64f else 84f
         container.addView(buildDisc(), FrameLayout.LayoutParams(
-            SwStyle.dp(this, 84f), SwStyle.dp(this, 84f)
+            SwStyle.dp(this, discSize), SwStyle.dp(this, discSize)
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             topMargin = SwStyle.dp(this@ShellActivity, 2f)
@@ -666,7 +664,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             isClickable = false
             isFocusable = false
         }
-        val iconSize = if (resources.configuration.fontScale >= 1.6f) 24f else 32f
+        val iconSize = if (resources.configuration.fontScale >= 1.6f) SwStyle.SPACE_4_DP else 32f
         column.addView(
             ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_scan_capture)

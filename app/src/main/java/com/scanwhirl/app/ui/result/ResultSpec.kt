@@ -25,8 +25,11 @@ data class ResultSpec(
     val outcomeClass: String? = null,
     val noStrongerPreset: Boolean = false,
     /** A retained workspace's explicit intent. CLEAR_TOP/SINGLE_TOP resumes its exact live inputs. */
-    val adjustIntent: Intent? = null
+    val adjustIntent: Intent? = null,
+    /** Measured facts, never requested dimensions. The result remeasures available output bytes. */
+    val facts: Facts? = null
 ) {
+    data class Facts(val bytes: Long, val pages: Int? = null, val width: Int? = null, val height: Int? = null)
     enum class Kind { IMAGE, PDF, FILE }
     enum class WhereState { NOT_SAVED, LIBRARY }
     enum class Action { SAVE_TO_PHONE, SHARE, OPEN, SHOW_IN_LIBRARY, ADJUST, REMOVE_COPY }
@@ -63,6 +66,12 @@ data class ResultSpec(
         putString("rs_outcome_class", outcomeClass)
         putBoolean("rs_no_stronger_preset", noStrongerPreset)
         putParcelable("result_adjust", adjustIntent?.let { Intent(it) })
+        facts?.let {
+            putLong("result_bytes", it.bytes)
+            it.pages?.let { n -> putInt("result_pages", n) }
+            it.width?.let { n -> putInt("result_width", n) }
+            it.height?.let { n -> putInt("result_height", n) }
+        }
     }
 
     companion object {
@@ -84,7 +93,13 @@ data class ResultSpec(
                 compressGrew = b.getBoolean("compress_grew"),
                 outcomeClass = b.getString("rs_outcome_class"),
                 noStrongerPreset = b.getBoolean("rs_no_stronger_preset"),
-                adjustIntent = b.getParcelable("result_adjust")
+                adjustIntent = b.getParcelable("result_adjust"),
+                facts = if (b.containsKey("result_bytes")) Facts(
+                    b.getLong("result_bytes"),
+                    b.getInt("result_pages").takeIf { it > 0 },
+                    b.getInt("result_width").takeIf { it > 0 },
+                    b.getInt("result_height").takeIf { it > 0 }
+                ) else null
             )
         }
     }

@@ -332,6 +332,7 @@ class ToolResultActivity : BaseActivity() {
         rootView = buildRoot()
         setContentView(rootView)
         if (savedCopy != null || documentsExistingName != null) markDocumentsSaved()
+        if (chosenLocationName != null) phonePrimary?.isEnabled = false
         render()
         if (!undone && !alreadyCompact && savedInstanceState == null &&
             !intent.getBooleanExtra(EXTRA_USE_LAST_RECEIPT, false) &&
@@ -346,7 +347,9 @@ class ToolResultActivity : BaseActivity() {
         // W3: if this result was already undone before a rotation, do not offer its actions again.
         if (undone) showAlreadyUndone()
         // v2 UI: 74_motion — the one success moment call for every tool result.
-        com.scanwhirl.app.ui.kit.SwMotion.success(this)
+        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_USE_LAST_RECEIPT, false) &&
+            !undone && docIds.any { repo.getDocument(it)?.pdfFile?.isFile == true })
+            com.scanwhirl.app.ui.kit.SwMotion.success(this)
     }
 
     /** V2T T1: write the honest fact record after every verified state change. */
@@ -504,6 +507,7 @@ class ToolResultActivity : BaseActivity() {
                 docIds.isNotEmpty() -> R.string.rs_copy_ready
                 else -> R.string.rs_file_ready
             })
+            isVisible = !alreadyCompact && outcomeClass != OutcomeClass.TARGET_MISSED
             androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
             setPadding(0, SwStyle.dp(context, SwStyle.SPACE_4_DP), 0, 0)
         })
@@ -631,7 +635,7 @@ class ToolResultActivity : BaseActivity() {
             }
             bottomBar.addView(
                 button(getString(R.string.tools_result_done), R.id.rsDone,
-                    primary = noStrongerPreset || receiptSourceId.isNullOrBlank()) { finish() },
+                     primary = noStrongerPreset || receiptSourceId.isNullOrBlank()) { showInLibrary() },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             )
             root.addView(bottomBar, LinearLayout.LayoutParams(
@@ -765,7 +769,7 @@ class ToolResultActivity : BaseActivity() {
             val opening = morePanel.visibility != View.VISIBLE
             morePanel.visibility = if (opening) View.VISIBLE else View.GONE
             findViewById<TextView>(R.id.toolResultMore)?.text = getString(
-                if (opening) R.string.tools_result_fewer_options else R.string.rs_more
+                R.string.rs_more
             )
         }
         val secondary = LinearLayout(this).apply {
@@ -786,6 +790,10 @@ class ToolResultActivity : BaseActivity() {
             ))
         }
         column.addView(secondary)
+        listOf(R.id.v2t_compress_copy, R.id.v2t_protect_copy).forEach { id ->
+            morePanel.findViewById<View>(id)?.isVisible =
+                docIds.size == 1 && outputIdentity != null && !outputIdentity!!.startsWith(CHEAP_IDENTITY_PREFIX)
+        }
         column.removeView(morePanel)
         column.addView(morePanel)
         val primary = if (resultSpec.primary == ResultSpec.Action.SHARE) share else
@@ -946,6 +954,7 @@ class ToolResultActivity : BaseActivity() {
             else -> 0L
         }
         val pages = docs.sumOf { it.pageCount }
+        resultSpec = resultSpec.copy(facts = ResultSpec.Facts(measured, pages = pages.takeIf { it > 0 }))
         if (isCompressResult) {
             val before = beforeBytes
             if (before != null && before > 0L) {
@@ -1034,7 +1043,7 @@ class ToolResultActivity : BaseActivity() {
                 val summary = if (words.size > MORE_NOTE_WORDS) {
                     words.take(MORE_NOTE_WORDS).joinToString(" ") + "…"
                 } else firstLine
-                view.text = summary
+                view.text = getString(R.string.rs_details_title)
                 if (summary != full) {
                     val d = androidx.appcompat.content.res.AppCompatResources
                         .getDrawable(this, R.drawable.ic_sym_info)?.mutate()
@@ -1125,7 +1134,7 @@ class ToolResultActivity : BaseActivity() {
             return
         }
         savedLine.isVisible = true
-        savedLine.text = when {
+        val where = when {
             docIds.any { repo.getDocument(it) != null } -> getString(R.string.rs_library_as, name) +
                 when {
                     sourceKept -> getString(R.string.rs_saved_suffix_kept).removePrefix("”")
@@ -1137,13 +1146,21 @@ class ToolResultActivity : BaseActivity() {
             documentsExistingName != null -> getString(R.string.rs_where_documents_existing) + "\n" + documentsExistingName
             else -> getString(R.string.rs_not_saved_yet) + "\n" + name
         }
-        savedLine.contentDescription = savedLine.text
+        if (savedLine.text.toString() != where) {
+            savedLine.text = where
+            savedLine.contentDescription = where
+        }
     }
 
     /** Decode only actual output bytes, with library protection rechecked on IO. */
     private fun bindOutputPreview() {
         previewHost.isVisible = false
         preview.isVisible = false
+        if (docIds.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
+            previewHost.isVisible = true
+            showFileCard(files.first())
+            return
+        }
         if (toolId in noVisualTools || alreadyCompact) return
         if (isCompressResult || toolId in markTools) return
         lifecycleScope.launch {
@@ -1167,16 +1184,14 @@ class ToolResultActivity : BaseActivity() {
             previewHost.isVisible = true
             if (docIds.isEmpty()) {
                 val bytes = files.sumOf { it.length() }
+                resultSpec = resultSpec.copy(facts = ResultSpec.Facts(bytes,
+                    width = measured.second, height = measured.third))
                 val size = if (toolId == "form_ready")
                     String.format(java.util.Locale.getDefault(), "%.1f KB", bytes / 1024.0)
                 else StatusLine.formatBytes(bytes)
                 summary.text = getString(R.string.rs_image_facts, measured.second, measured.third,
                     files.firstOrNull()?.extension?.uppercase(java.util.Locale.ROOT).orEmpty(), size)
             }
-        }
-        if (docIds.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
-            previewHost.isVisible = true
-            showFileCard(files.first())
         }
     }
 
@@ -1451,8 +1466,9 @@ class ToolResultActivity : BaseActivity() {
             ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
         }
         previewHost.addView(card, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
+        previewHost.layoutParams = previewHost.layoutParams.apply { height = ViewGroup.LayoutParams.WRAP_CONTENT }
         lifecycleScope.launch {
             val count = withContext(Dispatchers.IO) { OfficeFileCounts.count(file) }
             if (count != null && !isFinishing) {
@@ -1610,6 +1626,7 @@ class ToolResultActivity : BaseActivity() {
                 if (saved.created) {
                     savedCopy = saved
                     documentsExistingName = null
+                    com.scanwhirl.app.ui.kit.SwMotion.success(this@ToolResultActivity)
                 } else {
                     documentsExistingName = saved.name
                 }
@@ -1740,6 +1757,7 @@ class ToolResultActivity : BaseActivity() {
                 val created = withContext(Dispatchers.IO) { createdName(uri, suggested) }
                 chosenLocationName = created
                 phonePrimary?.isEnabled = false
+                com.scanwhirl.app.ui.kit.SwMotion.success(this@ToolResultActivity)
                 refreshLocationLines()
                 renderMoreLocation()
                 persistReceipt()
@@ -2019,6 +2037,7 @@ class ToolResultActivity : BaseActivity() {
         docIds.isNotEmpty() -> "application/pdf"
         files.any { it.name.endsWith(".zip") } -> "application/zip"
         files.any { it.name.endsWith(".png") } -> "image/png"
+        files.any { it.name.endsWith(".pdf", ignoreCase = true) } -> "application/pdf"
         files.any { it.name.endsWith(".docx") } ->
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         files.any { it.name.endsWith(".pptx") } ->

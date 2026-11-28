@@ -6,7 +6,7 @@
     <string name="rs_copy_ready">PDF तैयार है</string>
     <string name="rs_file_ready">फ़ाइल तैयार है</string>
     <string name="rs_not_saved_yet">अभी सहेजा नहीं है</string>
-    <string name="rs_library_as">आपकी ScanWhirl लाइब्रेरी में “%1$s” नाम से सहेजी गई</string>
+    <string name="rs_library_as">ScanWhirl संग्रह में “%1$s”</string>
     <string name="rs_image_facts">%1$d × %2$d px · %3$s · %4$s</string>
     <string name="rs_save_to_phone">फ़ोन में सहेजें</string>
     <string name="rs_adjust">बदलाव करें</string>
@@ -31,7 +31,7 @@
     <string name="rs_already_compact_msg">छोटी प्रति नहीं बनी। मूल फ़ाइल वैसी ही है।</string>
     <string name="rs_try_strong">और छोटा करें</string>
 
-    <string name="rs_zoom_caption">अक्षरों की स्पष्टता जाँचने के लिए ज़ूम</string>
+    <string name="rs_zoom_caption">बड़ा दृश्य</string>
     <string name="rs_before_size_label">पहले · %1$s</string>
     <string name="rs_after_size_label">बाद में · %1$s</string>
     <string name="rs_after_label">बाद में</string>

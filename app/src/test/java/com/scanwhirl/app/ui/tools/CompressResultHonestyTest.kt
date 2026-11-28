@@ -350,14 +350,14 @@ abstract class CompressResultHonestyBase {
                 assertTrue("and it is visible in the More panel", also.isShown)
                 val open = activity.findViewById<TextView>(R.id.toolResultOpen)
                 assertEquals(
-                    "B3: Open is the filled action",
-                    SwStyle.color(activity, R.color.sw_disc_ink),
+                    "Open is secondary to Share",
+                    SwStyle.color(activity, R.color.text_hologram_hi),
                     open.currentTextColor
                 )
                 val share = activity.findViewById<TextView>(R.id.toolResultShare)
                 assertEquals(
-                    "B3: Share is the secondary action",
-                    SwStyle.color(activity, R.color.text_hologram_hi),
+                    "Share is the sole filled action",
+                    SwStyle.color(activity, R.color.sw_disc_ink),
                     share.currentTextColor
                 )
             }
