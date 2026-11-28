@@ -10,7 +10,6 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.Sha256
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 
 /**
@@ -20,13 +19,19 @@ import java.io.IOException
  * an independent verifier before sealing. No engine dependency in this slice.
  */
 internal class DigitalStorage(private val context: Context) {
+    internal data class Stamp(val bytes: Long, val modified: Long, val device: Long,
+                              val inode: Long, val changed: Long)
+    internal data class Identity(val generation: String, val hash: String, val manifestHash: String,
+                                 val pdf: Stamp, val manifest: Stamp)
+    private data class Proof(val identity: Identity, val pages: List<PageRef>)
+
     companion object {
         const val LIVE = "digital_documents_v1"
         const val TRASH = "digital_trash_v1"
         const val ESCROW = "digital_import_discard_v1"
         const val STAGING = "digital_staging_v1"
         const val DRAFTS = "digital_drafts_v1"
-        const val PDF = "scan.pdf"
+        const val PDF = com.scanwhirl.app.util.PdfProtection.PDF_FILE
         const val META = "meta.txt"
         const val PAGES = "pages.v1"
         const val PURGE_INTENT = ".purge-intent"
@@ -106,13 +111,13 @@ internal class DigitalStorage(private val context: Context) {
             require(pages.map { it.id }.toSet().size == pages.size)
             pages.forEachIndexed { index, page ->
                 require(token(page.id) && page.index == index && page.rotation in setOf(0, 90, 180, 270))
-                require(page.originIndex == null || page.originIndex in 0 until MAX_PAGES)
+                require(page.originIndex == null || page.originIndex in pages.indices)
                 for (box in listOf(page.mediaBox, page.cropBox)) {
                     require(listOf(box.left, box.bottom, box.right, box.top).all { it.isFinite() && kotlin.math.abs(it) <= 1000000.0 })
                     require(box.right > box.left && box.top > box.bottom)
                 }
-                require(maxOf(page.mediaBox.left, page.cropBox.left) < minOf(page.mediaBox.right, page.cropBox.right) &&
-                    maxOf(page.mediaBox.bottom, page.cropBox.bottom) < minOf(page.mediaBox.top, page.cropBox.top))
+                require(page.cropBox.left >= page.mediaBox.left && page.cropBox.bottom >= page.mediaBox.bottom &&
+                    page.cropBox.right <= page.mediaBox.right && page.cropBox.top <= page.mediaBox.top)
             }
         }
         private fun boxText(box: PageBox) = listOf(box.left, box.bottom, box.right, box.top).joinToString(",")
@@ -143,8 +148,42 @@ internal class DigitalStorage(private val context: Context) {
                     a[3].toInt(), PageKind.valueOf(a[2]), a[4].takeUnless { it == "-" }?.toInt())
             }.also(::validatePages)
         }
-        /** Validate even if flags are off. Never repair from preview data. */
-        fun read(dir: File): ScanDocument? = try {
+        // A proof binds both immutable members to generation, declared hashes and
+        // filesystem identity. Moving a whole directory does not change its member inodes.
+        // Metadata-only edits deliberately do not invalidate it. No PDF IO on recognition.
+        private fun stamp(file: File): Stamp {
+            val stat = android.system.Os.stat(file.path)
+            return Stamp(file.length(), file.lastModified(), stat.st_dev, stat.st_ino, stat.st_ctime)
+        }
+        private val verified = java.util.concurrent.ConcurrentHashMap<Identity, Proof>()
+        @Volatile internal var verificationProbe: ((File) -> Unit)? = null
+        internal fun clearVerificationCacheForTests() { verified.clear() }
+        fun forget(dir: File) { identity(dir)?.let { verified.remove(it) } }
+        /** Cheap name recognition even before startup proof cache is populated. */
+        fun recognizedName(dir: File): String? = try {
+            if (!owned(dir)) null else boundedLines(File(dir, META), MAX_META_BYTES)
+                .takeIf { it.size >= 3 }?.firstOrNull()?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) { null }
+
+        /** Cheap recognition only. Cold/changed authority is unavailable until recovery verifies it. */
+        fun read(dir: File): ScanDocument? = readInternal(dir, false)
+        /** Full verification belongs to the producer, authenticated restore or startup recovery. */
+        fun verify(dir: File): ScanDocument? {
+            val key = identity(dir)
+            val result = readInternal(dir, true)
+            if (result == null && key != null) verified.remove(key)
+            return result
+        }
+        fun identity(dir: File): Identity? = try {
+            val meta = boundedLines(File(dir, META), MAX_META_BYTES)
+            val fields = meta.drop(3).associate { it.substringBefore('=') to it.substringAfter('=') }
+            val pdf = File(dir, PDF)
+            val manifest = File(dir, PAGES)
+            require(owned(dir) && owned(pdf) && owned(manifest) && pdf.isFile && manifest.isFile)
+            Identity(requireNotNull(fields["pdf_generation"]), requireNotNull(fields["pdf_sha256"]),
+                requireNotNull(fields["page_manifest_sha256"]), stamp(pdf), stamp(manifest))
+        } catch (_: Exception) { null }
+        private fun readInternal(dir: File, full: Boolean): ScanDocument? = try {
             require(owned(dir) && dir.isDirectory)
             val names = dir.listFiles() ?: throw IOException("Cannot list digital document")
             // No locked/Vault or other authoritative members until W7b-7. Markers
@@ -170,10 +209,24 @@ internal class DigitalStorage(private val context: Context) {
             require(shaPattern.matches(hash) && token(generation) && bytes in 1..MAX_PDF_BYTES)
             val pdf = File(dir, PDF)
             val manifest = File(dir, PAGES)
-            require(owned(pdf) && pdf.isFile && pdf.length() == bytes && Sha256.of(pdf) == hash)
+            require(owned(pdf) && pdf.isFile && pdf.length() == bytes)
             require(owned(manifest) && manifest.isFile && manifest.length() in 1..MAX_MANIFEST_BYTES)
-            require(Sha256.of(manifest) == m["page_manifest_sha256"])
-            val pages = decodePages(manifest, hash)
+            val manifestHash = requireNotNull(m["page_manifest_sha256"])
+            require(shaPattern.matches(manifestHash))
+            val key = Identity(generation, hash, manifestHash, stamp(pdf), stamp(manifest))
+            val pages = if (full) {
+                verificationProbe?.invoke(pdf)
+                require(boundedHash(pdf) == hash && Sha256.of(manifest) == manifestHash)
+                val decoded = decodePages(manifest, hash)
+                require(identity(dir) == key)
+                require(decoded.size == m["pdf_pages"]?.toInt())
+                verified[key] = Proof(key, decoded)
+                decoded
+            } else {
+                val proof = verified[key]
+                require(proof?.identity == key)
+                requireNotNull(proof).pages
+            }
             require(pages.size == m["pdf_pages"]?.toInt())
             val organised = LibraryMeta.read(lines)
             val revision = maxOf(meta.lastModified(), pdf.lastModified(), manifest.lastModified())
@@ -225,9 +278,29 @@ internal class DigitalStorage(private val context: Context) {
         return flags.getBoolean("digital_store_read", false) && flags.getBoolean("digital_import", false)
     }
 
+    internal data class PurgeProof(val lines: List<String>, val stamps: Map<String, Stamp>)
+
+    /** Read only bounded marker and filesystem stamps. No PDF content IO. */
+    private fun purgeState(hidden: File): PurgeProof? {
+        val trash = existingRoot(TRASH)
+        if (!owned(trash) || !isDirectChild(trash, hidden) || !owned(hidden) ||
+            !hidden.name.startsWith(".purge-") || !hidden.isDirectory) return null
+        val files = hidden.listFiles() ?: return null
+        if (files.isEmpty()) return PurgeProof(emptyList(), emptyMap())
+        val marker = File(hidden, PURGE_INTENT)
+        val lines = try { boundedLines(marker, 512) } catch (_: Exception) { return null }
+        if (lines.size != 4 || lines[0] != "scanwhirl-digital-purge-v1" ||
+            lines[1] != hidden.name || !token(lines[2]) || !shaPattern.matches(lines[3])) return null
+        val allowed = members + listOf(".ready", ".intent", "meta.txt.tmp", ".ready.tmp",
+            "trashed.txt", "trashed.txt.tmp", ".import-discard", ".import-discard.tmp", PURGE_INTENT, "$PURGE_INTENT.tmp")
+        if (!files.all { owned(it) && it.isFile && it.name in allowed }) return null
+        return try { PurgeProof(lines, files.associate { it.name to stamp(it) }) } catch (_: Exception) { null }
+    }
+
     /** Called under repository writer locks, after a user-authorized delete/expiry. */
-    fun beginPurge(dir: File, hidden: File) {
+    fun beginPurge(dir: File, hidden: File): PurgeProof {
         val doc = read(dir) ?: throw IOException("Digital document unavailable")
+        val authority = identity(dir) ?: throw IOException("Digital document unavailable")
         val trash = root(TRASH)
         if (hidden.parentFile != trash || !isDirectChild(trash, hidden) ||
             !hidden.name.startsWith(".purge-") || trash.list()?.contains(hidden.name) == true)
@@ -236,29 +309,38 @@ internal class DigitalStorage(private val context: Context) {
         Durable.atomicWriteText(File(dir, PURGE_INTENT), text)
         Durable.syncDir(dir)
         OpFaults.at("digital:purge_marked")
-        if (!dir.renameTo(hidden)) throw IOException("Could not stage digital deletion")
+        if (identity(dir) != authority || !dir.renameTo(hidden)) throw IOException("Could not stage digital deletion")
         Durable.syncDir(dir.parentFile!!)
         Durable.syncDir(trash)
+        val proof = purgeState(hidden) ?: throw IOException("Digital purge marker unavailable")
+        // Whole directory move carries the cached, verified PDF unchanged.
+        if (proof.stamps[PDF] != authority.pdf || proof.stamps[PAGES] != authority.manifest)
+            throw IOException("Digital purge authority changed")
+        verified.remove(authority)
+        return proof
+    }
+
+    /** On recovery only: prove surviving bytes outside the writer lock. */
+    fun verifyPurge(hidden: File): PurgeProof? {
+        val proof = purgeState(hidden) ?: return null
+        val pdf = File(hidden, PDF)
+        if (proof.stamps.containsKey(PDF) &&
+            (pdf.length() !in 1..MAX_PDF_BYTES || boundedHash(pdf) != proof.lines[3])) return null
+        val meta = File(hidden, META)
+        if (proof.stamps.containsKey(META)) {
+            val lines = try { boundedLines(meta, MAX_META_BYTES) } catch (_: Exception) { return null }
+            if (lines.drop(3).filter { it.startsWith("pdf_generation=") } != listOf("pdf_generation=${proof.lines[2]}") ||
+                lines.drop(3).filter { it.startsWith("pdf_sha256=") } != listOf("pdf_sha256=${proof.lines[3]}")) return null
+        }
+        return proof.takeIf { purgeState(hidden) == proof }
     }
 
     /** Marker is deleted last. Unknown, linked or inconsistent payload is retained. */
-    fun finishPurge(hidden: File): Boolean {
-        val trash = existingRoot(TRASH)
-        if (!owned(trash) || !isDirectChild(trash, hidden) || !owned(hidden) ||
-            !hidden.name.startsWith(".purge-") || !hidden.isDirectory) return false
-        val files = hidden.listFiles() ?: return false
-        if (files.isEmpty()) return hidden.delete()
+    fun finishPurge(hidden: File, proof: PurgeProof): Boolean {
+        if (purgeState(hidden) != proof) return false
+        if (proof.stamps.isEmpty()) return hidden.delete()
         val marker = File(hidden, PURGE_INTENT)
-        val lines = try { boundedLines(marker, 512) } catch (_: Exception) { return false }
-        if (lines.size != 4 || lines[0] != "scanwhirl-digital-purge-v1" ||
-            lines[1] != hidden.name || !token(lines[2]) || !shaPattern.matches(lines[3])) return false
-        val allowed = members + listOf(".ready", ".intent", "meta.txt.tmp", ".ready.tmp",
-            "trashed.txt", "trashed.txt.tmp", ".import-discard", ".import-discard.tmp", PURGE_INTENT, "$PURGE_INTENT.tmp")
-        if (!files.all { owned(it) && it.isFile && it.name in allowed }) return false
-        val pdf = File(hidden, PDF)
-        if (pdf.exists() && (pdf.length() !in 1..MAX_PDF_BYTES || boundedHash(pdf) != lines[3])) return false
-        val full = read(hidden)
-        if (full != null && (full.contentGeneration != lines[2] || full.contentSha256 != lines[3])) return false
+        val files = hidden.listFiles() ?: return false
         for (file in files.filter { it.name != PURGE_INTENT }) {
             if (!file.delete()) return false
             OpFaults.at("digital:purge_member:${file.name}")
@@ -267,31 +349,17 @@ internal class DigitalStorage(private val context: Context) {
         if (!marker.delete()) return false
         Durable.syncDir(hidden)
         if (!hidden.delete()) return false
-        Durable.syncDir(trash)
+        Durable.syncDir(existingRoot(TRASH))
         return true
     }
 
     /** Bounded copy of immutable input, verify staged bytes, not the caller's path. */
     fun writeVerified(dir: File, source: File, name: String, generation: String,
-                      verify: (File) -> List<PageRef>): ScanDocument {
+                      copyPdf: (File, File) -> Unit, verify: (File) -> List<PageRef>): ScanDocument {
         require(token(generation) && name.isNotBlank() && name.length <= 512 && '\n' !in name && '\r' !in name)
         require(source.isFile && source.length() in 1..MAX_PDF_BYTES)
         val pdf = File(dir, PDF)
-        source.inputStream().use { input ->
-            FileOutputStream(pdf).use { output ->
-                val buffer = ByteArray(64 * 1024)
-                var total = 0L
-                while (true) {
-                    if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
-                    val n = input.read(buffer)
-                    if (n < 0) break
-                    total += n
-                    if (total > MAX_PDF_BYTES) throw IOException("Digital PDF too large")
-                    output.write(buffer, 0, n)
-                }
-                Durable.syncStream(output, pdf)
-            }
-        }
+        copyPdf(source, dir)
         OpFaults.at("digital:pdf_synced")
         val hash = Sha256.of(pdf)
         val pages = verify(pdf)
@@ -314,6 +382,6 @@ internal class DigitalStorage(private val context: Context) {
         }
         Durable.writeFile(File(dir, META), meta.toByteArray(Charsets.UTF_8))
         OpFaults.at("digital:meta_synced")
-        return read(dir) ?: throw IOException("Digital verification failed")
+        return verify(dir) ?: throw IOException("Digital verification failed")
     }
 }

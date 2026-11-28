@@ -228,7 +228,15 @@ class ImportDiscardStore(
     }
 
     /** Reconciles interrupted work and returns every unexpired durable Undo token. Off main. */
-    fun recover(): List<Token> = repo.withImportDiscardLock {
+    fun recover(): List<Token> {
+        // Escrow is recovered before normal library startup. Verify a cold payload
+        // (or its already-restored live member) on the recovery worker, not under locks.
+        repo.digitalStorage.dirs(DigitalStorage.ESCROW).filter { KEY.matches(it.name) }.forEach { dir ->
+            val payload = File(dir, "document")
+            val target = if (payload.isDirectory) payload else active(idOf(dir), true)
+            if (target.isDirectory && DigitalStorage.read(target) == null) DigitalStorage.verify(target)
+        }
+        return repo.withImportDiscardLock {
         val pending = mutableListOf<Token>()
         (root.listFiles().orEmpty().toList() + digitalRoot.listFiles().orEmpty())
             .filter { it.isDirectory && KEY.matches(it.name) }.forEach { dir ->
@@ -248,6 +256,7 @@ class ImportDiscardStore(
             }
         }
         pending
+        }
     }
 
     fun pending(): List<Token> = recover()

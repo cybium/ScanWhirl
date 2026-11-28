@@ -101,6 +101,31 @@ class ScanRepository(private val context: Context) {
             File(context.filesDir, ".vault_pending_purge/$id").exists() ||
             digitalStorage.reserves(id, ignoreStage)
 
+    /** Canonical PDF writers stay repository-owned; never overwrite a published PDF. */
+    internal fun copyDigitalStagePdf(source: File, dir: File) {
+        require(dir.parentFile == digitalStorage.existingRoot(DigitalStorage.STAGING) &&
+            DigitalStorage.owned(dir) && DigitalStorage.safeId(dir.name) && dir.isDirectory)
+        require(source.isFile && source.length() in 1..DigitalStorage.MAX_PDF_BYTES)
+        val pdf = File(dir, DigitalStorage.PDF)
+        if (dir.list()?.contains(DigitalStorage.PDF) == true || !DigitalStorage.owned(pdf))
+            throw IOException("Digital staging PDF already exists")
+        source.inputStream().use { input ->
+            FileOutputStream(pdf).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > DigitalStorage.MAX_PDF_BYTES) throw IOException("Digital PDF too large")
+                    output.write(buffer, 0, n)
+                }
+                Durable.syncStream(output, pdf)
+            }
+        }
+    }
+
     /** Unsupported digital operations must not reach a JPEG builder. */
     private fun rasterDir(id: String): File {
         if (digitalStorage.hasLive(id)) throw IOException("This operation does not yet support digital PDFs")
@@ -440,7 +465,7 @@ class ScanRepository(private val context: Context) {
     private fun uniqueDocumentName(dir: File, proposed: String): String =
         DocumentNames.unique(proposed, iterateLiveDocs()
             .filter { it.absoluteFile != dir.absoluteFile }
-            .mapNotNull { loadDocument(it)?.name })
+            .mapNotNull { if (it.parentFile?.name == DigitalStorage.LIVE) DigitalStorage.recognizedName(it) else loadDocument(it)?.name })
 
     /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
     internal fun resolveNameBeforePublish(dir: File) {
@@ -1365,9 +1390,9 @@ class ScanRepository(private val context: Context) {
                     val root = if (digitalStorage.hasLive(id)) digitalStorage.root(DigitalStorage.TRASH) else trashDir
                     val hidden = File(root, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
                     if (root != trashDir) {
-                        digitalStorage.beginPurge(dir, hidden)
+                        val proof = digitalStorage.beginPurge(dir, hidden)
                         trashFault(TrashStage.PURGE_HIDDEN)
-                        if (!digitalStorage.finishPurge(hidden)) throw IOException("Could not finish removing digital copy")
+                        if (!digitalStorage.finishPurge(hidden, proof)) throw IOException("Could not finish removing digital copy")
                     } else if (dir.renameTo(hidden)) {
                         trashFault(TrashStage.PURGE_HIDDEN)
                         if (!hidden.deleteRecursively()) throw IOException("Could not finish removing the copy")
@@ -1574,9 +1599,9 @@ class ScanRepository(private val context: Context) {
             val originalId = trashedIn(src)?.originalId
             val hidden = File(src.parentFile, "$PURGE_PREFIX${src.name}-${UUID.randomUUID().toString().take(8)}")
             if (key.startsWith("digital:")) {
-                digitalStorage.beginPurge(src, hidden)
+                val proof = digitalStorage.beginPurge(src, hidden)
                 trashFault(TrashStage.PURGE_HIDDEN)
-                if (!digitalStorage.finishPurge(hidden)) throw IOException("Could not delete digital item")
+                if (!digitalStorage.finishPurge(hidden, proof)) throw IOException("Could not delete digital item")
                 originalId?.let { dropDerivedCaches(it) }
                 return
             }
@@ -1668,13 +1693,21 @@ class ScanRepository(private val context: Context) {
      * they belong to an interrupted Replace and [recoverOperations] puts them back.
      */
     fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
+        // Cold Trash proofs are established on the recovery worker, before taking Trash lock.
+        digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }.forEach {
+            if (DigitalStorage.read(it) == null) DigitalStorage.verify(it)
+        }
+        val digitalPurges = digitalStorage.dirs(DigitalStorage.TRASH).filter { it.name.startsWith(PURGE_PREFIX) }
+            .mapNotNull { dir ->
+                try { digitalStorage.verifyPurge(dir)?.let { dir to it } } catch (_: IOException) { null }
+            }
         var finished = 0
         synchronized(TRASH_LOCK) {
             trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
             }
-            digitalStorage.dirs(DigitalStorage.TRASH).filter { it.name.startsWith(PURGE_PREFIX) }.forEach { f ->
-                try { if (digitalStorage.finishPurge(f)) finished++ } catch (_: IOException) { /* retain */ }
+            digitalPurges.forEach { (dir, proof) ->
+                try { if (digitalStorage.finishPurge(dir, proof)) finished++ } catch (_: IOException) { /* retain */ }
             }
             (trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().toList() +
                 digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }).forEach { dir ->
@@ -1697,8 +1730,8 @@ class ScanRepository(private val context: Context) {
                     val removed = if (trashed.document.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL) {
                         try {
                             val hidden = File(dir.parentFile, "$PURGE_PREFIX${dir.name}-${UUID.randomUUID().toString().take(8)}")
-                            digitalStorage.beginPurge(dir, hidden)
-                            digitalStorage.finishPurge(hidden)
+                            val proof = digitalStorage.beginPurge(dir, hidden)
+                            digitalStorage.finishPurge(hidden, proof)
                         } catch (_: IOException) { false }
                     } else dir.deleteRecursively()
                     if (removed) {

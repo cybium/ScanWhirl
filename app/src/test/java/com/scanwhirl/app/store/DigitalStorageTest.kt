@@ -46,6 +46,9 @@ class DigitalStorageTest {
 
     @After fun tearDown() {
         OpFaults.reset()
+        DigitalStorage.verificationProbe = null
+        DigitalStorage.clearVerificationCacheForTests()
+        FullBackup.archiveStreamProbe = null
         Durable.resetForTests()
         ScanRepository.resetTestSeams()
         ImportDiscardStore.fault = {}
@@ -317,6 +320,179 @@ class DigitalStorageTest {
         repo.renameDocument(doc.id, repo.getDocument(old.name)!!.name)
         val names = repo.listDocuments().map { it.name }
         assertEquals(names.toSet().size, names.size)
+    }
+
+    @Test fun listingAndMetadataEditsNeverHashPdfAndRecoveryRevalidatesColdCache() {
+        enable()
+        val doc = publish()
+        var fullReads = 0
+        DigitalStorage.verificationProbe = {
+            assertFalse("full verification must run outside writer lock", Thread.holdsLock(ScanRepository.PDF_LOCK))
+            fullReads++
+        }
+        repeat(10) {
+            assertEquals(doc.contentSha256, repo.getDocument(doc.id)!!.contentSha256)
+            assertEquals(1, repo.listDocuments().size)
+            repo.renameDocument(doc.id, "New title $it")
+            repo.setTags(doc.id, listOf("tag"))
+        }
+        assertEquals("listing and metadata changes must not hash PDF", 0, fullReads)
+        DigitalStorage.clearVerificationCacheForTests()
+        assertTrue(repo.digitalStorage.hasLive(doc.id))
+        repo.digitalTransaction.recover()
+        assertEquals(1, fullReads)
+        assertEquals(doc.contentSha256, repo.getDocument(doc.id)!!.contentSha256)
+        // Same-size mutation invalidates the generation-bound cache on changed file stamp.
+        val pdf = doc.pdfFile
+        val oldTime = pdf.lastModified()
+        val bytes = pdf.readBytes()
+        bytes[0] = 0
+        pdf.writeBytes(bytes)
+        assertTrue(pdf.setLastModified(oldTime + 2000))
+        assertNull(repo.getDocument(doc.id))
+        repo.digitalTransaction.recover()
+        assertNull(repo.getDocument(doc.id))
+    }
+
+    @Test fun fullVerificationAndProducerDoNotHoldWriterLocks() {
+        enable()
+        var checks = 0
+        DigitalStorage.verificationProbe = {
+            assertFalse(Thread.holdsLock(ScanRepository.PDF_LOCK))
+            checks++
+        }
+        val doc = repo.digitalTransaction.publish(input, "Off lock", UUID.randomUUID().toString()) {
+            assertFalse(Thread.holdsLock(ScanRepository.PDF_LOCK))
+            verified(it)
+        }
+        assertTrue(checks > 0)
+        assertNotNull(repo.getDocument(doc.id))
+        repo.digitalTransaction.recover()
+        assertTrue(checks > 1)
+    }
+
+    @Test fun rasterBackupStreamDoesNotBlockConcurrentRepositoryWriter() {
+        val old = raster()
+        val archive = File(app.cacheDir, "lock-regression-${UUID.randomUUID()}.swbackup")
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        var exercised = false
+        try {
+            FullBackup.archiveStreamProbe = { path ->
+                if (path.endsWith("page_000.jpg") && !exercised) {
+                    exercised = true
+                    assertFalse("raster stream must not own PDF lock", Thread.holdsLock(ScanRepository.PDF_LOCK))
+                    executor.submit {
+                        repo.withImportDiscardLock { repo.renameDocument(old.name, "Renamed while streaming") }
+                    }.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
+            assertEquals(1, FullBackup(app).write(archive, "fictional password 123", FullBackup.Wrap.PASSWORD).documents)
+            assertTrue(exercised)
+            assertEquals("Renamed while streaming", repo.getDocument(old.name)!!.name)
+        } finally {
+            FullBackup.archiveStreamProbe = null
+            executor.shutdownNow()
+            archive.delete()
+        }
+    }
+
+    @Test fun digitalBackupAbortsWhenSnapshotChangesDuringUnlockedStream() {
+        enable()
+        val doc = publish()
+        val archive = File(app.cacheDir, "changed-snapshot-${UUID.randomUUID()}.swbackup")
+        try {
+            FullBackup.archiveStreamProbe = { path ->
+                if (path.endsWith(DigitalStorage.PDF)) {
+                    assertFalse(Thread.holdsLock(ScanRepository.PDF_LOCK))
+                    repo.renameDocument(doc.id, "Changed during backup")
+                }
+            }
+            try {
+                FullBackup(app).write(archive, "fictional password 123", FullBackup.Wrap.PASSWORD)
+                fail("changed digital snapshot must not publish backup")
+            } catch (_: IOException) {}
+            assertFalse(archive.exists())
+            assertEquals("Changed during backup", repo.getDocument(doc.id)!!.name)
+        } finally { FullBackup.archiveStreamProbe = null; archive.delete() }
+    }
+
+    @Test fun hostileSelfConsistentGeometryAndProvenanceCannotBecomeAuthority() {
+        enable()
+        for (badCrop in listOf(true, false)) {
+            val doc = publish()
+            val dir = doc.pdfFile.parentFile!!
+            val manifest = File(dir, DigitalStorage.PAGES)
+            val lines = manifest.readLines().toMutableList()
+            val page = lines[2].split('\t').toMutableList()
+            if (badCrop) page[6] = "-1,0,595,842" else page[4] = "1"
+            lines[2] = page.joinToString("\t")
+            manifest.writeText(lines.joinToString("\n", postfix = "\n"))
+            val meta = File(dir, DigitalStorage.META)
+            meta.writeText(meta.readLines().joinToString("\n", postfix = "\n") {
+                if (it.startsWith("page_manifest_sha256=")) "page_manifest_sha256=${Sha256.of(manifest)}" else it
+            })
+            assertNull(DigitalStorage.verify(dir))
+            assertNull(repo.getDocument(doc.id))
+            assertTrue(doc.pdfFile.isFile)
+        }
+    }
+
+    @Test fun agedOrphansReclaimOnlyEmptyOrIndependentlyVerifiedDuplicate() {
+        enable()
+        val doc = publish()
+        val root = repo.digitalStorage.root(DigitalStorage.STAGING)
+        val empty = File(root, UUID.randomUUID().toString()).apply { mkdir() }
+        val duplicate = File(root, doc.id)
+        assertTrue(doc.pdfFile.parentFile!!.copyRecursively(duplicate))
+        File(duplicate, ".intent").writeText("scanwhirl-digital-intent-v1\n${doc.id}\n${doc.contentGeneration}\n${doc.contentSha256}\nimport\n")
+        val last = File(root, UUID.randomUUID().toString()).apply { mkdir() }
+        File(last, DigitalStorage.PDF).writeBytes(input.readBytes())
+        File(last, ".intent").writeText("scanwhirl-digital-intent-v1\n${last.name}\n${last.name}\n${Sha256.of(input)}\nimport\n")
+        val recent = File(root, UUID.randomUUID().toString()).apply { mkdir() }
+        val unknown = File(root, UUID.randomUUID().toString()).apply { mkdir() }
+        File(unknown, ".ready.tmp").writeText("possible torn seal")
+        val old = System.currentTimeMillis() - DigitalTransaction.ORPHAN_AGE_MS - 60_000
+        for (dir in listOf(empty, duplicate, last, unknown)) {
+            dir.listFiles().orEmpty().forEach { assertTrue(it.setLastModified(old)) }
+            assertTrue(dir.setLastModified(old))
+        }
+        repo.digitalTransaction.recover()
+        assertFalse(empty.exists())
+        assertFalse(duplicate.exists())
+        assertTrue(last.exists())
+        assertTrue(recent.exists())
+        assertTrue(unknown.exists())
+        assertArrayEquals(input.readBytes(), repo.getDocument(doc.id)!!.pdfFile.readBytes())
+    }
+
+    @Test fun hostileVerifierRejectionCannotSealEvenAfterRetryOrCrash() {
+        enable()
+        input.writeText("%PDF-1.7\nmalformed xref /Encrypt /JavaScript /Launch")
+        val id = UUID.randomUUID().toString()
+        var sealAttempts = 0
+        OpFaults.hook = { if (it == "digital:before_seal") sealAttempts++ }
+        try {
+            repo.digitalTransaction.publish(input, "Hostile fixture", id) {
+                // A test-only stand-in for W7b-1/3 syntax/protection classifier.
+                assertTrue(it.readText().contains("/Encrypt"))
+                throw SimulatedProcessDeath("rejecting verifier interrupted")
+            }
+            fail("must not publish an unverified payload")
+        } catch (_: SimulatedProcessDeath) {}
+        val stage = File(repo.digitalStorage.existingRoot(DigitalStorage.STAGING), id)
+        assertTrue(stage.exists())
+        assertFalse(File(stage, ".ready").exists())
+        repo.digitalTransaction.recover()
+        assertNull(repo.getDocument(id))
+        try {
+            repo.digitalTransaction.publish(input, "Hostile fixture", id) {
+                throw IOException("reject malformed/encrypted PDF")
+            }
+            fail("rejecting verifier must not publish")
+        } catch (_: IOException) {}
+        assertEquals(0, sealAttempts)
+        assertNull(repo.getDocument(id))
+        assertTrue(repo.listDocuments().isEmpty())
     }
 
 }

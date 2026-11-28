@@ -189,25 +189,18 @@ class FullBackup(
             val salt = VaultCrypto.newSalt()
             val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
             try {
-                var archiveVersion = 2
-                var digitalCount = 0
+                val digitalSnapshot = repo.withImportDiscardLock { snapshotDigital() }
+                val archiveVersion = if (digitalSnapshot.isEmpty()) 2 else VERSION
+                val digitalCount = digitalSnapshot.size
                 DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
-                    repo.withImportDiscardLock {
-                        val root = digital.existingRoot(DigitalStorage.LIVE)
-                        if (!DigitalStorage.owned(root)) throw IOException("Digital storage unavailable")
-                        val dirs = root.listFiles().orEmpty().sortedBy { it.name }
-                        digitalCount = dirs.size
-                        if (dirs.isNotEmpty()) archiveVersion = VERSION
-                        writeEntry(out, "manifest.json", manifest(archiveVersion, digitalCount).toByteArray(Charsets.UTF_8))
-                        copyTree(out, docsDir, "documents")
-                        for (dir in dirs) {
-                            val doc = DigitalStorage.read(dir)
-                            if (!DigitalStorage.safeId(dir.name) || doc == null ||
-                                File(docsDir, dir.name).exists()) throw IOException("Digital document unavailable for backup")
-                            for (member in DigitalStorage.members) {
-                                writeFileEntry(out, "${DigitalStorage.LIVE}/${dir.name}/$member", File(dir, member))
-                            }
-                        }
+                    writeEntry(out, "manifest.json", manifest(archiveVersion, digitalCount).toByteArray(Charsets.UTF_8))
+                    // Raster and digital payload streaming must never hold repository writer locks.
+                    copyTree(out, docsDir, "documents")
+                    for (entry in digitalSnapshot) {
+                        val prefix = "${DigitalStorage.LIVE}/${entry.dir.name}"
+                        writeEntry(out, "$prefix/${DigitalStorage.META}", entry.meta)
+                        writeFileEntry(out, "$prefix/${DigitalStorage.PDF}", File(entry.dir, DigitalStorage.PDF), entry.identity.hash)
+                        writeFileEntry(out, "$prefix/${DigitalStorage.PAGES}", File(entry.dir, DigitalStorage.PAGES), entry.identity.manifestHash)
                     }
                     copyTree(out, sigDir, "signatures")
                     copyTree(out, stampDir, "stamps")
@@ -217,6 +210,7 @@ class FullBackup(
                     writeEntry(out, "settings.json", settings().toByteArray(Charsets.UTF_8))
                     out.writeByte(END)
                 }
+                repo.withImportDiscardLock { checkDigitalSnapshot(digitalSnapshot) }
                 target.parentFile?.mkdirs()
                 val part = File(target.parentFile, target.name + ".part")
                 try {
@@ -237,8 +231,11 @@ class FullBackup(
                         }
                     }
                     Durable.syncFile(part)
-                    if (!part.renameTo(target)) throw IOException("Could not write the backup file")
-                    Durable.syncDir(target.parentFile)
+                    repo.withImportDiscardLock {
+                        checkDigitalSnapshot(digitalSnapshot)
+                        if (!part.renameTo(target)) throw IOException("Could not write the backup file")
+                        Durable.syncDir(target.parentFile)
+                    }
                 } catch (e: Exception) {
                     part.delete()
                     target.delete()
@@ -266,6 +263,32 @@ class FullBackup(
         } finally {
             plain.delete()
         }
+    }
+
+    private data class DigitalBackupEntry(val dir: File, val identity: DigitalStorage.Identity, val meta: ByteArray)
+
+    private fun snapshotDigital(): List<DigitalBackupEntry> {
+        val root = digital.existingRoot(DigitalStorage.LIVE)
+        if (!DigitalStorage.owned(root)) throw IOException("Digital storage unavailable")
+        val dirs = root.listFiles().orEmpty().sortedBy { it.name }
+        return dirs.map { dir ->
+            val doc = DigitalStorage.read(dir)
+            val identity = DigitalStorage.identity(dir)
+            if (!DigitalStorage.safeId(dir.name) || doc == null || identity == null ||
+                File(docsDir, dir.name).exists()) throw IOException("Digital document unavailable for backup")
+            val meta = File(dir, DigitalStorage.META)
+            val bytes = DigitalStorage.boundedLines(meta, DigitalStorage.MAX_META_BYTES)
+                .joinToString("\n", postfix = "\n").toByteArray(Charsets.UTF_8)
+            if (DigitalStorage.identity(dir) != identity) throw IOException("Digital document changed during backup snapshot")
+            DigitalBackupEntry(dir, identity, bytes)
+        }
+    }
+
+    private fun checkDigitalSnapshot(snapshot: List<DigitalBackupEntry>) {
+        val current = snapshotDigital()
+        if (current.size != snapshot.size || current.zip(snapshot).any { (a, b) ->
+                a.dir != b.dir || a.identity != b.identity || !a.meta.contentEquals(b.meta)
+            }) throw IOException("Digital library changed during backup")
     }
 
     /**
@@ -574,7 +597,9 @@ class FullBackup(
         writeFileEntry(out, path, file)
 
     /** Streams one file in 64 KiB pieces: a 5 MB page never sits in memory. */
-    private fun writeFileEntry(out: DataOutputStream, path: String, file: File) {
+    private fun writeFileEntry(out: DataOutputStream, path: String, file: File, expectedHash: String? = null) {
+        archiveStreamProbe?.invoke(path)
+        val digest = expectedHash?.let { java.security.MessageDigest.getInstance("SHA-256") }
         out.writeByte(ENTRY)
         out.writeUTF(path)
         // F4 (found by the MiniMax calibration): the length is declared before the bytes, so
@@ -590,13 +615,17 @@ class FullBackup(
                 val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
                 if (read < 0) throw java.io.IOException("A file changed while the backup was being written: $path")
                 out.write(buffer, 0, read)
+                digest?.update(buffer, 0, read)
                 left -= read
             }
             if (input.read() >= 0) {
                 throw java.io.IOException("A file changed while the backup was being written: $path")
             }
         }
+        if (digest != null && digest.digest().joinToString("") { "%02x".format(it) } != expectedHash)
+            throw IOException("Digital member changed during backup")
     }
+
 
     /** Returns the number of oversized text entries that were skipped, for an honest report. */
     private fun replay(archive: File, staging: File): Int {
@@ -785,24 +814,22 @@ class FullBackup(
         staging.resolve(DigitalStorage.LIVE).listFiles().orEmpty().sortedBy { it.name }.forEach { input ->
             restoreLimits.checkCancelled()
             val id = input.name
-            val validated = DigitalStorage.read(input.canonicalFile)
-            if (!DigitalStorage.safeId(id) || validated == null) {
+            if (!DigitalStorage.safeId(id)) {
                 c.docsFailed++
                 c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
                 return@forEach
             }
-            repo.withImportDiscardLock {
-                if (repo.getDocument(id) != null) {
-                    c.docsAlreadyHere++
-                    return@withImportDiscardLock
-                }
-                try {
-                    repo.digitalTransaction.restore(input.canonicalFile)
-                    c.documents++
-                } catch (_: Exception) {
-                    c.docsFailed++
-                    c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
-                }
+            val exists = repo.withImportDiscardLock { repo.getDocument(id) != null }
+            if (exists) {
+                c.docsAlreadyHere++
+                return@forEach
+            }
+            try {
+                repo.digitalTransaction.restore(input.canonicalFile)
+                c.documents++
+            } catch (_: Exception) {
+                c.docsFailed++
+                c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
             }
         }
 
@@ -1083,6 +1110,7 @@ class FullBackup(
         /** SEC1 1.3.0: test seam for the derived export-key wipe; null in production. */
         @androidx.annotation.VisibleForTesting
         internal var exportKeyWipeProbe: (() -> Unit)? = null
+        @Volatile internal var archiveStreamProbe: ((String) -> Unit)? = null
     }
 }
 
