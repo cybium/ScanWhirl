@@ -84,10 +84,11 @@ class PdfBoxEngine(
         dir.listFiles()?.forEach { it.delete() }
     }
 
-    /** Test-only visibility for the temp-hygiene assertions. */
+    /** Test-only visibility for this engine's temp-hygiene assertions. */
     internal fun stagedTempPaths(): List<File> =
-        (context.filesDir.listFiles { f -> f.name.startsWith(TEMP_PREFIX) }?.toList().orEmpty() +
-            (dir.listFiles()?.toList().orEmpty())).sortedBy { it.name }
+        (context.filesDir.listFiles { f ->
+            f.name.startsWith(TEMP_PREFIX) && f.name.contains("-$engineId-")
+        }?.toList().orEmpty() + (dir.listFiles()?.toList().orEmpty())).sortedBy { it.name }
 
     private fun temp(name: String): File {
         val fileName = "$TEMP_PREFIX$engineId-${sequence.incrementAndGet()}-$name.pdf"

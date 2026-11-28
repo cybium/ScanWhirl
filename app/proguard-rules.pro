@@ -77,14 +77,16 @@
 -dontwarn com.tom_roush.pdfbox.pdmodel.encryption.**
 
 # W7a engine is not yet called from any screen (W7b wiring is deferred), so R8
-# would remove the whole package from the minified APK. Keeping this package is
-# the single root; PDFBox/fontbox classes reachable from it are kept transitively.
+# would remove the whole package from the minified APK. Keep it for the
+# instrumented runtime check and the later UI integration.
 -keep class com.scanwhirl.app.pdf.engine.** { *; }
 
-# These two are reached through asset names / static initialisers rather than a
-# direct bytecode reference from the engine.
--keep class com.tom_roush.pdfbox.android.PDFBoxResourceLoader { *; }
--keep class com.tom_roush.pdfbox.pdmodel.font.Standard14Fonts { *; }
+# The AAR resolves fonts, filters and the resource loader from asset names and
+# service-style reflection. Keeping only the two reflective entry points is not
+# enough: R8 strips PDDocument and the smoke crashes with NoClassDefFoundError.
+# Keep the library intact; the size workflow re-measures this cost on every push.
+-keep class com.tom_roush.pdfbox.** { *; }
+-keep class com.tom_roush.fontbox.** { *; }
 
 # Kotlin runtime helpers used by the engine's compiled Kotlin classes.
 -keep class kotlin.jvm.internal.Intrinsics { *; }
