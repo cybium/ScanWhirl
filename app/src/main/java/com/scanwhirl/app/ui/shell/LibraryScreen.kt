@@ -2415,6 +2415,7 @@ class LibraryScreen(
             SwStyle.color(context, R.color.cyan_primary), bold = true
         ).apply {
             tag = "result-new-badge"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             text = context.getString(R.string.rs_new)
             background = SwStyle.rounded(context, SwStyle.color(context, R.color.rv_surface_2),
                 SwStyle.RADIUS_CONTROL_DP)
@@ -2423,6 +2424,8 @@ class LibraryScreen(
             info.addView(this, 0, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         }
         badge.isVisible = doc.id == revealId
+        if (doc.id == revealId)
+            card.contentDescription = context.getString(R.string.rs_new) + " · " + card.contentDescription
         card.setOnClickListener {
             if (selectionMode) {
                 toggleSelection(doc.id)

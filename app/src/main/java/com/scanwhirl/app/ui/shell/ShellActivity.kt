@@ -261,6 +261,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         navHost = buildNav()
         navHost.minimumHeight = SwStyle.dp(this, 100f)
+        // At 200 % the Scan disc is lifted above the pill; let it draw there while the pill
+        // keeps its own hit area and the four labels keep their full-width cells.
+        navHost.clipChildren = false
+        root.clipChildren = false
         root.addView(navHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
         // The gradient above is the first background. The optional photo decode starts only
@@ -504,12 +508,15 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
 
     private fun buildNav(): View {
         val container = FrameLayout(this)
+        // U5: at 200 % the four labels stay on one line each in weighted cells. The wider
+        // Library cell keeps "Library"/"कागज़ात" whole; the disc is lifted out of the pill.
+        val largeFont = resources.configuration.fontScale >= 1.6f
         val bar = LinearLayout(this).apply {
             id = R.id.swShellNav
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             // G6: the dock grows with wrapped labels instead of clipping them.
-            minimumHeight = SwStyle.dp(this@ShellActivity, 64f)
+            minimumHeight = SwStyle.dp(this@ShellActivity, if (largeFont) 56f else 64f)
             background = SwStyle.rounded(
                 this@ShellActivity,
                 // W5a: the nav is a themed surface, not a navy literal.
@@ -594,14 +601,18 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             id = R.id.swNavMe
         }
         // G6: cells wrap their labels; the bar (and dock) grows with them at 200 %.
-        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        // V2L device reflow: at 200 % a 86dp disc gap starves "Library" and "Tools" into
-        // mid-word breaks on a 393-411dp phone. Reclaim most of it for the four cells.
-        val discGap = if (resources.configuration.fontScale >= 1.6f) 68f else 86f
+        // U5: the disc no longer steals a mid-bar gap — it sits above the pill at 200 %.
+        // Library gets the widest cell at both scales because its single word is the longest.
+        bar.addView(libraryItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT,
+            if (largeFont) 1.3f else 1f))
+        bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT,
+            if (largeFont) 1f else 1f))
+        val discGap = if (largeFont) 0f else 86f
         bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, discGap), 1))
-        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT,
+            if (largeFont) 1f else 1f))
+        bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT,
+            if (largeFont) 0.7f else 1f))
         navItems = items
 
         container.addView(
@@ -610,16 +621,19 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.BOTTOM
-                val m = SwStyle.dp(this@ShellActivity, 12f)
-                setMargins(m, 0, m, SwStyle.dp(this@ShellActivity, 12f))
+                // U5: the lifted disc occupies the space above the pill, so the pill sits
+                // flush at the bottom in large type; its labels still own 48dp+ hit areas.
+                val side = SwStyle.dp(this@ShellActivity, if (largeFont) 4f else 12f)
+                val bottom = SwStyle.dp(this@ShellActivity, if (largeFont) 0f else 12f)
+                setMargins(side, 0, side, bottom)
             }
         )
-        val discSize = if (resources.configuration.fontScale >= 1.6f) 64f else 84f
         container.addView(buildDisc(), FrameLayout.LayoutParams(
-            SwStyle.dp(this, discSize), SwStyle.dp(this, discSize)
+            SwStyle.dp(this, 84f), SwStyle.dp(this, 84f)
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            topMargin = SwStyle.dp(this@ShellActivity, 2f)
+            // Lift only the action, never the label row: its bottom meets the pill's top.
+            topMargin = SwStyle.dp(this@ShellActivity, if (largeFont) -40f else 2f)
         })
         return container
     }

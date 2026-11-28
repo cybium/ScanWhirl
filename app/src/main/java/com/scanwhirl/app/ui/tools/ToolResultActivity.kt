@@ -469,7 +469,7 @@ class ToolResultActivity : BaseActivity() {
             setOnClickListener { handleBack() }
         })
         bar.addView(
-            SwStyle.text(this, 22f, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
+            SwStyle.text(this, SwType.TITLE_SP, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
                 id = R.id.rsTitle
                 text = when {
                     alreadyCompact -> getString(R.string.rs_not_smaller_title)
@@ -477,8 +477,6 @@ class ToolResultActivity : BaseActivity() {
                         getString(R.string.cp1_compress_header_missed)
                     else -> toolName
                 }
-                maxLines = 2
-                ellipsize = TextUtils.TruncateAt.END
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SwStyle.dp(this@ToolResultActivity, 8f)
@@ -486,6 +484,7 @@ class ToolResultActivity : BaseActivity() {
         )
         bar.addView(textAction(getString(R.string.tools_result_done)).apply {
             tag = "result-done"
+            isVisible = !alreadyCompact && !idCardFlow
             minimumWidth = SwStyle.dp(this@ToolResultActivity, SwStyle.TOUCH_MIN_DP)
             setOnClickListener { showInLibrary() }
         })
@@ -610,6 +609,7 @@ class ToolResultActivity : BaseActivity() {
         errorView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
             id = R.id.toolResultError
             isVisible = false
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         column.addView(errorView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1038,30 +1038,21 @@ class ToolResultActivity : BaseActivity() {
                 view.setOnClickListener(null)
                 view.isClickable = false
             } else {
-                val firstLine = full.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
-                val words = firstLine.split(Regex("\\s+")).filter { it.isNotEmpty() }
-                val summary = if (words.size > MORE_NOTE_WORDS) {
-                    words.take(MORE_NOTE_WORDS).joinToString(" ") + "…"
-                } else firstLine
                 view.text = getString(R.string.rs_details_title)
-                if (summary != full) {
-                    val d = androidx.appcompat.content.res.AppCompatResources
-                        .getDrawable(this, R.drawable.ic_sym_info)?.mutate()
-                    val size = SwStyle.dp(this, 18f)
-                    d?.setBounds(0, 0, size, size)
-                    d?.setTint(SwStyle.color(this, R.color.sw_text_secondary))
-                    view.setCompoundDrawablesRelative(null, null, d, null)
-                    view.compoundDrawablePadding = SwStyle.dp(this, 6f)
-                    view.contentDescription = summary + ". " + getString(R.string.rs_details_title)
-                    view.isClickable = true
-                    view.setOnClickListener {
-                        com.scanwhirl.app.ui.kit.SwSheet.note(this, getString(R.string.rs_details_title), full)
-                    }
-                } else {
-                    view.setCompoundDrawablesRelative(null, null, null, null)
-                    view.contentDescription = null
-                    view.setOnClickListener(null)
-                    view.isClickable = false
+                val d = androidx.appcompat.content.res.AppCompatResources
+                    .getDrawable(this, R.drawable.ic_sym_info)?.mutate()
+                val size = SwStyle.dp(this, SwStyle.SPACE_6_DP)
+                d?.setBounds(0, 0, size, size)
+                d?.setTint(SwStyle.color(this, R.color.sw_text_secondary))
+                view.setCompoundDrawablesRelative(null, null, d, null)
+                view.compoundDrawablePadding = SwStyle.dp(this, SwStyle.SPACE_2_DP)
+                view.contentDescription = getString(R.string.rs_details_title)
+                view.isClickable = true
+                view.minimumHeight = SwStyle.dp(this, SwStyle.TOUCH_MIN_DP)
+                view.gravity = Gravity.CENTER_VERTICAL
+                SwStyle.asButton(view)
+                view.setOnClickListener {
+                    SwSheet.note(this, getString(R.string.rs_details_title), full)
                 }
             }
         }
@@ -1137,6 +1128,7 @@ class ToolResultActivity : BaseActivity() {
         val where = when {
             docIds.any { repo.getDocument(it) != null } -> getString(R.string.rs_library_as, name) +
                 when {
+                    receiptSourceId?.let { it in docIds } == true -> ""
                     sourceKept -> getString(R.string.rs_saved_suffix_kept).removePrefix("”")
                     receiptSourceId != null -> getString(R.string.rs_saved_suffix_missing).removePrefix("”")
                     else -> ""
@@ -1159,6 +1151,8 @@ class ToolResultActivity : BaseActivity() {
         if (docIds.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
             previewHost.isVisible = true
             showFileCard(files.first())
+            if (mime == "application/pdf" && toolId !in setOf("protect", "unlock"))
+                bindPdfFilePreview(files.first())
             return
         }
         if (toolId in noVisualTools || alreadyCompact) return
@@ -1192,6 +1186,51 @@ class ToolResultActivity : BaseActivity() {
                 summary.text = getString(R.string.rs_image_facts, measured.second, measured.third,
                     files.firstOrNull()?.extension?.uppercase(java.util.Locale.ROOT).orEmpty(), size)
             }
+        }
+    }
+
+    /** A file-only PDF still gets its real first page; encrypted/unreadable files keep the type card. */
+    private fun bindPdfFilePreview(file: File) {
+        lifecycleScope.launch {
+            val rendered = withContext(Dispatchers.IO) {
+                synchronized(ScanRepository.PDF_LOCK) {
+                    val source = receiptSourceId?.let { repo.getDocument(it) }
+                    if (source?.isLocked == true || source?.isVaulted == true ||
+                        !file.canonicalPath.startsWith(cacheDir.canonicalPath + File.separator)) return@synchronized null
+                    runCatching {
+                        android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                            android.graphics.pdf.PdfRenderer(fd).use { renderer ->
+                                renderer.openPage(0).use { page ->
+                                    val scale = 900.0 / maxOf(page.width, page.height).coerceAtLeast(1)
+                                    val bitmap = android.graphics.Bitmap.createBitmap(
+                                        (page.width * scale).toInt().coerceAtLeast(1),
+                                        (page.height * scale).toInt().coerceAtLeast(1),
+                                        android.graphics.Bitmap.Config.ARGB_8888)
+                                    try {
+                                        // Page paper is a document pixel, not a theme surface.
+                                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                                        page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                        bitmap to renderer.pageCount
+                                    } catch (e: Throwable) {
+                                        bitmap.recycle()
+                                        throw e
+                                    }
+                                }
+                            }
+                        }
+                    }.getOrNull()
+                }
+            } ?: return@launch
+            if (isFinishing || undone) { rendered.first.recycle(); return@launch }
+            previewHost.removeViews(1, (previewHost.childCount - 1).coerceAtLeast(0))
+            previewHost.layoutParams = previewHost.layoutParams.apply {
+                height = SwStyle.dp(this@ToolResultActivity, SwStyle.SPACE_6_DP * 9)
+            }
+            preview.setImageBitmap(rendered.first)
+            preview.isVisible = true
+            summary.text = resources.getQuantityString(R.plurals.rs_fact_pages, rendered.second, rendered.second) +
+                " · " + StatusLine.formatBytes(file.length())
+            resultSpec = resultSpec.copy(facts = ResultSpec.Facts(file.length(), pages = rendered.second))
         }
     }
 

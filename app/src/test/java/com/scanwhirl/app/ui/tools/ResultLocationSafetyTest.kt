@@ -37,6 +37,28 @@ class ResultLocationSafetyTest {
     private fun imageIntent(): Intent = ToolResultActivity.intent(app,
         ResultSpec("form_ready", files = listOf(RsFixtures.jpeg("location", 413, 531, app)), mime = "image/jpeg"))
 
+    @Test(timeout = 30_000)
+    fun `location primary and New badge remain legible after compositing in both themes`() {
+        for (night in listOf(android.content.res.Configuration.UI_MODE_NIGHT_NO,
+            android.content.res.Configuration.UI_MODE_NIGHT_YES)) {
+            val config = android.content.res.Configuration(app.resources.configuration).apply {
+                uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+            }
+            val context = app.createConfigurationContext(config)
+            val base = SwStyle.color(context, R.color.void_abyss)
+            for ((text, surface) in listOf(
+                R.color.text_hologram_hi to R.color.void_abyss,
+                R.color.sw_disc_ink to R.color.cyan_primary,
+                R.color.cyan_primary to R.color.rv_surface_2
+            )) {
+                val background = androidx.core.graphics.ColorUtils.compositeColors(SwStyle.color(context, surface), base)
+                val foreground = androidx.core.graphics.ColorUtils.compositeColors(SwStyle.color(context, text), background)
+                assertTrue("composited text contrast in mode $night",
+                    androidx.core.graphics.ColorUtils.calculateContrast(foreground, background) >= 4.5)
+            }
+        }
+    }
+
     private fun media(): FakeMediaStore = FakeMediaStore().also {
         it.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
         ShadowContentResolver.registerProviderInternal("media", it)
@@ -149,6 +171,31 @@ class ResultLocationSafetyTest {
             assertEquals(1, filled.size)
             assertEquals(R.id.toolResultShare, filled.single().id)
             assertTrue(activity.findViewById<TextView>(R.id.toolResultName).text.contains("Fictional result"))
+        } finally { controller.destroy() }
+    }
+
+    @Test(timeout = 30_000)
+    fun `file PDF preview shows the produced first page without claiming a library save`() {
+        val repo = ScanRepository(app)
+        val source = DocFixtures.saved(repo, app, 2, "Fictional pages")
+        val sourceFile = requireNotNull(repo.getDocument(source)).pdfFile
+        val original = sourceFile.readBytes()
+        val output = java.io.File(app.cacheDir, "documents/result-preview.pdf").apply {
+            parentFile?.mkdirs()
+            writeBytes(original)
+        }
+        val controller = Robolectric.buildActivity(ToolResultActivity::class.java,
+            ToolResultActivity.intent(app, ResultSpec("pdfa", files = listOf(output), mime = "application/pdf"))).setup()
+        try {
+            val activity = controller.get()
+            assertTrue("a real rendered page replaces the type-only fallback", await {
+                val preview = activity.findViewById<android.widget.ImageView>(R.id.toolResultPreview)
+                preview.visibility == View.VISIBLE && preview.drawable is android.graphics.drawable.BitmapDrawable
+            })
+            assertTrue(activity.findViewById<TextView>(R.id.toolResultSummary).text.toString().contains("2 pages"))
+            assertTrue(activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+                .startsWith(app.getString(R.string.rs_not_saved_yet)))
+            assertArrayEquals(original, sourceFile.readBytes())
         } finally { controller.destroy() }
     }
 

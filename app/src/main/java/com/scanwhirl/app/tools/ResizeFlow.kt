@@ -342,6 +342,8 @@ class ResizeFlow(
                     com.scanwhirl.app.ui.tools.ToolResultActivity.intent(activity,
                         com.scanwhirl.app.ui.result.ResultSpec("resize", files = listOf(file),
                             mime = result.mime, beforeBytes = bytes.size.toLong(), note = warning,
+                            facts = com.scanwhirl.app.ui.result.ResultSpec.Facts(saved.first,
+                                width = saved.second, height = saved.third),
                             outputIdentity = withContext(Dispatchers.IO) {
                                 com.scanwhirl.app.ui.tools.ToolResultActivity.captureOutputIdentityBlocking(
                                     activity, emptyList(), listOf(file))
