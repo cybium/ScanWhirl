@@ -47,11 +47,13 @@ import java.io.ByteArrayOutputStream
 class FormReadyActivityTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
+    private val async = FormAsyncIdle()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private val controllers = mutableListOf<ActivityController<FormReadyActivity>>()
 
     @Before
     fun setUp() {
+        async.install()
         // Both are process-wide test hooks. A test that fails mid-flight must not leak a
         // blocking encode gate or a stale sheet into the next test in the same fork.
         ExactKbEncoder.beforeEncode = null
@@ -66,18 +68,11 @@ class FormReadyActivityTest {
         org.robolectric.shadows.ShadowDialog.reset()
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-w360dp-h800dp-xhdpi")
+        async.reset()
     }
 
-    private fun waitUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean {
-        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
-        while (System.nanoTime() < deadline) {
-            idle()
-            if (condition()) return true
-            Thread.sleep(5)
-        }
-        idle()
-        return condition()
-    }
+    private fun waitUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean =
+        async.waitUntil(timeoutMs, condition)
 
     private fun makeActivity(): FormReadyActivity =
         Robolectric.buildActivity(FormReadyActivity::class.java).setup().also { controllers += it }.get()
