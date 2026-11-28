@@ -24,5 +24,12 @@ data class ScanDocument(
     /** Bytes of the PDF (or of all pages when there is no PDF): cached while listing. */
     val cachedSize: Long = 0L,
     /** Newest content modification time (the [revision]): cached while listing. */
-    val cachedModified: Long = 0L
-)
+    val cachedModified: Long = 0L,
+    val contentKind: ContentKind = ContentKind.RASTER,
+    val pageRefs: List<PageRef> = emptyList(),
+    val contentGeneration: String? = null,
+    val contentSha256: String? = null,
+    val storageBytes: Long = cachedSize
+) {
+    val authoritativePdf: File get() = pdfFile
+}

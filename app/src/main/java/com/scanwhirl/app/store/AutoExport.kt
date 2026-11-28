@@ -20,6 +20,9 @@ object AutoExport {
      * Call off the main thread.
      */
     fun afterSave(context: Context, repo: ScanRepository, doc: ScanDocument): String? {
+        // W7b-3 owns digital output authority and export routing. No implicit external
+        // copy from a synthetic or newly restored digital authority before that gate.
+        if (doc.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL) return null
         if (!Prefs.autoCopyToDocuments(context) || !doc.pdfFile.exists() || doc.pdfFile.length() == 0L) return null
         // PM-3.1c: never copy a PDF whose lock record says "protected" while the PDF is not.
         if (PdfProtection.state(doc.pdfFile.parentFile!!) == PdfProtection.State.NEEDS_REPAIR) return null

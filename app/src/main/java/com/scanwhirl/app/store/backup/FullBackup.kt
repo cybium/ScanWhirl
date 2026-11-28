@@ -20,6 +20,8 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import com.scanwhirl.app.store.DigitalStorage
+import com.scanwhirl.app.store.ScanRepository
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -85,7 +87,8 @@ class FullBackup(
         val iterations: Int,
         val salt: ByteArray,
         /** True when the archive carries the backup Vault's key, so entries can be re-encrypted. */
-        val hasVaultKey: Boolean
+        val hasVaultKey: Boolean,
+        val version: Int = 2
     )
 
     data class Report(
@@ -145,6 +148,8 @@ class FullBackup(
     }
 
     private val docsDir: File get() = File(context.filesDir, "documents")
+    private val repo get() = ScanRepository(context)
+    private val digital get() = repo.digitalStorage
     private val vaultDir: File get() = File(context.filesDir, "vault2")
     private val sigDir: File get() = File(context.filesDir, "signatures")
     private val stampDir: File get() = File(context.filesDir, "stamps")
@@ -184,9 +189,26 @@ class FullBackup(
             val salt = VaultCrypto.newSalt()
             val key = secretKey(secret, wrap, salt, VaultCrypto.PBKDF2_ITERATIONS)
             try {
+                var archiveVersion = 2
+                var digitalCount = 0
                 DataOutputStream(BufferedOutputStream(FileOutputStream(plain), BUFFER)).use { out ->
-                    writeEntry(out, "manifest.json", manifest().toByteArray(Charsets.UTF_8))
-                    copyTree(out, docsDir, "documents")
+                    repo.withImportDiscardLock {
+                        val root = digital.existingRoot(DigitalStorage.LIVE)
+                        if (!DigitalStorage.owned(root)) throw IOException("Digital storage unavailable")
+                        val dirs = root.listFiles().orEmpty().sortedBy { it.name }
+                        digitalCount = dirs.size
+                        if (dirs.isNotEmpty()) archiveVersion = VERSION
+                        writeEntry(out, "manifest.json", manifest(archiveVersion, digitalCount).toByteArray(Charsets.UTF_8))
+                        copyTree(out, docsDir, "documents")
+                        for (dir in dirs) {
+                            val doc = DigitalStorage.read(dir)
+                            if (!DigitalStorage.safeId(dir.name) || doc == null ||
+                                File(docsDir, dir.name).exists()) throw IOException("Digital document unavailable for backup")
+                            for (member in DigitalStorage.members) {
+                                writeFileEntry(out, "${DigitalStorage.LIVE}/${dir.name}/$member", File(dir, member))
+                            }
+                        }
+                    }
                     copyTree(out, sigDir, "signatures")
                     copyTree(out, stampDir, "stamps")
                     copyTree(out, draftDir, "drafts")
@@ -201,7 +223,7 @@ class FullBackup(
                     BufferedOutputStream(FileOutputStream(part), BUFFER).use { raw ->
                         val out = DataOutputStream(raw)
                         out.write(MAGIC)
-                        out.writeByte(VERSION)
+                        out.writeByte(archiveVersion)
                         out.writeByte(wrap.ordinal + 1)
                         out.writeInt(VaultCrypto.PBKDF2_ITERATIONS)
                         out.writeByte(salt.size)
@@ -223,7 +245,7 @@ class FullBackup(
                     throw e
                 }
                 return Report(
-                    documents = countEntries(docsDir),
+                    documents = countEntries(docsDir) + digitalCount,
                     docsAlreadyHere = 0,
                     vaultEntries = if (vaultPending) 0 else countVaultEntries(),
                     vaultReencrypted = 0,
@@ -302,7 +324,7 @@ class FullBackup(
             if (saltLength !in 8..64) throw VaultAuthException("Damaged backup header")
             val salt = ByteArray(saltLength).also { input.readFully(it) }
             val hasVaultKey = if (version >= 2) input.readUnsignedByte() == 1 else false
-            return Header(wrap, iterations, salt, hasVaultKey)
+            return Header(wrap, iterations, salt, hasVaultKey, version)
         }
     }
 
@@ -345,6 +367,7 @@ class FullBackup(
                     val magic = ByteArray(MAGIC.size).also { input.readFully(it) }
                     if (!magic.contentEquals(MAGIC)) throw VaultAuthException("Not a ScanWhirl backup file")
                     val version = input.readUnsignedByte()
+                    if (version != header.version) throw VaultAuthException("Backup header changed")
                     input.readUnsignedByte()
                     input.readInt()
                     val saltLength = input.readUnsignedByte()
@@ -372,6 +395,14 @@ class FullBackup(
                 }
             }
             val skippedText = replay(plain, staging)
+            val digitalStage = staging.resolve(DigitalStorage.LIVE)
+            if (digitalStage.exists()) {
+                // v1/v2 archives must never be interpreted as carrying a new authority.
+                val manifestFile = staging.resolve("manifest.json")
+                val format = runCatching { JSONObject(readBoundedText(manifestFile, MAX_SETTINGS_BYTES)).getInt("format") }.getOrNull()
+                if (header.version != VERSION || format != VERSION || !digitalStage.isDirectory)
+                    throw VaultAuthException("Invalid digital backup format")
+            }
             val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.let {
                 if (it.length() != 32L) throw VaultAuthException("Damaged backup key")
                 ByteArray(32).also { bytes -> DataInputStream(it.inputStream()).use { input -> input.readFully(bytes) } }
@@ -432,12 +463,12 @@ class FullBackup(
     // Archive internals
     // ------------------------------------------------------------------
 
-    private fun manifest(): String = JSONObject().apply {
+    private fun manifest(version: Int, digitalCount: Int): String = JSONObject().apply {
         put("app", "ScanWhirl")
-        put("format", VERSION)
+        put("format", version)
         put("createdAt", System.currentTimeMillis())
         put("appVersion", BuildConfig.VERSION_NAME)
-        put("documents", docsDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.size ?: 0)
+        put("documents", (docsDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }?.size ?: 0) + digitalCount)
     }.toString()
 
     // Only portable user choices from Prefs, with the same types on both sides. Entitlement,
@@ -588,6 +619,10 @@ class FullBackup(
                             segments.any { it.isEmpty() || it == "." }) {
                             throw BackupResourceException(context)
                         }
+                        if (segments.first() == DigitalStorage.LIVE &&
+                            (segments.size != 3 || !DigitalStorage.safeId(segments[1]) ||
+                                segments[2] !in DigitalStorage.members))
+                            throw VaultAuthException("Invalid digital backup member")
                         // SECURITY_JUDGE 1.3.0 finding 4: format-specific caps for text
                         // that consumers read into memory. Skip oversized entries rather
                         // than publishing a file that could exhaust the heap later; the
@@ -610,6 +645,13 @@ class FullBackup(
                                     VaultControlBlobs.rootLimit(segments[1]) ?: MAX_ENTRY_BYTES
                                 path == "settings.json" || path == "manifest.json" -> MAX_SETTINGS_BYTES
                                 path.endsWith("/meta.txt") -> MAX_META_BYTES
+                                segments.first() == DigitalStorage.LIVE -> when {
+                                    segments.size != 3 || !DigitalStorage.safeId(segments[1]) ||
+                                        segments[2] !in DigitalStorage.members -> throw VaultAuthException("Invalid digital backup member")
+                                    segments[2] == DigitalStorage.PAGES -> DigitalStorage.MAX_MANIFEST_BYTES
+                                    segments[2] == DigitalStorage.PDF -> DigitalStorage.MAX_PDF_BYTES
+                                    else -> DigitalStorage.MAX_META_BYTES
+                                }
                                 else -> MAX_ENTRY_BYTES
                             }
                             if (size > cap || (path == VAULT_KEY_ENTRY && size != 32L)) {
@@ -670,8 +712,7 @@ class FullBackup(
     private fun applyStaging(staging: File, oldVaultKey: ByteArray?, c: ApplyCounters): Report {
         // 1. Documents.
         docsDir.mkdirs()
-        val existingNames = docsDir.listFiles { f -> f.isDirectory }
-            .orEmpty()
+        val existingNames = repo.iterateLiveDocs()
             .mapNotNull { d -> File(d, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) } }
             .toMutableSet()
         val restored = staging.resolve("documents")
@@ -686,7 +727,14 @@ class FullBackup(
                 c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
                 return@forEach
             }
-            if (File(docsDir, id).exists()) { c.docsAlreadyHere++; return@forEach }
+            if (File(docsDir, id).exists() || digital.hasLive(id)) { c.docsAlreadyHere++; return@forEach }
+            if (digital.reserves(id)) { c.docsFailed++; return@forEach }
+            // A digital metadata marker must never be adopted into the old namespace.
+            val kind = runCatching {
+                File(dir, "meta.txt").takeIf { it.isFile }?.let { readBoundedText(it, MAX_META_BYTES) }
+                    ?.lineSequence()?.drop(3)?.any { it.startsWith("content_kind=") && it != "content_kind=raster" }
+            }.getOrDefault(true)
+            if (kind == true) { c.docsFailed++; return@forEach }
             val name = File(dir, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) } ?: id
             var targetId = id
             if (name in existingNames) {
@@ -699,12 +747,14 @@ class FullBackup(
                 }
             }
             val target = File(docsDir, targetId)
-            val renamed = try {
-                dir.renameTo(target)
+            val placed = repo.withImportDiscardLock {
+                if (target.exists() || digital.reserves(targetId)) return@withImportDiscardLock false
+                val renamed = try {
+                    dir.renameTo(target)
             } catch (_: SecurityException) {
                 false
             }
-            val placed = renamed || try {
+                renamed || try {
                 // B1: a rename can fail across storage volumes or on a locked source. Copy the
                 // whole document first, then drop the staging copy; never leave a half document.
                 dir.copyRecursively(target, overwrite = false)
@@ -714,11 +764,37 @@ class FullBackup(
                 target.deleteRecursively()
                 false
             }
+            }
             if (placed) {
                 c.documents++
                 existingNames.add(if (targetId == id) name else "$name (restored)")
             } else {
                 c.docsFailed++
+            }
+        }
+
+        // Digital authorities remain isolated even on restore with import disabled.
+        staging.resolve(DigitalStorage.LIVE).listFiles().orEmpty().sortedBy { it.name }.forEach { input ->
+            restoreLimits.checkCancelled()
+            val id = input.name
+            val validated = DigitalStorage.read(input.canonicalFile)
+            if (!DigitalStorage.safeId(id) || validated == null) {
+                c.docsFailed++
+                c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
+                return@forEach
+            }
+            repo.withImportDiscardLock {
+                if (repo.resolveDocDir(id) != null) {
+                    c.docsAlreadyHere++
+                    return@withImportDiscardLock
+                }
+                try {
+                    repo.digitalTransaction.restore(input.canonicalFile)
+                    c.documents++
+                } catch (_: Exception) {
+                    c.docsFailed++
+                    c.warnings.add(context.getString(R.string.b1_restore_doc_failed))
+                }
             }
         }
 
@@ -926,7 +1002,7 @@ class FullBackup(
     private fun freeId(): String {
         while (true) {
             val id = UUID.randomUUID().toString().take(8)
-            if (!File(docsDir, id).exists() && !File(vaultDir, id).exists()) return id
+            if (!File(docsDir, id).exists() && !File(vaultDir, id).exists() && !digital.reserves(id)) return id
         }
     }
 
@@ -968,7 +1044,7 @@ class FullBackup(
         internal const val MAX_META_BYTES = 64L * 1024
 
         private val MAGIC = "SWFULLB1".toByteArray(Charsets.UTF_8)
-        private const val VERSION = 2
+        private const val VERSION = 3
         private const val MIN_VERSION = 1
         private const val ENTRY = 1
         internal const val VAULT_KEY_ENTRY = "vault-key.bin"
