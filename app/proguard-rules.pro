@@ -79,3 +79,8 @@
 # Standard-14 AFM resources and the embedded-font loader are reached from asset
 # names, not from bytecode references. Keep the font model intact.
 -keep class com.tom_roush.pdfbox.pdmodel.font.** { *; }
+
+# The AndroidX test runner (instrumented smoke test) is Kotlin-compiled and
+# resolves Intrinsics from the target APK's class loader. Keep it in the
+# minified release build so the runtime smoke test can start.
+-keep class kotlin.jvm.internal.Intrinsics { *; }
