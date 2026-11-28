@@ -185,6 +185,7 @@ jobs:
           name: gate-result
           path: |
             gate-result.txt
+            gate-result/**
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/reports/lint-results-debug.txt
           retention-days: 7

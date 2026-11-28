@@ -995,8 +995,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         // is the existing trust string, now stated on About and on the empty Library).
         // C1 (2026-11-20 owner): about_message carries the complete short privacy line too;
         // this last line keeps the shared trust pill on About.
-        val message = getString(R.string.about_message, versionName()) +
-            "\n\n" + getString(R.string.trust_offline_no_ads)
+        // W5d V068 (minimal hunk, owner W5b): the About body already carries the privacy
+        // promise; the old trailing "Private · No ads" pill text was an orphaned fragment
+        // above Privacy policy / Licences. The pill itself is unchanged elsewhere.
+        val message = getString(R.string.about_message, versionName())
         SwSheet.builder(this)
             .setTitle(getString(R.string.about_title))
             .setMessage(message)

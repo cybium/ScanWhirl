@@ -20,6 +20,7 @@ import com.scanwhirl.app.store.vault.VaultStore
 import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -55,7 +56,9 @@ class W5dBackupRenderTest {
     fun setUp() {
         app = ApplicationProvider.getApplicationContext()
         VaultSession.close()
-        outDir = File(System.getProperty("user.dir") ?: ".", "app/build/w5d-renders").apply { mkdirs() }
+        // Gate's upload-artifact step publishes gate-result/**; write the renders there so
+        // the lead can actually review the pixels without reproducing this test locally.
+        outDir = File(System.getProperty("user.dir") ?: ".", "gate-result/w5d-renders").apply { mkdirs() }
         names.clear()
     }
 
@@ -143,10 +146,14 @@ class W5dBackupRenderTest {
      * V047: one fresh instance per state so the newest ShadowDialog is always the one
      * being rendered. No sheet is submitted and no secret is ever typed.
      */
-    private fun renderState(tag: String, dark: Boolean, scale: Float, action: (BackupActivity) -> Unit) {
+    private fun renderState(
+        tag: String, dark: Boolean, scale: Float, action: (BackupActivity) -> Unit,
+        narrow: Boolean = false
+    ) {
         ShadowDialog.reset()
         RuntimeEnvironment.setQualifiers(
-            "en-rUS-w360dp-h800dp-${if (dark) "night" else "notnight"}-xxhdpi"
+            "en-rUS-w${if (narrow) "320" else "360"}dp-h800dp-" +
+                "${if (dark) "night" else "notnight"}-xxhdpi"
         )
         RuntimeEnvironment.setFontScale(scale)
         BackupActivity.vaultOverride = readyVault()
@@ -193,12 +200,43 @@ class W5dBackupRenderTest {
                     ShadowDialog.getLatestDialog()!!.findViewById<TextView>(R.id.swSheetTitle).text.toString())
             }
         }
-        assertEquals16Renders()
+        // D2: the two captions must be whole at the narrowest phone and both text scales.
+        for (scale in listOf(1f, 2f)) {
+            renderState("password-sheet-320", false, scale, { activity ->
+                activity.findViewById<View>(R.id.backupNow).performClick()
+                idle()
+                ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetSecondary).performClick()
+                idle()
+                // Lay the sheet out before reading its caption lines.
+                val sheetRoot = ShadowDialog.getLatestDialog()!!.window!!.decorView
+                sheetRoot.measure(exactly(960), atMost(2400))
+                sheetRoot.layout(0, 0, sheetRoot.measuredWidth, sheetRoot.measuredHeight)
+                idle()
+                for ((id, full) in listOf(
+                    R.id.backupPasswordLabel to activity.getString(R.string.backup_password_hint),
+                    R.id.backupRepeatLabel to activity.getString(R.string.backup_password_repeat)
+                )) {
+                    val label = ShadowDialog.getLatestDialog()!!.findViewById<TextView>(id)
+                    assertNotNull("full caption $full is present at 320dp/$scale", label)
+                    assertEquals("full caption text at 320dp/$scale", full, label!!.text.toString())
+                    val lay = label.layout
+                    assertNotNull("caption $full is laid out", lay)
+                    for (line in 0 until lay!!.lineCount) {
+                        assertEquals("caption $full is not ellipsized at 320dp/$scale", 0,
+                            lay.getEllipsisCount(line))
+                        assertTrue("caption $full fits at 320dp/$scale",
+                            lay.getLineWidth(line) <= label.width - label.totalPaddingLeft -
+                                label.totalPaddingRight + 1f)
+                    }
+                }
+            }, narrow = true)
+        }
+        assertAllRenders()
     }
 
-    private fun assertEquals16Renders() {
-        assertTrue("20 renders expected (screen + four sheets x four looks), got ${names.size}",
-            names.size == 20)
+    private fun assertAllRenders() {
+        assertTrue("22 renders expected (20 four-look + 2 narrow password), got ${names.size}",
+            names.size == 22)
         for (name in names) assertTrue("$name is present", File(outDir, name).length() > 0L)
     }
 }

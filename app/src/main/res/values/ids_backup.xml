@@ -7,6 +7,8 @@
     <item name="backupRestore" type="id" />
     <item name="backupReminder" type="id" />
     <item name="backupMore" type="id" />
+    <item name="backupPasswordLabel" type="id" />
+    <item name="backupRepeatLabel" type="id" />
     <item name="backupPassword" type="id" />
     <item name="swMeBackup" type="id" />
 </resources>

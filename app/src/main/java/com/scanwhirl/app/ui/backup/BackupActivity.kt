@@ -603,18 +603,34 @@ class BackupActivity : BaseActivity() {
     }
 
     private fun askPassword() {
+        // W5d round 2 (D2): a 56dp single-line field clips its long hint at 320dp and 2.0
+        // font. The full words become wrapping captions above the fields; the fields
+        // themselves stay empty and named for TalkBack. No password logic changes.
+        fun caption(text: String, topDp: Float, id: Int): TextView = SwStyle.text(
+            this, 14f, SwStyle.color(this, R.color.text_hologram_mid)
+        ).apply {
+            this.text = text
+            this.id = id
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(topDp) }
+        }
         val field = PasswordField(this).apply {
-            editText.hint = getString(R.string.backup_password_hint)
+            editText.hint = ""
             editText.id = R.id.backupPassword
+            editText.contentDescription = getString(R.string.backup_password_hint)
         }
         val repeat = PasswordField(this).apply {
-            editText.hint = getString(R.string.backup_password_repeat)
+            editText.hint = ""
             editText.id = R.id.backupPasswordConfirm
+            editText.contentDescription = getString(R.string.backup_password_repeat)
             showStrength = false
         }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(caption(getString(R.string.backup_password_hint), 0f, R.id.backupPasswordLabel))
             addView(field)
+            addView(caption(getString(R.string.backup_password_repeat), 10f, R.id.backupRepeatLabel))
             addView(repeat)
         }
         val sheet = SwSheet.builder(this)
