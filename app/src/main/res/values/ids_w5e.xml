@@ -2,4 +2,5 @@
 <resources>
     <item name="toolSetupPurpose" type="id" />
     <item name="toolFirstPurpose" type="id" />
+    <item name="ocrAboutReading" type="id" />
 </resources>

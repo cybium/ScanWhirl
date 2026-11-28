@@ -2,14 +2,19 @@ package com.scanwhirl.app.w5e
 
 import android.app.Application
 import android.app.Dialog
+import android.view.Menu
 import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.google.android.material.appbar.MaterialToolbar
 import com.scanwhirl.app.R
+import com.scanwhirl.app.store.DocFixtures
+import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.vault.VaultSession
 import com.scanwhirl.app.ui.ImportRasterNotice
 import com.scanwhirl.app.ui.ImportSheet
+import com.scanwhirl.app.ui.OcrEditorActivity
 import com.scanwhirl.app.ui.qr.QrActivity
 import com.scanwhirl.app.ui.protect.LockToolsActivity
 import com.scanwhirl.app.ui.shell.ShellActivity
@@ -17,6 +22,7 @@ import com.scanwhirl.app.ui.shell.VaultScreen
 import com.scanwhirl.app.ui.tools.PdfImportSheets
 import com.scanwhirl.app.ui.tools.ToolFirstScreenCopy
 import com.scanwhirl.app.ui.tools.ToolSetupActivity
+import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.util.PdfImportBudget
 import com.scanwhirl.app.util.ProGate
 import com.scanwhirl.app.util.ResetDialogShadowsRule
@@ -29,6 +35,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -167,6 +174,25 @@ class W5eHonestyTest {
                 planSheet.dismiss()
             }
         }
+
+        // Door 4: Tools hub / Tools search import_pdf (ShellActivity.open) — one helper call.
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.open(ToolRegistry.byId("import_pdf")!!)
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                val prePicker = ShadowDialog.getLatestDialog()!!
+                assertTrue("the Tools import door opens the notice", prePicker.isShowing)
+                assertEquals(
+                    "all four doors use the same helper text",
+                    notice,
+                    prePicker.findViewById<TextView>(R.id.swSheetMessage).text.toString()
+                )
+                assertNullPicker(activity)
+                prePicker.findViewById<View>(R.id.swSheetPrimary).performClick()
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                assertNotNull("Continue opens the PDF picker", shadowOf(activity).nextStartedActivityForResult)
+            }
+        }
     }
 
     private fun assertNullPicker(activity: ShellActivity) {
@@ -189,6 +215,42 @@ class W5eHonestyTest {
         )
     }
 
+    @Test
+    fun `readTextExplainsSearchablePdfWithoutAddingVisibleWords`() {
+        // V107 recommendation: the distinction is behind overflow, never on the 62-word screen.
+        val paragraphs = listOf(
+            R.string.w5e_ocr_about_p1, R.string.w5e_ocr_about_p2, R.string.w5e_ocr_about_p3
+        ).map { app.getString(it) }
+        assertTrue("info sheet is under the 40-word limit", paragraphs.sumOf { it.split(Regex("\\s+")).size } <= 40)
+        assertTrue("every paragraph is under 25 words", paragraphs.all { it.split(Regex("\\s+")).size < 25 })
+        assertFalse("the OCR screen still has no extra visible purpose line",
+            File("src/main/res/layout/activity_ocr_editor.xml").readText(Charsets.UTF_8)
+                .contains("toolFirstPurpose"))
+
+        val repo = ScanRepository(app)
+        val docId = DocFixtures.saved(repo, app, pages = 2, name = "Reading notes")
+        repo.updateOcrPage(docId, "page_000.jpg", "first")
+        repo.updateOcrPage(docId, "page_001.jpg", "second")
+        Robolectric.buildActivity(
+            OcrEditorActivity::class.java,
+            android.content.Intent(app, OcrEditorActivity::class.java)
+                .putExtra(OcrEditorActivity.EXTRA_DOC_ID, docId)
+        ).setup().use { controller ->
+            val activity = controller.get()
+            val menu: Menu = activity.findViewById<MaterialToolbar>(R.id.toolbar).menu
+            if (menu.findItem(R.id.ocrAboutReading) == null) activity.onCreateOptionsMenu(menu)
+            val item = menu.findItem(R.id.ocrAboutReading)
+            assertNotNull("the OCR overflow has About reading text", item)
+            item.performClick()
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val sheet = ShadowDialog.getLatestDialog()!!
+            val text = screenText(sheet.window!!.decorView)
+            assertTrue("the sheet explains reading", text.contains(paragraphs[0]))
+            assertTrue("the sheet distinguishes Searchable PDF", text.contains(paragraphs[1]))
+            assertTrue("the sheet explains scanned images", text.contains(paragraphs[2]))
+        }
+    }
+
     // ------------------------------------------------ Named tools' first screens
 
     @Test
@@ -196,7 +258,7 @@ class W5eHonestyTest {
         val ids = listOf(
             "split", "to_word", "to_excel", "to_powerpoint", "long_image", "zip",
             "searchable_pdf", "batch_tools", "link_index", "remove_metadata",
-            "qr_code", "protect", "unlock", "pdfa", "form_ready"
+            "qr_code", "protect", "unlock", "read_text", "pdfa", "form_ready"
         )
         for (id in ids) {
             val purpose = ToolFirstScreenCopy.text(app, id)

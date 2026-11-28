@@ -18,4 +18,10 @@
     <string name="w5e_purpose_qr_code">Read a code with the camera.</string>
     <string name="w5e_purpose_protect">Add a password to a PDF.</string>
     <string name="w5e_purpose_unlock">Remove a PDF password.</string>
+    <string name="w5e_purpose_read_text">Find and edit words already on a page.</string>
+    <!-- V107: the distinction lives in an overflow sheet, not on the budgeted OCR screen. -->
+    <string name="w5e_ocr_about_title">About reading text</string>
+    <string name="w5e_ocr_about_p1">Reading finds words already on a page and lets you copy or edit them.</string>
+    <string name="w5e_ocr_about_p2">Searchable PDF adds those words to the PDF so you can find them later.</string>
+    <string name="w5e_ocr_about_p3">A scanned image has no words until they are read.</string>
 </resources>

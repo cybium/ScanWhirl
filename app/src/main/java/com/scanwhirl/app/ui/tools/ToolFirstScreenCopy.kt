@@ -28,8 +28,9 @@ object ToolFirstScreenCopy {
         "qr_code" -> R.string.w5e_purpose_qr_code
         "protect" -> R.string.w5e_purpose_protect
         "unlock" -> R.string.w5e_purpose_unlock
-        // "read_text" intentionally has no line: the OCR screen is at its reviewed 62-word
-        // budget and 320 dp text-fit limit (WordBudgetGateTest / TextFitTest).
+        // V107: this line belongs to the tool's setup screen, NOT the OCR editor. The editor's
+        // 62-word budget and 320 dp text-fit limit stay untouched; the detail is in its menu.
+        "read_text" -> R.string.w5e_purpose_read_text
         else -> null
     }
 

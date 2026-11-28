@@ -180,6 +180,7 @@ jobs:
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/test-results/testDebugUnitTest/w5e-renders/*.png
             app/build/test-results/testDebugUnitTest/w5e-renders/manifest.txt
+            app/build/test-results/testDebugUnitTest/w5e-renders/tool-manifest.txt
             app/build/reports/lint-results-debug.txt
           retention-days: 7
 
