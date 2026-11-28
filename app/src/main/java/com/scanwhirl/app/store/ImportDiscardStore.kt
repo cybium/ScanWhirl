@@ -37,6 +37,9 @@ class ImportDiscardStore(
 ) {
     private val app = context.applicationContext
     private val root get() = File(app.filesDir, "import_discard").apply { mkdirs() }
+    private val digitalRoot get() = repo.digitalStorage.root(DigitalStorage.ESCROW)
+    private fun digital(dir: File) = dir.parentFile?.canonicalFile == repo.digitalStorage.existingRoot(DigitalStorage.ESCROW)
+    private fun keyOf(dir: File) = if (digital(dir)) "digital:${dir.name}" else dir.name
 
     data class Token(val key: String, val id: String, val deadline: Long)
     private data class Record(
@@ -51,19 +54,25 @@ class ImportDiscardStore(
     }
 
     companion object {
-        private const val MARKER = ".import-discard"
+        internal const val MARKER = ".import-discard"
         private val ID = Regex("[A-Za-z0-9_-]{1,64}")
         private val KEY = Regex("([A-Za-z0-9_-]{1,64})--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
         @Volatile internal var fault: (Stage) -> Unit = {}
     }
 
-    private fun tx(key: String): File? =
-        key.takeIf { KEY.matches(it) }?.let { File(root, it) }
-            ?.takeIf { it.canonicalFile.parentFile == root.canonicalFile }
+    private fun tx(key: String): File? {
+        val isDigital = key.startsWith("digital:")
+        val name = if (isDigital) key.removePrefix("digital:") else key
+        val parent = if (isDigital) digitalRoot else root
+        return name.takeIf { KEY.matches(it) }?.let { File(parent, it) }
+            ?.takeIf { it.canonicalFile == File(parent.canonicalFile, name) }
+    }
 
     private fun idOf(dir: File): String = requireNotNull(KEY.matchEntire(dir.name)).groupValues[1]
-    private fun active(id: String) = File(repo.docsDir, id)
-    private fun draft(id: String) = File(app.filesDir, "drafts/$id")
+    private fun active(id: String, digital: Boolean = false) = if (digital)
+        repo.digitalStorage.child(DigitalStorage.LIVE, id) else File(repo.docsDir, id)
+    private fun draft(id: String, digital: Boolean = false) = if (digital)
+        repo.digitalStorage.child(DigitalStorage.DRAFTS, id) else File(app.filesDir, "drafts/$id")
 
     private fun write(dir: File, record: Record) {
         Durable.atomicWriteText(File(dir, "manifest"),
@@ -75,7 +84,7 @@ class ImportDiscardStore(
     }
 
     private fun read(dir: File): Record? = runCatching {
-        val lines = File(dir, "manifest").readLines()
+        val lines = if (digital(dir)) DigitalStorage.boundedLines(File(dir, "manifest"), 1024) else File(dir, "manifest").readLines()
         require(lines.size >= 6 && lines[2] == idOf(dir))
         require(lines[1] in listOf("STAGING", "PENDING", "RESTORING", "PURGING"))
         val start = lines[3].toLong()
@@ -175,26 +184,29 @@ class ImportDiscardStore(
         require(ID.matches(id))
         require(undoMs >= 8_000)
         val doc = repo.getDocument(id) ?: throw IOException("Import is no longer available")
+        val isDigital = doc.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL
         check(!doc.isVaulted && repo.exportRecordsOf(id).isEmpty() &&
-            hasNoDraftEdits(id)) { "An import already used must be kept" }
-        requireOwnedTree(active(id))
-        if (draft(id).exists()) requireOwnedTree(draft(id))
-        val dir = File(root, "$id--${UUID.randomUUID()}")
+            (if (isDigital) !draft(id, true).exists() else hasNoDraftEdits(id))) { "An import already used must be kept" }
+        requireOwnedTree(active(id, isDigital))
+        if (draft(id, isDigital).exists()) requireOwnedTree(draft(id, isDigital))
+        val dir = File(if (isDigital) digitalRoot else root, "$id--${UUID.randomUUID()}")
         if (!dir.mkdir()) throw IOException("Could not stage import")
         val start = elapsed()
         val wallStart = wall()
         val record = Record("STAGING", start, start + undoMs, boot(), wallStart, wallStart + undoMs)
         var committed = record
         try {
+            if (isDigital) Durable.writeFile(File(dir, "identity"),
+                "${doc.contentGeneration}\n${doc.contentSha256}\n".toByteArray(Charsets.UTF_8))
             write(dir, record)
-            Durable.syncDir(root)
+            Durable.syncDir(dir.parentFile!!)
             fault(Stage.MANIFEST_WRITTEN)
-            Durable.atomicWriteText(File(active(id), MARKER), dir.name)
+            Durable.atomicWriteText(File(active(id, isDigital), MARKER), dir.name)
             // Draft first: interruption can never leave an orphan active draft for the
             // normal startup reaper to mistake for abandoned work.
-            if (draft(id).exists()) move(draft(id), File(dir, "draft"))
+            if (draft(id, isDigital).exists()) move(draft(id, isDigital), File(dir, "draft"))
             fault(Stage.DRAFT_MOVED)
-            move(active(id), File(dir, "document"))
+            move(active(id, isDigital), File(dir, "document"))
             fault(Stage.DOCUMENT_MOVED)
             clearCaches(id, File(dir, "document"))
             repo.ocrStore.pendingQueue()
@@ -212,15 +224,24 @@ class ImportDiscardStore(
         // PENDING is durable: a later fault is NOT a failed discard. Swallowing it keeps the
         // success receipt in the UI, which starts expiry; recovery still completes on restart.
         runCatching { fault(Stage.COMMITTED) }
-        Token(dir.name, id, committed.deadline)
+        Token(keyOf(dir), id, committed.deadline)
     }
 
     /** Reconciles interrupted work and returns every unexpired durable Undo token. Off main. */
-    fun recover(): List<Token> = repo.withImportDiscardLock {
+    fun recover(): List<Token> {
+        // Escrow is recovered before normal library startup. Verify a cold payload
+        // (or its already-restored live member) on the recovery worker, not under locks.
+        repo.digitalStorage.dirs(DigitalStorage.ESCROW).filter { KEY.matches(it.name) }.forEach { dir ->
+            val payload = File(dir, "document")
+            val target = if (payload.isDirectory) payload else active(idOf(dir), true)
+            if (target.isDirectory && DigitalStorage.read(target) == null) DigitalStorage.verify(target)
+        }
+        return repo.withImportDiscardLock {
         val pending = mutableListOf<Token>()
-        root.listFiles()?.filter { it.isDirectory && KEY.matches(it.name) }?.forEach { dir ->
+        (root.listFiles().orEmpty().toList() + digitalRoot.listFiles().orEmpty())
+            .filter { it.isDirectory && KEY.matches(it.name) }.forEach { dir ->
             // Never follow an unexpected symlink outside this private transaction tree.
-            if (tx(dir.name) == null || dir.canonicalFile != File(root.canonicalFile, dir.name)) return@forEach
+            if (tx(keyOf(dir)) == null || dir.canonicalFile != File(dir.parentFile!!.canonicalFile, dir.name)) return@forEach
             val record = read(dir)
             when {
                 record == null || record.phase == "STAGING" || record.phase == "RESTORING" ->
@@ -230,11 +251,12 @@ class ImportDiscardStore(
                     val current = if (record.phase == "PENDING" &&
                         !sameBoot(record) && !anchoredHere(record)) anchor(dir, record) else record
                     if (expired(current)) purge(dir)
-                    else pending += Token(dir.name, idOf(dir), deadlineOf(current))
+                    else pending += Token(keyOf(dir), idOf(dir), deadlineOf(current))
                 }
             }
         }
         pending
+        }
     }
 
     fun pending(): List<Token> = recover()
@@ -261,8 +283,26 @@ class ImportDiscardStore(
     private fun restorePayload(dir: File) {
         val id = idOf(dir)
         val document = File(dir, "document")
-        val dest = active(id)
+        val isDigital = digital(dir)
+        val dest = active(id, isDigital)
         val hadPayload = document.exists()
+        if (isDigital) {
+            // A torn, never-moved transaction is not authority to touch the live document.
+            val identity = File(dir, "identity")
+            if (!identity.isFile && !hadPayload) {
+                if (!DigitalStorage.deleteOwnedTree(dir)) throw IOException("Could not clean empty escrow")
+                return
+            }
+            val expected = DigitalStorage.boundedLines(identity, 128)
+            val checked = DigitalStorage.read(if (hadPayload) document else dest)
+                ?: throw IOException("Digital import unavailable")
+            if (expected != listOf(checked.contentGeneration, checked.contentSha256) ||
+                File(repo.docsDir, id).exists()) throw IOException("Digital import identity conflict")
+            if (hadPayload && File(document, MARKER).readText() != dir.name)
+                throw IOException("Digital import marker mismatch")
+        } else if (repo.digitalStorage.hasLive(id)) {
+            throw IOException("Cannot restore over a digital document")
+        }
         if (document.exists()) {
             if (dest.exists()) throw IOException("Cannot overwrite an existing document")
             move(document, dest)
@@ -281,21 +321,33 @@ class ImportDiscardStore(
         fault(Stage.DOCUMENT_RESTORED)
         val savedDraft = File(dir, "draft")
         if (savedDraft.exists()) {
-            if (draft(id).exists()) throw IOException("Cannot overwrite an existing draft")
-            draft(id).parentFile!!.mkdirs()
-            move(savedDraft, draft(id))
+            if (draft(id, isDigital).exists()) throw IOException("Cannot overwrite an existing draft")
+            draft(id, isDigital).parentFile!!.mkdirs()
+            move(savedDraft, draft(id, isDigital))
         }
         fault(Stage.DRAFT_RESTORED)
-        // If a previous restore moved the document, its token proves this is OUR item.
-        if (marker.isFile && marker.readText() == dir.name && !marker.delete()) {
-            throw IOException("Could not finish restoring import")
+        // The live marker is the visibility barrier. Keep it until the metadata
+        // and any saved draft are restored, and sync the document before publication.
+        // A previous restore's token proves this is OUR item.
+        if (marker.isFile && marker.readText() == dir.name) {
+            Durable.syncDir(dest)
+            if (!marker.delete()) throw IOException("Could not finish restoring import")
+            Durable.syncDir(dest)
         }
-        if (!dir.deleteRecursively()) throw IOException("Could not finish restoring import")
-        Durable.syncDir(root)
+        if (!(if (isDigital) DigitalStorage.deleteOwnedTree(dir) else dir.deleteRecursively()))
+            throw IOException("Could not finish restoring import")
+        Durable.syncDir(dir.parentFile!!)
     }
 
     private fun purge(dir: File) {
         val record = read(dir) ?: return
+        if (digital(dir) && File(dir, "document").exists() && record.phase != "PURGING") {
+            val payload = File(dir, "document")
+            val checked = DigitalStorage.read(payload) ?: throw IOException("Digital escrow damaged")
+            val expected = DigitalStorage.boundedLines(File(dir, "identity"), 128)
+            if (expected != listOf(checked.contentGeneration, checked.contentSha256) ||
+                File(payload, MARKER).readText() != dir.name) throw IOException("Digital escrow identity conflict")
+        }
         if (record.phase != "PURGING") write(dir, record.copy(phase = "PURGING"))
         fault(Stage.PURGE_STARTED)
         clearCaches(idOf(dir), File(dir, "document"))
@@ -305,8 +357,9 @@ class ImportDiscardStore(
             if (payload.exists()) requireOwnedTree(payload)
             if (payload.exists() && !payload.deleteRecursively()) throw IOException("Could not finish discard")
         }
-        if (!dir.deleteRecursively()) throw IOException("Could not finish discard")
-        Durable.syncDir(root)
+        if (!(if (digital(dir)) DigitalStorage.deleteOwnedTree(dir) else dir.deleteRecursively()))
+            throw IOException("Could not finish discard")
+        Durable.syncDir(dir.parentFile!!)
     }
 
     private fun move(from: File, to: File) {
@@ -343,8 +396,15 @@ class ImportDiscardStore(
     }
 
     private fun clearCaches(id: String, payload: File) {
-        payload.walkTopDown().filter { it.isFile }.forEach {
-            PageThumbLoader.invalidate(File(active(id), it.relativeTo(payload).path))
+        val isDigital = payload.parentFile?.let { digital(it) } == true
+        if (isDigital) {
+            val preview = File(app.cacheDir.canonicalFile, "digital_previews/$id")
+            if (preview.exists() && !DigitalStorage.deleteOwnedTree(preview))
+                throw IOException("Could not clear digital preview")
+        } else {
+            payload.walkTopDown().filter { it.isFile }.forEach {
+                PageThumbLoader.invalidate(File(active(id), it.relativeTo(payload).path))
+            }
         }
         listOf(File(app.cacheDir, "preview_$id.pdf"), File(app.cacheDir, "preview_$id.fp"),
             File(app.cacheDir, "documents/preview_$id.pdf")).forEach {
