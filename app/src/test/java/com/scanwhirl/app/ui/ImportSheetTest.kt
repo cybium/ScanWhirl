@@ -182,7 +182,7 @@ abstract class ImportSheetBase {
                     text.contains(app.getString(R.string.tools_import_plan_msg,
                         PdfImportSheets.formatSize(plan.estimateBytes),
                         PdfImportSheets.formatSize(plan.freeBytes))))
-                gate.findViewById<View>(R.id.swSheetSecondary).performClick()
+                gate.view.findViewById<View>(R.id.swSheetSecondary).performClick()
                 assertEquals("the cancelled decision is Cancel", "Cancel", decision)
                 assertEquals("cancel imports nothing", 0, docCount())
             }

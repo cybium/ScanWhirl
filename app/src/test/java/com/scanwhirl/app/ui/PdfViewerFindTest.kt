@@ -161,6 +161,13 @@ class PdfViewerFindTest {
     /** A row may not exist yet while a search is still running. */
     private fun safely(condition: () -> Boolean) = try { condition() } catch (_: NullPointerException) { false }
 
+    private fun snapshotLibrary(): Map<String, String> =
+        repo.docsDir.walkTopDown().filter { it.isFile }.associate { f ->
+            f.relativeTo(repo.docsDir).path to
+                MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) } +
+                "@" + f.lastModified()
+        }
+
     private fun layout(v: View, w: Int = 1080, h: Int = 1920) {
         v.measure(
             View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
