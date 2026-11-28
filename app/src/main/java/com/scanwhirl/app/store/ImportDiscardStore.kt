@@ -268,6 +268,11 @@ class ImportDiscardStore(
             move(document, dest)
         }
         if (!dest.isDirectory) throw IOException("Import is not available for recovery")
+        // R01 F1: a same-titled document can be created while the Undo receipt is live (the
+        // escrow is invisible to uniqueDocumentName). Resolve the title under the escrow's
+        // write lock, while the document is still hidden from docsDir readers, exactly as the
+        // Trash restore does — otherwise two different documents share an identical title.
+        repo.resolveNameBeforePublish(dest)
         val marker = File(dest, MARKER)
         if (!hadPayload && File(dir, "draft").exists() &&
             (!marker.isFile || marker.readText() != dir.name)) {

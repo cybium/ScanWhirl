@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
 import com.scanwhirl.app.model.ScanDocument
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +36,19 @@ object ShareUtils {
 
     /** Per-share folder names start with this marker, then the creation time. */
     private const val TOKEN_PREFIX = "x3-"
+
+    /**
+     * R09 F3: the disk work of a multi-file share never runs on the main thread. Callers launch
+     * the copy in the activity's lifecycle scope and only post the chooser back on main; names,
+     * URI order and the G1 guard (before the launch) are unchanged. A test can point this seam at
+     * a named single-thread dispatcher to prove the copy is off main and does not block it.
+     */
+    @Volatile internal var shareCopyDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    /** The copy itself; a seam so a test can observe which thread really performed it. */
+    @Volatile internal var namedShareCopy: (File, File) -> Unit = { src, out ->
+        src.copyTo(out, overwrite = false)
+    }
 
     fun share(context: Context, doc: ScanDocument) {
         when {
@@ -68,32 +82,62 @@ object ShareUtils {
      * ("Rent.pdf", "Rent (2).pdf"). The stored library files are never exposed or renamed. An
      * item that cannot be copied is skipped, like an unreadable one always was.
      */
-    fun namedUris(context: Context, items: List<Pair<File, String>>): List<Uri> {
-        val usable = items.filter { it.first.isFile }
-        if (usable.isEmpty()) return emptyList()
-        val dir = newShareDirectory(context)
-        val names = ExportNames.Allocator()
-        val uris = ArrayList<Uri>(usable.size)
-        for ((file, displayName) in usable) {
-            val out = File(dir, names.file(shareFileName(displayName)))
-            val uri = runCatching {
-                file.copyTo(out, overwrite = false)
-                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
-            }.getOrNull()
-            if (uri != null) uris += uri else out.delete()
+    suspend fun namedUris(context: Context, items: List<Pair<File, String>>): List<Uri> =
+        withContext(shareCopyDispatcher) {
+            val usable = items.filter { it.first.isFile }
+            if (usable.isEmpty()) return@withContext emptyList()
+            val dir = newShareDirectory(context)
+            val names = ExportNames.Allocator()
+            val uris = ArrayList<Uri>(usable.size)
+            for ((file, displayName) in usable) {
+                val out = File(dir, names.file(shareFileName(displayName)))
+                val uri = runCatching {
+                    namedShareCopy(file, out)
+                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
+                }.getOrNull()
+                if (uri != null) uris += uri else out.delete()
+            }
+            uris
         }
-        return uris
-    }
 
     /** Library multi-select Share: every document's PDF under its own name in one chooser. */
     fun shareDocuments(context: Context, docs: List<ScanDocument>) {
-        val uris = namedUris(context, documentItems(docs))
-        if (uris.isEmpty()) {
-            Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
-            return
+        val items = documentItems(docs)
+        launchShare(context) {
+            val uris = namedUris(context, items)
+            if (uris.isEmpty()) {
+                Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
+            } else {
+                startChooser(context, multiShareIntent(context, uris, "application/pdf"), R.string.share_pdf)
+            }
         }
-        val intent = multiShareIntent(context, uris, "application/pdf")
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
+    }
+
+    /**
+     * The share counterpart of [shareCopy]'s launch: start on the activity's main lifecycle
+     * scope, resume on main after the IO copies, and never touch UI for a dead activity.
+     * [block] is always entered on main; it suspends only inside the named copy helpers.
+     */
+    internal fun launchShare(context: Context, block: suspend () -> Unit) {
+        val scope = (context as? LifecycleOwner)?.lifecycleScope
+            ?: CoroutineScope(Dispatchers.Main.immediate)
+        scope.launch(Dispatchers.Main.immediate) {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                if (context is Activity && (context.isFinishing || context.isDestroyed)) return@launch
+                // No misleading "shared" state after a failed copy; reuse the honest error.
+                Toast.makeText(context, shareFailureMessage(context, e), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** The one chooser hop: on main only, and never for a finishing/destroyed activity. */
+    fun startChooser(context: Context, intent: Intent, titleRes: Int) {
+        if (context is Activity && (context.isFinishing || context.isDestroyed)) return
+        context.startActivity(Intent.createChooser(intent, context.getString(titleRes)))
     }
 
     /** Shares any file with an explicit MIME type (ZIP, PDF, image, …). */
@@ -180,13 +224,14 @@ object ShareUtils {
             Toast.makeText(context, R.string.nothing_to_share, Toast.LENGTH_SHORT).show()
             return
         }
-        val uris = ArrayList<Uri>(files.size)
-        files.forEachIndexed { i, page ->
-            val named = namedCopy(context, page, "${sanitize(docName)} - page ${i + 1}.jpg")
-            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
+        launchShare(context) {
+            val uris = ArrayList<Uri>(files.size)
+            files.forEachIndexed { i, page ->
+                val named = namedCopy(context, page, "${sanitize(docName)} - page ${i + 1}.jpg")
+                uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
+            }
+            startChooser(context, multiShareIntent(context, uris, "image/*"), R.string.share_pdf)
         }
-        val intent = multiShareIntent(context, uris, "image/*")
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
     }
 
     /**
@@ -236,13 +281,14 @@ object ShareUtils {
     }
 
     private fun sharePages(context: Context, doc: ScanDocument) {
-        val uris = ArrayList<Uri>(doc.pageFiles.size)
-        doc.pageFiles.forEachIndexed { i, page ->
-            val named = namedCopy(context, page, "${sanitize(doc.name)} - page ${i + 1}.jpg")
-            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
+        launchShare(context) {
+            val uris = ArrayList<Uri>(doc.pageFiles.size)
+            doc.pageFiles.forEachIndexed { i, page ->
+                val named = namedCopy(context, page, "${sanitize(doc.name)} - page ${i + 1}.jpg")
+                uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named))
+            }
+            startChooser(context, multiShareIntent(context, uris, "image/*"), R.string.share_pdf)
         }
-        val intent = multiShareIntent(context, uris, "image/*")
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_pdf)))
     }
 
     /**
@@ -300,12 +346,13 @@ object ShareUtils {
         return entry.lastModified()
     }
 
-    /** Copies [src] into a fresh share folder under its display name. */
-    private fun namedCopy(context: Context, src: File, displayName: String): File {
-        val out = newShareTarget(context, displayName)
-        src.copyTo(out, overwrite = false)
-        return out
-    }
+    /** Copies [src] into a fresh share folder under its display name, off the main thread. */
+    private suspend fun namedCopy(context: Context, src: File, displayName: String): File =
+        withContext(shareCopyDispatcher) {
+            val out = newShareTarget(context, displayName)
+            namedShareCopy(src, out)
+            out
+        }
 
     /** A name without an extension: illegal characters replaced, 60 code points at most (H2-3). */
     private fun sanitize(name: String): String = ExportNames.sanitizeBase(name, "scan")

@@ -1,5 +1,6 @@
 package com.scanwhirl.app
 
+import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -87,6 +88,16 @@ class G1PrivacyFixTest {
         return condition()
     }
 
+    /** R09 F3: the chooser is posted after the IO copies; a single idle() races it. */
+    private fun chooserAfterCopy(activity: Activity): Intent? {
+        var chooser: Intent? = null
+        waitUntil(5_000) {
+            chooser = shadowOf(activity).nextStartedActivity
+            chooser != null
+        }
+        return chooser
+    }
+
     private fun dirOf(id: String) = File(repo.docsDir, id)
 
     /** Plain scan.pdf + stale locked.meta — the documented crash window. */
@@ -141,8 +152,7 @@ class G1PrivacyFixTest {
                 // Drop anything the shell started while loading.
                 while (shadowOf(activity).nextStartedActivity != null) Unit
                 activity.findViewById<View>(R.id.swSelShare).performClick()
-                idle()
-                check(shadowOf(activity).nextStartedActivity)
+                check(chooserAfterCopy(activity))
             }
         }
     }

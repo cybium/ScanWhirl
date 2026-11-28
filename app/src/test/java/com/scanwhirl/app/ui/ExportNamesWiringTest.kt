@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui
 import com.scanwhirl.app.util.ResetDialogShadowsRule
 import org.junit.Rule
 
+import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.content.pm.ProviderInfo
@@ -96,6 +97,16 @@ class ExportNamesWiringTest {
         return condition()
     }
 
+    /** R09 F3: the chooser is posted after the IO copies; wait up to 15 s instead of one idle(). */
+    private fun chooserAfterCopy(activity: Activity): Intent? {
+        var chooser: Intent? = null
+        waitUntil {
+            chooser = shadowOf(activity).nextStartedActivity
+            chooser != null
+        }
+        return chooser
+    }
+
     /** The file names a multi share hands to the receiver (EXTRA_STREAM), in order. */
     @Suppress("DEPRECATION")
     private fun sharedNames(chooser: Intent): List<String> {
@@ -132,8 +143,7 @@ class ExportNamesWiringTest {
                 idle()
                 while (shadowOf(activity).nextStartedActivity != null) Unit
                 activity.findViewById<View>(R.id.swSelShare).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
                 assertEquals(
                     listOf("Electricity.pdf", "Rent receipt (2).pdf", "Rent receipt.pdf"),
@@ -170,8 +180,7 @@ class ExportNamesWiringTest {
             scenario.onActivity { activity ->
                 while (shadowOf(activity).nextStartedActivity != null) Unit
                 ShadowDialog.getLatestDialog().findViewById<View>(R.id.swSheetPrimary).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share all opens the sharesheet", chooser)
                 assertEquals(
                     listOf("Gas bill (2).pdf", "Water bill (2).pdf"),
@@ -195,8 +204,7 @@ class ExportNamesWiringTest {
             scenario.onActivity { activity ->
                 idle()
                 activity.findViewById<View>(R.id.toolResultShare).performClick()
-                idle()
-                val chooser = shadowOf(activity).nextStartedActivity
+                val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
                 assertEquals(listOf("Part one.pdf", "Part two.pdf"), sharedNames(chooser))
             }

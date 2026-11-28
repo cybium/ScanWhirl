@@ -761,25 +761,29 @@ class BatchActivity : BaseActivity() {
             }
         }
         val shareable = items.filter { it.first.isFile }.distinctBy { it.first }
-        val uris = ShareUtils.namedUris(this, shareable)
-        if (uris.isEmpty()) {
-            Toast.makeText(this, R.string.tools_result_nothing, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val type = if (items.all { it.second.endsWith(".pdf") }) "application/pdf" else "*/*"
-        val intent = if (uris.size == 1) {
-            Intent(Intent.ACTION_SEND).apply {
-                this.type = type
-                putExtra(Intent.EXTRA_STREAM, uris.first())
-                clipData = ClipData(ClipDescription("ScanWhirl batch", arrayOf(type)), ClipData.Item(uris.first()))
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // R09 F3: the copies run on IO inside namedUris; this launch keeps the chooser on main
+        // and the click callback responsive while a large batch is being copied.
+        ShareUtils.launchShare(this) {
+            val uris = ShareUtils.namedUris(this@BatchActivity, shareable)
+            if (uris.isEmpty()) {
+                Toast.makeText(this@BatchActivity, R.string.tools_result_nothing, Toast.LENGTH_SHORT).show()
+                return@launchShare
             }
-        } else {
-            // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
-            // so a ClipData with only the first file shared one file of a batch.
-            ShareUtils.multiShareIntent(this, uris, type, "ScanWhirl batch")
+            val type = if (items.all { it.second.endsWith(".pdf") }) "application/pdf" else "*/*"
+            val intent = if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).apply {
+                    this.type = type
+                    putExtra(Intent.EXTRA_STREAM, uris.first())
+                    clipData = ClipData(ClipDescription("ScanWhirl batch", arrayOf(type)), ClipData.Item(uris.first()))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } else {
+                // fixshare: every Uri must be in ClipData too — the Android 10+ grant model follows it,
+                // so a ClipData with only the first file shared one file of a batch.
+                ShareUtils.multiShareIntent(this@BatchActivity, uris, type, "ScanWhirl batch")
+            }
+            ShareUtils.startChooser(this@BatchActivity, intent, R.string.tools_batch_share_all)
         }
-        startActivity(Intent.createChooser(intent, getString(R.string.tools_batch_share_all)))
     }
 
     private fun showLibrary(results: List<ScanRepository.BatchItem>) {

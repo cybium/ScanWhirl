@@ -400,7 +400,7 @@ class ScanRepository(private val context: Context) {
             .mapNotNull { loadDocument(it)?.name })
 
     /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
-    private fun resolveNameBeforePublish(dir: File) {
+    internal fun resolveNameBeforePublish(dir: File) {
         updateMeta(dir) { lines ->
             if (lines.isNotEmpty()) lines[0] = uniqueDocumentName(dir, lines[0])
         }
