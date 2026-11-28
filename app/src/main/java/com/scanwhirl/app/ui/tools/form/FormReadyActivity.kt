@@ -509,6 +509,7 @@ class FormReadyActivity : BaseActivity() {
         SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_action_accent), bold = true).apply {
             id = R.id.formReadyKbInfo
             text = getString(R.string.form1_kb_info)
+            contentDescription = getString(R.string.form1_kb_info_title)
             maxLines = Int.MAX_VALUE
             minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
             gravity = Gravity.CENTER_VERTICAL

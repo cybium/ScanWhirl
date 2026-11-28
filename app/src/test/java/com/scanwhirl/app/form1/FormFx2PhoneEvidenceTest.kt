@@ -389,6 +389,10 @@ class FormFx2PhoneEvidenceTest {
         }
         val plain = apply(false)
         val plainRect = plain.first.cropRectForTest()
+        // J1: whole photo is now the default, so both renditions must use the SAME explicit frame
+        // before their ink is compared. Previously both were cropped implicitly.
+        plain.first.setCropRectForTest(plainRect)
+        idle()
         plain.first.findViewById<View>(R.id.formReadyApply).performClick()
         assertTrue("plain file never made", waitUntil { plain.first.lastOutputForTest() != null })
         val plainOut = decodeFile(plain.first.lastOutputForTest()!!)

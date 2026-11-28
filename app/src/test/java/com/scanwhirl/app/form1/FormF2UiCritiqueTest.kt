@@ -99,25 +99,28 @@ class FormF2UiCritiqueTest {
     }
 
     @Test(timeout = 30_000)
-    fun `choose photo sits directly below the presets and the empty crop canvas stays hidden`() {
+    fun `rules come first and the whole-photo preview replaces the hidden crop canvas`() {
         val c = controller()
         try {
             val a = c.get()
             idle()
-            val row3 = a.findViewById<View>(R.id.formReadyPresetRow3)
-            val column = row3.parent as ViewGroup
+            val column = a.findViewById<View>(R.id.formReadyPresetRow3).parent as ViewGroup
             val pick = a.findViewById<View>(R.id.formReadyPick)
-            assertEquals(
-                "Choose photo must be the very next control after the preset grid",
-                pick,
-                column.getChildAt(column.indexOfChild(row3) + 1)
+            // J1 spec: rules first, then ONE Choose photo primary. The old "immediately after the
+            // preset grid" pin described the pre-overhaul order and was deliberately replaced.
+            assertTrue(
+                "Choose photo must come after the editable rules",
+                column.indexOfChild(pick) > column.indexOfChild(a.findViewById(R.id.formReadyKbInfo))
             )
             assertEquals(View.VISIBLE, pick.visibility)
             assertEquals("empty preview must not take up space", View.GONE, a.findViewById<View>(R.id.formReadyCrop).visibility)
+            assertEquals(View.GONE, a.findViewById<View>(R.id.formReadyFitPreview).visibility)
 
             a.acceptPickedBytes(jpeg())
             assertTrue("photo never loaded", waitUntil { a.hasImageForTest() })
-            assertEquals("preview appears only once a photo exists", View.VISIBLE, a.findViewById<View>(R.id.formReadyCrop).visibility)
+            // Whole photo is the default; the crop canvas appears only on an explicit tap.
+            assertEquals("fit preview appears once a photo exists", View.VISIBLE, a.findViewById<View>(R.id.formReadyFitPreview).visibility)
+            assertEquals(View.GONE, a.findViewById<View>(R.id.formReadyCrop).visibility)
         } finally {
             c.pause().stop().destroy()
         }

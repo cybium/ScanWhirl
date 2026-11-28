@@ -90,7 +90,7 @@
     <string name="form1_max_width">Max width</string>
     <string name="form1_min_height">Min height</string>
     <string name="form1_max_height">Max height</string>
-    <string name="form1_kb_info">About KB</string>
+    <string name="form1_kb_info">1 KB = 1024 B</string>
     <string name="form1_kb_info_title">What KB means here</string>
     <string name="form1_kb_info_body">Form photos use 1 KB = 1024 bytes. This tool measures the saved JPG and shows its real size. A form notice may use a different rule; check yours.</string>
     <string name="form1_keep_whole">Keep whole photo</string>
