@@ -1144,7 +1144,16 @@ def open_tool_tile(tool_id, title):
     type_text(alias)
     back()  # keyboard only: the results stay, as in flow_driver F2
     time.sleep(0.5)
-    node = wait_for({"rid": "swToolLabel"}, timeout=6)
+    node = wait_for({"rid": "swToolLabel"}, timeout=10)
+    if node is None:
+        # Hindi IME/search results can be slow; clear and retype once before
+        # recording a failed tool capture (W5e self-check).
+        if tap({"rid": "swToolsClear"}, timeout=2):
+            tap({"rid": "swToolsSearch"}, timeout=3)
+            type_text(alias)
+            back()
+            time.sleep(0.5)
+            node = wait_for({"rid": "swToolLabel"}, timeout=8)
     if node is None:
         return False, "no result for %s" % alias
     root = hierarchy()  # fresh tree for the clickable ancestor lookup
