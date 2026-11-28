@@ -24,23 +24,55 @@ class VaultScreen(
         )
     }
     private lateinit var statusView: android.widget.TextView
+    private lateinit var noteView: android.widget.TextView
+    private lateinit var actionView: android.widget.TextView
+    private lateinit var factView: android.widget.TextView
+    private lateinit var relockRow: android.widget.LinearLayout
 
-    /** v2 UI: 04_vault — L2's live state: set up, locked/unlocked and how many files. */
+    private enum class State { NOT_SET_UP, LOCKED, UNLOCKED }
+
+    /**
+     * VQA V049/V050: one state read, applied to every piece of status copy. The tab must never
+     * claim protection ("encrypted", "AES-256", "Open Vault") while the Vault does not exist.
+     * Nothing here changes the Vault's setup, gate or recovery logic — it only reads the state.
+     */
     fun refreshStatus() {
         if (!::statusView.isInitialized) return
-        val text = runCatching {
+        val state = runCatching {
             when {
-                !store.isSetUp() -> context.getString(R.string.vault_tab_not_setup)
-                com.scanwhirl.app.store.vault.VaultSession.isUnlocked() -> {
-                    val count = runCatching { store.listEntries().size }.getOrDefault(0)
-                    context.resources.getQuantityString(
-                        R.plurals.vault_tab_unlocked, count, count
-                    )
-                }
-                else -> context.getString(R.string.vault_tab_locked)
+                !store.isSetUp() -> State.NOT_SET_UP
+                com.scanwhirl.app.store.vault.VaultSession.isUnlocked() -> State.UNLOCKED
+                else -> State.LOCKED
             }
-        }.getOrDefault(context.getString(R.string.vault_tab_locked))
-        statusView.text = text
+        }.getOrDefault(State.LOCKED)
+        noteView.text = context.getString(
+            when (state) {
+                State.NOT_SET_UP -> R.string.vault_tab_note_not_setup
+                State.LOCKED -> R.string.vault_tab_note_locked
+                State.UNLOCKED -> R.string.vault_tab_note_unlocked
+            }
+        )
+        statusView.text = when (state) {
+            State.NOT_SET_UP -> context.getString(R.string.vault_tab_not_setup)
+            State.LOCKED -> context.getString(R.string.vault_tab_locked)
+            State.UNLOCKED -> {
+                val count = runCatching { store.listEntries().size }.getOrDefault(0)
+                context.resources.getQuantityString(R.plurals.vault_tab_unlocked, count, count)
+            }
+        }
+        actionView.text = context.getString(
+            when (state) {
+                State.NOT_SET_UP -> R.string.vault_tab_setup
+                State.LOCKED -> R.string.vault_tab_unlock
+                State.UNLOCKED -> R.string.vault_tab_open
+            }
+        )
+        factView.text = context.getString(
+            if (state == State.NOT_SET_UP) R.string.vault_tab_fact_empty
+            else R.string.vault_tab_fact_on_phone
+        )
+        relockRow.visibility = if (state == State.NOT_SET_UP) android.view.View.GONE
+        else android.view.View.VISIBLE
     }
 
     /**
@@ -103,7 +135,8 @@ class VaultScreen(
         emblem.addView(
             SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
                 id = R.id.swVaultNote
-                text = context.getString(R.string.vault_tab_encrypted)
+                noteView = this
+                text = context.getString(R.string.vault_tab_note_not_setup)
                 gravity = Gravity.CENTER
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -125,39 +158,52 @@ class VaultScreen(
                 .apply { topMargin = SwStyle.dp(context, 12f) }
         )
 
-        // v2 UI: 04_vault — the honest facts, so the tab is never half empty.
+        // VQA V051/V052: one plain-language fact per short row, icon first and never dropped
+        // into wrapped text. No algorithm name is shown to a person choosing a private space.
+        fun factRow(icon: Int, initial: Int): Pair<android.widget.LinearLayout, android.widget.TextView> {
+            val row = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.TOP
+                minimumHeight = SwStyle.dp(context, 48f)
+            }
+            row.addView(
+                ImageView(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+                    importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
+                    .apply {
+                        marginEnd = SwStyle.dp(context, 10f)
+                        topMargin = SwStyle.dp(context, 3f)
+                    }
+            )
+            val text = SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
+                setText(initial)
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            }
+            row.addView(text, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            return row to text
+        }
+
         val facts = LinearLayout(context).apply {
             orientation = VERTICAL
             background = SwStyle.card(context, 18f)
             val pad = SwStyle.dp(context, 16f)
             setPadding(pad, pad, pad, pad)
         }
-        for (line in listOf(R.string.vault_tab_aes, R.string.vault_tab_relock)) {
-            val row = LinearLayout(context).apply {
-                orientation = HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = SwStyle.dp(context, 34f)
-            }
-            row.addView(
-                ImageView(context).apply {
-                    setImageResource(
-                        if (line == R.string.vault_tab_aes) R.drawable.ic_sym_encrypted
-                        else R.drawable.ic_sym_lock
-                    )
-                    imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
-                    importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                },
-                LayoutParams(SwStyle.dp(context, 18f), SwStyle.dp(context, 18f))
-                    .apply { marginEnd = SwStyle.dp(context, 10f) }
-            )
-            row.addView(
-                SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.text_hologram_mid)).apply {
-                    setText(line)
-                },
-                LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            )
-            facts.addView(row)
-        }
+        val (firstRow, firstText) = factRow(
+            R.drawable.ic_sym_shield_lock, R.string.vault_tab_fact_empty
+        )
+        factView = firstText
+        facts.addView(firstRow)
+        val (relock, _) = factRow(R.drawable.ic_sym_lock, R.string.vault_tab_relock)
+        relockRow = relock
+        facts.addView(
+            relockRow,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 8f) }
+        )
         addView(
             facts,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -166,7 +212,8 @@ class VaultScreen(
 
         val action = SwStyle.text(context, 15f, SwStyle.color(context, R.color.sw_disc_ink), bold = true).apply {
             id = R.id.swVaultAction
-            text = context.getString(R.string.vault_tab_open)
+            actionView = this
+            text = context.getString(R.string.vault_tab_setup)
             gravity = Gravity.CENTER
             background = SwStyle.rounded(
                 context, SwStyle.color(context, R.color.cyan_primary), radiusDp = 16f

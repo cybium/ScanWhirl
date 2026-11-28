@@ -18,6 +18,10 @@
         app:titleTextAppearance="@style/TextAppearance.ScanWhirl.ToolbarTitle"
         app:titleTextColor="@color/text_hologram_hi" />
 
+    <!-- VQA V107: no extra purpose line here. The OCR screen is already at its reviewed word
+         budget (62) and 320dp text-fit limit; the Searchable PDF first screen carries the
+         plain-language distinction. -->
+
     <!-- Page tabs: ChipGroup, only visible when there is more than one page. -->
     <HorizontalScrollView
         android:id="@+id/pageTabScroll"

@@ -159,8 +159,16 @@
     <string name="me_about_summary">संस्करण और निजता</string>
 
     <string name="vault_tab_title">तिजोरी</string>
-    <string name="vault_tab_encrypted">इस फ़ोन पर कोड के बिना नहीं पढ़ी जा सकतीं</string>
+    <!-- VQA V049/V050/V051: पुराने नाम परोक्ष रखे गए हैं; बिना सेटअप कोई सुरक्षा दावा नहीं। -->
+    <string name="vault_tab_encrypted">आपकी फ़ाइलों के लिए निजी जगह</string>
     <string name="vault_tab_open">तिजोरी खोलें</string>
+    <string name="vault_tab_note_not_setup">आपकी फ़ाइलों के लिए निजी जगह</string>
+    <string name="vault_tab_note_locked">इस फ़ोन पर ताला लगा है</string>
+    <string name="vault_tab_note_unlocked">इस फ़ोन पर खुली है</string>
+    <string name="vault_tab_setup">तिजोरी बनाएँ</string>
+    <string name="vault_tab_unlock">ताला खोलें</string>
+    <string name="vault_tab_fact_empty">अभी कुछ छिपाया नहीं गया</string>
+    <string name="vault_tab_fact_on_phone">फ़ाइलें इसी फ़ोन पर रहती हैं</string>
 
     <string name="sheet_cancel">रद्द करें</string>
     <string name="sheet_got_it">समझ गया</string>
@@ -264,7 +272,7 @@
     <string name="vault_tab_status_loading">देख रहे हैं…</string>
     <string name="vault_tab_not_setup">अभी बनी नहीं</string>
     <string name="vault_tab_locked">ताला लगा है</string>
-    <string name="vault_tab_aes">इस फ़ोन पर AES-256</string>
+    <string name="vault_tab_aes">फ़ाइलें इसी फ़ोन पर रहती हैं</string>
     <string name="vault_tab_relock">उँगली का निशान या गुप्त नंबर से खुलती है · 2 मिनट बाद ताला</string>
 
     <plurals name="vault_tab_unlocked">

@@ -35,6 +35,9 @@ object ImportSheet {
         }
 
         ViewCompat.setAccessibilityHeading(view.findViewById<TextView>(R.id.importTitle), true)
+        // D1: this door states the rasterisation fact itself. ImportRasterNotice is the single
+        // source, so a future digital-PDF path can hide it without editing this layout.
+        view.findViewById<TextView>(R.id.importPdfRasterNote).text = ImportRasterNotice.text(activity)
         view.findViewById<View>(R.id.importPhotos).apply {
             asButton()
             setOnClickListener { choose(onPhotos) }

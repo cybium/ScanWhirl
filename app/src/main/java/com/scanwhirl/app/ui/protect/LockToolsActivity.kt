@@ -20,6 +20,7 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.DocumentPicker
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.tools.ToolFirstScreenCopy
 
 /**
  * The Tools/Home "Protect PDF" and "Unlock PDF" entries: a document chooser, then the real sheet.
@@ -86,6 +87,25 @@ class LockToolsActivity : BaseActivity(), HomeHost {
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         )
+        // VQA V106: "Protect" and "Protect PDF" name the same action; "Unlock" must not reuse a
+        // closed-padlock promise. This screen says what each one does before the chooser opens.
+        ToolFirstScreenCopy.text(
+            this@LockToolsActivity, if (mode == MODE_PROTECT) "protect" else "unlock"
+        )?.let { purpose ->
+            addView(
+                SwStyle.text(
+                    this@LockToolsActivity,
+                    14f,
+                    SwStyle.color(this@LockToolsActivity, R.color.text_hologram_mid)
+                ).apply {
+                    id = R.id.toolFirstPurpose
+                    text = purpose
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(6) }
+            )
+        }
         // The chooser closes before it opens the next sheet or the Android file picker.
         // Returning here (for example after cancelling Protect) must leave a usable screen.
         val choose = MaterialButton(this@LockToolsActivity).apply {

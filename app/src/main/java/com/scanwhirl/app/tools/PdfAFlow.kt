@@ -11,6 +11,7 @@ import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.ProOffer
 import com.scanwhirl.app.ui.kit.SwSheet
+import com.scanwhirl.app.ui.tools.ToolFirstScreenCopy
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.PdfA
 import com.scanwhirl.app.util.PdfGenerator
@@ -52,7 +53,11 @@ object PdfAFlow {
         }
         SwSheet.builder(activity)
             .setTitle(R.string.tool_pdfa)
-            .setMessage(confirmIdentity(activity, doc) + "\n\n" + activity.getString(R.string.pdfa_note))
+            // VQA V114: "PDF/A" alone is a format noun; say what the copy is for.
+            .setMessage(
+                ToolFirstScreenCopy.text(activity, "pdfa").orEmpty() + "\n\n" +
+                    confirmIdentity(activity, doc) + "\n\n" + activity.getString(R.string.pdfa_note)
+            )
             .setPrimary(R.string.pdfa_create) {
                 create(activity, repo, doc)
             }

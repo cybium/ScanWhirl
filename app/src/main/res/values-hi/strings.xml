@@ -123,7 +123,11 @@
     <string name="import_pdf">PDF फ़ाइल</string>
     <string name="import_subtitle">चुनें कि पन्ने कहाँ से आ रहे हैं।</string>
     <string name="import_photos_desc">अपनी फ़ोटो से</string>
-    <string name="import_pdf_desc">PDF के पन्ने तस्वीर बनकर आएँगे</string>
+    <!-- VQA: "संपादन योग्य" का वादा नहीं; D1 सूचना ImportRasterNotice से आती है। -->
+    <string name="import_pdf_desc">इस फ़ोन की PDF से</string>
+    <string name="import_raster_notice_title">आयात से पहले</string>
+    <string name="import_raster_notice">आयात करने पर पन्ने तस्वीरें बन जाएँगे; लिखा हुआ चुनना संभव नहीं होगा।</string>
+    <string name="import_raster_notice_continue">आगे बढ़ें</string>
     <string name="import_order_note">Android का फ़ोटो चुनने वाला हिस्सा तस्वीरें अलग क्रम में दे सकता है, इसलिए सहेजने से पहले जाँच में पन्नों का क्रम देख लें।</string>
     <string name="empty_scan_button">एक दस्तावेज़ स्कैन करें</string>
     <string name="empty_import_button">फ़ोटो या एक PDF लाएँ</string>
