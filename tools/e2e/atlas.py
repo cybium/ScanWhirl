@@ -481,10 +481,11 @@ def hierarchy():
 
 
 def match(node, rid=None, desc=None, text=None, regex=None, cls=None,
-          text_contains=None):
+          text_contains=None, pkg=None):
     resource_id = node.get("resource-id") or ""
     return (
-        (rid is None or rid_name(node) == rid or resource_id.endswith("/" + rid))
+        (pkg is None or (node.get("package") or "") == pkg)
+        and (rid is None or rid_name(node) == rid or resource_id.endswith("/" + rid))
         and (desc is None or (node.get("content-desc") or "") == desc)
         and (text is None or (node.get("text") or "") == text)
         and (text_contains is None or text_contains in (node.get("text") or ""))
@@ -805,9 +806,9 @@ def open_tool(title):
     tap({"rid": "swToolsSearch"}, timeout=8)
     type_text(title)
     back()
-    # A tool row is a custom TextView, not a Button; the old cls filter silently
-    # dropped every result and left both result walks uncovered.
-    return tap_reachable({"regex": re.escape(title)}, swipes=2)
+    # A tool row is a custom TextView, not a Button. Match the app's own node only:
+    # the IME suggestion strip repeats the typed word and swallowed the old tap.
+    return tap_reachable({"text": title, "pkg": PKG}, swipes=2)
 
 
 def capture_result(kind):
@@ -845,6 +846,10 @@ def walk_results():
     def form():
         if not open_tool("Form photo"):
             return "Form photo tile unavailable"
+        if wait_for({"rid": "formReadyPick"}, timeout=12) is None:
+            capture("result", "form-photo-no-pick", ["Tools", "Form photo"],
+                    "Setup did not expose Choose photo")
+            return "Choose photo unavailable"
         if not tap_reachable({"rid": "formReadyPick"}):
             return "Choose photo unavailable"
         # GetContent often offers the seeded photo in Recent; only browse roots if
