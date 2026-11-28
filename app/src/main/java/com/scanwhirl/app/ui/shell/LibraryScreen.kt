@@ -908,6 +908,17 @@ class LibraryScreen(
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             isClickable = true
             isFocusable = true
+            if (active) {
+                // V028: the selected folder/category has a visible marker, not just teal text.
+                val check = androidx.appcompat.content.res.AppCompatResources
+                    .getDrawable(context, R.drawable.ic_sym_check)?.mutate()
+                val size = SwStyle.dp(context, 18f)
+                check?.setBounds(0, 0, size, size)
+                check?.setTint(SwStyle.color(context, R.color.cyan_primary))
+                setCompoundDrawablesRelative(check, null, null, null)
+                compoundDrawablePadding = SwStyle.dp(context, 8f)
+                contentDescription = context.getString(R.string.sort_selected, label)
+            }
             setOnClickListener { onClick() }
         }
 
@@ -1013,7 +1024,9 @@ class LibraryScreen(
             )
         }
 
-        list.addView(sheetHeading(context.getString(R.string.cb_categories)))
+        // V111: say plainly that categories are a second, separate way to organise, so
+        // "All folders", "Manage folders" and "Set category" do not read as one system.
+        list.addView(sheetHeading(context.getString(R.string.rs_categories_separate)))
         categoryRow = LinearLayout(context).apply {
             id = R.id.swChipRow
             orientation = VERTICAL
@@ -1036,14 +1049,16 @@ class LibraryScreen(
             .setContent(scroll)
             .setSecondary(R.string.sheet_cancel)
             .build()
-        built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
+        // V027: "New folder" is the one plain row right under "All"; a second filled
+        // footer button for the same action made the chooser look duplicated.
         chooserSheet = built
         built.show()
     }
 
     /** A section caption inside the shared folder/category chooser. */
     private fun sheetHeading(label: String): TextView =
-        SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+        // V028: a group caption is neutral, not another teal "selected" control.
+        SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             text = label
             contentDescription = label
             minimumHeight = SwStyle.dp(context, 48f)
@@ -1167,23 +1182,42 @@ class LibraryScreen(
                 }
             }
         }
+        // V017: a short visible label (the spoken name keeps the full one) fits at 200%.
+        // V018: More opens a real sheet so the second state is unmistakable; the two chip
+        // views stay in the tree (hidden) as the named controls the rest of the app uses.
+        val renameSelected: () -> Unit = {
+            if (selected.size >= 2) requirePro { showBatchRename() }
+            else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
+        }
+        val deleteSelected: () -> Unit = { confirmDeleteSelection() }
         val more = SwChip(context).apply {
             id = R.id.cbSelMore
-            bind(R.drawable.ic_sym_more_horiz, context.getString(R.string.cb_more_actions))
+            bind(R.drawable.ic_sym_more_horiz, context.getString(R.string.rs_more))
+            contentDescription = context.getString(R.string.cb_more_actions)
             minimumHeight = SwStyle.dp(context, 48f)
             minimumWidth = SwStyle.dp(context, 48f)
-            setOnClickListener { overflow.isVisible = !overflow.isVisible }
+            setOnClickListener {
+                com.scanwhirl.app.ui.kit.SwSheet.builder(context)
+                    .setTitle(context.getString(R.string.cb_more_actions))
+                    .setOptions(
+                        listOf(
+                            context.getString(R.string.sel_rename),
+                            context.getString(R.string.ux130_l1_move_to_trash)
+                        )
+                    ) { which, _ ->
+                        if (which == 0) renameSelected() else deleteSelected()
+                    }
+                    .build()
+                    .show()
+            }
         }
         actions.addView(
             more,
             LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                 .apply { marginEnd = SwStyle.dp(context, 8f) }
         )
-        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
-            if (selected.size >= 2) requirePro { showBatchRename() }
-            else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
-        }
-        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash) { confirmDeleteSelection() }
+        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename, renameSelected)
+        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash, deleteSelected)
         scroll.addView(actions)
         bar.addView(
             scroll,
@@ -1770,7 +1804,8 @@ class LibraryScreen(
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
-            setPadding(0, SwStyle.dp(context, 6f), 0, 0)
+            // V095: give the count its own breathing room under the field in every leg.
+            setPadding(0, SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 6f))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             isFocusable = true
             // P1: these lines sit on the bare wallpaper scrim without a surface otherwise.
@@ -1778,10 +1813,13 @@ class LibraryScreen(
         }
         val wrap = LinearLayout(context).apply {
             orientation = VERTICAL
-            background = readableBand()
+            // V026: the field owns the one outline; a second band around the wrapper drew
+            // an offset edge beneath and to the left of it.
         }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
-        wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = SwStyle.dp(context, 4f)
+        })
         return wrap.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
@@ -2176,7 +2214,7 @@ class LibraryScreen(
             context.getString(R.string.sort_oldest),
             context.getString(R.string.sort_name_az),
             context.getString(R.string.sort_name_za),
-            context.getString(R.string.sort_size)
+            context.getString(R.string.rs_sort_size_desc)
         )
         val checked = values.indexOf(sort).coerceAtLeast(0)
         SwSheet.builder(context)

@@ -708,19 +708,22 @@ class ProScreen(
     internal fun featureCellsForTest(): List<View> = featureCells
 
     private fun feature(icon: Int, label: Int): View {
+        // V076/V077: at 200 % the icon sits above the label, giving a long word the whole
+        // cell width, and every cell gets the same floor so sibling tiles stay the same height.
+        val stacked = resources.configuration.fontScale >= 1.6f
         val cell = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
             background = SwStyle.rounded(
                 context,
                 0x2AFFB800,
                 radiusDp = 16f,
                 stroke = 0x2EFFB800
             )
-            // A little more room for the label at 200% keeps a single long word from clipping.
-            val pad = SwStyle.dp(context, if (resources.configuration.fontScale >= 1.6f) 10f else 12f)
-            setPadding(pad, SwStyle.dp(context, 6f), pad, SwStyle.dp(context, 6f))
-            minimumHeight = SwStyle.dp(context, 48f)
+            val pad = SwStyle.dp(context, if (stacked) 10f else 12f)
+            setPadding(pad, SwStyle.dp(context, if (stacked) 12f else 6f),
+                pad, SwStyle.dp(context, if (stacked) 12f else 6f))
+            minimumHeight = SwStyle.dp(context, if (stacked) 96f else 48f)
         }
         cell.addView(
             ImageView(context).apply {
@@ -728,8 +731,10 @@ class ProScreen(
                 imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.gold_pro_primary))
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             },
-            LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f))
-                .apply { marginEnd = SwStyle.dp(context, 10f) }
+            LayoutParams(SwStyle.dp(context, 22f), SwStyle.dp(context, 22f)).apply {
+                if (stacked) bottomMargin = SwStyle.dp(context, 8f)
+                else marginEnd = SwStyle.dp(context, 10f)
+            }
         )
         cell.addView(
             SwStyle.text(context, 13.5f, SwStyle.color(context, R.color.copydiet_pro2_primary), bold = true).apply {
@@ -737,9 +742,15 @@ class ProScreen(
                 // UX5-3: SwStyle.text applied the 13.5sp token; no px cap. Three wrap lines are
                 // allowed so the measured height always matches the laid-out text at 130/200%.
                 maxLines = 3
+                ellipsize = null
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                gravity = if (stacked) Gravity.CENTER else Gravity.START
+                //noinspection WrongConstant
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
                 setLineSpacing(0f, 1.1f)
             },
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            if (stacked) LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            else LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
         return cell
     }

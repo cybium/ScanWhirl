@@ -59,6 +59,10 @@
     <string name="rs_where_documents_existing">Documents/ScanWhirl में पहले से है</string>
     <string name="rs_where_chosen">चुनी जगह पर सहेजी गई</string>
     <string name="rs_details_title">विवरण</string>
+    <!-- V029: आकार क्रम की दिशा; V028: चयनित पंक्ति की घोषणा। -->
+    <string name="rs_sort_size_desc">आकार, सबसे बड़ा पहले</string>
+    <string name="sort_selected">चयनित: %1$s</string>
+    <string name="rs_categories_separate">श्रेणियाँ · फ़ोल्डरों से अलग</string>
     <string name="rs_unsaved_output">फ़ाइल रखने के लिए प्रति सहेजें</string>
     <string name="rs_state_only">झलक उपलब्ध नहीं है</string>
     <string name="rs_exact_bytes">%1$d बाइट</string>

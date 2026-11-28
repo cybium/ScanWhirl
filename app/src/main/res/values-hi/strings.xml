@@ -640,7 +640,7 @@
     <string name="trash_delete_failed">कुछ चीज़ें हटाई नहीं जा सकीं। वे अभी भी हटाई गई फ़ाइलों में हैं।</string>
     <string name="trash_empty_title">कोई हटाई गई फ़ाइल नहीं है</string>
     <string name="trash_empty_body">किसी दस्तावेज़ को हटाई गई फ़ाइलों में भेजने के 30 दिन बाद वह अपने आप मिट जाता है।</string>
-    <string name="trash_header_note">वापस लाने पर हर पन्ना लौट आता है।</string>
+    <string name="trash_header_note">हटाए गए आइटम 30 दिन यहाँ रहते हैं, फिर हटा दिए जाते हैं।</string>
     <string name="trash_error_title">हटाई गई फ़ाइलें नहीं खुल सकीं</string>
     <string name="trash_error_body">आपके दस्तावेज़ नहीं बदले। फिर से कोशिश करें।</string>
     <string name="trash_retry">फिर से कोशिश करें</string>

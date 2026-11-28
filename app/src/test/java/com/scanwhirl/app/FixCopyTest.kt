@@ -414,7 +414,7 @@ class FixCopyTest {
                 "Cleans up scans. Off keeps the photo as taken.",
             "settings_searchable_pdf_summary" to
                 "Adds invisible text so other apps can search your PDFs.",
-            "trash_header_note" to "Restore brings back every page."
+            "trash_header_note" to "Deleted items stay here for 30 days, then are removed."
         )
         val en = englishStrings()
         val hi = hindiStrings()
