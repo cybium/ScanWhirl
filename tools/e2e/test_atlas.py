@@ -261,6 +261,16 @@ class DeepCoverageTest(unittest.TestCase):
             + '</hierarchy>')
         self.assertTrue(atlas.hindi_active(real))
 
+    def test_system_permission_prompt_only_finds_deny(self):
+        root = ET.fromstring(
+            '<hierarchy><node clickable="true" text="ALLOW" package="com.android.packageinstaller"/>'
+            '<node clickable="true" text="DENY" package="com.android.packageinstaller"/>'
+            '<node clickable="true" text="Deny" package="com.scanwhirl.app.test"/>'
+            '</hierarchy>')
+        node = atlas.system_deny_node(root)
+        self.assertIsNotNone(node)
+        self.assertEqual(node.get("text"), "DENY")
+
     def test_tool_capture_with_focused_search_is_detected(self):
         focused = ET.fromstring(
             '<hierarchy><node resource-id="pkg:id/swToolsSearch" focused="true" '

@@ -558,7 +558,38 @@ def hierarchy():
             root = ET.fromstring(data)
         except ET.ParseError:
             return None
+    # API 24 can show a system "keyboard wants contacts" prompt over the app.
+    # Deny (never allow) so the walk is not blocked by a permissions dialog.
+    for _ in range(2):
+        prompt = find(root, regex=r"Allow .{1,80} to access|Allow .{1,80} to use")
+        deny = system_deny_node(root)
+        if prompt is None or deny is None:
+            break
+        tap_node(root, deny)
+        DIALOGS += 1
+        print("denied system permission prompt (no data granted)", flush=True)
+        time.sleep(0.8)
+        data = dump_xml()
+        if not data:
+            return None
+        try:
+            root = ET.fromstring(data)
+        except ET.ParseError:
+            return None
     return root
+
+
+def system_deny_node(root):
+    """The Deny button of a system permission prompt (never its Allow button)."""
+    if root is None:
+        return None
+    for node in root.iter("node"):
+        if (node.get("clickable") == "true"
+                and (node.get("text") or "").strip().lower() in ("deny", "don't allow")
+                and (node.get("package") or "").startswith(
+                    ("com.android.", "com.google.android."))):
+            return node
+    return None
 
 
 def match(node, rid=None, desc=None, text=None, regex=None, cls=None,
@@ -1292,12 +1323,14 @@ def walk_deep_tools():
             return "%s document picker missing" % tool_id
         capture("tools", "tool-%s-picker" % tool_id,
                 ["Library", "Tools", title, "Pick a document"])
-        root = hierarchy()
-        node = (find(root, rid="docPickerName", text_contains=FIXTURE)
-                or find(root, text_contains=FIXTURE)) if root else None
+        node = wait_for({"rid": "docPickerName", "text_contains": FIXTURE}, timeout=6)
+        if node is None:
+            root = hierarchy()
+            node = find(root, text_contains=FIXTURE) if root else None
         if node is None:
             return "fixture not offered by %s picker" % tool_id
-        tap_node(root, node)
+        root = hierarchy()
+        tap_node(root, find(root, rid="docPickerName", text_contains=FIXTURE) or node)
         time.sleep(1.2)
         if wait_for_any([{"rid": rid} for rid in arrive_rids], timeout=20) is None:
             return "%s editor/grid did not appear" % tool_id
