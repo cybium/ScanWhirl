@@ -206,7 +206,7 @@ class W5eHonestyTest {
         }
 
         // The shared setup screen renders that same line for its own named tools.
-        ActivityScenario.launch(ToolSetupActivity.intent(app, "zip")).use { scenario ->
+        ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "zip")).use { scenario ->
             scenario.onActivity { activity ->
                 shadowOf(android.os.Looper.getMainLooper()).idle()
                 val view = activity.findViewById<TextView>(R.id.toolSetupPurpose)
@@ -214,14 +214,14 @@ class W5eHonestyTest {
                 assertEquals(ToolFirstScreenCopy.text(app, "zip"), view.text.toString())
             }
         }
-        ActivityScenario.launch(QrActivity.intent(app)).use { scenario ->
+        ActivityScenario.launch<QrActivity>(QrActivity.intent(app)).use { scenario ->
             scenario.onActivity { activity ->
                 val view = activity.findViewById<TextView>(R.id.toolFirstPurpose)
                 assertNotNull("QR's first screen says it reads a code", view)
                 assertEquals(ToolFirstScreenCopy.text(app, "qr_code"), view.text.toString())
             }
         }
-        ActivityScenario.launch(
+        ActivityScenario.launch<LockToolsActivity>(
             LockToolsActivity.intent(app, LockToolsActivity.MODE_PROTECT)
         ).use { scenario ->
             scenario.onActivity { activity ->

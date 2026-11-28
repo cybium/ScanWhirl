@@ -39,7 +39,7 @@ import java.io.FileOutputStream
  * so the lead can see the layout in light, dark and 2.0 font. No passcode or recovery code
  * is ever entered or written: the setup sheet is captured empty.
  *
- * Artifacts: app/build/test-results/testDebugUnitTest/w5e-renders/*.png (+ manifest.txt).
+ * Artifacts: PNG files in app/build/test-results/testDebugUnitTest/w5e-renders/ (+ manifest.txt).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
