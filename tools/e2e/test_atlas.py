@@ -178,5 +178,20 @@ class ScreenshotTest(unittest.TestCase):
         self.assertEqual(stats["unique"], 1)
 
 
+class J5IdentityTest(unittest.TestCase):
+    def test_page_identity_matches_a_content_desc_only_card(self):
+        # At font 2.0 the page-3 position label can be clipped while the card's
+        # accessible identity remains. match() prefixes an empty text with "\\n", so a
+        # leading ^ would silently reject this card and fail the J5 atlas walk.
+        root = ET.Element("hierarchy")
+        card = node("[40,1590][518,2120]",
+                    **{"content-desc": "Page 3 of 3",
+                       "class": "androidx.cardview.widget.CardView",
+                       "package": atlas.PKG})
+        root.append(card)
+        self.assertIs(atlas.find(root, regex=r"Page 3 of |पेज 3|पन्ना 3", pkg=atlas.PKG), card)
+        self.assertIsNotNone(atlas.find(root, regex=r"Page 3 of ", pkg=atlas.PKG))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -718,7 +718,13 @@ def seed():
     ]))
     adb("shell", "mkdir", "-p", "/sdcard/Download")
     adb("shell", "mkdir", "-p", "/sdcard/Pictures")
+    # API 24's Downloads root is DownloadManager-backed and lists "No items" for
+    # adb-pushed files. The test APK's FixtureDocumentsProvider is a root on every
+    # API, so seed the same fictional PDF in both places and let the picker try both.
+    provider_dir = "/sdcard/Android/data/%s/files/m07_fixtures" % PKG
+    adb("shell", "mkdir", "-p", provider_dir)
     adb("push", fixture, "/sdcard/Download/" + FIXTURE_PDF, timeout=40)
+    adb("push", fixture, provider_dir + "/" + FIXTURE_PDF, timeout=40)
     adb_ok("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
            "-d", "file:///sdcard/Download/" + FIXTURE_PDF)
     for index, accent in enumerate(((40, 120, 200), (200, 90, 60)), 1):
@@ -727,9 +733,23 @@ def seed():
         adb("push", photo, "/sdcard/Pictures/atlas-photo-%d.png" % index, timeout=40)
         adb_ok("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
                "-d", "file:///sdcard/Pictures/atlas-photo-%d.png" % index)
-    ok = adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
-    print("fixtures seeded: pdf=%s" % ok, flush=True)
+    ok = (adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
+          and adb_ok("shell", "test", "-s", provider_dir + "/" + FIXTURE_PDF))
+    print("fixtures seeded: pdf=%s (Downloads + fixture provider)" % ok, flush=True)
     return ok
+
+
+def choose_picker_root(labels):
+    """Open the DocumentsUI drawer and select the first listed root."""
+    if not tap({"desc": "Show roots"}, timeout=4):
+        return None
+    for label in labels:
+        if wait_for({"text": label}, timeout=4) is not None:
+            tap({"text": label}, timeout=4)
+            time.sleep(0.7)
+            return label
+    back()  # leave the drawer closed if nothing matched
+    return None
 
 
 def import_fixture():
@@ -760,31 +780,42 @@ def import_fixture():
             launch()
             return True
     tap({"desc": "Show roots"}, timeout=4)
-    # API 24 hides the filesystem root until this menu option is enabled.
-    if tap({"desc": "More options"}, timeout=1):
-        if not tap({"regex": r"Show (internal storage|SD card)"}, timeout=1):
-            back()
-        tap({"desc": "Show roots"}, timeout=2)
-    model = adb("shell", "getprop", "ro.product.model")
-    root_node = None
-    for label in (model, "Internal storage", "Downloads", "This device"):
-        root_node = wait_for({"text": label}, timeout=4) if label else None
-        if root_node is not None:
-            tap({"text": label}, timeout=4)
-            break
+    choose_picker_root(("Downloads", "Download", "This device", "Internal storage"))
     for label in ("Download", "Downloads"):
         if wait_for({"text": label}, timeout=5) is not None:
             tap({"text": label}, timeout=4)
             break
     if wait_for({"text": FIXTURE_PDF}, timeout=8) is None:
+        # API 24's Downloads root is DownloadManager-backed, so the adb-pushed file is
+        # absent. The test APK's fixture provider is listed on every API and serves the
+        # same fictional PDF from m07_fixtures.
+        if choose_picker_root(("ScanWhirl test fixtures",)) is not None:
+            if (wait_for({"text": FIXTURE_PDF}, timeout=6) is None and
+                    wait_for({"text": "fixtures"}, timeout=4) is not None):
+                tap({"text": "fixtures"}, timeout=4)
+    if wait_for({"text": FIXTURE_PDF}, timeout=8) is None:
         capture("import", "picker-no-fixture", ["Library", "Create", "Import PDF"],
-                "Generated PDF not listed by DocumentsUI")
+                "Generated PDF not listed by DocumentsUI (Downloads and fixture root tried)")
         return False
     capture("import", "picker-fixture", ["Library", "Create", "Import PDF", FIXTURE_PDF])
-    tap({"text": FIXTURE_PDF}, timeout=6)
-    accept_fixture_import_plan()
-    opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
-              or wait_for({"rid": "btnMore"}, timeout=8) is not None)
+    opened = False
+    for _ in range(2):
+        tap({"text": FIXTURE_PDF}, timeout=6)
+        accept_fixture_import_plan()
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=8) is not None)
+        if opened:
+            break
+        # API 24: tap can miss the DocumentsUI row; focus it and activate with ENTER.
+        for _ in range(4):
+            adb("shell", "input", "keyevent", "KEYCODE_TAB")
+            time.sleep(0.15)
+        adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+        time.sleep(1.5)
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=20) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=5) is not None)
+        if opened:
+            break
     if not opened:
         capture("import", "import-stuck", ["Library", "Create", "Import PDF", "open"],
                 "Viewer did not appear after import")
@@ -1129,10 +1160,11 @@ def walk_j5_organize():
         if third is None:
             # At font 2.0 page 3's paper may be visible while its lower label is clipped
             # by the scrolling viewport. Its accessible page identity still names the card.
-            third = find(root, regex=r"^Page 3 of |^पेज 3|^पन्ना 3", pkg=PKG)
+            # No leading ^: content-desc-only nodes are matched after a "\n" in match().
+            third = find(root, regex=r"Page 3 of |पेज 3|पन्ना 3", pkg=PKG)
         first = find(root, rid="pageNum", text="1")
         if first is None:
-            first = find(root, regex=r"^Page 1 of |^पेज 1|^पन्ना 1", pkg=PKG)
+            first = find(root, regex=r"Page 1 of |पेज 1|पन्ना 1", pkg=PKG)
         if third is None or first is None:
             raise AssertionError("J5 real page identities unavailable")
         a = parse_bounds(clickable_ancestor(root, third).get("bounds"))
