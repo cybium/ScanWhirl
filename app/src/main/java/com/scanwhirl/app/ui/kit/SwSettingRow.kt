@@ -59,7 +59,7 @@ class SwSettingRow(context: Context) : LinearLayout(context) {
         texts.addView(titleView, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
-        texts.addView(subtitleView, ViewGroup.LayoutParams(
+        texts.addView(subtitleView, LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(context, 2f) })
         addView(texts, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -81,7 +81,7 @@ class SwSettingRow(context: Context) : LinearLayout(context) {
     fun bind(iconRes: Int, title: CharSequence, subtitle: CharSequence? = null): SwSettingRow = apply {
         iconView.setImageResource(iconRes)
         titleView.text = title
-        subtitleView.text = subtitle.orEmpty()
+        subtitleView.text = subtitle?.toString().orEmpty()
         subtitleView.visibility = if (subtitle.isNullOrBlank()) View.GONE else View.VISIBLE
         contentDescription = if (subtitle.isNullOrBlank()) title else "$title, $subtitle"
     }
