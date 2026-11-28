@@ -500,6 +500,15 @@ class ToolSetupPickerUiTest {
     private fun assertHintFits(hintRes: Int) {
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress")).use { scenario ->
             scenario.onActivity { activity ->
+                assertTrue(
+                    "the library is listed before the size aim",
+                    waitUntil { activity.findViewById<View>(R.id.toolSetupDocName)?.isShown == true }
+                )
+                // J2: the custom field lives on the Aim-for-a-size page; measuring it while
+                // its parent is GONE would report a zero width, not the field's real width.
+                activity.window.decorView
+                    .findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
+                idle()
                 layoutScreen(activity)
                 val field = requireNotNull(activity.findViewById<EditText>(R.id.toolSetupTarget))
                 val hint = requireNotNull(field.hint).toString()

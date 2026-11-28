@@ -117,6 +117,9 @@ class ToolResultActivity : BaseActivity() {
     private lateinit var chipView: TextView
     private lateinit var savedLine: TextView
     private lateinit var bottomBar: LinearLayout
+    /** J2: a missed target keeps the usable copy until the person decides what to do. */
+    private var missDecisionRow: LinearLayout? = null
+    private var missKept = false
     private var alsoSaveButton: TextView? = null
     private var saveAnotherCopy: View? = null
     private var moreLocation: TextView? = null
@@ -310,6 +313,7 @@ class ToolResultActivity : BaseActivity() {
         // already-undone result never offers the actions again as if nothing happened.
         savedInstanceState?.let { state ->
             undone = state.getBoolean(KEY_UNDONE)
+            missKept = missKept || state.getBoolean(KEY_MISS_KEPT)
             savedCopy = readSavedCopy(state)
             chosenLocationName = state.getString(KEY_CHOSEN_NAME)
             documentsExistingName = state.getString(KEY_EXISTING_NAME)
@@ -414,6 +418,7 @@ class ToolResultActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_UNDONE, undone)
+        outState.putBoolean(KEY_MISS_KEPT, missKept)
         chosenLocationName?.let { outState.putString(KEY_CHOSEN_NAME, it) }
         documentsExistingName?.let { outState.putString(KEY_EXISTING_NAME, it) }
         savedCopy?.let { copy ->
@@ -777,7 +782,11 @@ class ToolResultActivity : BaseActivity() {
             tag = "result-secondary"
         }
         val actions = buildList {
-            if (resultSpec.adjustIntent != null) add(
+            // J2: a missed target owns its own "Choose another size" decision below the actions;
+            // a second generic "Adjust" would be the same destination with a different name.
+            if (resultSpec.adjustIntent != null &&
+                !(isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED)
+            ) add(
                 button(getString(R.string.rs_adjust), tag = "result-adjust") { adjust() }
             )
             add(open)
@@ -796,6 +805,41 @@ class ToolResultActivity : BaseActivity() {
         }
         column.removeView(morePanel)
         column.addView(morePanel)
+        // J2: a missed target is a decision, not a silent success. Both choices sit above the
+        // dock's Share primary; choosing another size removes only this run's copy (verified),
+        // so going back to the intact setup never leaves a stray copy behind.
+        if (isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED && !missKept) {
+            val keep = button(getString(R.string.ux130_l3_compress_keep_copy), tag = "result-keep") {
+                keepMissedCopy()
+            }
+            val choose = button(
+                getString(R.string.ux130_l3_compress_choose_another), tag = "result-choose-another"
+            ) { chooseAnotherSize() }
+            val row = LinearLayout(this).apply {
+                orientation = if (stacksActionsAtLargeFont()) LinearLayout.VERTICAL
+                else LinearLayout.HORIZONTAL
+                tag = "result-miss-decisions"
+            }
+            if (stacksActionsAtLargeFont()) {
+                row.addView(keep, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+                row.addView(choose, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+            } else {
+                row.addView(keep, LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                ).apply { marginEnd = SwStyle.dp(this@ToolResultActivity, 8f) })
+                row.addView(choose, LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                ))
+            }
+            bottomBar.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
+            missDecisionRow = row
+        }
         val primary = if (resultSpec.primary == ResultSpec.Action.SHARE) share else
             button(getString(R.string.rs_save_to_phone), tag = "result-primary", primary = true,
                 icon = R.drawable.ic_sym_download) { alsoSave() }.also { phonePrimary = it }
@@ -1907,6 +1951,74 @@ class ToolResultActivity : BaseActivity() {
         finish()
     }
 
+    /**
+     * J2: "Keep this copy" accepts the usable copy after a miss. The measured size and the
+     * "Above …" chip stay honest; only the decision row goes away, and Share remains the primary.
+     */
+    private fun keepMissedCopy() {
+        missKept = true
+        missDecisionRow?.isVisible = false
+        missDecisionRow = null
+        findViewById<TextView>(R.id.rsTitle)?.text = toolName
+    }
+
+    /**
+     * J2: "Choose another size" returns to the intact setup WITHOUT leaving this run's copy
+     * behind. Removal uses the same producer identity guard as Undo; a changed or partial copy is
+     * kept and named, never silently deleted.
+     */
+    private fun chooseAnotherSize() {
+        if (undoChecking) return
+        undoChecking = true
+        val row = missDecisionRow
+        row?.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val initialDocs = docIds.toList()
+                val initialFiles = files.toList()
+                val removal = withContext(Dispatchers.IO) {
+                    repo.removeResultOutputsIfUnchanged(
+                        initialDocs, initialFiles, outputIdentity, receiptSourceId
+                    )
+                }
+                when (removal.state) {
+                    ScanRepository.ResultDeleteState.REFUSED -> {
+                        fail(getString(R.string.ux130_l3_copy_changed))
+                        return@launch
+                    }
+                    ScanRepository.ResultDeleteState.PARTIAL -> {
+                        docIds = removal.remainingDocIds.toMutableList()
+                        files = removal.remainingFiles.map(::File).toMutableList()
+                        persistReceipt()
+                        fail(getString(R.string.w3_undo_not_removed))
+                        return@launch
+                    }
+                    ScanRepository.ResultDeleteState.REMOVED -> Unit
+                }
+                docIds.clear()
+                files.clear()
+                undone = true
+                persistReceipt()
+                val target = resultSpec.adjustIntent
+                if (target != null) {
+                    startActivity(
+                        Intent(target).addFlags(
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                    )
+                }
+                finish()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                fail(getString(R.string.w3_undo_not_removed))
+            } finally {
+                undoChecking = false
+                row?.isEnabled = true
+            }
+        }
+    }
+
     private fun undo() {
         if (undone || undoChecking) return
         undoChecking = true
@@ -2150,6 +2262,7 @@ class ToolResultActivity : BaseActivity() {
 
         /** W3: recreation-safe receipt/undo state (never a storage policy, only this run's own copy). */
         private const val KEY_UNDONE = "w3_undone"
+        private const val KEY_MISS_KEPT = "rs_miss_kept_state"
         private const val KEY_COPY_URI = "w3_copy_uri"
         private const val KEY_COPY_NAME = "w3_copy_name"
         private const val KEY_COPY_REQUESTED = "w3_copy_requested"

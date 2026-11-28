@@ -200,8 +200,49 @@ class J2CompressHarmTest {
                     com.scanwhirl.app.ui.kit.SwStyle.color(activity, R.color.sw_disc_ink),
                     activity.findViewById<TextView>(R.id.toolResultShare).currentTextColor
                 )
+                val keep = activity.window.decorView.findViewWithTag<TextView>("result-keep")
+                assertNotNull("a usable missed copy can be kept", keep)
+                assertEquals(
+                    "the keep choice is named plainly",
+                    app.getString(R.string.ux130_l3_compress_keep_copy),
+                    keep.text.toString()
+                )
+                val choose = activity.window.decorView.findViewWithTag<TextView>("result-choose-another")
+                assertNotNull("the person can go back for another size", choose)
+                assertEquals(
+                    "the other-size choice is named plainly",
+                    app.getString(R.string.ux130_l3_compress_choose_another),
+                    choose.text.toString()
+                )
             }
         }
+    }
+
+    @Test
+    fun `choosing another size removes the missed copy`() {
+        val source = DocFixtures.saved(repo, app, pages = 2, name = "Miss source")
+        val copy = DocFixtures.saved(repo, app, pages = 1, name = "Missed copy")
+        val bytes = requireNotNull(repo.getDocument(copy)).pdfFile.length()
+        val identity = ToolResultActivity.captureOutputIdentityBlocking(app, listOf(copy), emptyList())
+        assertNotNull("the producer recorded this copy", identity)
+        ActivityScenario.launch<ToolResultActivity>(
+            ToolResultActivity.intent(
+                app, "compress", docIds = listOf(copy), targetBytes = 1_000L,
+                beforeBytes = bytes + 10L, compressTargetMissed = true,
+                outcomeClass = "TARGET_MISSED", receiptSourceId = source,
+                outputIdentity = identity
+            )
+        ).use { scenario ->
+            scenario.onActivity { activity ->
+                idle()
+                val choose = activity.window.decorView.findViewWithTag<View>("result-choose-another")
+                assertNotNull("a miss offers another size", choose)
+                choose.performClick()
+            }
+            pollUntil { repo.getDocument(copy) == null }
+        }
+        assertNull("going back for another size leaves no stray copy", repo.getDocument(copy))
+        assertNotNull("the original document stays untouched", repo.getDocument(source))
     }
 
     // ---- 4. no gain means no duplicate -------------------------------------
@@ -230,9 +271,10 @@ class J2CompressHarmTest {
                     "no removable copy exists on a no-gain result",
                     activity.findViewById<View>(R.id.toolResultUndo)
                 )
-                assertFalse(
-                    "no saved copy is named",
-                    activity.findViewById<TextView>(R.id.toolResultName).isVisible
+                assertEquals(
+                    "the receipt says no smaller copy was made, not that a copy was saved",
+                    app.getString(R.string.rs_already_compact_msg),
+                    activity.findViewById<TextView>(R.id.toolResultName).text.toString()
                 )
             }
         }

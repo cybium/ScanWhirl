@@ -2708,7 +2708,8 @@ class ScanRepository(private val context: Context) {
         id: String,
         quality: Int,
         maxDim: Int?,
-        rejectNotSmaller: Boolean = false
+        rejectNotSmaller: Boolean = false,
+        onPage: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanDocument = withContext(Dispatchers.IO) {
         val doc = loadDocument(rasterDir(id)) ?: throw IllegalStateException("Scan not found")
         refuseLockedSources(listOf(doc))
@@ -2717,7 +2718,7 @@ class ScanRepository(private val context: Context) {
             validateOutput = { if (rejectNotSmaller) rejectGrownStagedPdf(doc, it, null) }) { staging ->
             // H3-5: the words survive compression; text and rescaled geometry are carried to the
             // copy so it is searchable right away (CP1).
-            stageCompressedPages(id, doc, staging) { _, file ->
+            stageCompressedPages(id, doc, staging, onPage = onPage) { _, file ->
                 ImageTools.recompressJpeg(
                     file.readBytes(), quality, maxDim, isCancelled = { !ctx.isActive }
                 )
@@ -2760,8 +2761,13 @@ class ScanRepository(private val context: Context) {
         }
 
     /** Result producers use these paths: a rejected file never becomes a library document. */
-    suspend fun compressScanForResult(id: String, quality: Int, maxDim: Int?): ScanDocument? =
-        try { compressScan(id, quality, maxDim, rejectNotSmaller = true) }
+    suspend fun compressScanForResult(
+        id: String,
+        quality: Int,
+        maxDim: Int?,
+        onPage: (Int, Int) -> Unit = { _, _ -> }
+    ): ScanDocument? =
+        try { compressScan(id, quality, maxDim, rejectNotSmaller = true, onPage = onPage) }
         catch (_: NotSmaller) { null }
 
     suspend fun compressScanToTargetForResult(

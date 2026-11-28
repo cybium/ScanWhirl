@@ -26,6 +26,9 @@
     <string name="ux130_l3_compress_progress_pages">%1$d पृष्ठ छोटे किए जा रहे हैं</string>
     <string name="ux130_l3_compress_failed_title">छोटा नहीं किया जा सका</string>
     <string name="ux130_l3_compress_retry">फिर प्रयास करें</string>
+    <!-- J2: लक्ष्य चूकने पर भी प्रति उपयोगी रहती है; झूठी सफलता नहीं. -->
+    <string name="ux130_l3_compress_keep_copy">यह प्रति रखें</string>
+    <string name="ux130_l3_compress_choose_another">दूसरा आकार चुनें</string>
 
     <!-- L3-04: बाहरी PDF का क्रम बदलना. -->
     <string name="ux130_l3_merge_move_earlier">पहले ले जाएँ</string>

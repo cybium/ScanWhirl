@@ -977,7 +977,12 @@ def walk_j2():
             return "result unavailable"
         time.sleep(1)
         capture("j2", "result-missed", ["Tools", "Compress", "Result"],
-                "Closest achieved size, honest miss title, Share primary")
+                "Closest achieved size, honest miss title, Keep this copy / Choose another size, Share primary")
+        # Keeping the usable copy is an explicit decision; the size stays honest.
+        if tap({"text": "Keep this copy"}, timeout=4):
+            time.sleep(0.5)
+            capture("j2", "result-missed-kept", ["Tools", "Compress", "Result", "Kept"],
+                    "Kept copy: the Above chip still states the missed limit")
         tap({"text": "Done"}, timeout=3)
         wait_for({"rid": "swHomeSearch"}, timeout=12)
         return "missed result captured"

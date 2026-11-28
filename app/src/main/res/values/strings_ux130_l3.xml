@@ -27,6 +27,9 @@
     <string name="ux130_l3_compress_progress_pages">Compressing %1$d pages</string>
     <string name="ux130_l3_compress_failed_title">Couldn’t compress</string>
     <string name="ux130_l3_compress_retry">Try again</string>
+    <!-- J2: a missed target leaves the usable copy with the person, not a false success. -->
+    <string name="ux130_l3_compress_keep_copy">Keep this copy</string>
+    <string name="ux130_l3_compress_choose_another">Choose another size</string>
 
     <!-- L3-04: accessible external merge reorder. -->
     <string name="ux130_l3_merge_move_earlier">Move earlier</string>

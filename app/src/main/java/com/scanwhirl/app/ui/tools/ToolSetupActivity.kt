@@ -1927,7 +1927,13 @@ class ToolSetupActivity : BaseActivity() {
                         }
                     } else {
                         val (quality, maxDim) = compressLevel()
-                        repo.compressScanForResult(doc.id, quality, maxDim)
+                        repo.compressScanForResult(doc.id, quality, maxDim) { done, pages ->
+                            this@ToolSetupActivity.runOnUiThread {
+                                compressProgressText.text = getString(
+                                    R.string.ux130_l3_compress_progress_page, done, pages
+                                )
+                            }
+                        }
                     }
                     val ids = listOfNotNull(out?.id)
                     // L3-02 P1: hashing happens on IO, never on the Main thread.
