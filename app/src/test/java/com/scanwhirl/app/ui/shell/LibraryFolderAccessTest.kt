@@ -276,7 +276,7 @@ class LibraryFolderAccessTest {
             // V027: one creation control only — the plain row under "All folders".
             val newFolder = sheet.findViewById<TextView>(R.id.swNewFolder)
             assertNotNull("New folder stays reachable from the empty state", newFolder)
-            assertEquals("New folder", newFolder.text.toString())
+            assertEquals("+ New folder", newFolder.text.toString())
             assertTrue("New folder is visible", newFolder.isVisible)
         }
     }
