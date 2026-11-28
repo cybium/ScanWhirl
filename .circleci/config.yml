@@ -220,7 +220,7 @@ jobs:
       - atlas-leg:
           leg: small24
           api: "24"
-          arch: x86
+          arch: x86_64
           profile: Nexus 4
           setup: "true"
 
