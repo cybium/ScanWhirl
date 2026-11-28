@@ -1,25 +1,31 @@
 <#
 .SYNOPSIS
-  Fetch CircleCI atlas artefacts for a commit or branch into <outDir>/<leg>/.
+  Fetch CircleCI atlas artefacts for a commit or branch, or report credit usage.
 
 .DESCRIPTION
   Usage: pwsh tools/ci/circleci_fetch.ps1 <branch-or-sha> <outDir>
+         pwsh tools/ci/circleci_fetch.ps1 -Credits [-Ref <branch>]
 
   Finds the pipeline for a cc/atlas-* branch or a commit SHA in the public
   project gh/cybium/ScanWhirl through CircleCI API v2. The public project is
   readable without a token; if CircleCI starts asking for authentication, the
-  script reads a personal token from the CIRCLECI_TOKEN environment variable
-  and says so. No secrets are written to disk or printed.
+  script reads a personal read-only token from CIRCLE_TOKEN (process env first,
+  then User scope) and sends it ONLY as the Circle-Token request header. The
+  token is never printed, logged or written to disk.
 
   Each atlas leg's artefacts are stored under <outDir>/<leg>/ (light, dark,
   font200, small24), including index.html, report.json and numbered PNG/XML.
+
+  -Credits prints credits used by each workflow on a branch (and per atlas job)
+  plus a month-to-date (last-30-days Insights) total across cc/atlas-* branches.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Mandatory = $false, Position = 0)]
     [string]$Ref,
-    [Parameter(Mandatory = $true, Position = 1)]
-    [string]$OutDir
+    [Parameter(Mandatory = $false, Position = 1)]
+    [string]$OutDir,
+    [switch]$Credits
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,6 +33,14 @@ $Project = 'gh/cybium/ScanWhirl'
 $ApiBase = 'https://circleci.com/api/v2'
 $script:Token = $null
 $script:Legs = @('light', 'dark', 'font200', 'small24')
+
+function Resolve-CircleToken {
+    $value = $env:CIRCLE_TOKEN
+    if (-not $value) {
+        $value = [Environment]::GetEnvironmentVariable('CIRCLE_TOKEN', 'User')
+    }
+    return $value
+}
 
 function Get-HttpStatus {
     param($ErrorRecord)
@@ -48,11 +62,11 @@ function Invoke-CircleApi {
     } catch {
         $status = Get-HttpStatus -ErrorRecord $_
         if (($status -eq 401 -or $status -eq 403) -and -not $script:Token) {
-            $envToken = $env:CIRCLECI_TOKEN
+            $envToken = Resolve-CircleToken
             if (-not $envToken) {
-                throw "CircleCI API returned $status for $Uri and requires a token. Set CIRCLECI_TOKEN (personal API token) and re-run; nothing was written."
+                throw "CircleCI API returned $status for $Uri and requires a token. Set the read-only token in CIRCLE_TOKEN (process or User scope) and re-run; nothing was written."
             }
-            Write-Host 'CircleCI API requires authentication; using CIRCLECI_TOKEN from the environment.'
+            Write-Host 'CircleCI API requires authentication; using CIRCLE_TOKEN from the environment.'
             $script:Token = $envToken
             $headers['Circle-Token'] = $script:Token
             return Invoke-RestMethod -Uri $Uri -Headers $headers -TimeoutSec 60
@@ -99,6 +113,66 @@ function Find-Pipeline {
         throw "No CircleCI pipeline found in $Project for branch $Wanted. Use a cc/atlas-* branch that has been pushed."
     }
     return $match
+}
+
+function Show-Credits {
+    param([string]$Branch)
+    $windows = @(
+        @{ Name = 'last-24-hours'; Label = 'per workflow, last 24 hours' },
+        @{ Name = 'last-30-days'; Label = 'month to date, last 30 days' }
+    )
+    foreach ($window in $windows) {
+        Write-Host "`nCredits ($($window.Label)):"
+        $uri = "$ApiBase/insights/$Project/workflows?reporting-window=$($window.Name)"
+        if ($Branch) { $uri += '&branch=' + [uri]::EscapeDataString($Branch) }
+        else { $uri += '&all-branches=true' }
+        $rows = Get-Paged -Uri $uri
+        foreach ($row in $rows) {
+            $runs = [int]$row.metrics.total_runs
+            $credits = [int]$row.metrics.total_credits_used
+            $perRun = if ($runs -gt 0) { [math]::Round($credits / $runs, 1) } else { 0 }
+            Write-Host ("  {0}: {1} credits total, {2} runs, ~{3}/run" -f $row.name, $credits, $runs, $perRun)
+        }
+    }
+
+    if ($Branch) {
+        Write-Host "`nCredits per atlas job ($Branch, last 24 hours):"
+        $uri = "$ApiBase/insights/$Project/workflows/atlas/jobs?branch=" +
+               [uri]::EscapeDataString($Branch) + '&reporting-window=last-24-hours'
+        foreach ($row in (Get-Paged -Uri $uri)) {
+            $runs = [int]$row.metrics.total_runs
+            $credits = [int]$row.metrics.total_credits_used
+            $perRun = if ($runs -gt 0) { [math]::Round($credits / $runs, 1) } else { 0 }
+            Write-Host ("  {0}: {1} credits total, {2} runs, ~{3}/run" -f $row.name, $credits, $runs, $perRun)
+        }
+    }
+
+    # Insights has no "branch prefix" filter, so sum per-branch workflow totals.
+    Write-Host "`nMonth-to-date credits across cc/atlas-* branches (last-30-days Insights):"
+    $branchInfo = Invoke-CircleApi -Uri "$ApiBase/insights/$Project/branches?workflow-name=atlas"
+    $atlasBranches = @($branchInfo.branches | Where-Object { $_ -like 'cc/atlas-*' } | Select-Object -First 50)
+    $monthTotal = 0
+    foreach ($b in $atlasBranches) {
+        $uri = "$ApiBase/insights/$Project/workflows?branch=" +
+               [uri]::EscapeDataString($b) + '&reporting-window=last-30-days'
+        foreach ($row in (Get-Paged -Uri $uri)) {
+            if ($row.name -eq 'atlas') {
+                $credits = [int]$row.metrics.total_credits_used
+                $monthTotal += $credits
+                Write-Host ("  {0}: {1} credits in {2} runs" -f $b, $credits, $row.metrics.total_runs)
+            }
+        }
+    }
+    Write-Host "  TOTAL: $monthTotal credits (Insights is approximate, not billing-grade)."
+}
+
+if ($Credits) {
+    Show-Credits -Branch $Ref
+    return
+}
+
+if (-not $Ref -or -not $OutDir) {
+    throw 'Usage: circleci_fetch.ps1 <branch-or-sha> <outDir>  (or -Credits [-Ref <branch>])'
 }
 
 $pipeline = Find-Pipeline -Wanted $Ref

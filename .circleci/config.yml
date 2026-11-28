@@ -67,6 +67,7 @@ commands:
       - run:
           name: Boot the emulator (hardware-accelerated machine executor)
           command: |
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
             emulator -avd sw-atlas -delay-adb -verbose -no-window -gpu swiftshader_indirect \
               -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           background: true
@@ -76,6 +77,7 @@ commands:
           no_output_timeout: 20m
           command: |
             set -euo pipefail
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
             adb kill-server >/dev/null 2>&1 || true
             adb wait-for-device
             BOOTED=""
@@ -93,6 +95,7 @@ commands:
           no_output_timeout: 40m
           command: |
             set -euo pipefail
+            export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
             # atlas.sh/atlas.py guard on GITHUB_ACTIONS to refuse local adb. Set it
             # only INSIDE this CI job; the emulator-only guards still apply:
             # ANDROID_SERIAL=emulator-N, ro.kernel.qemu=1, exactly one device.
@@ -156,7 +159,8 @@ jobs:
             APK=app/build/outputs/apk/debug/app-debug.apk
             test -f "$APK"
             AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -n1)
-            "$AAPT2" dump badging "$APK" | head -n 3 | tee badging.txt
+            "$AAPT2" dump badging "$APK" > badging-full.txt
+            head -n 3 badging-full.txt | tee badging.txt
             grep -q "package: name='com.scanwhirl.app.test'" badging.txt
             sha256sum "$APK" | tee apk-sha256.txt
             mkdir -p test-apk
