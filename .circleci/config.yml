@@ -68,7 +68,8 @@ commands:
           name: Boot the emulator (hardware-accelerated machine executor)
           command: |
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
-            emulator -avd sw-atlas -delay-adb -verbose -no-window -gpu swiftshader_indirect \
+            # No -delay-adb: the wait step polls adb until sys.boot_completed.
+            emulator -avd sw-atlas -verbose -no-window -gpu swiftshader_indirect \
               -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           background: true
 
@@ -79,11 +80,16 @@ commands:
             set -euo pipefail
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
             adb kill-server >/dev/null 2>&1 || true
-            adb wait-for-device
             BOOTED=""
-            for _ in $(seq 1 450); do
-              BOOTED=$(adb shell getprop sys.boot_completed | tr -d '\r')
-              [ "$BOOTED" = "1" ] && break
+            for i in $(seq 1 450); do
+              STATE=$(adb get-state 2>/dev/null || true)
+              if [ "$STATE" = "device" ]; then
+                BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+                [ "$BOOTED" = "1" ] && break
+              fi
+              if [ $((i % 15)) -eq 0 ]; then
+                echo "waiting for emulator boot ($i/450) state=$STATE boot=$BOOTED"
+              fi
               sleep 2
             done
             test "$BOOTED" = "1"
