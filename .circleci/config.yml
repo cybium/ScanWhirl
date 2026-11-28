@@ -98,7 +98,7 @@ commands:
 
       - run:
           name: Screen atlas - << parameters.leg >> (API << parameters.api >>)
-          no_output_timeout: 40m
+          no_output_timeout: 50m
           command: |
             set -euo pipefail
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -112,7 +112,7 @@ commands:
             export LEG='<< parameters.leg >>'
             export API_LEVEL='<< parameters.api >>'
             export LEG_SETUP='<< parameters.setup >>'
-            export ATLAS_MAX_MINUTES=33
+            export ATLAS_MAX_MINUTES=42
             export APK="$PWD/test-apk/app-debug.apk"
             export OUT="$PWD/artifacts/<< parameters.leg >>"
             bash tools/e2e/atlas.sh

@@ -115,18 +115,46 @@ function Find-Pipeline {
     return $match
 }
 
+function Format-InsightsDate {
+    param([DateTime]$Value)
+    return $Value.ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-JobCreditsTimeSeries {
+    param([string]$Branch, [DateTime]$Start, [DateTime]$End)
+    $uri = "$ApiBase/insights/time-series/$Project/workflows/atlas/jobs?branch=" +
+           [uri]::EscapeDataString($Branch) + '&granularity=daily&start-date=' +
+           [uri]::EscapeDataString((Format-InsightsDate $Start)) + '&end-date=' +
+           [uri]::EscapeDataString((Format-InsightsDate $End))
+    $result = @()
+    foreach ($row in (Get-Paged -Uri $uri)) {
+        $result += [pscustomobject]@{
+            name = $row.name
+            credits = [int]$row.metrics.total_credits_used
+            runs = [int]$row.metrics.total_runs
+        }
+    }
+    return $result
+}
+
 function Show-Credits {
     param([string]$Branch)
+    $now = [DateTime]::UtcNow
     $windows = @(
-        @{ Name = 'last-24-hours'; Label = 'per workflow, last 24 hours' },
-        @{ Name = 'last-30-days'; Label = 'month to date, last 30 days' }
+        @{ Name = 'last-24-hours'; Label = 'last 24 hours'; Start = $now.AddHours(-24) },
+        @{ Name = 'last-30-days'; Label = 'last 30 days'; Start = $now.AddDays(-30) }
     )
+    # The aggregated workflows endpoint can lag behind the time-series endpoint:
+    # use it first, fall back to per-job time-series when it has no rows yet.
     foreach ($window in $windows) {
         Write-Host "`nCredits ($($window.Label)):"
         $uri = "$ApiBase/insights/$Project/workflows?reporting-window=$($window.Name)"
         if ($Branch) { $uri += '&branch=' + [uri]::EscapeDataString($Branch) }
         else { $uri += '&all-branches=true' }
-        $rows = Get-Paged -Uri $uri
+        $rows = @(Get-Paged -Uri $uri)
+        if ($rows.Count -eq 0 -and $Branch) {
+            $rows = @(Get-JobCreditsTimeSeries -Branch $Branch -Start $window.Start -End $now)
+        }
         foreach ($row in $rows) {
             $runs = [int]$row.metrics.total_runs
             $credits = [int]$row.metrics.total_credits_used
@@ -137,31 +165,30 @@ function Show-Credits {
 
     if ($Branch) {
         Write-Host "`nCredits per atlas job ($Branch, last 24 hours):"
-        $uri = "$ApiBase/insights/$Project/workflows/atlas/jobs?branch=" +
-               [uri]::EscapeDataString($Branch) + '&reporting-window=last-24-hours'
-        foreach ($row in (Get-Paged -Uri $uri)) {
-            $runs = [int]$row.metrics.total_runs
-            $credits = [int]$row.metrics.total_credits_used
-            $perRun = if ($runs -gt 0) { [math]::Round($credits / $runs, 1) } else { 0 }
-            Write-Host ("  {0}: {1} credits total, {2} runs, ~{3}/run" -f $row.name, $credits, $runs, $perRun)
+        $rows = @(Get-JobCreditsTimeSeries -Branch $Branch -Start $now.AddHours(-24) -End $now)
+        foreach ($row in $rows) {
+            $perRun = if ($row.runs -gt 0) { [math]::Round($row.credits / $row.runs, 1) } else { 0 }
+            Write-Host ("  {0}: {1} credits total, {2} runs, ~{3}/run" -f $row.name, $row.credits, $row.runs, $perRun)
         }
     }
 
-    # Insights has no "branch prefix" filter, so sum per-branch workflow totals.
-    Write-Host "`nMonth-to-date credits across cc/atlas-* branches (last-30-days Insights):"
-    $branchInfo = Invoke-CircleApi -Uri "$ApiBase/insights/$Project/branches?workflow-name=atlas"
-    $atlasBranches = @($branchInfo.branches | Where-Object { $_ -like 'cc/atlas-*' } | Select-Object -First 50)
+    # Insights has no "branch prefix" filter, so sum per-branch job time series.
+    Write-Host "`nMonth-to-date credits across cc/atlas-* branches (Insights time series):"
+    $monthStart = [DateTime]::UtcNow.Date.AddDays(1 - [DateTime]::UtcNow.Day)
+    try {
+        $branchInfo = Invoke-CircleApi -Uri "$ApiBase/insights/$Project/branches?workflow-name=atlas"
+        $atlasBranches = @($branchInfo.branches | Where-Object { $_ -like 'cc/atlas-*' } | Select-Object -First 50)
+    } catch {
+        $atlasBranches = @()
+    }
+    if ($atlasBranches.Count -eq 0) { $atlasBranches = @('cc/atlas-circleci-test') }
     $monthTotal = 0
     foreach ($b in $atlasBranches) {
-        $uri = "$ApiBase/insights/$Project/workflows?branch=" +
-               [uri]::EscapeDataString($b) + '&reporting-window=last-30-days'
-        foreach ($row in (Get-Paged -Uri $uri)) {
-            if ($row.name -eq 'atlas') {
-                $credits = [int]$row.metrics.total_credits_used
-                $monthTotal += $credits
-                Write-Host ("  {0}: {1} credits in {2} runs" -f $b, $credits, $row.metrics.total_runs)
-            }
-        }
+        $credits = ($rows2 = @(Get-JobCreditsTimeSeries -Branch $b -Start $monthStart -End $now) |
+                    Measure-Object -Property credits -Sum).Sum
+        if (-not $credits) { $credits = 0 }
+        $monthTotal += $credits
+        Write-Host ("  {0}: {1} credits" -f $b, $credits)
     }
     Write-Host "  TOTAL: $monthTotal credits (Insights is approximate, not billing-grade)."
 }
@@ -211,7 +238,11 @@ foreach ($leg in $script:Legs) {
         $parts = $normalized.Split('/')
         $legIndex = [Array]::IndexOf($parts, $leg)
         if ($legIndex -ge 0) {
-            $relative = ($parts[$legIndex..($parts.Length - 1)] -join '/')
+            # Artefact paths look like atlas/<leg>/<file>; keep only what follows <leg>.
+            $start = $legIndex + 1
+            while ($start -lt $parts.Length -and $parts[$start] -eq $leg) { $start++ }
+            if ($start -ge $parts.Length) { continue }
+            $relative = ($parts[$start..($parts.Length - 1)] -join '/')
         } else {
             $relative = $parts[-1]
         }
