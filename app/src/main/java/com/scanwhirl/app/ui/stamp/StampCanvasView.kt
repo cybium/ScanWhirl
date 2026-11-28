@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.customview.widget.ExploreByTouchHelper
 import com.scanwhirl.app.R
 import com.scanwhirl.app.util.PageStamp
 import kotlin.math.atan2
@@ -125,6 +126,7 @@ class StampCanvasView @JvmOverloads constructor(
             field = value
             contentDescription = describeState()
             rebuild()
+            accessibilityHelper.invalidateRoot()
         }
 
     var selectedIndex: Int? = null
@@ -195,6 +197,8 @@ class StampCanvasView @JvmOverloads constructor(
     }
     private val dimPaint = Paint().apply { color = (voidInk and 0x00FFFFFF) or 0x66000000 }
 
+    private val accessibilityHelper by lazy { CanvasAccessibility() }
+
     init {
         // A TalkBack user reaches the marks through the local context menu: move, resize,
         // rotate and delete are custom accessibility actions, never a precision drag.
@@ -202,7 +206,7 @@ class StampCanvasView @JvmOverloads constructor(
         isFocusable = true
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         contentDescription = describeState()
-        ViewCompat.setAccessibilityDelegate(this, CanvasAccessibility())
+        ViewCompat.setAccessibilityDelegate(this, accessibilityHelper)
     }
 
     private fun markLabel(mark: PageStamp.Mark): String = context.getString(
@@ -244,7 +248,66 @@ class StampCanvasView @JvmOverloads constructor(
         return true
     }
 
-    private inner class CanvasAccessibility : AccessibilityDelegateCompat() {
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean =
+        accessibilityHelper.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        accessibilityHelper.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    private inner class CanvasAccessibility : ExploreByTouchHelper(this@StampCanvasView) {
+        override fun getVirtualViewAt(x: Float, y: Float): Int {
+            val page = pageRect()
+            if (page.isEmpty) return INVALID_ID
+            return hitTest(toNormalised(x,y,page)).takeIf { it >= 0 } ?: INVALID_ID
+        }
+
+        override fun getVisibleVirtualViews(ids: MutableList<Int>) {
+            val page = pageRect()
+            if (page.isEmpty) return
+            marks.forEachIndexed { i, mark ->
+                val bounds = normalizedBounds(mark)?.let { toView(it,page) }
+                if (bounds != null && RectF.intersects(bounds, RectF(0f,0f,width.toFloat(),height.toFloat()))) ids += i
+            }
+        }
+
+        override fun onPopulateNodeForVirtualView(id: Int, info: AccessibilityNodeInfoCompat) {
+            val mark = marks[id]
+            val bounds = normalizedBounds(mark)?.let { toView(it,pageRect()) } ?: RectF(0f,0f,1f,1f)
+            val padX = max(0f, (dp(48f)-bounds.width())/2f)
+            val padY = max(0f, (dp(48f)-bounds.height())/2f)
+            bounds.inset(-padX,-padY)
+            val rect = android.graphics.Rect()
+            bounds.roundOut(rect)
+            info.setBoundsInParent(rect)
+            info.contentDescription = if (mark is PageStamp.Mark.Redact)
+                context.getString(R.string.j34_area,id+1,pageNumber)
+                else context.getString(R.string.j34_named_mark,markLabel(mark),id+1,pageNumber)
+            info.className = android.widget.Button::class.java.name
+            info.isSelected = id == selectedIndex
+            info.isClickable = true
+            info.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
+            listOf(R.id.a11y_move_left, R.id.a11y_move_right, R.id.a11y_move_up, R.id.a11y_move_down,
+                R.id.a11y_grow, R.id.a11y_shrink, R.id.a11y_delete_mark).forEach { action ->
+                val label = when (action) {
+                    R.id.a11y_move_left -> R.string.a11y_move_left
+                    R.id.a11y_move_right -> R.string.a11y_move_right
+                    R.id.a11y_move_up -> R.string.a11y_move_up
+                    R.id.a11y_move_down -> R.string.a11y_move_down
+                    R.id.a11y_grow -> R.string.a11y_grow
+                    R.id.a11y_shrink -> R.string.a11y_shrink
+                    else -> R.string.a11y_delete_mark
+                }
+                info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat(action,context.getString(label)))
+            }
+        }
+
+        override fun onPerformActionForVirtualView(id: Int, action: Int, args: Bundle?): Boolean {
+            tool = Tool.SELECT
+            listener?.onSelect(id)
+            if (action == AccessibilityNodeInfoCompat.ACTION_CLICK) return true
+            return performAccessibilityAction(this@StampCanvasView,action,args)
+        }
+
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
             super.onInitializeAccessibilityNodeInfo(host, info)
             info.contentDescription = describeState()
@@ -734,7 +797,8 @@ class StampCanvasView @JvmOverloads constructor(
                 val rect = toView(bounds, page).apply { inset(-dp(6f), -dp(6f)) }
                 if (canRotate(mark)) {
                     val knob = PointF(rect.centerX(), rect.top - dp(30f))
-                    if (distanceTo(event.x, event.y, knob) <= dp(22f)) {
+                    if (kotlin.math.abs(event.x-knob.x) <= dp(24f) &&
+                        kotlin.math.abs(event.y-knob.y) <= dp(24f)) {
                         mode = Mode.ROTATE
                         rotateIndex = selected
                         lastAngle = Math.toDegrees(

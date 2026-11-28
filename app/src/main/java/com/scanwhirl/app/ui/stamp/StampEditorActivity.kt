@@ -278,12 +278,14 @@ class StampEditorActivity : BaseActivity() {
 
         binding.prevPage.setOnClickListener {
             if (editor.currentPage > 0) {
+                binding.canvas.cancelActiveGesture()
                 editor.currentPage -= 1
                 showPage()
             }
         }
         binding.nextPage.setOnClickListener {
             if (editor.currentPage < editor.pageCount - 1) {
+                binding.canvas.cancelActiveGesture()
                 editor.currentPage += 1
                 showPage()
             }
@@ -530,6 +532,10 @@ class StampEditorActivity : BaseActivity() {
         entry(R.string.stamp_undo) { if (editor.undo()) refresh() }
         entry(R.string.stamp_redo) { if (editor.redo()) refresh() }
         entry(R.string.j34_marks) { marksSheet() }
+        if (binding.canvas.placement != null) entry(R.string.j34_place_signature) {
+            binding.canvas.placement?.let { editor.add(it) }
+            disarm(); refresh(); positionSheet()
+        }
         entry(R.string.j34_position) { positionSheet() }
         if (!hideJourney) entry(if (binding.canvas.snapEnabled) R.string.j34_snap_on else R.string.j34_snap_off) {
             binding.canvas.snapEnabled = !binding.canvas.snapEnabled
@@ -1399,24 +1405,39 @@ class StampEditorActivity : BaseActivity() {
      */
     private fun showPersistentReceipt(copy: ScanDocument) {
         receiptCopyId = copy.id
-        SwSheet.builder(this)
+        var handled = false
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.v2v_redact_receipt_title)
             .setMessage(getString(R.string.cdf1_redact_receipt_body, copy.name))
             // P2: the safe, reversible choice is primary; Trash is the secondary.
-            .setPrimary(R.string.v2v_keep_original) { receiptCopyId = null; openResult(copy) }
+            .setPrimary(R.string.v2v_keep_original) {
+                handled = true; receiptCopyId = null; openResult(copy)
+            }
             .setSecondary(R.string.v2v_move_original_to_trash) {
-                confirmTrashOriginal(document.id)
+                handled = true
+                confirmTrashOriginal(document.id, copy)
             }
             .build()
-            .show()
+        sheet.setOnDismissListener {
+            // A user-dismissed receipt leads to the result; lifecycle teardown must retain it.
+            if (!handled && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                receiptCopyId = null
+                openResult(copy)
+            }
+        }
+        sheet.show()
     }
 
-    private fun confirmTrashOriginal(id: String) {
-        SwSheet.builder(this)
+    private fun confirmTrashOriginal(id: String, copy: ScanDocument) {
+        var handled = false
+        val sheet = SwSheet.builder(this)
             .setTitle(R.string.v2v_trash_original_confirm)
             .setMessage(R.string.v2v_trash_original_body)
-            .setPrimary(R.string.v2v_keep_original) { }
+            .setPrimary(R.string.v2v_keep_original) {
+                handled = true; receiptCopyId = null; openResult(copy)
+            }
             .setSecondary(R.string.v2v_move_original_to_trash) {
+                handled = true
                 // Same path as every other Trash route: off the main thread, with the
                 // named Undo snackbar. Never delete without this confirmation.
                 lifecycleScope.launch {
@@ -1425,15 +1446,24 @@ class StampEditorActivity : BaseActivity() {
                     }
                     if (moved.keys.isEmpty()) {
                         note(getString(R.string.trash_move_failed))
+                        showPersistentReceipt(copy)
                         return@launch
                     }
                     val root = findViewById<View>(android.R.id.content) ?: window.decorView
                     TrashActions.showMoved(this@StampEditorActivity, root, null, moved) { }
                     note(getString(R.string.v2v_trash_original_done))
+                    receiptCopyId = null
+                    openResult(copy)
                 }
             }
             .build()
-            .show()
+        sheet.setOnDismissListener {
+            if (!handled && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                receiptCopyId = null
+                openResult(copy)
+            }
+        }
+        sheet.show()
     }
 
     /** Reports the finished save on whichever instance of the screen is alive, exactly once. */
