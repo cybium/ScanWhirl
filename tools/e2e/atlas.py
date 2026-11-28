@@ -1159,7 +1159,7 @@ def walk_j5_organize():
                 drag.communicate(timeout=5)
         time.sleep(1)
         root = hierarchy()
-        was = find(root, regex=r"was p\.3|originally page 3|पहले पेज 3")
+        was = find(root, regex=r"was p\.3|originally page 3|पहले पन्ना 3")
         first = find(root, rid="pageNum", text="1")
         if (was is None or first is None or
                 clickable_ancestor(root, was) is not clickable_ancestor(root, first)):

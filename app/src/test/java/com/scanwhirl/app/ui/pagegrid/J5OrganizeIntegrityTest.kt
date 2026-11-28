@@ -161,11 +161,13 @@ class J5OrganizeIntegrityTest {
         open(id) { activity, grid ->
             val third = grid.pageAt(2)!!
             assertTrue(grid.simulateDrag(2, 0))
-            waitFor { actual(id).first() == third && grid.provenanceFor(third, 0) == 3 }
+            // Wait for the first edit to finish: the next reorder is deliberately ignored while
+            // the durable commit is in flight, and "was p.3" must clear when moved back.
+            waitFor { actual(id).first() == third && grid.provenanceFor(third, 0) == 3 && settled(activity) }
             assertNull(grid.provenanceFor(grid.pageAt(1)!!, 1))
             assertNull(grid.provenanceFor(grid.pageAt(2)!!, 2))
             activity.reorderPages(0, 2)
-            waitFor { actual(id).last() == third && grid.provenanceFor(third, 2) == null }
+            waitFor { actual(id).last() == third && grid.provenanceFor(third, 2) == null && settled(activity) }
         }
     }
 

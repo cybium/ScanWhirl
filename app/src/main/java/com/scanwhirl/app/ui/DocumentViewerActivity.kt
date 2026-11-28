@@ -569,6 +569,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             button.typeface = SwType.medium(this)
             button.maxLines = Int.MAX_VALUE
             button.minHeight = dp(SwStyle.TOUCH_MIN_DP)
+            button.minWidth = dp(SwStyle.TOUCH_MIN_DP)
             button.isVisible = !(narrow && button == binding.btnSelExtract)
         }
         if (narrow) {
@@ -978,7 +979,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 item.iconPadding = dp(SwStyle.SPACE_1_DP)
                 item.insetTop = 0
                 item.insetBottom = 0
-                item.maxLines = Int.MAX_VALUE
+                item.maxLines = 3
                 val params = if (large && chunk.size == 1) {
                     // One action left in a two-column grid grows across both columns.
                     LinearLayout.LayoutParams(
@@ -1175,6 +1176,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.draftBar.isVisible = organize || (!selectMode && (draft?.changes ?: 0) > 0)
         binding.selCount.text = resources.getQuantityString(R.plurals.selected_count, count, count)
         binding.btnSelAll.isEnabled = visiblePages.isNotEmpty() && !editBusy
+        binding.btnSelAll.alpha = if (binding.btnSelAll.isEnabled) 1f else 0.45f
         binding.btnSelAll.setText(if (count == visiblePages.size && count > 0)
             R.string.j5_deselect_all else R.string.draft_select_all)
         val reason = document?.let(::protectedReason)
@@ -1225,6 +1227,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
+            action.minWidth = dp(SwStyle.TOUCH_MIN_DP)
             flow.addView(action)
         }
         bar.addView(

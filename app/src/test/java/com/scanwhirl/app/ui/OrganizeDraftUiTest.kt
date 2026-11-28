@@ -229,6 +229,16 @@ class OrganizeDraftUiTest {
                 activity.rotateSelected(true)
             }
             assertTrue(pollUntil { draftChanges(id) == 1 })
+            // The organizer ignores Save while the rotation commit is still running; the
+            // persistent Undo action is enabled only in that commit's finally block.
+            assertTrue(pollUntil {
+                var ready = false
+                scenario.onActivity { a ->
+                    ready = a.findViewById<android.view.View>(android.R.id.content)
+                        .findViewWithTag<android.view.View>("j5-undo")?.isEnabled == true
+                }
+                ready
+            })
             scenario.onActivity {
                 it.findViewById<android.view.View>(R.id.btnDraftSave)!!.performClick()
             }

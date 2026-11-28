@@ -89,7 +89,7 @@ class J5ReflowTest {
     @Test @Config(qualifiers = "w320dp-h640dp-xhdpi")
     fun `320dp moves secondary actions to More instead of clipping`() =
         check(2, expectWrappedBar = true)
-    @Test @Config(qualifiers = "w412dp-h900dp-xhdpi-night")
+    @Test @Config(qualifiers = "w412dp-h900dp-night-xhdpi")
     fun `dark 412dp keeps the page grid dominant`() = check(3)
     @Test fun `font two keeps labels reachable without shrinking page coordinates`() =
         check(2, 2f, expectWrappedBar = true)
