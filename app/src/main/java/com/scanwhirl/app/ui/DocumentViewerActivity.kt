@@ -102,6 +102,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private var organize = false
     private var editBusy = false
     private var resultShown = false
+    private var organizeName: String? = null
     private var undoButton: TextView? = null
 
     /** Pages shown in the grid (document pages minus any pending Undo deletes). */
@@ -318,6 +319,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
         organize = intent.getBooleanExtra(EXTRA_ORGANIZE, false)
+        organizeName = savedInstanceState?.getString("j5-name")
         // B2: a storage-permission answer may be re-delivered here after a rotation. The token
         // carries only the action kind and document id, never the document's bytes or text.
         PendingSaveAction.restore(savedInstanceState, ACTION_SAVE_PDF)?.let { (kind, target) ->
@@ -780,6 +782,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         outState.putStringArrayList(KEY_PENDING_DELETES, ArrayList(pendingDeletes))
         outState.putLong(KEY_DELETE_DEADLINE, pendingDeleteDeadline)
         outState.putStringArrayList(KEY_SELECTED_PAGES, ArrayList(selected))
+        outState.putString("j5-name", organizeName)
         pendingPhotoPosition?.let { outState.putInt(KEY_PHOTO_INSERT_AT, it) }
         pendingPhotoCount?.let { outState.putInt(KEY_PHOTO_COUNT, it) }
         // R1: only a batch the crop flow already owns is worth restoring; a copy in flight is
@@ -1098,7 +1101,10 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                     panel,
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
+                    ).apply {
+                        leftMargin = dp(SwStyle.SPACE_3_DP)
+                        rightMargin = dp(SwStyle.SPACE_3_DP)
+                    }
                 )
             }
             if (pages.parent == null) {
@@ -1117,8 +1123,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 panel.layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    leftMargin = dp(4f)
-                    rightMargin = dp(4f)
+                    leftMargin = dp(SwStyle.SPACE_3_DP)
+                    rightMargin = dp(SwStyle.SPACE_3_DP)
                     bottomMargin = dp(4f)
                 }
                 binding.contentRoot.addView(panel)
@@ -1161,7 +1167,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         for (button in allActions) {
             button.isEnabled = count > 0 && !editBusy && document != null &&
                 (reason == null || button == binding.btnSelMore) &&
-                (button != binding.btnSelDelete || count < visiblePages.size)
+                (button != binding.btnSelDelete || count < visiblePages.size) &&
+                (!organize || button != binding.btnSelShare || count < visiblePages.size)
             button.alpha = if (button.isEnabled) 1f else 0.45f
             button.contentDescription = listOfNotNull(button.text.toString(),
                 reason.takeIf { !button.isEnabled }).joinToString(". ")
@@ -1171,6 +1178,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.pageList.checkboxesVisible = selectMode
         // The entry control is redundant (and costs height) once selection is open.
         findViewById<View>(R.id.ux130_l4_select_pages).isVisible = !selectMode && !organize
+        binding.docHeader.findViewWithTag<View>("j5-hold-hint")?.isVisible =
+            !selectMode && (draft?.changes ?: 0) == 0
         updateUndoAvailability()
     }
 
@@ -1739,6 +1748,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         if (organize) {
             if (editBusy) return
             val doc = repo.getDocument(id) ?: return
+            binding.pageList.animatePageTurns(pages.indices.filter { pages[it].path in paths }, clockwise)
             editBusy = true
             updateSelectionUi()
             lifecycleScope.launch {
@@ -2437,12 +2447,20 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
      * new copy instead of closing this screen. The draft bar still just saves and finishes.
      */
     private fun saveDraftFlow(onSaved: ((ScanDocument) -> Unit)? = null) {
+        if (organize && editBusy) return
         val id = docId ?: return
         val doc = document ?: return
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) { commitPendingDeletesNow() }
-                promptDraftName(getString(R.string.draft_edited_name, doc.name)) { name ->
+                val initial = if (organize) organizeName ?: getString(R.string.j5_organized_name, doc.name)
+                    else getString(R.string.draft_edited_name, doc.name)
+                promptDraftName(initial) { name ->
+                    if (organize) {
+                        organizeName = name
+                        editBusy = true
+                        updateSelectionUi()
+                    }
                     lifecycleScope.launch {
                         try {
                             val copy = withContext(Dispatchers.IO) {
@@ -2463,7 +2481,19 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                                 continueAfterSave(onSaved, copy)
                             }
                         } catch (e: Exception) {
-                            showDraftError(e)
+                            if (organize && e !is DraftStore.DraftStale && e !is DraftStore.DraftDamaged) {
+                                SwSheet.builder(this@DocumentViewerActivity)
+                                    .setTitle(R.string.j5_save_failed_title)
+                                    .setMessage(getString(R.string.j5_save_failed,
+                                        V2vFailureCopy.message(this@DocumentViewerActivity, e)))
+                                    .setPrimary(R.string.j5_retry) { saveDraftFlow(onSaved) }
+                                    .setSecondary(R.string.draft_keep_editing)
+                                    .build().show()
+                            } else showDraftError(e)
+                        } finally {
+                            editBusy = false
+                            updateSelectionUi()
+                            updateDraftBar()
                         }
                     }
                 }

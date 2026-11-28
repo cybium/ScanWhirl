@@ -79,12 +79,16 @@ class DraftEngineTest {
         val reloaded = newProcess()
         val draft = runBlocking { reloaded.draftOf(id) }!!
         assertEquals("the manifest still holds the last committed edit", 2, draft.changes)
-        val referenced = draft.entries.flatMap {
+        // J5 Undo is a durable reference, not an orphan. Keep every live/history file and
+        // still require the interrupted third rotation's uncommitted file to be pruned.
+        val referenced = (draft.entries + draft.history.flatMap { it.entries }).flatMap {
             listOfNotNull(it.replacement, it.replacementOrig)
         }.toSet()
         val leftovers = draftDir(id).listFiles()
             .orEmpty().filter { it.name.startsWith("r_") && it.name !in referenced }
         assertTrue("unreferenced replacements must be pruned, found $leftovers", leftovers.isEmpty())
+        assertFalse("the interrupted replacement is not an Undo reference",
+            File(draftDir(id), "r_2.jpg").exists())
     }
 
     @Test

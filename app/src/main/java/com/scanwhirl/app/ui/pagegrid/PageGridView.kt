@@ -23,6 +23,7 @@ import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.isVisible
+import androidx.core.view.doOnNextLayout
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.RecyclerView
@@ -70,6 +71,7 @@ class PageGridView @JvmOverloads constructor(
     var onDelete: ((Int) -> Unit)? = null
     var provenanceFor: (File, Int) -> Int? = { _, _ -> null }
     var identityFor: (File) -> String = { it.path }
+    internal var hapticProbe: ((Int) -> Unit)? = null
 
     /** Which filter a cell's file should display (file-based so it stays correct mid-drag). */
     var filterFor: (File) -> ScanFilter = { ScanFilter.ORIGINAL }
@@ -133,7 +135,11 @@ class PageGridView @JvmOverloads constructor(
     private var fingerX = 0f
     private var fingerY = 0f
     private var lastFrame = 0L
+    private var edgeRemainder = 0f
     private var settling = false
+    private var selectionHoldConsumed = false
+    private var settlingPages: List<File> = emptyList()
+    private var settleCleanup: (() -> Unit)? = null
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val hold = Runnable { beginDrag(downIndex) }
     private val edgeScroll = object : Runnable {
@@ -145,15 +151,18 @@ class PageGridView @JvmOverloads constructor(
             val band = px(48f)
             val velocity = when {
                 fingerX !in 0f..width.toFloat() || fingerY !in 0f..height.toFloat() -> 0f
-                fingerY < paddingTop + band -> -((paddingTop + band - fingerY) / band).coerceIn(0f, 1f)
-                fingerY > height - paddingBottom - band ->
-                    ((fingerY - height + paddingBottom + band) / band).coerceIn(0f, 1f)
+                fingerY < band -> -((band - fingerY) / band).coerceIn(0f, 1f)
+                fingerY > height - band ->
+                    ((fingerY - height + band) / band).coerceIn(0f, 1f)
                 else -> 0f
             } * px(600f)
             if (velocity != 0f) {
-                scrollBy(0, (velocity * dt).toInt())
+                val travel = velocity * dt + edgeRemainder
+                val pixels = travel.toInt()
+                edgeRemainder = travel - pixels
+                scrollBy(0, pixels)
                 updateTarget()
-            }
+            } else edgeRemainder = 0f
             postOnAnimation(this)
         }
     }
@@ -168,6 +177,7 @@ class PageGridView @JvmOverloads constructor(
         override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
             if (settling) return true
             if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                selectionHoldConsumed = false
                 removeCallbacks(hold)
                 downX = e.x
                 downY = e.y
@@ -181,10 +191,16 @@ class PageGridView @JvmOverloads constructor(
                 if (e.actionMasked != MotionEvent.ACTION_MOVE ||
                     kotlin.math.hypot(e.x - downX, e.y - downY) > touchSlop) removeCallbacks(hold)
             }
-            return drag != null
+            return drag != null || selectionHoldConsumed
         }
 
         override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+            if (selectionHoldConsumed) {
+                if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    selectionHoldConsumed = false
+                }
+                return
+            }
             fingerX = e.x
             fingerY = e.y
             when (e.actionMasked) {
@@ -209,6 +225,7 @@ class PageGridView @JvmOverloads constructor(
         // Never silently replace an existing selection. Select this page; hold again to drag.
         if (selected.isNotEmpty() && index !in selected) {
             onLongPress?.invoke(index)
+            selectionHoldConsumed = true
             return false
         }
         val moving = if (selected.isEmpty()) listOf(anchor) else selected.map { before[it] }
@@ -260,10 +277,15 @@ class PageGridView @JvmOverloads constructor(
         // organizer taps to select and never changes selection merely because it lifted.
         if (onOrderDropped == null) onLongPress?.invoke(index)
         hideMovingCells()
-        preview.animate().scaleX(1.08f).scaleY(1.08f)
-            .setDuration(SwMotion.duration(context, SwMotion.SHORT))
-            .setInterpolator(SwMotion.emphasized()).start()
-        performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.DRAG_START
+        if (SwMotion.enabled(context)) {
+            preview.animate().scaleX(1.08f).scaleY(1.08f)
+                .setDuration(SwMotion.duration(context, SwMotion.SHORT))
+                .setInterpolator(SwMotion.emphasized()).start()
+        } else {
+            preview.scaleX = 1.08f
+            preview.scaleY = 1.08f
+        }
+        pulse(if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.DRAG_START
             else HapticFeedbackConstants.LONG_PRESS)
         parent?.requestDisallowInterceptTouchEvent(true)
         stopScroll()
@@ -317,7 +339,7 @@ class PageGridView @JvmOverloads constructor(
     }
 
     private fun hideMovingCells() {
-        val moving = drag?.moving.orEmpty()
+        val moving = drag?.moving ?: settlingPages
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             child.alpha = if (pageAt(getChildAdapterPosition(child)) in moving) 0f else 1f
@@ -334,41 +356,71 @@ class PageGridView @JvmOverloads constructor(
     private fun finishDrag(valid: Boolean) {
         val d = drag ?: return
         removeCallbacks(edgeScroll)
+        edgeRemainder = 0f
         removeCallbacks(hold)
         val after = pageOrder()
         val changed = valid && after != d.before
         if (!changed) previewOrder(d.before)
+        settlingPages = d.moving
         drag = null
         settling = true
         parent?.requestDisallowInterceptTouchEvent(false)
-        val destination = findViewHolderForAdapterPosition(gridAdapter.pages.indexOf(d.anchor))?.itemView
-        val rootAt = IntArray(2).also(d.host::getLocationOnScreen)
-        val at = destination?.let { IntArray(2).also(it::getLocationOnScreen) }
-        val endX = at?.let { (it[0] - rootAt[0]).toFloat() } ?: d.origin.left
-        val endY = at?.let { (it[1] - rootAt[1]).toFloat() } ?: d.origin.top
+        var cleaned = false
         val done = {
-            d.host.overlay.remove(d.preview)
-            d.bitmap.recycle()
-            settling = false
-            hideMovingCells()
+            if (!cleaned) {
+                cleaned = true
+                d.preview.animate().cancel()
+                d.host.overlay.remove(d.preview)
+                d.bitmap.recycle()
+                settling = false
+                settlingPages = emptyList()
+                settleCleanup = null
+                hideMovingCells()
+            }
         }
-        if (SwMotion.enabled(context)) {
-            d.preview.animate().x(endX).y(endY).scaleX(1f).scaleY(1f).z(px(1f))
-                .setDuration(SwMotion.duration(context, SwMotion.SETTLE))
-                .setInterpolator(SwMotion.standard()).withEndAction { done() }.start()
+        settleCleanup = { done() }
+        if (SwMotion.enabled(context) && isAttachedToWindow) {
+            // Wait for the preview order's layout, NOT for neighbour animations. Their
+            // translation is deliberately excluded from the destination gap coordinates.
+            doOnNextLayout {
+                if (!cleaned) {
+                    val destination = findViewHolderForAdapterPosition(
+                        gridAdapter.pages.indexOf(d.anchor))?.itemView
+                    val rootAt = IntArray(2).also(d.host::getLocationOnScreen)
+                    val at = destination?.let { IntArray(2).also(it::getLocationOnScreen) }
+                    val endX = at?.let { it[0] - rootAt[0] - (destination?.translationX ?: 0f) } ?: d.origin.left
+                    val endY = at?.let { it[1] - rootAt[1] - (destination?.translationY ?: 0f) } ?: d.origin.top
+                    d.preview.animate().x(endX).y(endY).scaleX(1f).scaleY(1f).z(px(1f))
+                        .setDuration(SwMotion.duration(context, SwMotion.SETTLE))
+                        .setInterpolator(SwMotion.standard()).withEndAction { done() }.start()
+                }
+            }
+            requestLayout()
         } else done()
         if (changed) {
-            performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
+            pulse(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
                 else HapticFeedbackConstants.VIRTUAL_KEY)
             if (onOrderDropped != null) onOrderDropped?.invoke(after, d.moving)
             else onDropped?.invoke(d.before.indexOf(d.anchor), after.indexOf(d.anchor))
         }
     }
 
+    private fun pulse(feedback: Int) {
+        hapticProbe?.invoke(feedback)
+        performHapticFeedback(feedback)
+    }
+
     init {
         layoutManager = GridLayoutManager(context, 2)
         adapter = gridAdapter
-        itemAnimator = DefaultItemAnimator().apply {
+        itemAnimator = object : DefaultItemAnimator() {
+            override fun animateMove(holder: ViewHolder, fromX: Int, fromY: Int,
+                toX: Int, toY: Int): Boolean {
+                val result = super.animateMove(holder, fromX, fromY, toX, toY)
+                holder.itemView.animate().setInterpolator(SwMotion.standard())
+                return result
+            }
+        }.apply {
             moveDuration = SwMotion.duration(context, SwMotion.MEDIUM)
             changeDuration = 0L
             supportsChangeAnimations = false
@@ -380,6 +432,7 @@ class PageGridView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         cancelDrag()
+        settleCleanup?.invoke()
         removeCallbacks(hold)
         removeCallbacks(edgeScroll)
         super.onDetachedFromWindow()
@@ -395,7 +448,8 @@ class PageGridView @JvmOverloads constructor(
 
     private fun revisionOf(pages: List<File>): String {
         var hash = 17
-        for (page in pages) hash = hash * 31 + page.path.hashCode()
+        // Reordering is not a content revision. Keep cached content attached to its identity.
+        for (path in pages.map { it.path }.sorted()) hash = hash * 31 + path.hashCode()
         return Integer.toHexString(hash)
     }
 
@@ -451,8 +505,38 @@ class PageGridView @JvmOverloads constructor(
         if (index in 0 until gridAdapter.itemCount) scrollToPosition(index)
     }
 
+    /** Turn only the paper, in a fixed cell. Reordering never changes page artwork rotation. */
+    fun animatePageTurns(indices: List<Int>, clockwise: Boolean) {
+        if (!SwMotion.enabled(context)) return
+        indices.forEach { index ->
+            val cell = findViewHolderForAdapterPosition(index)?.itemView ?: return@forEach
+            val thumb = cell.findViewById<ImageView>(R.id.pageThumb) ?: return@forEach
+            val host = thumb.parent as? ViewGroup ?: return@forEach
+            val drawable = thumb.drawable ?: return@forEach
+            val turning = ImageView(context).apply {
+                setImageDrawable(drawable.constantState?.newDrawable()?.mutate() ?: drawable)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            turning.measure(MeasureSpec.makeMeasureSpec(thumb.width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(thumb.height, MeasureSpec.EXACTLY))
+            turning.layout(thumb.left, thumb.top, thumb.right, thumb.bottom)
+            host.overlay.add(turning)
+            thumb.alpha = 0f
+            val fit = minOf(thumb.width.toFloat() / thumb.height.coerceAtLeast(1),
+                thumb.height.toFloat() / thumb.width.coerceAtLeast(1))
+            turning.animate().rotation(if (clockwise) 90f else -90f).scaleX(fit).scaleY(fit)
+                .setDuration(SwMotion.duration(context, SwMotion.SETTLE))
+                .setInterpolator(SwMotion.standard()).withEndAction {
+                    host.overlay.remove(turning)
+                    thumb.alpha = 1f
+                }.start()
+        }
+    }
+
     /** Test seam: start the same ItemTouchHelper drag a long-press would start. */
     internal fun startDragAt(index: Int): Boolean {
+        selectionHoldConsumed = false
         val cell = findViewHolderForAdapterPosition(index)?.itemView ?: return false
         fingerX = (cell.left + cell.right) / 2f
         fingerY = (cell.top + cell.bottom) / 2f
@@ -561,7 +645,7 @@ class PageGridView @JvmOverloads constructor(
                 index + 1, gridAdapter.itemCount) +
                 (was?.let { ", " + context.getString(R.string.j5_original_page, it) } ?: "")
             binding.root.isSelected = selected
-            binding.root.alpha = if (file in drag?.moving.orEmpty()) 0f else 1f
+            binding.root.alpha = if (file in (drag?.moving ?: settlingPages)) 0f else 1f
             binding.checkSelectTouch.isVisible = checkboxesVisible
             binding.checkSelect.isVisible = checkboxesVisible
             binding.checkSelect.imageAlpha = if (selected) 255 else 0
@@ -632,27 +716,30 @@ class PageGridView @JvmOverloads constructor(
                         )
                     }
                     if (dragEnabled && pos != NO_POSITION) {
-                        listOf(
-                            R.string.j5_move_first to R.string.j5_move_first,
-                            R.string.j5_move_last to R.string.j5_move_last,
-                            R.string.j5_move_selected to R.string.j5_move_selected,
-                            R.string.a11y_rotate_cw to R.string.a11y_rotate_cw,
-                            R.string.j5_delete_page to R.string.j5_delete_page
-                        ).forEach { (id, label) ->
+                        buildList {
+                            if (pos > 0) add(R.string.j5_move_first to R.string.j5_move_page_first)
+                            if (pos < gridAdapter.itemCount - 1)
+                                add(R.string.j5_move_last to R.string.j5_move_page_last)
+                            if (onMoveSelected != null && gridAdapter.pages.indices.any { checkedAt(it) })
+                                add(R.string.j5_move_selected to R.string.j5_move_selected)
+                            if (onRotate != null) add(R.string.a11y_rotate_cw to R.string.a11y_rotate_cw)
+                            if (onDelete != null && gridAdapter.itemCount > 1)
+                                add(R.string.j5_delete_page to R.string.j5_delete_page_number)
+                        }.forEach { (id, label) ->
                             info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat(
-                                id, context.getString(label)))
+                                id, context.getString(label, pos + 1)))
                         }
                         if (pos > 0) {
                             info.addAction(
                                 AccessibilityNodeInfoCompat.AccessibilityActionCompat(
-                                    R.id.a11y_move_up, context.getString(R.string.a11y_move_up)
+                                    R.id.a11y_move_up, context.getString(R.string.j5_move_page_up, pos + 1)
                                 )
                             )
                         }
                         if (pos < gridAdapter.itemCount - 1) {
                             info.addAction(
                                 AccessibilityNodeInfoCompat.AccessibilityActionCompat(
-                                    R.id.a11y_move_down, context.getString(R.string.a11y_move_down)
+                                    R.id.a11y_move_down, context.getString(R.string.j5_move_page_down, pos + 1)
                                 )
                             )
                         }

@@ -3,10 +3,19 @@
 <resources>
     <!-- review: J5 physical page organization -->
     <string name="j5_title">पेज व्यवस्थित करें</string>
+    <string name="j5_organized_name">%1$s (क्रम बदला)</string>
+    <string name="j5_save_failed_title">सेव नहीं हुआ</string>
+    <string name="j5_save_failed">आपके बदलाव मौजूद हैं। %1$s</string>
+    <string name="j5_retry">फिर कोशिश करें</string>
     <string name="j5_hold_hint">क्रम बदलने के लिए दबाकर खींचें।</string>
     <string name="j5_was_page">पहले पेज %1$d</string>
     <string name="j5_original_page">पहले पेज %1$d था</string>
     <string name="j5_move_first">सबसे पहले ले जाएँ</string>
+    <string name="j5_move_page_up">पेज %1$d को एक स्थान पहले ले जाएँ</string>
+    <string name="j5_move_page_down">पेज %1$d को एक स्थान आगे ले जाएँ</string>
+    <string name="j5_move_page_first">पेज %1$d को सबसे पहले ले जाएँ</string>
+    <string name="j5_move_page_last">पेज %1$d को सबसे अंत में ले जाएँ</string>
+    <string name="j5_delete_page_number">पेज %1$d हटाएँ</string>
     <string name="j5_move_last">सबसे अंत में ले जाएँ</string>
     <string name="j5_move_selected">चुने हुए पेज ले जाएँ…</string>
     <string name="j5_delete_page">पेज हटाएँ</string>

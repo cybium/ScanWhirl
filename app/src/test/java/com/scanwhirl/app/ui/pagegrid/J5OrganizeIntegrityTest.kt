@@ -3,6 +3,7 @@ package com.scanwhirl.app.ui.pagegrid
 import android.app.Application
 import android.os.Looper
 import android.view.View
+import android.view.HapticFeedbackConstants
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -54,9 +55,7 @@ class J5OrganizeIntegrityTest {
             scenario.onActivity { a ->
                 waitFor { a.findViewById<TextView>(R.id.pageCount).text.isNotEmpty() }
                 val grid = a.findViewById<PageGridView>(R.id.pageList)
-                grid.measure(View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.EXACTLY))
-                grid.layout(0, 0, 720, 1200)
+                layoutGrid(grid)
                 block(a, grid)
                 grid.cancelDrag()
             }
@@ -64,6 +63,16 @@ class J5OrganizeIntegrityTest {
     }
 
     private fun actual(id: String): List<File> = runBlocking { repo.draftPages(id) }
+
+    private fun layoutGrid(grid: PageGridView) {
+        grid.measure(View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.EXACTLY))
+        grid.layout(0, 0, 720, 1200)
+    }
+
+    private fun settled(activity: DocumentViewerActivity): Boolean =
+        activity.findViewById<View>(android.R.id.content)
+            .findViewWithTag<View>("j5-undo")?.isEnabled == true
 
     @Test fun `drag reorder keeps page identity and content`() {
         val id = DocFixtures.saved(repo, app, pages = 3, name = "Admission form")
@@ -82,8 +91,11 @@ class J5OrganizeIntegrityTest {
         val id = DocFixtures.saved(repo, app, pages = 6)
         open(id) { activity, grid ->
             val before = grid.pageOrder()
+            val haptics = mutableListOf<Int>()
+            grid.hapticProbe = { haptics.add(it) }
             activity.toggleSelected(1)
             activity.toggleSelected(3)
+            layoutGrid(grid)
             assertTrue(grid.startDragAt(1))
             grid.previewDragTo(0)
             assertNotEquals(before, grid.pageOrder())
@@ -93,6 +105,7 @@ class J5OrganizeIntegrityTest {
             assertTrue(grid.checkedAt(3))
             assertNull(runBlocking { repo.draftOf(id) })
             assertEquals(before, actual(id))
+            assertEquals("cancel has lift feedback only", listOf(HapticFeedbackConstants.DRAG_START), haptics)
         }
     }
 
@@ -102,12 +115,17 @@ class J5OrganizeIntegrityTest {
         open(id) { activity, grid ->
             activity.toggleSelected(1)
             activity.toggleSelected(3)
+            layoutGrid(grid)
+            val haptics = mutableListOf<Int>()
+            grid.hapticProbe = { haptics.add(it) }
             assertTrue(grid.simulateDrag(1, 0))
             val expected = listOf(before[1], before[3], before[0], before[2], before[4], before[5])
-            waitFor { actual(id) == expected }
+            waitFor { actual(id) == expected && grid.pageOrder() == expected && settled(activity) }
+            assertEquals(listOf(HapticFeedbackConstants.DRAG_START, HapticFeedbackConstants.CONFIRM), haptics)
             assertEquals(1, runBlocking { repo.draftOf(id) }!!.history.size)
             activity.undoOrganize()
-            waitFor { actual(id) == before }
+            waitFor { actual(id) == before && grid.pageOrder() == before &&
+                grid.checkedAt(1) && grid.checkedAt(3) }
             assertEquals(0, runBlocking { repo.draftOf(id) }!!.changes)
             assertTrue(grid.checkedAt(1))
             assertTrue(grid.checkedAt(3))
@@ -169,6 +187,18 @@ class J5OrganizeIntegrityTest {
                 assertArrayEquals(original, repo.getDocument(id)!!.pdfFile.readBytes())
                 assertNull(runBlocking { repo.draftOf(id) })
             }
+        }
+    }
+
+    @Test @Config(sdk = [24], qualifiers = "w360dp-h800dp-xhdpi")
+    fun `older Android uses supported lift and drop feedback`() {
+        val id = DocFixtures.saved(repo, app, pages = 3)
+        open(id) { _, grid ->
+            val haptics = mutableListOf<Int>()
+            grid.hapticProbe = { haptics.add(it) }
+            assertTrue(grid.simulateDrag(2, 0))
+            assertEquals(listOf(HapticFeedbackConstants.LONG_PRESS,
+                HapticFeedbackConstants.VIRTUAL_KEY), haptics)
         }
     }
 }

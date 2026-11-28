@@ -36,7 +36,7 @@ internal class DraftStore(filesDir: File) {
         val sourceSha: String?,
         val replacement: String? = null,
         val replacementOrig: String? = null,
-        val pageId: String = source ?: UUID.randomUUID().toString()
+        val pageId: String = source ?: replacement ?: UUID.randomUUID().toString()
     )
 
     data class Draft(

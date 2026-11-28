@@ -434,12 +434,20 @@ abstract class DocumentWorkspaceBase {
             for (actionId in visibleDockIds) {
                 val b = buttonOf(activity, actionId)
                 val fill = b.backgroundTintList?.defaultColor ?: Color.TRANSPARENT
-                val ratio = contrast(b.currentTextColor, fill)
-                assertTrue(
-                    "action ${activity.resources.getResourceEntryName(actionId)} label contrast " +
-                        "is ${"%.2f".format(ratio)}:1, needs 4.5:1",
-                    ratio >= 4.5
-                )
+                for (surface in listOf(R.color.void_abyss, R.color.glass_surface,
+                    R.color.glass_surface_raised)) {
+                    val backdrop = androidx.core.graphics.ColorUtils.compositeColors(
+                        activity.getColor(surface), activity.getColor(R.color.void_abyss))
+                    val compositedFill = androidx.core.graphics.ColorUtils.compositeColors(fill, backdrop)
+                    val compositedInk = androidx.core.graphics.ColorUtils.compositeColors(
+                        b.currentTextColor, compositedFill)
+                    val ratio = contrast(compositedInk, compositedFill)
+                    assertTrue(
+                        "action ${activity.resources.getResourceEntryName(actionId)} composited label contrast " +
+                            "is ${"%.2f".format(ratio)}:1, needs 4.5:1",
+                        ratio >= 4.5
+                    )
+                }
             }
             assertEquals(
                 "the dock no longer prints a heading",
