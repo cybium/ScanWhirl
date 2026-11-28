@@ -535,7 +535,7 @@ class PdfBoxEngine(
             throw PdfEngineError.VerificationFailed("a redacted page still has a text layer")
         }
         val raw = out.readBytes().toString(Charset.forName("ISO-8859-1"))
-        if (raw.contains("/Annots") || raw.contains("/Names") || Regex("%%EOF").findAll(raw).count() != 1L) {
+        if (raw.contains("/Annots") || raw.contains("/Names") || Regex("%%EOF").findAll(raw).count() != 1) {
             throw PdfEngineError.VerificationFailed("redacted output retained annotations or history")
         }
         val target = File(destination)
@@ -610,5 +610,7 @@ class PdfBoxEngine(
         }
     }
 
-    private const val TEMP_PREFIX = "swpdf-private-"
+    companion object {
+        private const val TEMP_PREFIX = "swpdf-private-"
+    }
 }
