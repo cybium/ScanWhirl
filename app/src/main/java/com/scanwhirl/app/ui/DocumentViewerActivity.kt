@@ -570,7 +570,24 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             button.maxLines = Int.MAX_VALUE
             button.minHeight = dp(SwStyle.TOUCH_MIN_DP)
             button.isVisible = !(narrow && button == binding.btnSelExtract)
-            bar.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        if (narrow) {
+            // V045: at 320dp or font 2.0 equal columns break words and crowd the actions.
+            // Let them wrap at their natural width; Extract moves to More above.
+            val flow = com.scanwhirl.app.ui.kit.SwFlowLayout(
+                this, horizontalGapDp = 4f, verticalGapDp = 4f)
+            actions.forEach { button ->
+                button.layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                flow.addView(button)
+            }
+            bar.addView(flow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        } else {
+            actions.forEach { button ->
+                bar.addView(button, LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
         }
         binding.pageList.spanCount = if (resources.configuration.screenWidthDp <= 320 ||
             resources.configuration.fontScale >= 2f) 2 else 3

@@ -30,7 +30,7 @@ class J5ReflowTest {
     @get:Rule val dialogs = ResetDialogShadowsRule()
     @After fun reset() = RuntimeEnvironment.setFontScale(1f)
 
-    private fun check(columns: Int, font: Float = 1f) {
+    private fun check(columns: Int, font: Float = 1f, expectWrappedBar: Boolean = false) {
         RuntimeEnvironment.setFontScale(font)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val repo = ScanRepository(app)
@@ -58,6 +58,13 @@ class J5ReflowTest {
                 assertEquals(columns, grid.spanCount)
                 assertTrue("the grid retains a usable viewport", grid.height >= 48 * dm.density)
                 assertFalse(a.findViewById<View>(R.id.bottomDock).isShown)
+                if (expectWrappedBar) {
+                    val bar = a.findViewById<ViewGroup>(R.id.selectionActionBar)
+                    val wrapped = (0 until bar.childCount).any {
+                        bar.getChildAt(it) is com.scanwhirl.app.ui.kit.SwFlowLayout
+                    }
+                    assertTrue("selection actions wrap instead of sharing fixed columns", wrapped)
+                }
                 for (rid in listOf(R.id.btnSelRotate, R.id.btnSelShare, R.id.btnSelExtract,
                     R.id.btnSelDelete, R.id.btnSelMore, R.id.btnDraftSave)) {
                     val text = a.findViewById<TextView>(rid)
@@ -80,10 +87,12 @@ class J5ReflowTest {
 
     @Test fun `360dp keeps three legible page columns`() = check(3)
     @Test @Config(qualifiers = "w320dp-h640dp-xhdpi")
-    fun `320dp moves secondary actions to More instead of clipping`() = check(2)
+    fun `320dp moves secondary actions to More instead of clipping`() =
+        check(2, expectWrappedBar = true)
     @Test @Config(qualifiers = "w412dp-h900dp-xhdpi-night")
     fun `dark 412dp keeps the page grid dominant`() = check(3)
-    @Test fun `font two keeps labels reachable without shrinking page coordinates`() = check(2, 2f)
+    @Test fun `font two keeps labels reachable without shrinking page coordinates`() =
+        check(2, 2f, expectWrappedBar = true)
     @Test @Config(qualifiers = "hi-rIN-w360dp-h800dp-xhdpi")
     fun `Hindi page actions fit without ellipses`() = check(3)
 }
