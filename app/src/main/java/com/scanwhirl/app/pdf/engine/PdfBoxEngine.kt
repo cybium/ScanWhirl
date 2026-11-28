@@ -84,6 +84,9 @@ class PdfBoxEngine(
         dir.listFiles()?.forEach { it.delete() }
     }
 
+    /** Test-only visibility for the encryption gate's three-state answer. */
+    internal fun encryptionProbeName(raw: ByteArray): String = encryptionProbe(raw).name
+
     /** Test-only visibility for this engine's temp-hygiene assertions. */
     internal fun stagedTempPaths(): List<File> =
         (context.filesDir.listFiles { f ->
@@ -182,21 +185,83 @@ class PdfBoxEngine(
     private enum class EncryptionProbe { Absent, Present, Unknown }
 
     /**
-     * Decides whether a file carries an /Encrypt dictionary before any decryptor work.
+     * Decides whether a file carries an /Encrypt key before any decryptor work.
      *
-     * The trailer chain is parsed as PDF values — strings first, comments second, byte
-     * cursor, no whole-file String — and followed through /Prev and /XRefStm. A valid
-     * plain file (xref stream, incremental update, hybrid trailer) therefore takes the
-     * plain fast path without entering PdfDecryptor's rewrite-grade structural gate.
+     * Section selection mirrors PDFBox 2.0.27's lenient COSParser: the last `%%EOF` in
+     * its 2048-byte lookup window, then the last `startxref` before that marker. Bytes
+     * after that `%%EOF` that are not whitespace make the result Unknown, as does any
+     * section that is not a real xref table or a structurally valid `/Type /XRef`
+     * stream. A backward dictionary scan then flags any dictionary (classic trailer or
+     * xref stream) carrying an /Encrypt key anywhere in the file, which is what PDFBox's
+     * lenient `rebuildTrailer()` recovery can re-attach to the trailer.
      *
-     * [EncryptionProbe.Unknown] means the chain could not be parsed; the caller then runs
-     * PdfDecryptor, whose own parser fails closed with a typed error instead of handing
-     * encrypted bytes to PDFBox.
+     * Absent therefore means: the PDFBox-selected section chain has no /Encrypt and no
+     * dictionary in the file has one either. Present means the app decryptor must run.
+     * Unknown means neither could be proved, and the caller runs PdfDecryptor, whose own
+     * parser either types the refusal or confirms there is no encryption.
      */
     private fun encryptionProbe(raw: ByteArray): EncryptionProbe {
-        val marker = lastIndexOfToken(raw, STARTXREF)
-        if (marker < 0) return EncryptionProbe.Unknown
+        val eof = lastEofMarker(raw) ?: return EncryptionProbe.Unknown
+        for (i in eof + EOF_MARKER.length until raw.size) {
+            if (!isPdfWhitespace(raw[i])) return EncryptionProbe.Unknown
+        }
+        val marker = lastStartxrefBefore(raw, eof) ?: return EncryptionProbe.Unknown
         val first = trailerOffset(raw, marker + STARTXREF.length) ?: return EncryptionProbe.Unknown
+        val chain = probeTrailerChain(raw, first)
+        if (chain == EncryptionProbe.Present) return EncryptionProbe.Present
+
+        val dictionaries = scanEncryptDictionaries(raw)
+        if (dictionaries == EncryptionProbe.Present) return EncryptionProbe.Present
+        val trailers = scanMalformedTrailers(raw)
+        if (trailers == EncryptionProbe.Present) return EncryptionProbe.Present
+        if (chain == EncryptionProbe.Unknown || dictionaries == EncryptionProbe.Unknown ||
+            trailers == EncryptionProbe.Unknown
+        ) {
+            return EncryptionProbe.Unknown
+        }
+        return EncryptionProbe.Absent
+    }
+
+    /** Last `%%EOF` inside PDFBox's 2048-byte trailing lookup window. */
+    private fun lastEofMarker(raw: ByteArray): Int? {
+        val from = maxOf(0, raw.size - EOF_LOOKUP_BYTES)
+        var i = raw.size - EOF_MARKER.length
+        while (i >= from) {
+            if (matchesAt(raw, i, EOF_MARKER)) return i
+            i--
+        }
+        return null
+    }
+
+    /** Last `startxref` strictly before [limit] (the effective `%%EOF`). */
+    private fun lastStartxrefBefore(raw: ByteArray, limit: Int): Int? {
+        var i = limit - STARTXREF.length
+        while (i >= 0) {
+            if (matchesAt(raw, i, STARTXREF)) return i
+            i--
+        }
+        return null
+    }
+
+    private fun matchesAt(raw: ByteArray, at: Int, text: String): Boolean {
+        if (at < 0 || at + text.length > raw.size) return false
+        for (i in text.indices) if (raw[at + i] != text[i].code.toByte()) return false
+        return true
+    }
+
+    private fun isPdfWhitespace(byte: Byte): Boolean {
+        val c = byte.toInt() and 0xFF
+        return c == 0 || c == 9 || c == 10 || c == 12 || c == 13 || c == 32
+    }
+
+    private fun trailerOffset(raw: ByteArray, from: Int): Int? {
+        val c = ProbeCursor(raw, from)
+        c.skip()
+        val value = c.readLong() ?: return null
+        return if (value > 0 && value < raw.size) value.toInt() else null
+    }
+
+    private fun probeTrailerChain(raw: ByteArray, first: Int): EncryptionProbe {
         val pending = ArrayDeque<Int>()
         pending.addLast(first)
         val visited = HashSet<Int>()
@@ -212,11 +277,78 @@ class PdfBoxEngine(
         return EncryptionProbe.Absent
     }
 
-    private fun trailerOffset(raw: ByteArray, from: Int): Int? {
-        val c = ProbeCursor(raw, from)
-        c.skip()
-        val value = c.readLong() ?: return null
-        return if (value > 0 && value < raw.size) value.toInt() else null
+    /**
+     * Lexical scan for any dictionary with a top-level /Encrypt key, outside strings and
+     * comments. PDFBox's lenient trailer rebuild scans the whole file for a `trailer`
+     * dictionary and copies /Encrypt from it, so trusting only the startxref section
+     * would leave that recovery route open.
+     */
+    private fun scanEncryptDictionaries(raw: ByteArray): EncryptionProbe {
+        val c = ProbeCursor(raw, 0)
+        var examined = 0
+        while (true) {
+            c.skip()
+            if (c.pos >= c.size) return EncryptionProbe.Absent
+            when {
+                c.peek() == '('.code -> {
+                    val at = c.pos
+                    // A literal that never closes is binary data, not a PDF string.
+                    if (!skipProbeLiteral(c)) c.pos = at + 1
+                }
+                c.peek() == '<'.code && c.peekNext() == '<'.code -> {
+                    if (++examined > MAX_PROBE_DICTIONARIES) return EncryptionProbe.Unknown
+                    val at = c.pos
+                    val entries = readProbeDictionary(c, 0)
+                    if (entries == null) {
+                        c.pos = at + 2
+                    } else if (entries.containsKey("Encrypt")) {
+                        return EncryptionProbe.Present
+                    }
+                }
+                c.peek() == '<'.code -> {
+                    val at = c.pos
+                    if (!skipProbeHex(c)) c.pos = at + 1
+                }
+                c.peek() == '/'.code -> {
+                    if (c.readName() == null) c.pos++
+                }
+                else -> {
+                    val before = c.pos
+                    c.readToken()
+                    if (c.pos == before) c.pos++
+                }
+            }
+        }
+    }
+
+    /**
+     * A `trailer` keyword followed by a dictionary that cannot be parsed leaves the
+     * question open: PDFBox's repair may still read it. Parsed dictionaries are handled
+     * by [scanEncryptDictionaries]; this pass only adds the fail-closed Unknown.
+     */
+    private fun scanMalformedTrailers(raw: ByteArray): EncryptionProbe {
+        var before = raw.size
+        var examined = 0
+        while (true) {
+            val at = lastTokenBefore(raw, TRAILER_MARKER, before)
+            if (at < 0) return EncryptionProbe.Absent
+            before = at
+            val c = ProbeCursor(raw, at + TRAILER_MARKER.length)
+            c.skip()
+            if (c.pos >= c.size || c.peek() != '<'.code || c.peekNext() != '<'.code) continue
+            if (++examined > MAX_PROBE_TRAILERS) return EncryptionProbe.Unknown
+            val entries = readProbeDictionary(c, 0) ?: return EncryptionProbe.Unknown
+            if (entries.containsKey("Encrypt")) return EncryptionProbe.Present
+        }
+    }
+
+    private fun lastTokenBefore(raw: ByteArray, text: String, before: Int): Int {
+        var i = minOf(before, raw.size) - text.length
+        while (i >= 0) {
+            if (matchesAt(raw, i, text)) return i
+            i--
+        }
+        return -1
     }
 
     private class TrailerSection(val hasEncrypt: Boolean, val links: List<Int>)
@@ -225,8 +357,11 @@ class PdfBoxEngine(
     private fun readTrailerSection(raw: ByteArray, offset: Int): TrailerSection? {
         val c = ProbeCursor(raw, offset)
         c.skip()
+        val entries: Map<String, ProbeValue>
         if (c.word("xref")) {
             if (!skipProbeXrefTable(c)) return null
+            c.skip()
+            entries = readProbeDictionary(c, 0) ?: return null
         } else {
             // startxref points at an xref stream object: `<number> <gen> obj << … >>`.
             if (c.readLong() == null) return null
@@ -235,16 +370,53 @@ class PdfBoxEngine(
             c.skip()
             if (!c.word("obj")) return null
             c.skip()
+            entries = readProbeDictionary(c, 0) ?: return null
+            if (!isGenuineXrefStream(c, entries)) return null
         }
-        val entries = readProbeDictionary(c, 0) ?: return null
         val links = ArrayList<Int>(2)
         for (name in listOf("Prev", "XRefStm")) {
             if (!entries.containsKey(name)) continue
-            val link = entries[name] ?: return null
+            val link = entries[name]?.integer ?: return null
             if (link <= 0 || link >= raw.size) return null
             links += link.toInt()
         }
         return TrailerSection(entries.containsKey("Encrypt"), links)
+    }
+
+    /**
+     * A non-classic startxref target must be a real xref stream, not any dictionary
+     * object: `/Type /XRef`, a 3-number `/W`, a direct `/Length`, and a `stream` body
+     * closed by `endstream`. Anything else is Unknown.
+     */
+    private fun isGenuineXrefStream(c: ProbeCursor, entries: Map<String, ProbeValue>): Boolean {
+        if (entries["Type"]?.name != "XRef") return false
+        val widths = entries["W"]?.array ?: return false
+        if (widths.size != 3) return false
+        var total = 0L
+        for (width in widths) {
+            val value = width.integer ?: return false
+            if (value < 0 || value > 8) return false
+            total += value
+        }
+        if (total <= 0) return false
+        val length = entries["Length"]?.integer ?: return false
+        if (length < 0 || length > c.size) return false
+        c.skip()
+        if (!c.word("stream")) return false
+        if (c.pos >= c.size) return false
+        if (c.peek() == '\r'.code) {
+            c.pos++
+            if (c.pos < c.size && c.peek() == '\n'.code) c.pos++
+        } else if (c.peek() == '\n'.code) {
+            c.pos++
+        } else {
+            return false
+        }
+        val bodyEnd = c.pos.toLong() + length
+        if (bodyEnd > c.size) return false
+        c.pos = bodyEnd.toInt()
+        c.skip()
+        return c.word("endstream")
     }
 
     private fun skipProbeXrefTable(c: ProbeCursor): Boolean {
@@ -277,12 +449,12 @@ class PdfBoxEngine(
     }
 
     /** Top-level dictionary entries; a nested `/Encrypt` is a value, never a trailer key. */
-    private fun readProbeDictionary(c: ProbeCursor, depth: Int): Map<String, Long?>? {
+    private fun readProbeDictionary(c: ProbeCursor, depth: Int): Map<String, ProbeValue>? {
         if (depth > MAX_PROBE_DEPTH) return null
         c.skip()
         if (c.peek() != '<'.code || c.peekNext() != '<'.code) return null
         c.pos += 2
-        val entries = HashMap<String, Long?>()
+        val entries = HashMap<String, ProbeValue>()
         while (true) {
             c.skip()
             if (c.pos >= c.size) return null
@@ -294,11 +466,15 @@ class PdfBoxEngine(
             val key = c.readName() ?: return null
             val value = skipProbeValue(c, depth + 1) ?: return null
             if (entries.size >= MAX_PROBE_KEYS) return null
-            entries[key] = value.integer
+            entries[key] = value
         }
     }
 
-    private class ProbeValue(val integer: Long? = null)
+    private class ProbeValue(
+        val integer: Long? = null,
+        val name: String? = null,
+        val array: List<ProbeValue>? = null
+    )
 
     /**
      * Skips any PDF value, honouring lexical rules: a `%` inside a literal or hex
@@ -318,17 +494,22 @@ class PdfBoxEngine(
             }
             '['.code -> {
                 c.pos++
+                val items = ArrayList<ProbeValue>()
                 while (true) {
                     c.skip()
                     if (c.pos >= c.size) return null
                     if (c.peek() == ']'.code) {
                         c.pos++
-                        return ProbeValue()
+                        return ProbeValue(array = items)
                     }
-                    if (skipProbeValue(c, depth + 1) == null) return null
+                    if (items.size >= MAX_PROBE_ARRAY) return null
+                    items += skipProbeValue(c, depth + 1) ?: return null
                 }
             }
-            '/'.code -> return if (c.readName() != null) ProbeValue() else null
+            '/'.code -> {
+                val name = c.readName() ?: return null
+                return ProbeValue(name = name)
+            }
             else -> {
                 val token = c.readToken()
                 if (token.isEmpty()) return null
@@ -349,9 +530,11 @@ class PdfBoxEngine(
 
     private fun skipProbeLiteral(c: ProbeCursor): Boolean {
         if (c.peek() != '('.code) return false
+        val start = c.pos
         c.pos++
         var depth = 1
         while (c.pos < c.size) {
+            if (c.pos - start > MAX_PROBE_LITERAL) return false
             val ch = c.raw[c.pos].toInt() and 0xFF
             c.pos++
             when {
@@ -378,16 +561,6 @@ class PdfBoxEngine(
             if (ch == '>'.code) return true
         }
         return false
-    }
-
-    private fun lastIndexOfToken(raw: ByteArray, text: String): Int {
-        val needle = text.toByteArray(Charsets.ISO_8859_1)
-        if (needle.size > raw.size) return -1
-        outer@ for (i in raw.size - needle.size downTo 0) {
-            for (j in needle.indices) if (raw[i + j] != needle[j]) continue@outer
-            return i
-        }
-        return -1
     }
 
     /**
@@ -855,10 +1028,17 @@ class PdfBoxEngine(
 }
 
 private const val STARTXREF = "startxref"
+private const val EOF_MARKER = "%%EOF"
+private const val EOF_LOOKUP_BYTES = 2048
+private const val TRAILER_MARKER = "trailer"
 private const val MAX_PROBE_SECTIONS = 64
 private const val MAX_PROBE_XREF_ROWS = 2_000_000L
 private const val MAX_PROBE_KEYS = 512
 private const val MAX_PROBE_DEPTH = 32
+private const val MAX_PROBE_ARRAY = 1024
+private const val MAX_PROBE_LITERAL = 65_536
+private const val MAX_PROBE_DICTIONARIES = 100_000
+private const val MAX_PROBE_TRAILERS = 256
 
 private fun isProbeDelimiter(c: Int): Boolean = c == 0 || c == 9 || c == 10 || c == 12 || c == 13 || c == 32 ||
     c == 0x28 || c == 0x29 || c == 0x3C || c == 0x3E || c == 0x5B || c == 0x5D ||

@@ -42,7 +42,7 @@ import java.nio.charset.Charset
 class PdfBoxEngineDigitalPagesTest {
 
     private lateinit var dir: File
-    private lateinit var engine: PdfEngine
+    private lateinit var engine: PdfBoxEngine
 
     @Before
     fun setUp() {
@@ -247,6 +247,17 @@ class PdfBoxEngineDigitalPagesTest {
         target.writeBytes(iso(raw.substring(0, dict + 2) + " $entry " + raw.substring(dict + 2)))
         return target
     }
+
+    /** Replaces the number after the last startxref with [value]. */
+    private fun replaceLastStartxref(raw: String, value: Int): String {
+        val at = raw.lastIndexOf("startxref")
+        check(at >= 0) { "fixture has no startxref" }
+        val start = at + "startxref".length
+        val lineEnd = raw.indexOf('\n', start).let { if (it < 0) raw.length else it }
+        return raw.substring(0, start) + "\n$value" + raw.substring(lineEnd)
+    }
+
+    private fun probeOf(file: File): String = engine.encryptionProbeName(file.readBytes())
 
     private fun signaturePng(): ByteArray {
         val bitmap = android.graphics.Bitmap.createBitmap(120, 60, android.graphics.Bitmap.Config.ARGB_8888)
@@ -504,18 +515,62 @@ class PdfBoxEngineDigitalPagesTest {
         val plain = withTrailerEntry(
             makePdf("string-plain-base.pdf", 1, "PUBLIC_ALPHA"),
             File(dir, "string-plain.pdf"),
-            "/Note (a% b)"
+            "/Note (a% b) /Hex <25>"
         )
         assertEquals(1, engine.open(plain).pageCount)
 
-        // With a non-standard /Filter the decryptor refuses; the string must not hide /Encrypt
+        // Nested and escaped parens plus a hex string around /Encrypt must stay strings.
+        val nestedEntry = "/Note (a(b\\)c% d) /Hex <25>"
+        val nestedPlain = withTrailerEntry(
+            makePdf("string-nested-base.pdf", 1, "PUBLIC_ALPHA"),
+            File(dir, "string-nested-plain.pdf"),
+            nestedEntry
+        )
+        assertEquals("Absent", probeOf(nestedPlain))
+        assertEquals(1, engine.open(nestedPlain).pageCount)
+
+        // With a non-standard /Filter the decryptor refuses; the strings must not hide /Encrypt
         // from the engine's probe, or encrypted bytes would reach PDFBox.
         val encrypted = File(dir, "string-encrypted.pdf")
         PdfEncryptor.encrypt(makePdf("string-protected-base.pdf", 1, "PUBLIC_ALPHA"), encrypted, "pw-fictional")
-        val crafted = withTrailerEntry(encrypted, File(dir, "string-patched.pdf"), "/Note (a% b)")
+        val crafted = withTrailerEntry(encrypted, File(dir, "string-patched.pdf"), nestedEntry)
         crafted.writeBytes(iso(iso(crafted.readBytes()).replace("/Standard", "/NoStdFlt")))
+        assertEquals("Present", probeOf(crafted))
         assertTrue(
             expectError { engine.open(crafted, "pw-fictional") } is PdfEngineError.UnsupportedFeature
+        )
+    }
+
+    @Test
+    fun decoyStartxrefAfterEofCannotBypassEncryption() {
+        val encrypted = File(dir, "decoy-a.pdf")
+        PdfEncryptor.encrypt(
+            makePdf("decoy-a-base.pdf", 1, "PUBLIC_ALPHA", "INFO_MARKER_9"),
+            encrypted, "pw-fictional"
+        )
+        val raw = iso(encrypted.readBytes())
+        val plainObjectOffset = raw.indexOf("1 0 obj")
+        assertTrue("fixture has no catalog object", plainObjectOffset > 0)
+
+        // Decoy A: data after the real %%EOF, pointing at a plain dictionary object.
+        val decoy = File(dir, "decoy-a-appended.pdf")
+        decoy.writeBytes(iso(raw + "\nstartxref\n$plainObjectOffset\n"))
+        assertFalse("a decoy after %%EOF looked plain", probeOf(decoy) == "Absent")
+        val error = expectError { engine.open(decoy, "wrong-password") }
+        assertTrue(
+            error is PdfEngineError.InvalidPassword || error is PdfEngineError.MalformedDocument ||
+                error is PdfEngineError.UnsupportedFeature
+        )
+
+        // Decoy B: the only startxref is replaced to point at the same plain object.
+        val replaced = File(dir, "decoy-b-replaced.pdf")
+        replaced.writeBytes(iso(replaceLastStartxref(raw, plainObjectOffset)))
+        assertFalse("a replaced startxref looked plain", probeOf(replaced) == "Absent")
+        val replacedError = expectError { engine.open(replaced, "wrong-password") }
+        assertTrue(
+            replacedError is PdfEngineError.InvalidPassword ||
+                replacedError is PdfEngineError.MalformedDocument ||
+                replacedError is PdfEngineError.UnsupportedFeature
         )
     }
 }
