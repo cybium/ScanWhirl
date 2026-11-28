@@ -20,6 +20,7 @@ import com.scanwhirl.app.util.Prefs
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -423,21 +424,20 @@ class W5aFoundationsTest {
     }
 
     @Test(timeout = 60_000)
-    fun `Me exposes system light and dark and remembers the choice`() {
-        ActivityScenario.launch(ShellActivity::class.java).use { shell ->
-            openMe(shell)
-            shell.onActivity { activity ->
-                val row = activity.findViewById<View>(R.id.swMeTheme)
-                assertNotNull("Me has a Theme row", row)
+    fun `Theme lives once in Settings and remembers the choice`() {
+        // W5d V097: one appearance home. Me is a short hub and must not repeat the control.
+        ActivityScenario.launch(SettingsActivity::class.java).use { settings ->
+            settings.onActivity { activity ->
+                val row = activity.findViewById<View>(R.id.rowTheme)
+                assertNotNull("Settings has a Theme row", row)
                 assertEquals("Follow system",
-                    activity.findViewById<TextView>(R.id.swMeThemeValue)!!.text.toString())
+                    activity.findViewById<TextView>(R.id.subTheme)!!.text.toString())
                 row!!.performClick()
             }
             idle()
-            shell.onActivity { activity ->
+            settings.onActivity {
                 val items = ShadowDialog.getLatestDialog()?.findViewById<ViewGroup>(R.id.swSheetItems)
                 assertNotNull("the theme sheet opens", items)
-                // Option rows carry their label as contentDescription (SwSheet.setOptions).
                 val labels = (0 until items!!.childCount).map { items.getChildAt(it).contentDescription.toString() }
                 assertTrue("the three choices are offered: $labels",
                     labels.containsAll(listOf("Follow system", "Light", "Dark")))
@@ -445,11 +445,12 @@ class W5aFoundationsTest {
             }
             idle()
         }
-        assertEquals("Light was chosen in Me", Prefs.THEME_LIGHT, Prefs.themeMode(app))
-        ActivityScenario.launch(SettingsActivity::class.java).use { settings ->
-            settings.onActivity { activity ->
-                assertEquals("Settings names the Me choice",
-                    "Light", activity.findViewById<TextView>(R.id.subTheme)!!.text.toString())
+        assertEquals("Light was chosen in Settings", Prefs.THEME_LIGHT, Prefs.themeMode(app))
+        ActivityScenario.launch(ShellActivity::class.java).use { shell ->
+            openMe(shell)
+            shell.onActivity { activity ->
+                assertNull("Me does not duplicate the Theme row",
+                    activity.findViewById<View>(R.id.swMeTheme))
             }
         }
     }

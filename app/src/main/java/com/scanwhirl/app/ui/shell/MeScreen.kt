@@ -6,10 +6,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
 import com.scanwhirl.app.R
-import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.TrustPill
@@ -95,7 +93,9 @@ class MeScreen(
         // Saving: one switch, shared with Settings (the same preference, not a second one).
         list.addView(
             toggleRow(
-                R.drawable.ic_sym_settings,
+                // V003: this persistent save preference is not the Settings gear. Match
+                // Settings' document glyph until the kit ships a dedicated save icon.
+                R.drawable.ic_document,
                 context.getString(R.string.me_also_save_to_documents),
                 context.getString(R.string.me_also_save_to_documents_summary),
                 R.id.swMeAlsoSave,
@@ -103,10 +103,8 @@ class MeScreen(
                 Prefs.autoCopyToDocuments(context)
             ) { checked -> Prefs.setAutoCopyToDocuments(context, checked) }
         )
-        // Appearance: System / Light / Dark. The default is Follow system (B2).
-        list.addView(
-            themeRow()
-        )
+        // W5d V097: Theme is not duplicated here. One appearance home owns it —
+        // Settings > Appearance (Theme, Font, Text size) — so Me stays a short hub.
         list.addView(
             row(
                 R.drawable.ic_sym_settings,
@@ -139,46 +137,6 @@ class MeScreen(
                 R.id.swMeAbout
             ) { callbacks.onAbout() }
         )
-    }
-
-    /** The Me theme row: its summary is the active choice, so it needs a stable id. */
-    private fun themeRow(): View {
-        val label = context.getString(
-            when (Prefs.themeMode(context)) {
-                Prefs.THEME_LIGHT -> R.string.theme_light
-                Prefs.THEME_SYSTEM -> R.string.theme_system
-                else -> R.string.theme_dark
-            }
-        )
-        return row(
-            R.drawable.ic_palette,
-            context.getString(R.string.me_theme),
-            label,
-            R.id.swMeTheme,
-            summaryId = R.id.swMeThemeValue,
-            onClick = ::chooseTheme
-        )
-    }
-
-    /** Native sheet with the three theme choices; mirrors Settings' chooser. */
-    private fun chooseTheme() {
-        val values = arrayOf(Prefs.THEME_SYSTEM, Prefs.THEME_LIGHT, Prefs.THEME_DARK)
-        val labels = arrayOf(
-            context.getString(R.string.theme_system),
-            context.getString(R.string.theme_light),
-            context.getString(R.string.theme_dark)
-        )
-        val checked = values.indexOf(Prefs.themeMode(context)).coerceAtLeast(0)
-        SwSheet.builder(context)
-            .setTitle(R.string.me_theme)
-            .setOptions(labels.toList(), checked) { which, _ ->
-                Prefs.setThemeMode(context, values[which])
-                AppCompatDelegate.setDefaultNightMode(Prefs.nightMode(values[which]))
-                buildRows()
-            }
-            .setSecondary(android.R.string.cancel)
-            .build()
-            .show()
     }
 
     /** A Me row whose only control is a switch. The card itself is the full 48dp target. */

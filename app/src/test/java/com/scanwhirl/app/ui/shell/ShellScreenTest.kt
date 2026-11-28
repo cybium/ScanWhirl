@@ -105,8 +105,9 @@ class ShellScreenTest {
 
             activity.findViewById<View>(R.id.swNavMe).performClick()
             idle()
-            // B2/B1 added the Theme and Also-save rows to Me (was 5).
-            assertEquals(7, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
+            // W5d V097: Theme moved back to Settings; Me keeps Pro, the one save
+            // preference, Settings, Backup, Trash and About (6 rows).
+            assertEquals(6, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
 
             activity.findViewById<View>(R.id.swNavVault).performClick()
             idle()

@@ -149,7 +149,7 @@
     <string name="me_settings">सेटिंग</string>
     <string name="me_settings_summary">रंग-रूप और भाषा</string>
     <string name="me_trash">हटाई गई फ़ाइलें</string>
-    <string name="me_trash_summary">हटाए गए, 30d</string>
+    <string name="me_trash_summary">30 दिनों के भीतर वापस करें, फिर हटा दिए जाएँगे</string>
     <string name="me_about">ScanWhirl के बारे में</string>
     <string name="me_about_summary">संस्करण और निजता</string>
 

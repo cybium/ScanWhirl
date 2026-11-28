@@ -528,13 +528,33 @@ class BackupActivity : BaseActivity() {
 
     private fun startBackup() {
         val canUseCode = runCatching { vault.isSetUp() }.getOrDefault(false)
+        // W5d V053/V054: one short, plain message — what protects the file, what is needed to
+        // restore it, and an explicit answer on Vault files. The longer honest detail lives
+        // behind "More" instead of padding this sheet past the 25-word limit.
+        val more = TextView(this).apply {
+            id = R.id.backupMore
+            text = getString(R.string.backup_more)
+            contentDescription = text
+            textSize = 15f
+            setTextColor(SwStyle.color(this@BackupActivity, R.color.cyan_primary))
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            minimumHeight = dp(48f)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                SwSheet.builder(this@BackupActivity)
+                    .setTitle(R.string.backup_choose)
+                    .setMessage(R.string.backup_explain)
+                    .setPrimary(R.string.sheet_got_it)
+                    .build()
+                    .secure()
+                    .show()
+            }
+        }
         val sheet = SwSheet.builder(this)
             .setTitle(R.string.backup_choose)
-            // The detailed inclusion/exclusion and warning copy stays before consent.
-            .setMessage(
-                getString(R.string.backup_choose_note) + "\n" +
-                    getString(R.string.backup_explain)
-            )
+            .setMessage(R.string.backup_choose_note)
+            .setContent(more)
             .build()
         if (canUseCode) {
             sheet.setPrimary(R.string.backup_use_code) { sheet.dismiss(); askRecoveryCode() }

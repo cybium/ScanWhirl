@@ -69,7 +69,7 @@ class MeRowFitTest {
 
     private fun openMe(scenario: ActivityScenario<ShellActivity>): Map<Int, View> {
         val ids = listOf(
-            R.id.swMePro, R.id.swMeAlsoSave, R.id.swMeTheme,
+            R.id.swMePro, R.id.swMeAlsoSave,
             R.id.swMeSettings, R.id.swMeBackup, R.id.swMeTrash, R.id.swMeAbout
         )
         poll {

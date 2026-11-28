@@ -149,6 +149,14 @@ class SettingsActivity : BaseActivity() {
         nameRowsForTalkBack()
     }
 
+    /** Resolve ?attr/... to a style before setTextAppearance; the raw attr id is not a style. */
+    private fun applyThemedTextAppearance(view: android.widget.TextView, attr: Int) {
+        val value = android.util.TypedValue()
+        if (theme.resolveAttribute(attr, value, true) && value.resourceId != 0) {
+            view.setTextAppearance(value.resourceId)
+        }
+    }
+
     /** Rows whose label lives on child TextViews: the clickable node owns the words instead. */
     private fun nameRowsForTalkBack() {
         val rows = listOf(
@@ -176,6 +184,22 @@ class SettingsActivity : BaseActivity() {
         val parent = binding.rowLanguage.parent as? android.view.ViewGroup ?: return
         val density = resources.displayMetrics.density
         val pad = (16 * density).toInt()
+        val langIndex = parent.indexOfChild(binding.rowLanguage)
+        // W5d V063: the Language card gets the same inset hairline as the other cards.
+        parent.addView(
+            android.view.View(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+                ).apply {
+                    marginStart = (54 * density).toInt()
+                    marginEnd = (16 * density).toInt()
+                }
+                setBackgroundColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_border_hair)
+                )
+            },
+            if (langIndex >= 0) langIndex + 1 else parent.childCount
+        )
         val row = android.widget.LinearLayout(this).apply {
             id = R.id.rowOcrLanguage
             orientation = android.widget.LinearLayout.HORIZONTAL
@@ -188,13 +212,17 @@ class SettingsActivity : BaseActivity() {
         }
         row.addView(
             android.widget.ImageView(this).apply {
-                setImageResource(R.drawable.ic_sym_language)
+                // W5d V062/U7: a text-reading glyph, never the App language globe.
+                setImageResource(R.drawable.ic_ocr)
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
                 )
             },
-            android.widget.LinearLayout.LayoutParams((22 * density).toInt(), (22 * density).toInt())
+            // W5d V060/U10: the same 24dp icon and 14dp gap as the XML rows, so the
+            // label's x is identical to App language's at 320dp and font 2.0.
+            android.widget.LinearLayout.LayoutParams((24 * density).toInt(), (24 * density).toInt())
+                .apply { marginEnd = (14 * density).toInt() }
         )
         val texts = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -202,34 +230,36 @@ class SettingsActivity : BaseActivity() {
         texts.addView(
             android.widget.TextView(this).apply {
                 setText(R.string.cdf1_ocr_language)
-                setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_hi))
-                textSize = 15f
+                applyThemedTextAppearance(this, com.google.android.material.R.attr.textAppearanceTitleSmall)
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_hi)
+                )
             }
         )
         subOcrLanguage = android.widget.TextView(this).apply {
             id = R.id.subOcrLanguage
-            setTextColor(com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_mid))
-            textSize = 12.5f
+            applyThemedTextAppearance(this, com.google.android.material.R.attr.textAppearanceBodySmall)
+            setTextColor(
+                com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_mid)
+            )
             setPadding(0, (2 * density).toInt(), 0, 0)
         }
         texts.addView(subOcrLanguage)
         row.addView(
             texts,
             android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginStart = (12 * density).toInt() }
         )
         row.addView(
             android.widget.ImageView(this).apply {
-                setImageResource(R.drawable.ic_sym_chevron_right)
+                setImageResource(R.drawable.ic_chevron_right)
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
-                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_dim)
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.sf_outline)
                 )
             },
             android.widget.LinearLayout.LayoutParams((20 * density).toInt(), (20 * density).toInt())
         )
-        val index = parent.indexOfChild(binding.rowLanguage)
-        parent.addView(row, if (index >= 0) index + 1 else parent.childCount)
+        parent.addView(row, if (langIndex >= 0) langIndex + 2 else parent.childCount)
     }
 
     /**
@@ -294,7 +324,10 @@ class SettingsActivity : BaseActivity() {
         val divider = android.view.View(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
-            ).apply { marginStart = (54 * d).toInt() }
+            ).apply {
+                marginStart = (54 * d).toInt()
+                marginEnd = (16 * d).toInt()
+            }
             setBackgroundColor(
                 com.scanwhirl.app.ui.kit.SwStyle.color(
                     this@SettingsActivity, R.color.cyan_border_hair
@@ -382,7 +415,10 @@ class SettingsActivity : BaseActivity() {
         val divider = android.view.View(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, (1 * d).toInt()
-            ).apply { marginStart = (16 * d).toInt() }
+            ).apply {
+                marginStart = (16 * d).toInt()
+                marginEnd = (16 * d).toInt()
+            }
             setBackgroundColor(
                 com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_border_hair)
             )
@@ -527,20 +563,90 @@ class SettingsActivity : BaseActivity() {
         else -> R.string.cdf1_text_size_default
     }
 
+    /**
+     * W5d V057/V058: the option row IS the preview. SwSheet builds every other list in the
+     * app, but its fixed 15sp sans-serif rows make Serif/Monospace and Small/Largest look
+     * identical. These two sheets own their rows so each renders in its own face or scale.
+     */
+    private fun showPreviewChoice(
+        titleRes: Int,
+        labels: List<String>,
+        checked: Int,
+        decorate: (android.widget.TextView, Int) -> Unit,
+        onPick: (Int) -> Unit
+    ) {
+        val d = resources.displayMetrics.density
+        val list = android.widget.LinearLayout(this).apply {
+            id = R.id.swSheetItems
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        var sheet: com.scanwhirl.app.ui.kit.SwSheet? = null
+        labels.forEachIndexed { index, label ->
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                minimumHeight = com.scanwhirl.app.ui.kit.SwStyle.dp(this@SettingsActivity, 48f)
+                isClickable = true
+                isFocusable = true
+                tag = index
+                contentDescription = label
+                isSelected = index == checked
+                setBackgroundResource(android.R.drawable.list_selector_background)
+                setPadding((6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt())
+            }
+            val text = android.widget.TextView(this).apply {
+                this.text = label
+                setTextColor(
+                    com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.text_hologram_hi)
+                )
+            }
+            decorate(text, index)
+            row.addView(
+                text,
+                android.widget.LinearLayout.LayoutParams(
+                    0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                )
+            )
+            if (index == checked) {
+                row.addView(
+                    android.widget.ImageView(this).apply {
+                        setImageResource(R.drawable.ic_sym_check)
+                        imageTintList = android.content.res.ColorStateList.valueOf(
+                            com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
+                        )
+                        importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    },
+                    android.widget.LinearLayout.LayoutParams((20 * d).toInt(), (20 * d).toInt())
+                )
+            }
+            row.setOnClickListener {
+                onPick(index)
+                sheet?.dismiss()
+            }
+            list.addView(row)
+        }
+        sheet = com.scanwhirl.app.ui.kit.SwSheet.builder(this)
+            .setTitle(titleRes)
+            .setContent(androidx.core.widget.NestedScrollView(this).apply { addView(list) })
+            .setSecondary(android.R.string.cancel)
+            .build()
+        sheet?.show()
+    }
+
     /** Persist the choice and recreate: BaseActivity reads it in attachBaseContext. */
     private fun chooseTextSize() {
         val modes = TextSizePrefs.MODES
         val labels = modes.map { getString(textSizeLabel(it)) }
         val checked = modes.indexOf(TextSizePrefs.mode(this)).coerceAtLeast(0)
-        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.cz_text_size_title)
-            .setOptions(labels, checked) { which, _ ->
-                TextSizePrefs.setMode(this, modes[which])
+        // A visible scale, not four identically sized words (V058).
+        val sizes = floatArrayOf(12f, 15f, 19f, 23f)
+        showPreviewChoice(R.string.cz_text_size_title, labels, checked,
+            decorate = { view, index -> view.textSize = sizes[index.coerceIn(0, sizes.lastIndex)] },
+            onPick = { index ->
+                TextSizePrefs.setMode(this, modes[index])
                 recreate()
             }
-            .setSecondary(android.R.string.cancel)
-            .build()
-            .show()
+        )
     }
 
     // ---- Lane Z: Storage -----------------------------------------------------
@@ -797,21 +903,27 @@ class SettingsActivity : BaseActivity() {
 
     private fun chooseFont() {
         val values = arrayOf(Prefs.FONT_DEFAULT, Prefs.FONT_SERIF, Prefs.FONT_MONO)
-        val labels = arrayOf(
+        val labels = listOf(
             getString(R.string.font_default),
             getString(R.string.font_serif),
             getString(R.string.font_mono)
         )
         val checked = values.indexOf(Prefs.fontStyle(this)).coerceAtLeast(0)
-        com.scanwhirl.app.ui.kit.SwSheet.builder(this)
-            .setTitle(R.string.settings_font)
-            .setOptions(labels.toList(), checked) { which, _ ->
-                Prefs.setFontStyle(this, values[which])
+        // The row's face is its preview: Default is the bundled Manrope, the other two are
+        // the platform serif and monospace faces (V057). Sheet title is now "Font" (V056).
+        showPreviewChoice(R.string.settings_font, labels, checked,
+            decorate = { view, index ->
+                view.typeface = when (index) {
+                    1 -> android.graphics.Typeface.SERIF
+                    2 -> android.graphics.Typeface.MONOSPACE
+                    else -> com.scanwhirl.app.ui.kit.SwType.regular(this@SettingsActivity)
+                }
+            },
+            onPick = { index ->
+                Prefs.setFontStyle(this, values[index])
                 recreate()
             }
-            .setSecondary(android.R.string.cancel)
-            .build()
-            .show()
+        )
     }
 
     private fun chooseLanguage() {

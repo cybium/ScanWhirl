@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -313,60 +314,72 @@ class Phase5ScreensTest {
                 val density = activity.resources.displayMetrics.density
                 val oneDp = Math.round(1f * density)
 
-                // Appearance: theme, font, greeting and wallpaper share one card.
+                // W5d V055/V098: Appearance is one card — Theme, Font and the single
+                // Text size row plus its preview. The old duplicate card was removed.
                 val rowFont = activity.findViewById<View>(R.id.rowFont)
                 val rowGreeting = activity.findViewById<View>(R.id.rowGreeting)
-                assertSame("font and greeting rows share a section container",
+                val rowTextSize = activity.findViewById<View>(R.id.rowTextSize)
+                assertSame("font and text size share the Appearance card",
+                    rowFont.parent, rowTextSize.parent)
+                assertSame("hidden rows stay in the same card so their ids survive",
                     rowFont.parent, rowGreeting.parent)
                 val appearance = rowFont.parent as ViewGroup
-                // ATLAS-F2 (014): the unbuilt "Accent · Gold coming soon" row is gone, so the
-                // card now holds theme, font, greeting and wallpaper + 3 dividers.
-                assertEquals("appearance card holds 4 rows + 3 dividers", 7, appearance.childCount)
+                assertEquals("appearance card holds theme, font, text size, preview and hidden rows",
+                    10, appearance.childCount)
                 assertTrue("rows live inside a MaterialCardView",
                     appearance.parent is com.google.android.material.card.MaterialCardView)
 
-                // 1dp cyan hairline dividers between the rows.
+                // 1dp cyan hairline dividers between the rows, inset at both ends (V063).
                 val dividers = (0 until appearance.childCount)
                     .map { appearance.getChildAt(it) }
                     .filter { it !is ViewGroup && it.layoutParams.height == oneDp }
-                assertEquals("three hairline dividers", 3, dividers.size)
+                assertEquals("four hairline dividers", 4, dividers.size)
+                for (divider in dividers) {
+                    val lp = divider.layoutParams as android.view.ViewGroup.MarginLayoutParams
+                    assertEquals("divider stops at the card's right padding",
+                        Math.round(16f * density), lp.marginEnd)
+                }
 
-                // Viewing and About sections group their pairs the same way.
+                // W5d V064: Viewing is the viewer alone; scanning/saving has its own card.
                 val rowViewer = activity.findViewById<View>(R.id.rowViewer)
                 val rowAuto = activity.findViewById<View>(R.id.rowAutoEnhance)
-                assertSame("viewer and auto-enhance share a section container",
+                assertNotSame("viewer and auto-enhance no longer share a section",
                     rowViewer.parent, rowAuto.parent)
-                assertEquals("viewing card: 4 rows + 3 dividers", 7, (rowViewer.parent as ViewGroup).childCount)
+                assertEquals("viewing card holds the viewer only", 1,
+                    (rowViewer.parent as ViewGroup).childCount)
+                assertEquals("scanning card holds three controls and two dividers", 5,
+                    (rowAuto.parent as ViewGroup).childCount)
                 val rowAbout = activity.findViewById<View>(R.id.rowAbout)
                 val rowPrivacy = activity.findViewById<View>(R.id.rowPrivacy)
                 assertSame("about and privacy share a section container",
                     rowAbout.parent, rowPrivacy.parent)
                 assertEquals("about card: 4 rows + 2 dividers", 6, (rowAbout.parent as ViewGroup).childCount)
 
-                // Language is a card with the app language row and the OCR text-language row.
+                // Language is a card with the app language row, a divider and the OCR row.
                 val rowLanguage = activity.findViewById<View>(R.id.rowLanguage)
                 val languageContainer = rowLanguage.parent as ViewGroup
-                // v2 UI: 08_text_ocr - the owner asked for "Text language" beside the app language.
-                assertEquals("language card: app language + text language", 2, languageContainer.childCount)
+                assertEquals("language card: app language + divider + text language", 3,
+                    languageContainer.childCount)
                 assertEquals(
                     "the text-language row follows the app language row",
-                    1,
+                    2,
                     languageContainer.indexOfChild(activity.findViewById<View>(R.id.rowOcrLanguage))
                 )
                 assertTrue("language row lives inside a MaterialCardView",
                     languageContainer.parent is com.google.android.material.card.MaterialCardView)
 
-                // Four cyan section headers label the groups.
+                // Five cyan section headers label the groups.
                 val headerTexts = listOf(
                     R.string.settings_appearance, R.string.settings_language_section,
+                    R.string.settings_viewing, R.string.settings_scanning_saving,
                     // The old About card is now "Privacy & security" (About itself lives in Me).
-                    R.string.settings_viewing, R.string.settings_privacy_section
+                    R.string.settings_privacy_section
                 ).map { activity.getString(it) }
                 val headers = allViews(activity.window.decorView)
                     .filterIsInstance<TextView>()
                     .map { it.text?.toString() }
                     .filter { it in headerTexts }
-                assertEquals("four section headers", 4, headers.size)
+                assertEquals("five section headers", 5, headers.size)
             }
         }
     }

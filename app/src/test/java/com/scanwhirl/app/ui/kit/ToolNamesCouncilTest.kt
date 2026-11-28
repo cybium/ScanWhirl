@@ -114,10 +114,10 @@ class ToolNamesCouncilParityTest {
         // Settings - COUNCIL §1 "Settings"
         "me_pro_summary" to ("All Pro tools" to "सभी Pro काम"),
         "me_settings_summary" to ("Look & language" to "रंग-रूप और भाषा"),
-        "settings_font" to ("Text size" to "लिखाई का आकार"),
+        "settings_font" to ("Font" to "फ़ॉन्ट"),
         "settings_greeting" to ("Home status line" to "मुख्य पन्ने की स्थिति-पंक्ति"),
         "settings_searchable_pdf" to ("Searchable PDFs" to "खोजने लायक PDF"),
-        "settings_auto_copy_to_documents" to ("Save copy to Documents" to "Documents में प्रति सहेजें"),
+        "settings_auto_copy_to_documents" to ("Also save to Documents" to "Documents में भी सहेजें"),
         "settings_block_screenshots" to ("Block screenshots" to "दस्तावेज़ों की तस्वीर रोकें"),
         "settings_pro_summary" to ("All Pro tools" to "सभी Pro काम"),
         // counts and empty states

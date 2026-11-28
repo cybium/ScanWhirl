@@ -26,7 +26,7 @@
     <string name="theme_light">हल्का</string>
     <string name="theme_dark">गहरा</string>
     <string name="theme_system">फ़ोन के अनुसार</string>
-    <string name="settings_font">लिखाई का आकार</string>
+    <string name="settings_font">फ़ॉन्ट</string>
     <string name="font_default">पहले से चुना हुआ</string>
     <string name="font_serif">सेरिफ़</string>
     <string name="font_mono">मोनोस्पेस</string>
@@ -34,6 +34,7 @@
     <string name="settings_language">ऐप की भाषा</string>
     <string name="language_system">फ़ोन के अनुसार</string>
     <string name="settings_viewing">देखने का तरीका</string>
+    <string name="settings_scanning_saving">स्कैन और सहेजना</string>
     <string name="settings_default_viewer">PDF पहले से किस ऐप में खुले</string>
     <string name="viewer_in_app">ScanWhirl में</string>
     <string name="viewer_system">फ़ोन का PDF ऐप</string>
@@ -131,7 +132,7 @@
     <string name="list_count_category">%2$s में %1$d</string>
     <string name="settings_greeting">मुख्य पन्ने की स्थिति-पंक्ति</string>
     <string name="settings_greeting_summary">मुख्य पन्ने पर हाल बताने वाली पंक्ति दिखाएँ</string>
-    <string name="settings_auto_copy_to_documents">Documents में प्रति सहेजें</string>
+    <string name="settings_auto_copy_to_documents">Documents में भी सहेजें</string>
     <string name="status_morning">सुप्रभात</string>
     <string name="status_afternoon">शुभ दोपहर</string>
     <string name="status_evening">शुभ संध्या</string>
@@ -150,7 +151,7 @@
     <string name="extracted">%1$d पन्ने एक नए स्कैन में निकाले गए</string>
     <!-- D-11 (2026-11-20): कैमरा स्कैनर और अंग्रेज़ी लिखावट पढ़ने वाला हिस्सा Google Play services से
          चलता है और पहली बार फ़ोन में आ सकता है। C1 (2026-11-20 owner): एक पूरी, छोटी निजता पंक्ति। -->
-    <string name="about_message">ScanWhirl %1$s\n\nआपके दस्तावेज़ इसी फ़ोन पर रहते हैं: कोई खाता नहीं, कोई विज्ञापन नहीं, कोई सर्वर नहीं। स्कैनर और अंग्रेज़ी लिखावट पढ़ना Google Play services से चलता है, जो पहली बार फ़ोन में आ सकता है।\n\nबनाने वाला: Cybium (github.com/cybium)\nसहायता: cybiumsupport@gmail.com\nनिजता नीति: cybium.github.io/scanwhirl-privacy</string>
+    <string name="about_message">ScanWhirl %1$s\n\nआपके दस्तावेज़ इसी फ़ोन पर रहते हैं। कोई खाता नहीं, कोई सर्वर नहीं।</string>
     <string name="about_title">ScanWhirl के बारे में</string>
     <string name="add_from_gallery">फ़ोटो से जोड़ें</string>
     <string name="add_pages">पन्ने जोड़ें</string>
@@ -401,7 +402,7 @@
         <item quantity="one">%d चुना</item>
         <item quantity="other">%d चुने</item>
     </plurals>
-    <string name="settings_auto_copy_to_documents_summary">सहेजी गई प्रतियाँ Documents/ScanWhirl में जाती हैं।</string>
+    <string name="settings_auto_copy_to_documents_summary">प्रतियाँ Documents/ScanWhirl में</string>
     <string name="settings_auto_enhance">स्कैन अपने आप बेहतर करें</string>
     <string name="settings_auto_enhance_summary">स्कैन साफ़ हो जाते हैं। बंद रखने पर फ़ोटो वैसी ही रहती है जैसी खींची गई थी।</string>
     <string name="settings_searchable_pdf">खोजने लायक PDF</string>

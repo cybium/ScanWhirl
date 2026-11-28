@@ -110,6 +110,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
@@ -163,11 +164,97 @@
                     </LinearLayout>
 
 
+                    <!-- W5d V055/V098: Appearance is one card — Theme, Font, Text size.
+                         The scale row lives here with its preview; the old duplicate
+                         "Text size" card is gone. -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="@color/cyan_border_hair" />
+
+                    <LinearLayout
+                        android:id="@+id/rowTextSize"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="16dp">
+
+                        <ImageView
+                            android:importantForAccessibility="no"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="14dp"
+                            android:importantForAutofill="no"
+                            android:src="@drawable/ic_sym_text_fields"
+                            app:tint="@color/cyan_primary" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/cz_text_size_title"
+                                android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+                            <TextView
+                                android:id="@+id/subTextSize"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="?android:attr/textColorSecondary" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:importantForAccessibility="no"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:importantForAutofill="no"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/colorOutline" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingStart="54dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/cz_text_size_sample"
+                            android:textAppearance="?attr/textAppearanceBodyLarge"
+                            android:textColor="?attr/colorOnSurface" />
+
+                        <TextView
+                            android:id="@+id/textSizePercent"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?android:attr/textColorSecondary" />
+                    </LinearLayout>
+
                     <!-- M08: decoration, not document work; removed from Settings. -->
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair"
                         android:visibility="gone" />
 
@@ -231,6 +318,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair"
                         android:visibility="gone" />
 
@@ -283,97 +371,6 @@
                             android:layout_height="wrap_content"
                             app:thumbTint="@color/sel_switch_thumb"
                             app:trackTint="@color/sel_switch_track" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Lane Z: Text size. Its own card keeps the appearance card's locked
-                 4-rows + 3-dividers structure intact. Default (1.0) follows the
-                 phone; the preview line states the multiplier honestly. -->
-            <com.google.android.material.card.MaterialCardView
-                style="@style/Widget.ScanWhirl.Card"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginVertical="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <LinearLayout
-                        android:id="@+id/rowTextSize"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:background="?attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:padding="16dp">
-
-                        <ImageView
-                            android:importantForAccessibility="no"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="14dp"
-                            android:importantForAutofill="no"
-                            android:src="@drawable/ic_sym_text_fields"
-                            app:tint="@color/cyan_primary" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/cz_text_size_title"
-                                android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-                            <TextView
-                                android:id="@+id/subTextSize"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?android:attr/textColorSecondary" />
-                        </LinearLayout>
-
-                        <ImageView
-                            android:importantForAccessibility="no"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:importantForAutofill="no"
-                            android:src="@drawable/ic_sym_chevron_right"
-                            app:tint="?attr/colorOutline" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingStart="54dp"
-                        android:paddingEnd="16dp"
-                        android:paddingBottom="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/cz_text_size_sample"
-                            android:textAppearance="?attr/textAppearanceBodyLarge"
-                            android:textColor="?attr/colorOnSurface" />
-
-                        <TextView
-                            android:id="@+id/textSizePercent"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:textAppearance="?attr/textAppearanceBodySmall"
-                            android:textColor="?android:attr/textColorSecondary" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -589,12 +586,31 @@
                             android:src="@drawable/ic_chevron_right"
                             app:tint="?attr/colorOutline" />
                     </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="54dp"
-                        android:background="@color/cyan_border_hair" />
+            <!-- W5d V064: auto-enhance, auto-save and searchable PDF change scanning and
+                 saving, not viewing. They get their own honestly named section. -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="8dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="4dp"
+                android:text="@string/settings_scanning_saving"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.ScanWhirl.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginVertical="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:id="@+id/rowAutoEnhance"
@@ -648,6 +664,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <!-- test26 T5.4: auto-copy finished PDFs to Documents/ScanWhirl. -->
@@ -703,6 +720,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <!-- test26 T12: Make PDFs searchable switch. -->
@@ -827,6 +845,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
@@ -888,6 +907,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
@@ -935,6 +955,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
@@ -1042,6 +1063,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout
@@ -1161,6 +1183,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="54dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/cyan_border_hair" />
 
                     <LinearLayout

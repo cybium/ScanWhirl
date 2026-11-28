@@ -49,7 +49,7 @@
     <string name="about_title">About ScanWhirl</string>
     <!-- D-11 (2026-11-20): the camera scanner and English text reader are Google Play services
          modules and can download once. C1 (2026-11-20 owner): one complete, short privacy line. -->
-    <string name="about_message">ScanWhirl %1$s\n\nYour documents stay on this phone: no accounts, no ads, no servers. The scanner and English text reading come from Google Play services, which may download once.\n\nDeveloper: Cybium (github.com/cybium)\nSupport: cybiumsupport@gmail.com\nPrivacy policy: cybium.github.io/scanwhirl-privacy</string>
+    <string name="about_message">ScanWhirl %1$s\n\nYour documents stay on this phone. No accounts, no servers.</string>
     <string name="share_pdf">Share</string>
     <string name="delete">Delete</string>
     <string name="delete_title">Delete scan?</string>
@@ -242,7 +242,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_system">Follow system</string>
-    <string name="settings_font">Text size</string>
+    <string name="settings_font">Font</string>
     <string name="font_default">Default</string>
     <string name="font_serif">Serif</string>
     <string name="font_mono">Monospace</string>
@@ -366,13 +366,14 @@
     <string name="settings_auto_enhance_summary">Cleans up scans. Off keeps the photo as taken.</string>
     <string name="settings_searchable_pdf">Searchable PDFs</string>
     <string name="settings_searchable_pdf_summary">Adds invisible text so other apps can search your PDFs.</string>
-    <string name="settings_auto_copy_to_documents">Save copy to Documents</string>
-    <string name="settings_auto_copy_to_documents_summary">Copies saved to Documents/ScanWhirl.</string>
+    <string name="settings_auto_copy_to_documents">Also save to Documents</string>
+    <string name="settings_auto_copy_to_documents_summary">Copies go to Documents/ScanWhirl</string>
     <string name="settings_pro_message">ScanWhirl Pro is not available yet.</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language">App language</string>
     <string name="language_system">System default</string>
     <string name="settings_viewing">Viewing</string>
+    <string name="settings_scanning_saving">Scanning &amp; saving</string>
     <string name="settings_default_viewer">Default PDF viewer</string>
     <string name="viewer_in_app">ScanWhirl viewer</string>
     <string name="viewer_system">System PDF app</string>
