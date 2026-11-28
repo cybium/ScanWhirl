@@ -520,7 +520,7 @@ class PdfBoxEngineDigitalPagesTest {
         assertEquals(1, engine.open(plain).pageCount)
 
         // Nested and escaped parens plus a hex string around /Encrypt must stay strings.
-        val nestedEntry = "/Note (a(b\\)c% d) /Hex <25>"
+        val nestedEntry = "/Note (a(b\\)c) d%) /Hex <25>"
         val nestedPlain = withTrailerEntry(
             makePdf("string-nested-base.pdf", 1, "PUBLIC_ALPHA"),
             File(dir, "string-nested-plain.pdf"),
