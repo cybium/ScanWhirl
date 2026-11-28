@@ -155,7 +155,7 @@ class MultiShareSitesFixShareTest {
                 summary.findViewById<View>(R.id.swSheetPrimary).performClick()
                 val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share all opens the sharesheet", chooser)
-                assertMultiShare(chooser, "application/pdf", expectedSize = 2)
+                assertMultiShare(chooser!!, "application/pdf", expectedSize = 2)
             }
         }
     }
@@ -182,7 +182,7 @@ class MultiShareSitesFixShareTest {
                 activity.findViewById<View>(R.id.swSelShare).performClick()
                 val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
-                assertMultiShare(chooser, "application/pdf", expectedSize = 2)
+                assertMultiShare(chooser!!, "application/pdf", expectedSize = 2)
             }
         }
     }

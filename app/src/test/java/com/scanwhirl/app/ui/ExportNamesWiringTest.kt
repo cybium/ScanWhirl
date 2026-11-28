@@ -147,7 +147,7 @@ class ExportNamesWiringTest {
                 assertNotNull("Share opens the sharesheet", chooser)
                 assertEquals(
                     listOf("Electricity.pdf", "Rent receipt (2).pdf", "Rent receipt.pdf"),
-                    sharedNames(chooser).sorted()
+                    sharedNames(chooser!!).sorted()
                 )
             }
         }
@@ -184,7 +184,7 @@ class ExportNamesWiringTest {
                 assertNotNull("Share all opens the sharesheet", chooser)
                 assertEquals(
                     listOf("Gas bill (2).pdf", "Water bill (2).pdf"),
-                    sharedNames(chooser).sorted()
+                    sharedNames(chooser!!).sorted()
                 )
             }
         }
@@ -206,7 +206,7 @@ class ExportNamesWiringTest {
                 activity.findViewById<View>(R.id.toolResultShare).performClick()
                 val chooser = chooserAfterCopy(activity)
                 assertNotNull("Share opens the sharesheet", chooser)
-                assertEquals(listOf("Part one.pdf", "Part two.pdf"), sharedNames(chooser))
+                assertEquals(listOf("Part one.pdf", "Part two.pdf"), sharedNames(chooser!!))
             }
         }
     }
