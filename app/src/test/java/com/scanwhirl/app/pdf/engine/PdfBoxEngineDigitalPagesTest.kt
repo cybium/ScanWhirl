@@ -134,7 +134,8 @@ class PdfBoxEngineDigitalPagesTest {
         engine.reorder(copy, intArrayOf(1, 0))
         engine.rotate(copy, 0, 90)
         engine.delete(copy, intArrayOf(1))
-        val editedText = oracleText(copy.file)
+        // PDFTextStripper splits glyphs of rotated text across lines; whitespace is not content.
+        val editedText = oracleText(copy.file).replace(Regex("\\s+"), " ")
         assertTrue(editedText.contains("page 3"))
         assertFalse(editedText.contains("page 1"))
 
