@@ -15,6 +15,7 @@ import com.scanwhirl.app.ui.tools.form.FormReadyActivity
 import com.scanwhirl.app.util.FormPresets
 import com.scanwhirl.app.util.ImageTools
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -45,12 +46,21 @@ import kotlin.math.floor
 class FormFx2PhoneEvidenceTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
+    private val async = FormAsyncIdle()
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    @Before
+    fun setUp() {
+        // Queue Main so every decode/encode continuation is pumped by waitUntil together with
+        // the main looper, instead of racing an unobservable background post (FX2 flakes).
+        async.install()
+    }
 
     @After
     fun tearDown() {
         setOrientation(null)
         RuntimeEnvironmentQualifiersReset()
+        async.reset()
     }
 
     private fun RuntimeEnvironmentQualifiersReset() {
@@ -63,16 +73,8 @@ class FormFx2PhoneEvidenceTest {
         field.set(null, value)
     }
 
-    private fun waitUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            idle()
-            if (condition()) return true
-            Thread.sleep(25)
-        }
-        idle()
-        return condition()
-    }
+    private fun waitUntil(timeoutMs: Long = 12_000, condition: () -> Boolean): Boolean =
+        async.waitUntil(timeoutMs, condition)
 
     private fun controller(): ActivityController<FormReadyActivity> =
         Robolectric.buildActivity(FormReadyActivity::class.java).setup()

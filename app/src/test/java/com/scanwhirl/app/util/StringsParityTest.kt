@@ -67,6 +67,38 @@ class StringsParityTest {
         )
     }
 
+    /**
+     * B3/B4 deliberately changed the Tools copy: three named student jobs were added and
+     * "Redact" became "Hide info". The generic parity loops above cannot tell a renamed
+     * string from a missing one, so pin both languages' slots and the natural Hindi wording.
+     */
+    @Test
+    fun `student job words and the renamed Hide info tile exist in both languages`() {
+        val en = File(valuesDir, "strings_l1.xml").readText(Charsets.UTF_8)
+        val hi = File(hiDir, "strings_l1.xml").readText(Charsets.UTF_8)
+        val keys = listOf(
+            "student_job_form_ready", "student_job_sign", "student_job_hide_info", "tool_redact"
+        )
+        for (key in keys) {
+            assertTrue("English $key is missing", Regex("name=\"$key\"").containsMatchIn(en))
+            assertTrue("Hindi $key is missing", Regex("name=\"$key\"").containsMatchIn(hi))
+        }
+        assertTrue("the tile reads Hide info", Regex("name=\"tool_redact\">Hide info<").containsMatchIn(en))
+        assertTrue(
+            "Hindi already says the plain thing naturally",
+            Regex("name=\"tool_redact\">[^<]*छिपाएँ<").containsMatchIn(hi)
+        )
+        assertTrue(
+            "the old word is gone from the tile",
+            !Regex("name=\"tool_redact\">Redact<").containsMatchIn(en)
+        )
+        assertTrue(
+            "VQA V080: the search prompt no longer uses the OCR acronym",
+            !Regex("name=\"tools_search_hint\">[^<]*OCR").containsMatchIn(en) &&
+                !Regex("name=\"tools_search_hint\">[^<]*OCR").containsMatchIn(hi)
+        )
+    }
+
     @Test
     fun `format specifiers match by position and type across all string files`() {
         val values = entries(valuesDir)

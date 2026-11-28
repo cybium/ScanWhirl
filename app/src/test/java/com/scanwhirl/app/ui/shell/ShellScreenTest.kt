@@ -105,7 +105,8 @@ class ShellScreenTest {
 
             activity.findViewById<View>(R.id.swNavMe).performClick()
             idle()
-            assertEquals(5, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
+            // B2/B1 added the Theme and Also-save rows to Me (was 5).
+            assertEquals(7, (activity.findViewById<View>(R.id.swMeList) as android.view.ViewGroup).childCount)
 
             activity.findViewById<View>(R.id.swNavVault).performClick()
             idle()

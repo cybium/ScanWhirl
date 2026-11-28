@@ -203,7 +203,8 @@ class FullBackupTest {
         val report = backup.restore(out, password)
 
         assertEquals("", Prefs.localeTag(app))
-        assertEquals(Prefs.THEME_DARK, Prefs.themeMode(app))
+        // B2: a malformed stored theme falls back to the follow-system default.
+        assertEquals(Prefs.THEME_SYSTEM, Prefs.themeMode(app))
         assertTrue(Prefs.makeSearchable(app))
         assertTrue(Prefs.galleryAutoCrop(app))
         assertEquals("hi", Prefs.ocrLanguage(app))

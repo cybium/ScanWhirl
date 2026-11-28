@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- W5a: the thumb is clearly visible on the OFF track in both themes, and uses
+     on-accent when checked. Disabled keeps a distinguishable muted thumb. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_checked="true" android:color="@color/cyan_primary" />
-    <item android:color="@color/text_hologram_mid" />
+    <item android:state_enabled="false" android:color="@color/tok_text_3" />
+    <item android:state_checked="true" android:color="@color/tok_on_accent" />
+    <item android:color="@color/tok_switch_thumb_off" />
 </selector>

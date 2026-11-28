@@ -108,7 +108,7 @@ class ScanListAdapter(
             // Paper: real first page (ordinary documents only), category tab,
             // a second sheet behind multi-page documents.
             DocThumbBinder.bind(binding.thumbImage, binding.thumbGlyph, doc)
-            val catColor = CategoryStyle.color(doc.category.orEmpty())
+            val catColor = CategoryStyle.color(doc.category.orEmpty(), binding.root.context)
             binding.thumbTab.backgroundTintList = ColorStateList.valueOf(catColor)
             binding.thumbBack.isVisible = doc.pageCount > 1
             binding.pageBadge.text = doc.pageCount.toString()

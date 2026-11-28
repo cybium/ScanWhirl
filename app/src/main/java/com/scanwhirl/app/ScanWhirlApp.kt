@@ -75,7 +75,8 @@ class ScanWhirlApp : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
-        // Theme + per-app language come from Settings (dark is the default).
+        // Theme + per-app language come from Settings (follow system is the default;
+        // an explicit Light/Dark choice is honoured).
         AppCompatDelegate.setDefaultNightMode(Prefs.nightMode(Prefs.themeMode(this)))
         val tag = Prefs.localeTag(this)
         if (tag.isNotEmpty()) {

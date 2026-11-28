@@ -85,8 +85,10 @@ class ToolNamesCouncilParityTest {
         // job and group headings - COUNCIL §1 "Headings"
         "tools_group_text" to ("OCR" to "OCR"),
         "tools_job_smaller" to ("Compress & resize" to "छोटा करें"),
-        "tools_job_organise" to ("Combine & organize" to "जोड़ें और सजाएँ"),
-        "tools_job_markup" to ("Sign & mark up" to "हस्ताक्षर और निशान"),
+        // B3 word budget: one plain word instead of "Combine & organize" (3 → 1).
+        "tools_job_organise" to ("Combine" to "जोड़ें"),
+        // B3 word budget: one word shorter, same plain meaning.
+        "tools_job_markup" to ("Sign & mark" to "हस्ताक्षर और निशान"),
         "tools_job_private" to ("Privacy" to "निजता"),
         "tools_job_text" to ("OCR & search" to "OCR और खोजें"),
         "tools_job_format" to ("Convert" to "फ़ॉर्मैट बदलें"),
@@ -106,14 +108,15 @@ class ToolNamesCouncilParityTest {
         "ocr_save_txt" to ("Save .txt" to ".txt सहेजें"),
         "ocr_w5_retry_txt" to ("Try again" to "फिर कोशिश करें"),
         "tools_result_done" to ("Done" to "हो गया"),
-        "tools_search_hint" to ("Find a tool, e.g. \"OCR\"" to "काम खोजें, जैसे \"OCR\""),
+        // B3 word budget: the example was cut; synonyms are still found by search.
+        "tools_search_hint" to ("Find a tool" to "काम खोजें"),
         "tools_no_match" to ("No tool for “%1\$s”" to "“%1\$s” के लिए कोई काम नहीं"),
         // OCR screen
         "ocr_title" to ("Extract text (OCR)" to "लिखा हुआ निकालें (OCR)"),
         "ocr_screen_title" to ("OCR" to "OCR"),
         // Settings - COUNCIL §1 "Settings"
         "me_pro_summary" to ("All Pro tools" to "सभी Pro काम"),
-        "me_settings_summary" to ("Look, language, privacy" to "रंग-रूप, भाषा, निजता"),
+        "me_settings_summary" to ("Look & language" to "रंग-रूप और भाषा"),
         "settings_font" to ("Text size" to "लिखाई का आकार"),
         "settings_greeting" to ("Home status line" to "मुख्य पन्ने की स्थिति-पंक्ति"),
         "settings_searchable_pdf" to ("Searchable PDFs" to "खोजने लायक PDF"),

@@ -47,8 +47,8 @@ object SwSnackbar {
         snackbar.setTextColor(SwStyle.color(activity, R.color.text_hologram_hi))
         snackbar.view.background = SwStyle.rounded(
             activity,
-            0xFF161D21.toInt(),
-            radiusDp = 16f,
+            SwStyle.color(activity, R.color.tok_surface_2),
+            radiusDp = SwStyle.RADIUS_CARD_DP,
             stroke = SwStyle.color(activity, R.color.sw_cyan_hair_strong)
         )
         // The action is a real button for TalkBack; give it the same words.

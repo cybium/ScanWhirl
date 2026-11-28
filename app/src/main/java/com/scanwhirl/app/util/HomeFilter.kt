@@ -38,9 +38,10 @@ object HomeFilter {
         docs: List<ScanDocument>,
         state: HomeState,
         normalizedText: (String) -> String,
-        originalText: (String) -> String
+        originalText: (String) -> String,
+        highlightColor: Int = SearchMatcher.LEGACY_SNIPPET_COLOR
     ): List<ScanDocument> =
-        applyDetailed(docs, state, normalizedText, originalText).docs
+        applyDetailed(docs, state, normalizedText, originalText, highlightColor).docs
 
     /**
      * The documents to show for [state], plus per-document snippets for
@@ -52,7 +53,8 @@ object HomeFilter {
         docs: List<ScanDocument>,
         state: HomeState,
         normalizedText: (String) -> String,
-        originalText: (String) -> String
+        originalText: (String) -> String,
+        highlightColor: Int = SearchMatcher.LEGACY_SNIPPET_COLOR
     ): HomeResult {
         val visible = if (state.includeVaulted) docs else docs.filter { !it.isVaulted }
 
@@ -60,7 +62,7 @@ object HomeFilter {
             HomeResult(visible, emptyMap())
         } else {
             val hits = SearchMatcher.search(
-                state.query, visible, state.includeVaulted, normalizedText, originalText
+                state.query, visible, state.includeVaulted, normalizedText, originalText, highlightColor
             )
             // Defence in depth: a locked document never carries an OCR snippet.
             val snippets = hits.filter { it.snippet != null && !it.doc.isLocked }

@@ -73,7 +73,7 @@
                 android:layout_height="50dp"
                 android:background="@drawable/bg_protect_thumb"
                 android:gravity="center"
-                android:textColor="@color/void_abyss"
+                android:textColor="@color/tok_on_paper"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 

@@ -6,9 +6,14 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.widget.SwitchCompat
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.TrustPill
+import com.scanwhirl.app.util.Prefs
 
 /**
  * v2 UI: Me tab — the restyled Settings entry, Pro, Trash and About.
@@ -42,7 +47,7 @@ class MeScreen(
             setPadding(pad, SwStyle.dp(context, 10f), pad, SwStyle.dp(context, 6f))
         }
         bar.addView(
-            SwStyle.text(context, 24f, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
+            SwStyle.text(context, SwType.TITLE_SP, SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply {
                 text = context.getString(R.string.me_title)
                 typeface = com.scanwhirl.app.ui.kit.SwType.extraBold(context)
             },
@@ -87,6 +92,21 @@ class MeScreen(
         )
         // L2's single Backup & restore row (ui/backup/BackupActivity), directly
         // after Pro. Do not add another.
+        // Saving: one switch, shared with Settings (the same preference, not a second one).
+        list.addView(
+            toggleRow(
+                R.drawable.ic_sym_settings,
+                context.getString(R.string.me_also_save_to_documents),
+                context.getString(R.string.me_also_save_to_documents_summary),
+                R.id.swMeAlsoSave,
+                R.id.swMeAlsoSaveSwitch,
+                Prefs.autoCopyToDocuments(context)
+            ) { checked -> Prefs.setAutoCopyToDocuments(context, checked) }
+        )
+        // Appearance: System / Light / Dark. The default is Follow system (B2).
+        list.addView(
+            themeRow()
+        )
         list.addView(
             row(
                 R.drawable.ic_sym_settings,
@@ -121,19 +141,135 @@ class MeScreen(
         )
     }
 
+    /** The Me theme row: its summary is the active choice, so it needs a stable id. */
+    private fun themeRow(): View {
+        val label = context.getString(
+            when (Prefs.themeMode(context)) {
+                Prefs.THEME_LIGHT -> R.string.theme_light
+                Prefs.THEME_SYSTEM -> R.string.theme_system
+                else -> R.string.theme_dark
+            }
+        )
+        return row(
+            R.drawable.ic_palette,
+            context.getString(R.string.me_theme),
+            label,
+            R.id.swMeTheme,
+            summaryId = R.id.swMeThemeValue,
+            onClick = ::chooseTheme
+        )
+    }
+
+    /** Native sheet with the three theme choices; mirrors Settings' chooser. */
+    private fun chooseTheme() {
+        val values = arrayOf(Prefs.THEME_SYSTEM, Prefs.THEME_LIGHT, Prefs.THEME_DARK)
+        val labels = arrayOf(
+            context.getString(R.string.theme_system),
+            context.getString(R.string.theme_light),
+            context.getString(R.string.theme_dark)
+        )
+        val checked = values.indexOf(Prefs.themeMode(context)).coerceAtLeast(0)
+        SwSheet.builder(context)
+            .setTitle(R.string.me_theme)
+            .setOptions(labels.toList(), checked) { which, _ ->
+                Prefs.setThemeMode(context, values[which])
+                AppCompatDelegate.setDefaultNightMode(Prefs.nightMode(values[which]))
+                buildRows()
+            }
+            .setSecondary(android.R.string.cancel)
+            .build()
+            .show()
+    }
+
+    /** A Me row whose only control is a switch. The card itself is the full 48dp target. */
+    private fun toggleRow(
+        icon: Int,
+        title: String,
+        summary: String,
+        id: Int,
+        switchId: Int,
+        checked: Boolean,
+        onToggle: (Boolean) -> Unit
+    ): View {
+        val card = RowCard(context).apply {
+            this.id = id
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = SwStyle.card(context, SwStyle.RADIUS_CARD_DP)
+            minimumHeight = SwStyle.dp(context, SwStyle.TOUCH_MIN_DP)
+            val pad = SwStyle.dp(context, if (largeFont) 8f else 14f)
+            setPadding(pad, pad, pad, pad)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = SwStyle.dp(context, 10f)
+            }
+            contentDescription = "$title, $summary"
+        }
+        val iconDp = if (largeFont) 18f else 26f
+        val iconGapDp = if (largeFont) 8f else 14f
+        card.addView(
+            ImageView(context).apply {
+                setImageResource(icon)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+            },
+            LayoutParams(SwStyle.dp(context, iconDp), SwStyle.dp(context, iconDp))
+                .apply { marginEnd = SwStyle.dp(context, iconGapDp) }
+        )
+        val info = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        info.addView(
+            SwStyle.text(context, SwType.BODY_SP,
+                SwStyle.color(context, R.color.text_hologram_hi), bold = true).apply { text = title }
+        )
+        info.addView(
+            SwStyle.text(context,
+                // 2.0x on 320dp needs a slightly tighter summary to wrap inside the
+                // card instead of overhanging its 1px border (MeRowFit).
+                if (largeFont) SwType.CAPTION_SP - 0.5f else SwType.CAPTION_SP,
+                SwStyle.color(context, R.color.text_hologram_dim)).apply { text = summary },
+            // WRAP_CONTENT sized one long line past the card at 2.0x; constrain to the
+            // info column so it wraps instead of overflowing (MeRowFit).
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 3f) }
+        )
+        card.addView(info, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        val toggle = SwitchCompat(context).apply {
+            this.id = switchId
+            isChecked = checked
+            contentDescription = title
+            isFocusable = true
+            minimumWidth = SwStyle.dp(context, SwStyle.TOUCH_MIN_DP)
+            minimumHeight = SwStyle.dp(context, SwStyle.TOUCH_MIN_DP)
+        }
+        // A fixed 48dp box clipped the switch's track and thumb (half-circle at
+        // the left edge). Let it measure its natural width; 48dp stays the touch
+        // floor, and the row's end padding then contains the whole control.
+        card.addView(
+            toggle,
+            LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, SwStyle.TOUCH_MIN_DP))
+        )
+        toggle.setOnCheckedChangeListener { _, value -> onToggle(value) }
+        card.isClickable = true
+        card.isFocusable = true
+        card.setOnClickListener { toggle.isChecked = !toggle.isChecked }
+        return card
+    }
+
     private fun row(
         icon: Int,
         title: String,
         summary: String,
         id: Int,
         gold: Boolean = false,
+        summaryId: Int = View.NO_ID,
         onClick: () -> Unit
     ): View {
         val card = RowCard(context).apply {
             this.id = id
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = SwStyle.card(context, 18f)
+            background = SwStyle.card(context, SwStyle.RADIUS_CARD_DP)
             // UI-W8: every Me row keeps a 48dp target even when the text is short.
             minimumHeight = SwStyle.dp(context, 48f)
             isClickable = true
@@ -168,16 +304,23 @@ class MeScreen(
         }
         info.addView(
             SwStyle.text(
-                context, 15.5f,
+                context, SwType.BODY_SP,
                 SwStyle.color(context, if (gold) R.color.gold_pro_primary else R.color.text_hologram_hi),
                 bold = true
             ).apply { text = title }
         )
         info.addView(
-            SwStyle.text(context, 12.5f, SwStyle.color(context, R.color.text_hologram_dim)).apply {
+            SwStyle.text(context,
+                // 2.0x on 320dp needs a slightly tighter summary to wrap inside the
+                // card instead of overhanging its 1px border (MeRowFit).
+                if (largeFont) SwType.CAPTION_SP - 0.5f else SwType.CAPTION_SP,
+                SwStyle.color(context, R.color.text_hologram_dim)).apply {
                 text = summary
+                if (summaryId != View.NO_ID) setId(summaryId)
             },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            // WRAP_CONTENT sized one long line past the card at 2.0x; constrain to the
+            // info column so it wraps instead of overflowing (MeRowFit).
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = SwStyle.dp(context, 3f) }
         )
         card.addView(info, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))

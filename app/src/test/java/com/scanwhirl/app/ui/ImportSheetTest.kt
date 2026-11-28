@@ -124,7 +124,11 @@ abstract class ImportSheetBase {
             val pdfDesc = sheet.findViewById<TextView>(R.id.importPdfDesc)!!.text.toString()
             assertEquals(app.getString(R.string.import_photos_desc), photosDesc)
             assertEquals(app.getString(R.string.import_pdf_desc), pdfDesc)
-            assertTrue("PDF copy says the pages become editable", pdfDesc.contains("editable"))
+            // DQA D1: deliberately updated — the old test pinned the false "editable page"
+            // promise that NATIVE_MAP §Import says must go. The real effect is stated below.
+            assertFalse("no misleading 'editable' promise", pdfDesc.contains("editable"))
+            val rasterNote = sheet.findViewById<TextView>(R.id.importPdfRasterNote)!!.text.toString()
+            assertEquals(app.getString(R.string.import_raster_notice), rasterNote)
             val all = listOf(photosTitle, photosDesc, pdfTitle, pdfDesc)
                 .joinToString(" ").lowercase()
             for (banned in listOf("coming", "wp-06", "lossless", "tap order", "order you tapped")) {
@@ -283,7 +287,7 @@ abstract class ImportSheetBase {
                 "taller content scrolls inside the sheet instead of clipping",
                 content.measuredHeight <= scroll.measuredHeight || scroll.canScrollVertically(1)
             )
-            for (id in intArrayOf(R.id.importPhotosDesc, R.id.importPdfDesc, R.id.importOrderNote)) {
+            for (id in intArrayOf(R.id.importPhotosDesc, R.id.importPdfDesc, R.id.importPdfRasterNote, R.id.importOrderNote)) {
                 val tv = sheet.findViewById<TextView>(id)!!
                 assertNull("copy is never ellipsized away", tv.ellipsize)
                 assertEquals("copy has no line cap", Int.MAX_VALUE, tv.maxLines)

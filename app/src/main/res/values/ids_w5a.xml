@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a: stable ids for the two Me rows built in code (Foundations step). -->
+<resources>
+    <item name="swMeTheme" type="id" />
+    <item name="swMeThemeValue" type="id" />
+    <item name="swMeAlsoSave" type="id" />
+    <item name="swMeAlsoSaveSwitch" type="id" />
+</resources>

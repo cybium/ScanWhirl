@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- COPY_DIET A1 roles, lane-local to F2, now backed by the shared token palette. -->
 <resources>
-    <!-- COPY_DIET §1 roles, lane-local to F2 so CD-core can add the shared aliases later. -->
-    <color name="f2_text_primary">#FFFFFF</color>
-    <color name="f2_text_secondary">#B3BCC2</color>
-    <color name="f2_text_tertiary">#8D979E</color>
-    <color name="f2_action_accent">#62E1F1</color>
-    <color name="f2_danger">#FF8C82</color>
+    <color name="f2_text_primary">@color/tok_text</color>
+    <color name="f2_text_secondary">@color/tok_text_2</color>
+    <color name="f2_text_tertiary">@color/tok_text_3</color>
+    <color name="f2_action_accent">@color/tok_accent</color>
+    <color name="f2_danger">@color/tok_danger</color>
 </resources>

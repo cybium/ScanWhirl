@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base Orbital Dark Theme (Universal dark universe; no DayNight drift) -->
+    <!-- W5a: one DayNight theme. Every colour below is a semantic token, so
+         values/ (light) and values-night/ (dark) supply the whole palette. "Dark
+         only" hard-coded surfaces were removed from the kit; the old flat palette
+         survives only as aliases in colors*.xml. -->
     <!-- Base holds all items; Theme.ScanWhirl (here and in values-v27/) is the
          qualifier-specific shell so we can add windowLightNavigationBar on API 27+
          without a ResourceCycle lint error. -->
-    <style name="Base.Theme.ScanWhirl" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Base.Theme.ScanWhirl" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/sf_primary</item>
         <item name="colorOnPrimary">@color/sf_on_primary</item>
         <item name="colorPrimaryContainer">@color/sf_primary_container</item>
@@ -19,7 +22,7 @@
         <item name="colorSurface">@color/sf_surface</item>
         <item name="colorOnSurface">@color/sf_on_surface</item>
         <item name="colorSurfaceContainerLowest">@color/sf_surface</item>
-        <item name="colorSurfaceContainerLow">#0A1222</item>
+        <item name="colorSurfaceContainerLow">@color/tok_surface_2</item>
         <item name="colorSurfaceContainer">@color/sf_surface</item>
         <item name="colorSurfaceContainerHigh">@color/glass_surface_raised</item>
         <item name="colorSurfaceContainerHighest">@color/glass_surface_high</item>
@@ -28,8 +31,10 @@
         <item name="colorOutline">@color/sf_outline</item>
         <item name="colorOutlineVariant">@color/sf_outline_variant</item>
         <item name="android:statusBarColor">@color/sf_surface</item>
-        <item name="android:navigationBarColor">@color/sf_background</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <!-- API 24-26 draw white system nav icons, so the bar stays dark there.
+             values-v27/ overrides with the themed bar + light icons (API 27+). -->
+        <item name="android:navigationBarColor">@color/tok_nav_bar_dark</item>
+        <item name="android:windowLightStatusBar">@bool/sw_light_system_bars</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
 
@@ -57,9 +62,10 @@
 
     <!-- Neural Vault Glass Dialog Theme (Card) -->
     <style name="ThemeOverlay.ScanWhirl.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="android:windowBackground">@drawable/bg_dialog_glass</item>
+        <!-- W5a: a token surface, never the dark-only glass drawable. -->
+        <item name="android:windowBackground">@color/tok_surface</item>
         <item name="android:backgroundDimAmount">0.85</item>
-        <item name="colorSurface">@color/glass_surface_high</item>
+        <item name="colorSurface">@color/tok_surface</item>
         <item name="colorOnSurface">@color/text_hologram_hi</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>
@@ -70,7 +76,7 @@
 
     <!-- Neural Vault Glass Sheet Theme -->
     <style name="ThemeOverlay.ScanWhirl.Dialog.Sheet" parent="ThemeOverlay.ScanWhirl.Dialog">
-        <item name="android:windowBackground">@drawable/bg_sheet_glass</item>
+        <item name="android:windowBackground">@color/tok_surface</item>
     </style>
 
     <!-- Danger Dialog Overlay -->
@@ -105,7 +111,7 @@
         <item name="iconTint">@color/void_abyss</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.04</item>
-        <item name="cornerRadius">24dp</item>
+        <item name="cornerRadius">@dimen/sw_radius_control</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:stateListAnimator">@animator/sw_press</item>
     </style>
@@ -117,7 +123,7 @@
         <item name="android:textColor">@color/text_hologram_hi</item>
         <item name="iconTint">@color/cyan_primary</item>
         <item name="android:letterSpacing">0.04</item>
-        <item name="cornerRadius">24dp</item>
+        <item name="cornerRadius">@dimen/sw_radius_control</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:stateListAnimator">@animator/sw_press</item>
     </style>
@@ -129,7 +135,7 @@
         <item name="iconTint">@color/laser_danger</item>
         <item name="backgroundTint">@color/laser_danger_surface</item>
         <item name="android:letterSpacing">0.04</item>
-        <item name="cornerRadius">24dp</item>
+        <item name="cornerRadius">@dimen/sw_radius_control</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:stateListAnimator">@animator/sw_press</item>
     </style>
@@ -198,10 +204,10 @@
 
     <!-- Card Styles -->
     <style name="Widget.ScanWhirl.Card" parent="Widget.Material3.CardView.Filled">
-        <item name="cardBackgroundColor">@color/glass_surface</item>
-        <item name="strokeColor">@color/sel_stroke_cyan</item>
+        <item name="cardBackgroundColor">@color/tok_surface</item>
+        <item name="strokeColor">@color/tok_line</item>
         <item name="strokeWidth">1dp</item>
-        <item name="cardCornerRadius">14dp</item>
+        <item name="cardCornerRadius">@dimen/sw_radius_card</item>
         <item name="cardElevation">0dp</item>
     </style>
 
@@ -209,16 +215,19 @@
     <style name="Widget.ScanWhirl.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
         <item name="thumbTint">@color/sel_switch_thumb</item>
         <item name="trackTint">@color/sel_switch_track</item>
+        <!-- A visible hairline outline keeps the OFF thumb distinct on the track. -->
+        <item name="strokeColor">@color/tok_boundary</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <!-- Popup Menu Styles -->
     <style name="Widget.ScanWhirl.PopupMenu" parent="Widget.Material3.PopupMenu">
-        <item name="android:popupBackground">@drawable/bg_popup_glass</item>
+        <item name="android:popupBackground">@color/tok_surface</item>
         <item name="android:popupElevation">12dp</item>
     </style>
 
     <style name="Widget.ScanWhirl.PopupMenu.Overflow" parent="Widget.Material3.PopupMenu.Overflow">
-        <item name="android:popupBackground">@drawable/bg_popup_glass</item>
+        <item name="android:popupBackground">@color/tok_surface</item>
         <item name="android:popupElevation">12dp</item>
     </style>
 

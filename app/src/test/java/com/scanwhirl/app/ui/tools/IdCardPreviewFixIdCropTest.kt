@@ -90,8 +90,8 @@ class IdCardPreviewFixIdCropTest {
                 val backdrop = host.background
                 assertTrue("a dark backdrop, not a glass box: $backdrop", backdrop is GradientDrawable)
                 assertEquals(
-                    "the backdrop is the ink colour",
-                    SwStyle.color(activity, R.color.void_abyss),
+                    "the backdrop is the dark preview token",
+                    SwStyle.color(activity, R.color.tok_preview_backdrop),
                     (backdrop as GradientDrawable).color?.defaultColor
                 )
                 assertNull("no white box behind the page", preview.background)
@@ -120,8 +120,19 @@ class IdCardPreviewFixIdCropTest {
                     val aroundPage = luminance(rendered.getPixel(SwStyle.dp(activity, 5f), middle))
                     val pageTop = luminance(rendered.getPixel(width / 2, SwStyle.dp(activity, 12f)))
 
-                    assertTrue("the backdrop around the page is dark ($aroundPage)", aroundPage < 70)
+                    // W5a: the backdrop is a theme token, so it is the light canvas when
+                    // Follow system resolves to light. Compare pixels to the resolved token.
+                    val expectedBackdrop = SwStyle.color(activity, R.color.tok_preview_backdrop)
+                    val cr = (expectedBackdrop shr 16 and 0xFF) * 0.2126 +
+                        (expectedBackdrop shr 8 and 0xFF) * 0.7152 +
+                        (expectedBackdrop and 0xFF) * 0.0722
+                    assertTrue(
+                        "the backdrop around the page uses the theme token ($aroundPage vs $cr)",
+                        kotlin.math.abs(aroundPage - cr) < 12
+                    )
                     assertTrue("the page is white ($pageTop)", pageTop > 200)
+                    // Original tolerance restored: the backdrop is dark in both themes
+                    // now, so the translucent white edge clears the 10-level delta.
                     assertTrue(
                         "a thin line marks the preview edge ($border vs $aroundPage)",
                         border > aroundPage + 10

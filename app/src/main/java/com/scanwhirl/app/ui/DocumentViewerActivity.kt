@@ -585,7 +585,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.docCategoryTouch.contentDescription =
             getString(R.string.doc_category_action, categoryLabel)
         binding.docCategoryDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
-            com.scanwhirl.app.util.CategoryStyle.color(doc.category)
+            com.scanwhirl.app.util.CategoryStyle.color(doc.category, this)
         )
         binding.docCategoryChip.isVisible = true
         binding.docCategoryTouch.isVisible = true
