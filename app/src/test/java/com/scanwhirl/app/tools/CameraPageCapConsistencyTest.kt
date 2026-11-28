@@ -64,8 +64,8 @@ class CameraPageCapConsistencyTest {
     /** The camera entries that add pages to an existing document; all must take the cap. */
     private val cameraAddPagesFiles = listOf(
         "ScanReviewActivity.kt",
-        "DocumentViewerActivity.kt",
-        "BookPagesActivity.kt"
+        "DocumentViewerActivity.kt"
+        // W8: BookPagesActivity.kt was deleted with the unreachable Book pages screen.
     )
 
     // ------------------------------------------------------------------ the guard
