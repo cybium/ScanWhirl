@@ -712,6 +712,8 @@ def seed():
     fixture = OUT / FIXTURE_PDF
     fixture.write_bytes(build([
         [FIXTURE + " / fictional page %d" % i,
+         "Fictional phone: 98765 43210",
+         "Fictional ID: 1234 5678 9012",
          "Self-authored ScanWhirl atlas fixture, no real content"]
         for i in range(1, 4)
     ]))
@@ -915,8 +917,8 @@ def walk_j34(suffix=""):
     def open_editor(hide):
         launch()
         require(tap({"rid": "swNavTools"}), "Tools tab")
-        title = (r"^Hide private info$|^निजी जानकारी छिपाएँ$" if hide else
-                 r"^Sign or fill a form$|^फ़ॉर्म पर हस्ताक्षर करें या भरें$|हस्ताक्षर.*फ़ॉर्म|फ़ॉर्म.*हस्ताक्षर")
+        title = (r"Hide private info|निजी जानकारी छिपाएँ" if hide else
+                 r"Sign or fill a form|हस्ताक्षर.*फ़ॉर्म|फ़ॉर्म.*हस्ताक्षर")
         require(tap({"regex": title, "pkg": PKG}), "student job")
         if wait_for({"rid": "canvas"}, timeout=2) is None:
             require(tap({"regex": FIXTURE, "pkg": PKG}), "fictional document picker row")
@@ -969,10 +971,16 @@ def walk_j34(suffix=""):
         shot("hide-page-3")
         require(tap({"regex": r"^Find$|^खोजें$"}), "Find sheet")
         shot("find-sheet")
+        require(tap({"rid": "swSheetPrimary"}), "Find candidates without applying")
+        require(wait_for({"rid": "swSheetRoot"}, timeout=50) is not None,
+                "candidate or honest unreadable outcome")
+        shot("find-candidates")
         dismiss_sheet()
         require(tap({"rid": "saveCopy"}), "Review")
         shot("review-hidden")
         require(editor_scroll_to({"regex": r"^Next page$|^अगला पन्ना$|^अगला पृष्ठ$"}), "second affected page")
+        require(editor_scroll_to({"regex": r"^Hidden$|^छिपाया हुआ$"}, backwards=True),
+                "second affected page visible in Hidden")
         shot("review-second-page")
         require(editor_scroll_to({"regex": r"^Original$|^मूल$"}, backwards=True), "Original comparison")
         shot("review-original-save-disabled")
@@ -1000,7 +1008,7 @@ def walk_j34_hindi():
     launch()
     if not tap({"rid": "swNavMe"}):
         raise AssertionError("J34 Hindi: Me unavailable")
-    if not tap_reachable({"regex": r"^Settings$"}):
+    if not tap_reachable({"regex": r"Settings"}):
         raise AssertionError("J34 Hindi: Settings unavailable")
     if not tap_reachable({"rid": "rowLanguage"}):
         raise AssertionError("J34 Hindi: language picker unavailable")

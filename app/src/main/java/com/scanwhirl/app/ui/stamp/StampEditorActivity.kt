@@ -221,6 +221,9 @@ class StampEditorActivity : BaseActivity() {
         binding.canvas.listener = object : StampCanvasView.Listener {
             override fun onSelect(index: Int?) {
                 editor.select(index)
+                if (index != null && binding.canvas.tool == StampCanvasView.Tool.SELECT) {
+                    binding.hint.visibility = View.GONE
+                }
                 refreshSelection()
             }
 
@@ -530,14 +533,14 @@ class StampEditorActivity : BaseActivity() {
         fun entry(label: Int, run: () -> Unit) {
             content.addView(action(label) { sheet.dismiss(); run() })
         }
-        entry(R.string.stamp_undo) { if (editor.undo()) refresh() }
-        entry(R.string.stamp_redo) { if (editor.redo()) refresh() }
-        entry(R.string.j34_marks) { marksSheet() }
+        if (editor.canUndo) entry(R.string.stamp_undo) { if (editor.undo()) refresh() }
+        if (editor.canRedo) entry(R.string.stamp_redo) { if (editor.redo()) refresh() }
+        if (editor.marks().isNotEmpty()) entry(R.string.j34_marks) { marksSheet() }
         if (binding.canvas.placement != null) entry(R.string.j34_place_signature) {
             binding.canvas.placement?.let { editor.add(it) }
             disarm(); refresh(); positionSheet()
         }
-        entry(R.string.j34_position) { positionSheet() }
+        if (editor.selected != null) entry(R.string.j34_position) { positionSheet() }
         if (!hideJourney) entry(if (binding.canvas.snapEnabled) R.string.j34_snap_on else R.string.j34_snap_off) {
             binding.canvas.snapEnabled = !binding.canvas.snapEnabled
         }
@@ -545,7 +548,7 @@ class StampEditorActivity : BaseActivity() {
             editor.add(PageStamp.Mark.Redact(PageStamp.Box(.1f, .1f, .5f, .15f)))
             disarm(); refresh(); positionSheet()
         }
-        entry(R.string.stamp_delete) { if (editor.removeSelected()) refresh() }
+        if (editor.selected != null) entry(R.string.stamp_delete) { if (editor.removeSelected()) refresh() }
         entry(R.string.j34_zoom_in) { binding.canvas.setZoom(binding.canvas.zoom * 1.5f) }
         entry(R.string.j34_zoom_out) { binding.canvas.setZoom(binding.canvas.zoom / 1.5f) }
         entry(R.string.j34_page_jump) { jumpSheet() }
@@ -1225,6 +1228,8 @@ class StampEditorActivity : BaseActivity() {
 
     private fun refreshSelection() {
         binding.canvas.selectedIndex = editor.selected
+        findViewById<View>(R.id.toolRedact)?.isSelected = binding.canvas.tool == StampCanvasView.Tool.REDACT
+        findViewById<View>(R.id.toolSignature)?.isSelected = binding.canvas.placement != null
         binding.pageIndicator.text = getString(
             R.string.stamp_page_indicator,
             editor.currentPage + 1,
