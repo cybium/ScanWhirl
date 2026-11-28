@@ -38,7 +38,7 @@ class ImportDiscardStore(
     private val app = context.applicationContext
     private val root get() = File(app.filesDir, "import_discard").apply { mkdirs() }
     private val digitalRoot get() = repo.digitalStorage.root(DigitalStorage.ESCROW)
-    private fun digital(dir: File) = dir.parentFile?.canonicalFile == digitalRoot.canonicalFile
+    private fun digital(dir: File) = dir.parentFile?.canonicalFile == repo.digitalStorage.existingRoot(DigitalStorage.ESCROW)
     private fun keyOf(dir: File) = if (digital(dir)) "digital:${dir.name}" else dir.name
 
     data class Token(val key: String, val id: String, val deadline: Long)
@@ -54,7 +54,7 @@ class ImportDiscardStore(
     }
 
     companion object {
-        private const val MARKER = ".import-discard"
+        internal const val MARKER = ".import-discard"
         private val ID = Regex("[A-Za-z0-9_-]{1,64}")
         private val KEY = Regex("([A-Za-z0-9_-]{1,64})--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
         @Volatile internal var fault: (Stage) -> Unit = {}
@@ -326,9 +326,13 @@ class ImportDiscardStore(
             move(savedDraft, draft(id, isDigital))
         }
         fault(Stage.DRAFT_RESTORED)
-        // If a previous restore moved the document, its token proves this is OUR item.
-        if (marker.isFile && marker.readText() == dir.name && !marker.delete()) {
-            throw IOException("Could not finish restoring import")
+        // The live marker is the visibility barrier. Keep it until the metadata
+        // and any saved draft are restored, and sync the document before publication.
+        // A previous restore's token proves this is OUR item.
+        if (marker.isFile && marker.readText() == dir.name) {
+            Durable.syncDir(dest)
+            if (!marker.delete()) throw IOException("Could not finish restoring import")
+            Durable.syncDir(dest)
         }
         if (!(if (isDigital) DigitalStorage.deleteOwnedTree(dir) else dir.deleteRecursively()))
             throw IOException("Could not finish restoring import")

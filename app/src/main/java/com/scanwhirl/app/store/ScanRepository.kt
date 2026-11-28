@@ -359,7 +359,8 @@ class ScanRepository(private val context: Context) {
         val parent = dir.parentFile?.canonicalFile
         if (parent == digitalStorage.existingRoot(DigitalStorage.LIVE) ||
             parent == digitalStorage.existingRoot(DigitalStorage.TRASH)) {
-            return DigitalStorage.read(dir)
+            val doc = DigitalStorage.read(dir)
+            return doc?.takeUnless { File(dir, ImportDiscardStore.MARKER).exists() }
         }
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null
@@ -369,7 +370,7 @@ class ScanRepository(private val context: Context) {
         // Visibility rule (WP-05): meta.txt is read FIRST, the marker SECOND. meta.txt is
         // only ever written after the save's marker exists and its content is complete,
         // so "meta present + marker absent" can only mean a published document.
-        if (SaveFormat.isIncomplete(dir)) return null
+        if (SaveFormat.isIncomplete(dir) || File(dir, ImportDiscardStore.MARKER).exists()) return null
         val name = lines[0].ifBlank { "Untitled scan" }
         val createdAt = lines.getOrNull(1)?.toLongOrNull() ?: dir.lastModified()
         val category = lines.getOrNull(2)?.takeIf { CategoryRules.isValid(it) }
@@ -468,12 +469,21 @@ class ScanRepository(private val context: Context) {
             .mapNotNull { if (it.parentFile?.name == DigitalStorage.LIVE) DigitalStorage.recognizedName(it) else loadDocument(it)?.name })
 
     /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
-    internal fun resolveNameBeforePublish(dir: File) {
-        val updated = updateMeta(dir) { lines ->
-            if (lines.isNotEmpty()) lines[0] = uniqueDocumentName(dir, lines[0])
+    internal fun resolveNameBeforePublish(dir: File) = synchronized(META_LOCK) {
+        val isDigital = dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING)
+        val meta = File(dir, "meta.txt")
+        if (isDigital && DigitalStorage.read(dir) == null) throw IOException("Digital metadata unavailable")
+        if (!meta.isFile) return@synchronized
+        val lines = if (isDigital) DigitalStorage.boundedLines(meta, DigitalStorage.MAX_META_BYTES).toMutableList()
+            else meta.readLines().toMutableList()
+        if (lines.isEmpty()) return@synchronized
+        val name = uniqueDocumentName(dir, lines[0])
+        // A no-conflict Undo must preserve every byte (including legacy line endings).
+        if (name != lines[0]) {
+            lines[0] = name
+            Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
+            Durable.syncDir(dir)
         }
-        if (!updated && dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING))
-            throw IOException("Digital metadata unavailable")
     }
 
     private fun padMeta(lines: MutableList<String>) {
@@ -888,7 +898,7 @@ class ScanRepository(private val context: Context) {
 
     private inline fun forEachDocumentDir(action: (File) -> Unit) {
         iterateLiveDocs().forEach { dir ->
-            if (!SaveFormat.isIncomplete(dir)) action(dir)
+            if (!SaveFormat.isIncomplete(dir) && !File(dir, ImportDiscardStore.MARKER).exists()) action(dir)
         }
     }
 

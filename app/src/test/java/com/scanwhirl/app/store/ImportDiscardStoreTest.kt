@@ -252,5 +252,31 @@ class ImportDiscardStoreTest {
         assertTrue(repo.listTrash().isEmpty())
     }
 
+    @Test fun `restored import is invisible until marker cleanup and preserves exact legacy metadata bytes`() {
+        val id = DocFixtures.saved(repo, app, pages = 2)
+        val dir = File(repo.docsDir, id)
+        val meta = File(dir, "meta.txt")
+        // A no-conflict restore must not normalize even the line endings.
+        meta.writeText(meta.readLines().joinToString("\r\n", postfix = "\r\n"))
+        val before = digest(id)
+        val token = store().discard(id, 8_000)
+        var checked = 0
+        ImportDiscardStore.fault = { stage ->
+            if (stage == ImportDiscardStore.Stage.DOCUMENT_RESTORED ||
+                stage == ImportDiscardStore.Stage.DRAFT_RESTORED) {
+                assertTrue("the directory has moved but is not yet published", dir.isDirectory)
+                assertTrue(File(dir, ImportDiscardStore.MARKER).isFile)
+                assertNull("getDocument must not reveal a partial Undo", repo.getDocument(id))
+                assertFalse("listing must not reveal a partial Undo", repo.listDocuments().any { it.id == id })
+                assertFalse("OCR queue must not claim an unpublished import", repo.ocrStore.pendingQueue().contains(id))
+                checked++
+            }
+        }
+        assertEquals(id, store().restore(token.key))
+        assertEquals(2, checked)
+        assertNotNull(repo.getDocument(id))
+        assertEquals(before, digest(id))
+    }
+
     private class SimulatedDeath : Error()
 }

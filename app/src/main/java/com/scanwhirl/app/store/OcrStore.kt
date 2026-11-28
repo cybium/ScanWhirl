@@ -601,7 +601,7 @@ class OcrStore(
     fun markPending(id: String) {
         lock.withLock {
             val dir = docDir(id)
-            if (!dir.isDirectory || SaveFormat.isIncomplete(dir)) return
+            if (!dir.isDirectory || SaveFormat.isIncomplete(dir) || File(dir, ImportDiscardStore.MARKER).exists()) return
             if (File(dir, VAULT_FILE).exists() || File(dir, PdfProtection.LOCK_FILE).exists()) return
             // Queue first: a crash before the marker still leaves the id in the queue, and the
             // next pass marks it again. The marker alone is the older, slower fallback.
@@ -672,7 +672,7 @@ class OcrStore(
     private fun scanPendingMarkers(): List<String> =
         docsDir.listFiles { f ->
             f.isDirectory &&
-                !SaveFormat.isIncomplete(f) &&
+                !SaveFormat.isIncomplete(f) && !File(f, ImportDiscardStore.MARKER).exists() &&
                 File(f, PENDING_FILE).isFile &&
                 !File(f, VAULT_FILE).exists() &&
                 !File(f, PdfProtection.LOCK_FILE).exists()
