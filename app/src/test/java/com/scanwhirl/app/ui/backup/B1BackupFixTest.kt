@@ -262,7 +262,8 @@ class B1BackupFixTest {
         cleanFiles()
         VaultSession.close()
 
-        val thisPhone = vaultStore().setupConfirmed("135790")
+        val thisPhone = vaultStore()
+        thisPhone.setupConfirmed("135790")
         thisPhone.lock()
         BackupActivity.vaultOverride = thisPhone
         try {
