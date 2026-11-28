@@ -516,7 +516,9 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             // G6: the dock grows with wrapped labels instead of clipping them.
-            minimumHeight = SwStyle.dp(this@ShellActivity, if (largeFont) 56f else 64f)
+            // V022: a shorter pill (still >=48dp cells) leaves the second row of tool tiles
+            // above the opaque surface at default font and on API 24.
+            minimumHeight = SwStyle.dp(this@ShellActivity, if (largeFont) 56f else 52f)
             background = SwStyle.rounded(
                 this@ShellActivity,
                 // W5a: the nav is a themed surface, not a navy literal.
@@ -624,7 +626,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
                 // U5: the lifted disc occupies the space above the pill, so the pill sits
                 // flush at the bottom in large type; its labels still own 48dp+ hit areas.
                 val side = SwStyle.dp(this@ShellActivity, if (largeFont) 4f else 12f)
-                val bottom = SwStyle.dp(this@ShellActivity, if (largeFont) 0f else 12f)
+                val bottom = SwStyle.dp(this@ShellActivity, if (largeFont) 0f else 4f)
                 setMargins(side, 0, side, bottom)
             }
         )

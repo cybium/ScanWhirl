@@ -1055,9 +1055,7 @@ class LibraryScreen(
             .setContent(scroll)
             .setSecondary(R.string.sheet_cancel)
             .build()
-        // The footer stays the reachable creation action in the empty state; the row under
-        // "All folders" is the same action's quick entry point (both pinned by tests).
-        built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
+        // V027: "New folder" is the one creation control — the plain row right under "All".
         chooserSheet = built
         built.show()
     }
@@ -1156,8 +1154,15 @@ class LibraryScreen(
             isVisible = false
         }
         val scroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
+        // V017/D5: at 200 % five chips cannot fit a 320 dp row. Wrap two per row so no
+        // label is cut and the More chip is always on screen.
+        val wrapChips = largeFont()
+        val chipRows = if (wrapChips) List(3) { LinearLayout(context).apply { orientation = HORIZONTAL } }
+            else emptyList()
+        val chipHost = LinearLayout(context).apply { orientation = VERTICAL }
         val actions = LinearLayout(context).apply { orientation = HORIZONTAL }
-        fun action(container: LinearLayout, id: Int, icon: Int, label: Int, onClick: () -> Unit) {
+        var chipIndex = 0
+        fun action(id: Int, icon: Int, label: Int, onClick: () -> Unit) {
             val chip = SwChip(context).apply {
                 this.id = id
                 bind(icon, context.getString(label))
@@ -1165,22 +1170,23 @@ class LibraryScreen(
                 minimumHeight = SwStyle.dp(context, 48f)
                 minimumWidth = SwStyle.dp(context, 48f)
             }
+            val container = if (wrapChips) chipRows[minOf(chipRows.lastIndex, chipIndex++ / 2)] else actions
             container.addView(
                 chip,
                 LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                     .apply { marginEnd = SwStyle.dp(context, 8f) }
             )
         }
-        action(actions, R.id.swSelMove, R.drawable.ic_sym_folder_open, R.string.sel_move) { showMoveSheet() }
-        action(actions, R.id.swSelTags, R.drawable.ic_sym_badge, R.string.sel_tags) {
+        action(R.id.swSelMove, R.drawable.ic_sym_folder_open, R.string.sel_move) { showMoveSheet() }
+        action(R.id.swSelTags, R.drawable.ic_sym_badge, R.string.sel_tags) {
             requirePro { showTagsSheet() }
         }
-        action(actions, R.id.swSelShare, R.drawable.ic_sym_share, R.string.sel_share) {
+        action(R.id.swSelShare, R.drawable.ic_sym_share, R.string.sel_share) {
             val chosen = docs.filter { it.id in selected }
             if (chosen.isNotEmpty()) callbacks.onShareDocs(chosen)
         }
         // v2 UI: 03_tools_hub — L4's Batch screen opens with these ids preselected.
-        action(actions, R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
+        action(R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
             val ids = docs.filter { it.id in selected }.map { it.id }
             if (ids.isEmpty()) return@action
             requirePro {
@@ -1218,19 +1224,36 @@ class LibraryScreen(
                     .show()
             }
         }
-        actions.addView(
+        val moreHost = if (wrapChips) chipRows[minOf(chipRows.lastIndex, chipIndex++ / 2)] else actions
+        moreHost.addView(
             more,
             LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                 .apply { marginEnd = SwStyle.dp(context, 8f) }
         )
-        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename, renameSelected)
-        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash, deleteSelected)
-        scroll.addView(actions)
-        bar.addView(
-            scroll,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = SwStyle.dp(context, 8f) }
-        )
+        // The two hidden named chips stay in the tree for existing handlers; they are never
+        // clipped because the sheet owns their visible presentation now.
+        overflow.addView(SwChip(context).apply {
+            id = R.id.swSelRename
+            bind(R.drawable.ic_sym_drive_file_rename, context.getString(R.string.sel_rename))
+            setOnClickListener { renameSelected() }
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f)))
+        overflow.addView(SwChip(context).apply {
+            id = R.id.swSelDelete
+            bind(R.drawable.ic_sym_delete, context.getString(R.string.ux130_l1_move_to_trash))
+            setOnClickListener { deleteSelected() }
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f)))
+        if (wrapChips) {
+            chipRows.forEach { chipHost.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
+            bar.addView(chipHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = SwStyle.dp(context, 8f) })
+        } else {
+            scroll.addView(actions)
+            bar.addView(
+                scroll,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+                    .apply { topMargin = SwStyle.dp(context, 8f) }
+            )
+        }
         bar.addView(
             overflow,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -2749,7 +2772,11 @@ class LibraryScreen(
             com.scanwhirl.app.R.plurals.pages, doc.pageCount, doc.pageCount
         ).replace(' ', '\u00A0')
         val tags = if (doc.tags.isEmpty()) "" else " · " + doc.tags.take(2).joinToString(" ") { "#$it" }
-        return "$pages · ${size(doc)} · ${whenDay(doc)}$tags"
+        // V025: at 200 % a dangling "·" left "Today" on its own line. Keep the size and
+        // date together at large font; the default-font wording stays byte-for-byte unchanged.
+        return if (largeFont())
+            "$pages · ${size(doc)}\u00A0·\u00A0${whenDay(doc)}$tags"
+        else "$pages · ${size(doc)} · ${whenDay(doc)}$tags"
     }
 
     /**

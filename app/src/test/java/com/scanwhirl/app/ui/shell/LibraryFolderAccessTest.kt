@@ -273,12 +273,11 @@ class LibraryFolderAccessTest {
             assertNotNull("the empty state is explicit", empty)
             assertTrue("the empty state is visible", empty.isVisible)
             assertEquals("No folders yet", (empty as TextView).text.toString())
-            val primary = sheet.findViewById<TextView>(R.id.swSheetPrimary)
-            assertTrue(
-                "New folder stays reachable from the empty state: ${primary.text}",
-                primary.text.toString().contains("New folder")
-            )
-            assertTrue("New folder is visible", primary.isVisible)
+            // V027: one creation control only — the plain row under "All folders".
+            val newFolder = sheet.findViewById<TextView>(R.id.swNewFolder)
+            assertNotNull("New folder stays reachable from the empty state", newFolder)
+            assertEquals("New folder", newFolder.text.toString())
+            assertTrue("New folder is visible", newFolder.isVisible)
         }
     }
 

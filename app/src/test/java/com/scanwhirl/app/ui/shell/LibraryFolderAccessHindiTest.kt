@@ -161,12 +161,11 @@ class LibraryFolderAccessHindiTest {
                 val empty = sheet!!.findViewById<TextView>(R.id.swFolderSheetEmpty)
                 assertNotNull("the empty state is explicit", empty)
                 assertEquals("अभी कोई फ़ोल्डर नहीं", empty.text.toString())
-                val primary = sheet.findViewById<TextView>(R.id.swSheetPrimary)
-                assertTrue(
-                    "the empty state offers a folder in Hindi: ${primary.text}",
-                    primary.text.toString().contains("नया फ़ोल्डर")
-                )
-                assertTrue(primary.isVisible)
+                // V027: one creation control only — the row under "All folders".
+                val newFolder = sheet.findViewById<TextView>(R.id.swNewFolder)
+                assertNotNull("the empty state offers a folder in Hindi", newFolder)
+                assertEquals("+ नया फ़ोल्डर", newFolder.text.toString())
+                assertTrue(newFolder.isVisible)
             }
         }
     }

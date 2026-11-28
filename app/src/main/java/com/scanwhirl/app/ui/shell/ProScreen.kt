@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
+import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -81,7 +82,7 @@ class ProScreen(
     // PRO2 critic: the decorative ring hero ate too much of the first screen. Shrink the rings
     // (the real brand mark stays) so the honest tool list starts higher. At 200% it gives up more
     // height so the promise and the actions stay whole above the pinned offer (B2-M4).
-    private val heroDp = if (largeFont) 56f else 96f
+    private val heroDp = if (largeFont) 32f else 96f
 
     /** Test seam: the order in which the entrance phases actually ran. */
     internal val entranceSteps = mutableListOf<String>()
@@ -218,7 +219,7 @@ class ProScreen(
         content.addView(
             trustRow,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = SwStyle.dp(context, if (largeFont) 8f else 14f) }
+                .apply { topMargin = SwStyle.dp(context, if (largeFont) 0f else 14f) }
         )
         this.trustRow = trustRow
         content.addView(
@@ -257,7 +258,8 @@ class ProScreen(
 
         val feat = LinearLayout(context).apply {
             orientation = VERTICAL
-            setPadding(SwStyle.dp(context, 18f), SwStyle.dp(context, 16f), SwStyle.dp(context, 18f), 0)
+            setPadding(SwStyle.dp(context, 18f), SwStyle.dp(context, if (largeFont) 8f else 16f),
+                SwStyle.dp(context, 18f), 0)
         }
         val features = listOf(
             R.drawable.ic_sym_signature to R.string.pro_feat_sign,
@@ -271,7 +273,7 @@ class ProScreen(
             R.drawable.ic_sym_badge to R.string.pro_feat_folders
         )
         for (pair in features.chunked(2)) {
-            val row = LinearLayout(context).apply { orientation = HORIZONTAL }
+            val row = EqualRow(context)
             for ((icon, label) in pair) {
                 val cell = feature(icon, label)
                 featureCells += cell
@@ -284,7 +286,7 @@ class ProScreen(
             feat.addView(
                 row,
                 LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-                    .apply { bottomMargin = SwStyle.dp(context, 10f) }
+                    .apply { bottomMargin = SwStyle.dp(context, if (largeFont) 4f else 10f) }
             )
         }
         content.addView(feat)
@@ -706,6 +708,30 @@ class ProScreen(
         return bar
     }
     internal fun featureCellsForTest(): List<View> = featureCells
+
+    /**
+     * V077: sibling tiles in one row share the tallest measured height, so unequal label
+     * lengths can no longer leave one card visibly shorter than its neighbour.
+     */
+    private inner class EqualRow(context: Context) : LinearLayout(context) {
+        init {
+            orientation = HORIZONTAL
+        }
+
+        override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+            super.onMeasure(widthSpec, heightSpec)
+            if (childCount != 2) return
+            val tallest = maxOf(getChildAt(0).measuredHeight, getChildAt(1).measuredHeight)
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                child.measure(
+                    MeasureSpec.makeMeasureSpec(child.measuredWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(tallest, MeasureSpec.EXACTLY)
+                )
+            }
+            setMeasuredDimension(measuredWidth, tallest)
+        }
+    }
 
     private fun feature(icon: Int, label: Int): View {
         // V076/V077: at 200 % the icon sits above the label, giving a long word the whole

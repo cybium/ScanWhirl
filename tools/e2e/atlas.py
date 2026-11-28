@@ -726,6 +726,9 @@ def seed():
         adb("push", photo, "/sdcard/Pictures/atlas-photo-%d.png" % index, timeout=40)
         adb_ok("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
                "-d", "file:///sdcard/Pictures/atlas-photo-%d.png" % index)
+    # API 24's DocumentsUI lists only media-scanned files; the broadcasts above are
+    # asynchronous, so give it time before the picker opens.
+    time.sleep(3)
     ok = adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
     print("fixtures seeded: pdf=%s" % ok, flush=True)
     return ok
@@ -743,7 +746,7 @@ def import_fixture():
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
     # The seeded PDF appears in DocumentsUI "Recent files". Take it directly when it is
     # offered; navigating roots first used to leave the picker and lose the fixture.
-    if tap({"text": FIXTURE_PDF}, timeout=5):
+    if tap({"regex": r"atlas-qa-fixture"}, timeout=5):
         opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
                   or wait_for({"rid": "btnMore"}, timeout=8) is not None)
         if opened:
@@ -765,16 +768,36 @@ def import_fixture():
         if root_node is not None:
             tap({"text": label}, timeout=4)
             break
-    for label in ("Download", "Downloads"):
-        if wait_for({"text": label}, timeout=5) is not None:
-            tap({"text": label}, timeout=4)
-            break
-    if wait_for({"text": FIXTURE_PDF}, timeout=8) is None:
+    fixture_node = wait_for({"regex": r"atlas-qa-fixture"}, timeout=8)
+    selected_by_key = False
+    if fixture_node is None and API == "24":
+        # API 24 DocumentsUI does not always expose a clickable row to uiautomator,
+        # but TAB focus + ENTER still selects the file. Stop when the focused node IS
+        # the fixture, never blind-press ENTER on an arbitrary row.
+        for _ in range(10):
+            adb("shell", "input", "keyevent", "KEYCODE_TAB")
+            root = hierarchy()
+            if root is None:
+                continue
+            for node in root.iter("node"):
+                if node.get("focused") == "true" and re.search(
+                        r"atlas-qa-fixture",
+                        (node.get("text") or "") + "\n" + (node.get("content-desc") or ""), re.I):
+                    fixture_node = node
+                    break
+            if fixture_node is not None:
+                break
+        if fixture_node is not None:
+            adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+            selected_by_key = True
+            time.sleep(0.6)
+    if fixture_node is None:
         capture("import", "picker-no-fixture", ["Library", "Create", "Import PDF"],
                 "Generated PDF not listed by DocumentsUI")
         return False
     capture("import", "picker-fixture", ["Library", "Create", "Import PDF", FIXTURE_PDF])
-    tap({"text": FIXTURE_PDF}, timeout=6)
+    if not selected_by_key and not tap({"regex": r"atlas-qa-fixture"}, timeout=6):
+        tap_node(hierarchy(), fixture_node)
     opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
               or wait_for({"rid": "btnMore"}, timeout=8) is not None)
     if not opened:
@@ -856,17 +879,35 @@ def walk_results():
         # The Android Photo Picker labels tiles "Photo taken on ...", not by filename;
         # older SAF pickers show the file name. Accept either before browsing roots.
         photo_tile = {"regex": r"Photo taken on|atlas-photo-1(?:\.png)?"}
-        if not tap(photo_tile, timeout=6):
+        picked_by_key = False
+        if find(hierarchy(), **photo_tile) is None and API == "24":
+            # API 24 SAF rows are not always clickable to uiautomator; TAB to focus the
+            # seeded photo and press ENTER, never an unexamined row.
+            photo_re = re.compile(r"Photo taken on|atlas-photo-1", re.I)
+            for _ in range(10):
+                adb("shell", "input", "keyevent", "KEYCODE_TAB")
+                root = hierarchy()
+                if root is None:
+                    continue
+                focused = [n for n in root.iter("node")
+                           if n.get("focused") == "true" and photo_re.search(
+                               (n.get("text") or "") + "\n" + (n.get("content-desc") or ""))]
+                if focused:
+                    adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+                    picked_by_key = True
+                    time.sleep(0.6)
+                    break
+        if not picked_by_key and not tap(photo_tile, timeout=6):
             tap({"text": "Files"}, timeout=1)
             if tap({"desc": "Show roots"}, timeout=5):
                 if not tap({"text": "Images"}, timeout=3):
                     tap({"text": "Pictures"}, timeout=2)
             tap({"text": "Pictures"}, timeout=2)
-        if not tap(photo_tile, timeout=8):
-            capture("result", "form-photo-picker-no-input", ["Tools", "Form photo", "Picker"],
-                    "Seeded fictional photo not listed")
-            back()
-            return "photo unavailable"
+            if not tap(photo_tile, timeout=8):
+                capture("result", "form-photo-picker-no-input", ["Tools", "Form photo", "Picker"],
+                        "Seeded fictional photo not listed")
+                back()
+                return "photo unavailable"
         if not tap_reachable({"rid": "formReadyApply"}):
             capture("result", "form-photo-no-apply", ["Tools", "Form photo", "Setup"],
                     "Processing action was not reachable")
@@ -941,7 +982,8 @@ def walk_library():
         if wait_for({"rid": "swSelectionBar"}, timeout=8) is None:
             return "selection bar did not appear"
         capture("library", "selection", ["Library", "Select document"])
-        tap({"rid": "swSelMore"}, timeout=4)
+        # V018/D2: the shipped chip is cbSelMore; the old swSelMore id tapped nothing.
+        tap({"rid": "cbSelMore"}, timeout=4)
         wait_for({"rid": "swSheetRoot"}, timeout=5)
         capture("library", "selection-overflow-sheet", ["Library", "Selection", "More"])
         dismiss_sheet()

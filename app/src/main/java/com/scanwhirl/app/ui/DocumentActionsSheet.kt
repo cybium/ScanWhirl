@@ -469,9 +469,14 @@ object DocumentActionsSheet {
         // badge used on the document cards; it is never a bare white square.
         stack.addView(TextView(activity).apply {
             tag = TAG_PREFIX + "thumb-pages"
-            text = activity.resources.getQuantityString(
-                R.plurals.pages, doc.pageCount, doc.pageCount
-            )
+            // D1: at 200 % a "3 pages" pill cannot fit the thumbnail corner and clips to
+            // "pag". The compact numeral is the same page-count badge the document cards use.
+            text = if (activity.resources.configuration.fontScale >= 1.6f)
+                doc.pageCount.toString()
+            else
+                activity.resources.getQuantityString(R.plurals.pages, doc.pageCount, doc.pageCount)
+            maxLines = 1
+            ellipsize = null
             textSize = 11f
             setTextColor(SwStyle.color(activity, R.color.sw_disc_ink))
             background = SwStyle.rounded(

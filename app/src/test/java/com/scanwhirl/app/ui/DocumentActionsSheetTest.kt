@@ -27,6 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -472,5 +473,38 @@ class DocumentActionsSheetTest {
         assertNotNull("Compress is available from the Library sheet", sheet.findViewById<View>(R.id.rowMoreCompress))
         sheet.dismiss()
         controller.pause().stop().destroy()
+    }
+
+    /** D1: the new page-count badge must stay whole at font 2.0 on a 320 dp phone. */
+    @Test(timeout = 30_000)
+    fun `the page-count badge is not clipped at font 2 on 320dp`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        RuntimeEnvironment.setQualifiers("en-rUS-w320dp-h640dp-xhdpi")
+        val controller = Robolectric.buildActivity(ShellActivity::class.java).setup()
+        try {
+            val id = DocFixtures.saved(repo, app, pages = 3, name = "Small screen doc")
+            val activity = controller.get()
+            idle()
+            DocumentActionsSheet.show(activity, id)
+            idle()
+            val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "the Actions sheet must open" }
+            val badge = tag(sheet, "thumb-pages") as TextView
+            assertEquals("compact badge at 200 %", "3", badge.text.toString())
+            badge.measure(0, 0)
+            badge.layout(0, 0, badge.measuredWidth, badge.measuredHeight)
+            val drawn = badge.layout
+            assertNotNull("badge was laid out", drawn)
+            assertEquals("no ellipsis in the badge", 0, drawn!!.getEllipsisCount(0))
+            assertTrue(
+                "badge text ${badge.text} fits ${badge.measuredWidth}px",
+                badge.paint.measureText(badge.text.toString()) <=
+                    badge.measuredWidth - badge.totalPaddingLeft - badge.totalPaddingRight + 1f
+            )
+            sheet.dismiss()
+        } finally {
+            controller.pause().stop().destroy()
+            RuntimeEnvironment.setFontScale(1f)
+            RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h640dp-xhdpi")
+        }
     }
 }
