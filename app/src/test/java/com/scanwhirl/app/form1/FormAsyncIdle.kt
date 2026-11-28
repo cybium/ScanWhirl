@@ -23,9 +23,19 @@ import org.robolectric.Shadows.shadowOf
 class FormAsyncIdle {
     private val scheduler = TestCoroutineScheduler()
     private val dispatcher = StandardTestDispatcher(scheduler)
+    private var installed = false
 
-    fun install() = Dispatchers.setMain(dispatcher)
-    fun reset() = Dispatchers.resetMain()
+    /** Queue Main only for tests whose async result is observed by [waitUntil]. */
+    fun install() {
+        Dispatchers.setMain(dispatcher)
+        installed = true
+    }
+
+    fun reset() {
+        if (!installed) return
+        Dispatchers.resetMain()
+        installed = false
+    }
 
     /** Pump the Main coroutine queue and the Robolectric main looper once. */
     fun idle() {
