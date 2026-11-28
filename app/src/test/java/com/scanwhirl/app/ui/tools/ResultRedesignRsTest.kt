@@ -194,6 +194,13 @@ abstract class ResultRedesignRsBase {
             )
             controller.setup()
             idle()
+            // The grown-output discard runs on IO in lifecycleScope: a single idle() races it.
+            val deadline = System.currentTimeMillis() + 10_000L
+            while (System.currentTimeMillis() < deadline && repo.getDocument(out) != null) {
+                idle()
+                Thread.sleep(10)
+            }
+            idle()
             assertFalse(
                 "no new library document from a copy that grew",
                 repo.getDocument(out) != null

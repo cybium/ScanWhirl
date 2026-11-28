@@ -1,6 +1,8 @@
 package com.scanwhirl.app.util
 
 import android.app.Activity
+import android.content.Intent
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.model.ScanDocument
 import org.junit.Assert.assertNotNull
@@ -42,12 +44,23 @@ class ProtectedShareFallbackTest {
         )
     }
 
-    private fun startedAfterShare(doc: ScanDocument): android.content.Intent? {
+    private fun startedAfterShare(doc: ScanDocument): Intent? {
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         try {
             ShareUtils.share(controller.get(), doc)
-            shadowOf(android.os.Looper.getMainLooper()).idle()
-            return shadowOf(controller.get()).nextStartedActivity
+            // R09 F3: the page-fallback chooser is posted after the IO copies; one idle() races
+            // it. Wait a bounded time, then return null just as before for the protected cases.
+            val deadline = System.currentTimeMillis() + 5_000L
+            var started: Intent? = null
+            while (System.currentTimeMillis() < deadline) {
+                shadowOf(Looper.getMainLooper()).idle()
+                started = shadowOf(controller.get()).nextStartedActivity
+                if (started != null) break
+                Thread.sleep(10)
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+            if (started == null) started = shadowOf(controller.get()).nextStartedActivity
+            return started
         } finally {
             controller.pause().stop().destroy()
         }
