@@ -716,7 +716,11 @@ class ToolResultActivity : BaseActivity() {
         val library = button(getString(R.string.tools_result_library), R.id.toolResultLibrary) {
             showInLibrary()
         }
-        if (isExportOnlyResult()) library.visibility = View.GONE
+        // J2: the miss's top Done and More > Show in library are the same destination; keep one
+        // so the decision screen stays under the forty-word receipt budget.
+        if (isExportOnlyResult() ||
+            (isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED)
+        ) library.visibility = View.GONE
         morePanel.addView(library, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
@@ -789,7 +793,9 @@ class ToolResultActivity : BaseActivity() {
             ) add(
                 button(getString(R.string.rs_adjust), tag = "result-adjust") { adjust() }
             )
-            add(open)
+            // J2: a miss already shows the real preview and owns a Keep/Choose decision; Open
+            // would add a second destination and two words to an already full decision screen.
+            if (!(isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED)) add(open)
             if (resultSpec.primary != ResultSpec.Action.SHARE) add(share)
             add(more)
         }
