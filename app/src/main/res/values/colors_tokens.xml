@@ -12,7 +12,7 @@
 
     <color name="tok_text">#13252a</color>
     <color name="tok_text_2">#566d74</color>
-    <!-- tokens.css light --text-3 is #87999e (2.97:1 on white). The accessibility floor
+    <!-- tokens.css light text-3 is #87999e (2.97:1 on white). The accessibility floor
          raises it to the same hue family at 5.1:1 so secondary facts stay readable in
          the real light palette; dark keeps the tokens.css value unchanged. -->
     <color name="tok_text_3">#5f7176</color>
