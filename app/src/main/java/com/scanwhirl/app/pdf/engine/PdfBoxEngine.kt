@@ -26,8 +26,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -132,13 +130,17 @@ class PdfBoxEngine(
         if (file.length() > budgets.maxOutputBytes) throw PdfEngineError.LimitExceeded("output bytes")
     }
 
+    /**
+     * Same-filesystem rename: on Android this is an atomic replace. File.renameTo is used
+     * deliberately instead of java.nio.Files (API 26+) because minSdk is 24.
+     */
     private fun atomicReplace(from: File, to: File) {
         checkOutput(from)
-        try {
-            Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING,
-                StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: IOException) {
-            Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        if (to.exists() && !to.delete()) {
+            throw PdfEngineError.Io(IOException("Could not remove the old output"))
+        }
+        if (!from.renameTo(to)) {
+            throw PdfEngineError.Io(IOException("Could not publish the output atomically"))
         }
     }
 
