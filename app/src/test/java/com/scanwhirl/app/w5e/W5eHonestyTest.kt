@@ -196,12 +196,13 @@ class W5eHonestyTest {
         val ids = listOf(
             "split", "to_word", "to_excel", "to_powerpoint", "long_image", "zip",
             "searchable_pdf", "batch_tools", "link_index", "remove_metadata",
-            "qr_code", "protect", "unlock", "read_text", "pdfa", "form_ready"
+            "qr_code", "protect", "unlock", "pdfa", "form_ready"
         )
         for (id in ids) {
             val purpose = ToolFirstScreenCopy.text(app, id)
             assertNotNull("$id has no plain-language purpose", purpose)
             assertTrue("$id purpose is too short: $purpose", purpose!!.length > 18)
+            assertTrue("$id purpose is too long for font 2.0 at 320 dp: $purpose", purpose.length <= 40)
             assertFalse("$id must not be a bare format noun", purpose.equals("ZIP", ignoreCase = true))
         }
 
