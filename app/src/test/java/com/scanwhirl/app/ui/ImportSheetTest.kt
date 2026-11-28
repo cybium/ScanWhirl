@@ -82,6 +82,22 @@ abstract class ImportSheetBase {
         }
     }
 
+    /**
+     * W8: the live one-tap Photos picker is the Create sheet's Photos row (the Library
+     * Import chooser shows the auto-crop sheet instead). Drive that live route for the
+     * picker-intent assertions.
+     */
+    private fun withCreateSheet(block: (ShellActivity, Dialog) -> Unit) {
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.swNavScan).performClick()
+                val sheet = ShadowDialog.getLatestDialog()
+                assertNotNull("Create sheet opens", sheet)
+                block(activity, sheet!!)
+            }
+        }
+    }
+
     private fun firstImage(row: View): android.widget.ImageView =
         (row as ViewGroup).getChildAt(0) as android.widget.ImageView
 
@@ -131,11 +147,12 @@ abstract class ImportSheetBase {
 
     @Test
     fun `photos tap dismisses and opens the multi-image gallery picker once`() {
-        withImportSheet { activity, sheet ->
-            sheet.findViewById<View>(R.id.importPhotos)!!.performClick()
+        withCreateSheet { activity, sheet ->
+            val photos = sheet.findViewById<View>(R.id.swCreatePhotos)!!
+            photos.performClick()
             assertFalse("sheet closes on choice", sheet.isShowing)
-            sheet.findViewById<View>(R.id.importPhotos)!!.performClick() // double tap
-            sheet.findViewById<View>(R.id.importPdf)!!.performClick()
+            photos.performClick() // double tap
+            sheet.findViewById<View>(R.id.swCreateImport)!!.performClick()
             val shadow = shadowOf(activity)
             val req = shadow.nextStartedActivityForResult
             assertNotNull("one picker launched", req)
@@ -201,8 +218,8 @@ abstract class ImportSheetBase {
             assertFalse("sheet is dismissed", sheet.isShowing)
             assertNull(shadowOf(activity).nextStartedActivityForResult)
         }
-        withImportSheet { activity, sheet ->
-            sheet.findViewById<View>(R.id.importPhotos)!!.performClick()
+        withCreateSheet { activity, sheet ->
+            sheet.findViewById<View>(R.id.swCreatePhotos)!!.performClick()
             val req = shadowOf(activity).nextStartedActivityForResult
             shadowOf(activity).clearNextStartedActivities()
             shadowOf(activity).receiveResult(req.intent, Activity.RESULT_CANCELED, null)
