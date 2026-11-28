@@ -1,4 +1,4 @@
-# Cloud screen atlas: one throwaway emulator per leg, four looks, one APK.
+# Cloud screen atlas: one throwaway emulator per leg, five looks, one APK.
 # Nothing here runs on a developer PC (no Gradle, emulator or adb locally):
 # the build job compiles, the matrix legs install and walk, artifacts are uploaded.
 # Fictional documents/photos are generated at run time; no secrets, no app edits.
@@ -93,8 +93,14 @@ jobs:
             profile: Nexus 4
             arch: x86
             setup: "true"
+          # Fifth leg: natural Hindi strings (values-hi) on the API 35 phone.
+          - leg: hindi
+            api: 35
+            profile: pixel_6
+            arch: x86_64
+            setup: "adb shell cmd locale set-locale hi-IN || adb shell settings put system system_locales hi-IN"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,7 +145,7 @@ jobs:
           LEG: ${{ matrix.leg }}
           API_LEVEL: ${{ matrix.api }}
           LEG_SETUP: ${{ matrix.setup }}
-          ATLAS_MAX_MINUTES: "33"
+          ATLAS_MAX_MINUTES: "40"
           APK: ${{ github.workspace }}/test-apk/app-debug.apk
           OUT: ${{ github.workspace }}/artifacts/${{ matrix.leg }}
 

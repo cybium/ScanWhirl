@@ -154,6 +154,98 @@ class IncidentHelperTest(unittest.TestCase):
         self.assertIn("IllegalStateException: boom", findings[0]["top"])
 
 
+class CaptureVerdictTest(unittest.TestCase):
+    PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 40
+
+    def test_secure_blank_capture_is_by_design_and_never_a_defect(self):
+        for payload, stats in ((b"", {"mean": None, "unique": 0}),
+                               (self.PNG, {"mean": 0.1, "unique": 2})):
+            verdict = atlas.classify_capture(payload, stats, secure=True, attempts=1)
+            self.assertEqual(verdict["status"], "secure-by-design")
+            self.assertEqual(verdict["label"], "secure (by design)")
+            self.assertIsNone(verdict["failure"])
+
+    def test_empty_non_secure_capture_fails_the_leg(self):
+        verdict = atlas.classify_capture(b"", {"mean": None, "unique": 0}, False, 3)
+        self.assertEqual(verdict["status"], "capture-failed")
+        self.assertEqual(verdict["failure"]["kind"], "empty")
+        self.assertEqual(verdict["failure"]["attempts"], 3)
+
+    def test_all_black_non_secure_capture_fails_the_leg(self):
+        verdict = atlas.classify_capture(self.PNG, {"mean": 0.5, "unique": 3}, False)
+        self.assertEqual(verdict["failure"]["kind"], "black")
+
+    def test_broken_png_is_not_a_false_green(self):
+        stats = atlas.png_stats(Path("/no/such/atlas-frame.png"))
+        self.assertIsNone(stats["mean"])
+        verdict = atlas.classify_capture(self.PNG, stats, False)
+        self.assertEqual(verdict["status"], "capture-failed")
+
+    def test_ordinary_frame_is_ok(self):
+        verdict = atlas.classify_capture(
+            self.PNG, {"mean": 120.0, "unique": 60}, False)
+        self.assertEqual(verdict["status"], "ok")
+        self.assertIsNone(verdict["failure"])
+
+    def test_screencap_retries_a_transient_race(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "frame.png"
+            with patch.object(atlas, "adb", return_value=b"") as adb:
+                adb.side_effect = [b"", b"", self.PNG]
+                payload, attempts = atlas.read_screencap(path)
+            self.assertEqual(payload, self.PNG)
+            self.assertEqual(attempts, 3)
+            self.assertEqual(path.read_bytes(), self.PNG)
+
+    def test_secure_window_takes_a_single_frame(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "frame.png"
+            with patch.object(atlas, "adb", return_value=b"") as adb:
+                _, attempts = atlas.read_screencap(path, secure=True)
+            self.assertEqual(attempts, 1)
+            self.assertEqual(adb.call_count, 1)
+
+    def test_always_secure_activities_are_recognised(self):
+        self.assertEqual(atlas.secure_activity(
+            "mResumedActivity: ... com.scanwhirl.app.test/"
+            "com.scanwhirl.app.ui.vault.VaultActivity t51"), "VaultActivity")
+        self.assertEqual(atlas.secure_activity(
+            "ActivityRecord{... com.scanwhirl.app.ui.backup.BackupActivity t53}"),
+            "BackupActivity")
+        self.assertIsNone(atlas.secure_activity(
+            "ActivityRecord{... com.scanwhirl.app.ui.shell.ShellActivityCyan t1}"))
+
+    def test_landscape_dimensions_are_swapped(self):
+        with patch.object(atlas, "WIDTH", 1080), patch.object(atlas, "HEIGHT", 2400):
+            self.assertEqual(atlas.display_dimensions(1), (2400, 1080))
+            self.assertEqual(atlas.display_dimensions("3"), (2400, 1080))
+            self.assertEqual(atlas.display_dimensions(0), (1080, 2400))
+
+    def test_secure_flag_is_scoped_to_our_windows(self):
+        other = "Window #1 com.android.systemui:\n  FLAG_SECURE\n"
+        mine = "Window #2 com.scanwhirl.app.test:\n  FLAG_SECURE\n"
+        with patch.object(atlas, "adb", return_value=other):
+            self.assertFalse(atlas.has_secure_flag())
+        with patch.object(atlas, "adb", return_value=mine + other):
+            self.assertTrue(atlas.has_secure_flag())
+
+
+class DeepCoverageTest(unittest.TestCase):
+    def test_every_deep_journey_has_a_locale_independent_search_alias(self):
+        for tool_id in atlas.DEEP_TOOLS:
+            self.assertIn(tool_id, atlas.TOOL_ALIASES)
+            self.assertTrue(atlas.TOOL_ALIASES[tool_id].isascii())
+
+    def test_picker_items_finds_media_thumbs_and_fixture_files(self):
+        root = ET.fromstring(
+            '<hierarchy><node clickable="true" bounds="[0,0][10,10]">'
+            '<node resource-id="pkg:id/icon_thumbnail" bounds="[0,0][10,10]"/>'
+            '</node><node clickable="true" text="atlas-photo-2.png" '
+            'bounds="[0,0][10,10]"/><node clickable="false" text="Recent" '
+            'bounds="[0,0][10,10]"/></hierarchy>')
+        self.assertEqual(len(atlas.picker_items(root)), 2)
+
+
 class ScreenshotTest(unittest.TestCase):
     def test_black_frame_is_measurable(self):
         width, height = 32, 32

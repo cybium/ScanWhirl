@@ -42,6 +42,23 @@ FIXTURE_PDF = FIXTURE + ".pdf"
 MIN_TARGET_DP = 48.0
 INSTRUCTION_WORD_LIMIT = 25
 MAX_MINUTES = float(os.environ.get("ATLAS_MAX_MINUTES", "34"))
+SCREENCAP_ATTEMPTS = 3
+SECURE_LABEL = "secure (by design)"
+# These activities call SecureView.apply() unconditionally, so their windows are
+# FLAG_SECURE even when `dumpsys window windows` does not spell the flag out
+# (notably on the API 24 image). They are evidence, never a reason to bypass it.
+SECURE_ACTIVITIES = ("VaultActivity", "BackupActivity")
+ROTATION_LEG = "light"
+DEEP_TOOLS = ("form_ready", "compress", "sign", "redact", "organize_pages")
+# English search aliases live in ToolRegistry.keywords, so the same query finds
+# the same tile in the English and Hindi legs (resource ids are locale-free).
+TOOL_ALIASES = {
+    "form_ready": "form ready",
+    "compress": "compress smaller",
+    "sign": "sign signature ink",
+    "redact": "aadhaar",
+    "organize_pages": "organize pages reorder",
+}
 
 BOUNDS_RE = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
 PRIMARY_RE = re.compile(
@@ -75,6 +92,7 @@ TOOLS = [
 
 SCREENS = []
 ERRORS = []
+CAPTURE_FAILURES = []
 COVERAGE = {"tools_total": len(TOOLS), "tools_visited": [], "tools_failed": []}
 N = 0
 DIALOGS = 0
@@ -82,6 +100,7 @@ CURRENT_STEP = "startup"
 LAST_SCREEN = None
 ANRS = []
 CRASHES = []
+HINDI_NODES = 0
 DENSITY = 1.0
 WIDTH = 1080
 HEIGHT = 2400
@@ -330,7 +349,55 @@ def png_stats(path):
         return {"mean": round(total / max(1, count), 1),
                 "unique": len(colours), "size": "%dx%d" % (width, height)}
     except Exception as exc:  # noqa: BLE001 - a broken PNG must not stop the walk
-        return {"mean": 255.0, "unique": 999, "error": str(exc)}
+        # Never return a friendly mean here: a corrupt capture is a failure, not
+        # a false green. classify_capture() turns this into a leg-report finding.
+        return {"mean": None, "unique": 0, "error": str(exc)}
+
+
+def secure_activity(window):
+    """Activity name known to set FLAG_SECURE unconditionally, or None."""
+    text = window or ""
+    for name in SECURE_ACTIVITIES:
+        if re.search(r"\b" + re.escape(name) + r"\b", text):
+            return name
+    return None
+
+
+def is_blank_capture(stats):
+    """All-black (or undecodable) frame, i.e. no visual evidence was captured."""
+    if not stats or stats.get("error"):
+        return True
+    mean, unique = stats.get("mean"), stats.get("unique", 0)
+    return mean is not None and mean <= 8 and unique <= 12
+
+
+def classify_capture(payload, stats, secure, attempts=1):
+    """Decide if a capture is OK, secure-by-design, or a leg-report failure.
+
+    Pure so the offline gate can prove that a secure window is never a defect and
+    that a 0-byte / all-black non-secure frame always fails the leg's report.
+    """
+    if secure:
+        return {"status": "secure-by-design", "label": SECURE_LABEL,
+                "failure": None, "secure": True}
+    if not payload or not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return {"status": "capture-failed", "label": "capture failed (empty)",
+                "failure": {"kind": "empty", "attempts": attempts,
+                            "detail": "screencap produced no PNG after %d attempt(s)" % attempts},
+                "secure": False}
+    if is_blank_capture(stats):
+        return {"status": "capture-failed", "label": "capture failed (all black)",
+                "failure": {"kind": "black", "attempts": attempts,
+                            "detail": "non-secure capture is all black or undecodable"},
+                "secure": False}
+    return {"status": "ok", "label": "ok", "failure": None, "secure": False}
+
+
+def display_dimensions(rotation):
+    """uiautomator reports portrait/landscape separately from `wm size`."""
+    if str(rotation) in ("1", "3") and WIDTH < HEIGHT:
+        return HEIGHT, WIDTH
+    return WIDTH, HEIGHT
 
 
 def write_fictional_png(path, width, height, accent):
@@ -397,11 +464,16 @@ def current_window():
 
 
 def has_secure_flag():
+    """FLAG_SECURE on one of OUR windows (not a system window that mentions it)."""
     try:
         output = adb("shell", "dumpsys", "window", "windows", timeout=20)
     except Exception:  # noqa: BLE001
         return False
-    return "FLAG_SECURE" in output
+    for block in re.split(r"(?=Window #)", output):
+        if PKG in block and "FLAG_SECURE" in block:
+            return True
+    return bool(re.search(r"%s[^\n]*FLAG_SECURE|FLAG_SECURE[^\n]*%s" % (
+        re.escape(PKG), re.escape(PKG)), output))
 
 
 def collect_anr_evidence(title, step, screen):
@@ -612,6 +684,40 @@ def launch():
     return wait_for({"rid": "swNavLibrary"}, timeout=40) is not None
 
 
+HINDI_TEXT_RE = re.compile(r"[\u0900-\u097f]")
+
+
+def hindi_node_count(root):
+    """How many visible labels are actually in Hindi (locale evidence)."""
+    if root is None:
+        return 0
+    return sum(1 for node in root.iter("node")
+               if HINDI_TEXT_RE.search(node.get("text") or ""))
+
+
+def ensure_hindi_locale():
+    """Verify the fifth leg really renders Hindi; fall back to the app setting."""
+    global HINDI_NODES
+    launch()
+    HINDI_NODES = hindi_node_count(hierarchy())
+    if HINDI_NODES == 0:
+        tap({"rid": "swNavMe"}, timeout=8)
+        tap({"rid": "swMeSettings"}, timeout=7)
+        if tap({"rid": "rowLanguage"}, timeout=7):
+            time.sleep(0.8)
+            root = hierarchy()
+            node = (find(root, regex="हिन्दी") or find(root, regex="Hindi")
+                    or find(root, regex="hi-IN")) if root else None
+            if node is not None:
+                tap_node(root, node)
+                time.sleep(2.0)
+                launch()
+                HINDI_NODES = hindi_node_count(hierarchy())
+    capture("shell", "hindi-locale", ["Library", "Me", "Settings", "Language"],
+            "Hindi labels visible: %d" % HINDI_NODES)
+    return "Hindi labels: %d" % HINDI_NODES
+
+
 def open_create_sheet():
     """The disc's first tap can be swallowed by its ring animation; retry once."""
     for _ in range(2):
@@ -638,6 +744,47 @@ def recover(reason):
 
 
 # ----------------------------------------------------------------- capture step
+def wait_for_any(wants, timeout=12.0):
+    """First matching node from a list of matchers, or None (bounded wait)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        root = hierarchy()
+        for want in wants:
+            node = find(root, **want) if root is not None else None
+            if node is not None:
+                return node
+        time.sleep(0.35)
+    return None
+
+
+def secure_capture_context(window):
+    """True when a black/empty frame is expected and must never be a defect."""
+    return has_secure_flag() or secure_activity(window) is not None
+
+
+def read_screencap(path, secure=False):
+    """Retry a transient screencap race; never bypass FLAG_SECURE.
+
+    A secure window on the API 24 x86 image can return zero bytes instead of a
+    black PNG (V048). Retrying a truly secure window cannot help, so we take one
+    frame and label it. Non-secure races get a short, bounded retry.
+    """
+    attempts = 0
+    payload = b""
+    for _ in range(1 if secure else SCREENCAP_ATTEMPTS):
+        attempts += 1
+        try:
+            payload = adb("exec-out", "screencap", "-p", binary=True, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - report it, never stop the walk
+            print("screencap attempt %d failed: %s" % (attempts, exc), flush=True)
+            payload = b""
+        if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            break
+        time.sleep(0.6)
+    path.write_bytes(payload)
+    return payload, attempts
+
+
 def capture(area, slug, path, note=None):
     global N, LAST_SCREEN
     N += 1
@@ -650,34 +797,52 @@ def capture(area, slug, path, note=None):
         xml_path.write_bytes(data)
     else:
         xml_path.write_text("<!-- uiautomator dump unavailable -->\n", encoding="utf-8")
-    try:
-        png_path.write_bytes(adb("exec-out", "screencap", "-p", binary=True, timeout=30))
-    except Exception as exc:  # noqa: BLE001
-        print("screencap failed for %s: %s" % (name, exc), flush=True)
-        png_path.write_bytes(b"")
-    stats = png_stats(png_path) if png_path.stat().st_size else {"mean": -1, "unique": 0}
-    secure = (0 <= stats.get("mean", 255) <= 8 and stats.get("unique", 99) <= 12)
-    if secure and has_secure_flag():
-        note = ((note + "; ") if note else "") + "FLAG_SECURE confirmed"
+    window = current_window()
+    window_secure = secure_activity(window)
+    # dumpsys window windows is only needed when a frame is blank or the
+    # activity is known to set FLAG_SECURE; every normal capture skips it.
+    payload, attempts = read_screencap(png_path, secure=window_secure is not None)
+    stats = png_stats(png_path)
+    blank = (not payload.startswith(b"\x89PNG\r\n\x1a\n")
+             or is_blank_capture(stats))
+    flag_confirmed = has_secure_flag() if (blank or window_secure) else False
+    secure = flag_confirmed or window_secure is not None
+    verdict = classify_capture(payload, stats, secure, attempts)
+    if flag_confirmed:
+        reason = "FLAG_SECURE confirmed on the app window"
+    elif window_secure:
+        reason = "%s always sets FLAG_SECURE" % window_secure
+    else:
+        reason = ""
+    if secure:
+        note = ((note + "; ") if note else "") + SECURE_LABEL + " (" + reason + ")"
     root = None
     if data:
         try:
             root = ET.fromstring(data)
         except ET.ParseError:
             pass
-    flags = analyze(root, DENSITY, WIDTH, HEIGHT)
+    width, height = display_dimensions(root.get("rotation") if root is not None else None)
+    flags = analyze(root, DENSITY, width, height)
     score = sum(len(v) if isinstance(v, list) else 1 for v in flags.values() if v)
     record = {
         "n": N, "slug": slug, "area": area,
         "path": " > ".join(path), "png": png_path.name, "xml": xml_path.name,
-        "window": current_window(), "secure": secure, "screenshot": stats,
+        "window": window, "secure": secure, "secure_reason": reason,
+        "capture_status": verdict["status"], "capture_label": verdict["label"],
+        "screenshot": stats, "screen_size": [width, height],
         "flags": flags, "score": score, "note": note or "",
         "step": CURRENT_STEP, "captured_at": time.time(),
     }
     SCREENS.append(record)
     LAST_SCREEN = record
-    print("screen %s [%s] secure=%s score=%d flags=%s" % (
-        name, area, secure, score,
+    if verdict["failure"] is not None:
+        failure = dict(verdict["failure"], leg=LEG, slug=slug, area=area,
+                       png=png_path.name, window=window)
+        CAPTURE_FAILURES.append(failure)
+        print("CAPTURE FAILURE (leg report): %s %s" % (slug, failure), flush=True)
+    print("screen %s [%s] capture=%s secure=%s score=%d flags=%s" % (
+        name, area, verdict["status"], secure, score,
         {k: len(v) if isinstance(v, list) else v.get("words", 0)
          for k, v in flags.items() if v}), flush=True)
     return record
@@ -716,18 +881,51 @@ def seed():
     ]))
     adb("shell", "mkdir", "-p", "/sdcard/Download")
     adb("shell", "mkdir", "-p", "/sdcard/Pictures")
+    # The test APK's FixtureDocumentsProvider is the root DocumentsUI lists on
+    # API 24 ("ScanWhirl test fixtures"); its Downloads root is DownloadManager
+    # backed and shows "No items" for adb-pushed files. Seed BOTH locations.
+    provider_dir = "/sdcard/Android/data/%s/files/m07_fixtures" % PKG
+    adb("shell", "mkdir", "-p", provider_dir)
     adb("push", fixture, "/sdcard/Download/" + FIXTURE_PDF, timeout=40)
+    adb("push", fixture, provider_dir + "/" + FIXTURE_PDF, timeout=40)
     for index, accent in enumerate(((40, 120, 200), (200, 90, 60)), 1):
         photo = OUT / ("atlas-photo-%d.png" % index)
         write_fictional_png(photo, 640, 480, accent)
         adb("push", photo, "/sdcard/Pictures/atlas-photo-%d.png" % index, timeout=40)
-    ok = adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
-    print("fixtures seeded: pdf=%s" % ok, flush=True)
+        # Make the pushed photos visible to Recent / the photo picker on every API.
+        adb_ok("shell", "am", "broadcast", "-a",
+               "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d",
+               "file:///sdcard/Pictures/atlas-photo-%d.png" % index)
+    adb_ok("shell", "am", "broadcast", "-a",
+           "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d",
+           "file:///sdcard/Download/" + FIXTURE_PDF)
+    ok = (adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
+          and adb_ok("shell", "test", "-s", provider_dir + "/" + FIXTURE_PDF))
+    print("fixtures seeded: pdf=%s (Downloads + fixture provider)" % ok, flush=True)
     return ok
 
 
+def choose_picker_root(labels):
+    """Open the DocumentsUI drawer and select the first listed root."""
+    if not tap({"desc": "Show roots"}, timeout=4):
+        return None
+    for label in labels:
+        if wait_for({"text": label}, timeout=4) is not None:
+            tap({"text": label}, timeout=4)
+            time.sleep(0.7)
+            return label
+    back()  # leave the drawer closed if nothing matched
+    return None
+
+
 def import_fixture():
-    """Import the generated PDF through DocumentsUI, as a person would."""
+    """Import the generated PDF through DocumentsUI, as a person would.
+
+    API 24's Downloads root is DownloadManager-backed and lists "No items" for
+    adb-pushed files; the test APK's fixture-provider root is listed on every
+    API and serves the same file from m07_fixtures. Try both, then open the
+    file by tap or (on API 24) by TAB-to-focus / ENTER.
+    """
     launch()
     if not open_create_sheet():
         return False
@@ -736,26 +934,39 @@ def import_fixture():
         return False
     wait_for({"desc": "Show roots"}, timeout=15)
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
-    tap({"desc": "Show roots"}, timeout=4)
-    model = adb("shell", "getprop", "ro.product.model")
-    root_node = None
-    for label in (model, "Internal storage", "Downloads", "This device"):
-        root_node = wait_for({"text": label}, timeout=4) if label else None
-        if root_node is not None:
-            tap({"text": label}, timeout=4)
-            break
+    choose_picker_root(("Downloads", "Download", "This device", "Internal storage"))
     for label in ("Download", "Downloads"):
-        if wait_for({"text": label}, timeout=5) is not None:
+        if wait_for({"text": label}, timeout=4) is not None:
             tap({"text": label}, timeout=4)
             break
+    if wait_for({"text": FIXTURE_PDF}, timeout=6) is None:
+        root = choose_picker_root(("ScanWhirl test fixtures",))
+        if root and wait_for({"text": FIXTURE_PDF}, timeout=6) is None:
+            # Some DocumentsUI versions open the root's "fixtures" directory node.
+            if wait_for({"text": "fixtures"}, timeout=4) is not None:
+                tap({"text": "fixtures"}, timeout=4)
     if wait_for({"text": FIXTURE_PDF}, timeout=8) is None:
         capture("import", "picker-no-fixture", ["Library", "Create", "Import PDF"],
-                "Generated PDF not listed by DocumentsUI")
+                "Generated PDF not listed by DocumentsUI (Downloads and fixture root tried)")
         return False
     capture("import", "picker-fixture", ["Library", "Create", "Import PDF", FIXTURE_PDF])
-    tap({"text": FIXTURE_PDF}, timeout=6)
-    opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
-              or wait_for({"rid": "btnMore"}, timeout=8) is not None)
+    opened = False
+    for _ in range(2):
+        tap({"text": FIXTURE_PDF}, timeout=5)
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=45) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=6) is not None)
+        if opened:
+            break
+        # Keyboard route that works on API 24: focus the row, then activate it.
+        for _ in range(4):
+            adb("shell", "input", "keyevent", "KEYCODE_TAB")
+            time.sleep(0.15)
+        adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+        time.sleep(1.5)
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=20) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=5) is not None)
+        if opened:
+            break
     if not opened:
         capture("import", "import-stuck", ["Library", "Create", "Import PDF", "open"],
                 "Viewer did not appear after import")
@@ -853,35 +1064,41 @@ def walk_tabs():
         step("shell", "tab-" + name, ["Library"], action)
 
 
+def open_tool_tile(tool_id, title):
+    """Search the Tools hub and tap the real result row (not the search field).
+
+    The row is the clickable ancestor of R.id.swToolLabel. The old regex match
+    also hit the EditText containing the query, so the "tool" captures were
+    really search-result screens. IDs work in the Hindi leg too.
+    """
+    alias = TOOL_ALIASES.get(tool_id, title)
+    launch()
+    if not tap({"rid": "swNavTools"}, timeout=10):
+        return False, "Tools tab missing"
+    wait_for({"rid": "swToolsSearch"}, timeout=12)
+    tap({"rid": "swToolsSearch"}, timeout=4)
+    type_text(alias)
+    back()  # keyboard only: the results stay, as in flow_driver F2
+    time.sleep(0.5)
+    node = wait_for({"rid": "swToolLabel"}, timeout=6)
+    if node is None:
+        return False, "no result for %s" % alias
+    root = hierarchy()  # fresh tree for the clickable ancestor lookup
+    if not tap_node(root, node):
+        return False, "result row not tappable"
+    time.sleep(1.4)
+    return True, alias
+
+
 def walk_tools():
     for tool_id, title in TOOLS:
         def action(tool_id=tool_id, title=title):
-            launch()
-            if not tap({"rid": "swNavTools"}, timeout=10):
-                return "Tools tab missing"
-            wait_for({"rid": "swToolsSearch"}, timeout=12)
-            tap({"rid": "swToolsSearch"}, timeout=4)
-            type_text(title)
-            back()  # keyboard only: the results stay, as in flow_driver F2
-            time.sleep(0.5)
-            root = hierarchy()
-            node = None
-            if root:
-                for candidate in root.iter("node"):
-                    if match(candidate, regex=re.escape(title)) and candidate.get("clickable") == "true":
-                        node = candidate
-                        break
-            if node is None:
-                node = wait_for({"regex": re.escape(title), "cls": "Button"}, timeout=5)
-            if node is None:
-                COVERAGE["tools_failed"].append(tool_id + " (no search result)")
+            opened, detail = open_tool_tile(tool_id, title)
+            if not opened:
+                COVERAGE["tools_failed"].append(tool_id + " (" + detail + ")")
                 capture("tools", "tool-" + tool_id + "-missing",
-                        ["Library", "Tools", "Search: " + title],
-                        "Search result tile not found")
-                return "no result for %s" % title
-            root = hierarchy()  # fresh tree for the clickable ancestor lookup
-            tap_node(root, node)
-            time.sleep(1.4)
+                        ["Library", "Tools", "Search: " + detail], "Search result tile not found")
+                return detail
             capture("tools", "tool-" + tool_id, ["Library", "Tools", "Search: " + title, title],
                     "Tile opened; first screen after launch")
             COVERAGE["tools_visited"].append(tool_id)
@@ -889,6 +1106,227 @@ def walk_tools():
             back()
             return title
         step("tools", "tool-" + tool_id, ["Library", "Tools"], action)
+
+
+def node_at_bounds(root, bounds):
+    if root is None:
+        return None
+    for node in root.iter("node"):
+        if node.get("bounds") == bounds:
+            return node
+    return None
+
+
+def picker_items(root):
+    """Selectable fictional photos in either the Media picker or DocumentsUI."""
+    items = []
+    if root is None:
+        return items
+    for node in root.iter("node"):
+        if node.get("clickable") != "true":
+            continue
+        label = (node.get("text") or "") + " " + (node.get("content-desc") or "")
+        media_thumb = any(rid_name(child) == "icon_thumbnail"
+                          for child in node.iter("node"))
+        if media_thumb or "atlas-photo-" in label:
+            items.append(node)
+    return items
+
+
+def wait_for_picker(timeout=12):
+    """Modern Media picker or API 24 DocumentsUI image picker."""
+    return wait_for_any(({"rid": "picker_tab_recyclerview"},
+                         {"desc": "Show roots"}, {"text": "Open from"},
+                         {"text": "Recent"}, {"text": "Photos"}), timeout)
+
+
+def select_picker_photos(count=2):
+    """Select the two fictional photos; returns how many were tapped."""
+    root = hierarchy()
+    if not picker_items(root) and tap({"desc": "Show roots"}, timeout=3):
+        for label in ("Recent", "Downloads", "Download", "Pictures", "Images"):
+            if wait_for({"text": label}, timeout=3) is not None:
+                tap({"text": label}, timeout=3)
+                break
+        root = hierarchy()
+    targets = [(node.get("bounds"), (node.get("text") or "") + " " +
+                (node.get("content-desc") or "")) for node in picker_items(root)[:count]]
+    tapped = 0
+    for bounds, _label in targets:
+        fresh = hierarchy()
+        node = node_at_bounds(fresh, bounds)
+        if node is not None and tap_node(fresh, node):
+            tapped += 1
+            time.sleep(0.3)
+    return tapped
+
+
+def confirm_picker():
+    """Press the picker's Add/Done/Use control, or ENTER if it has no label."""
+    root = hierarchy()
+    if root is not None:
+        for node in root.iter("node"):
+            if node.get("clickable") != "true":
+                continue
+            rid = rid_name(node)
+            text = (node.get("text") or "").strip().lower()
+            if (re.search(r"(confirm|apply|add|done|select|choose)", rid, re.I)
+                    or text in ("add", "done", "use", "ok", "select", "open")):
+                tap_node(root, node)
+                return True
+    adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+    time.sleep(0.5)
+    return False
+
+
+def walk_deep_tools():
+    """Two steps past the first screen for the J1 journeys named in ATLAS-README."""
+    def photo_form():
+        opened, detail = open_tool_tile("form_ready", "Form photo")
+        if not opened:
+            return detail
+        capture("tools", "tool-form-ready-setup",
+                ["Library", "Tools", "Form photo", "Setup"], "J1 setup with presets")
+        if not tap({"rid": "formReadyPick"}, timeout=7):
+            return "Form photo pick button missing"
+        wait_for_picker()
+        count = select_picker_photos(1)
+        capture("tools", "tool-form-ready-photo-picker",
+                ["Library", "Tools", "Form photo", "Pick", "Selected %d" % count],
+                "Fictional photo selected in the system picker")
+        confirm_picker()
+        arrived = wait_for_any(({"rid": "formReadyCrop"}, {"rid": "formReadyApplyBar"},
+                                {"rid": "formReadyReadout"}), timeout=20)
+        if arrived is None:
+            capture("tools", "tool-form-ready-photo-stuck",
+                    ["Library", "Tools", "Form photo", "Pick", "open"],
+                    "Photo edit screen did not appear")
+            return "photo edit screen not reached"
+        capture("tools", "tool-form-ready-photo-edit",
+                ["Library", "Tools", "Form photo", "Pick", "Photo edit"],
+                "J1: fictional photo picked, edit screen reached")
+        return "photo edit reached"
+
+    def setup_tool(tool_id, title):
+        opened, detail = open_tool_tile(tool_id, title)
+        if not opened:
+            return detail
+        if wait_for_any(({"rid": "toolSetupRun"}, {"rid": "toolSetupScroll"}),
+                        timeout=15) is None:
+            return "%s setup screen missing" % tool_id
+        root = hierarchy()
+        fixture = (find(root, regex=FIXTURE) if root else None)
+        capture("tools", "tool-%s-setup" % tool_id,
+                ["Library", "Tools", title, "Setup"],
+                "Fixture source: %s" % ("yes" if fixture else "not visible"))
+        scroll_page()
+        capture("tools", "tool-%s-options" % tool_id,
+                ["Library", "Tools", title, "Setup", "Options"],
+                "Setup screen scrolled to the tool options")
+        return "%s setup and options captured" % tool_id
+
+    def picker_tool(tool_id, title, arrive_rids, slug):
+        opened, detail = open_tool_tile(tool_id, title)
+        if not opened:
+            return detail
+        if wait_for_any(({"rid": "docPickerSheetRoot"}, {"rid": "docPickerName"}),
+                        timeout=12) is None:
+            return "%s document picker missing" % tool_id
+        capture("tools", "tool-%s-picker" % tool_id,
+                ["Library", "Tools", title, "Pick a document"])
+        root = hierarchy()
+        node = (find(root, rid="docPickerName", text_contains=FIXTURE)
+                or find(root, text_contains=FIXTURE)) if root else None
+        if node is None:
+            return "fixture not offered by %s picker" % tool_id
+        tap_node(root, node)
+        time.sleep(1.2)
+        if wait_for_any([{"rid": rid} for rid in arrive_rids], timeout=20) is None:
+            return "%s editor/grid did not appear" % tool_id
+        capture("tools", slug, ["Library", "Tools", title, "Pick " + FIXTURE, "Editor"],
+                "Fixture picked; setup/editor screen reached")
+        return "%s editor reached" % tool_id
+
+    step("tools", "deep-form-ready", ["Library", "Tools", "Form photo"], photo_form)
+    step("tools", "deep-compress", ["Library", "Tools", "Compress"],
+         lambda: setup_tool("compress", "Compress"))
+    step("tools", "deep-sign", ["Library", "Tools", "Sign"],
+         lambda: picker_tool("sign", "Sign", ("toolSignature", "toolRedact", "pageDock"),
+                             "tool-sign-editor"))
+    step("tools", "deep-redact", ["Library", "Tools", "Redact"],
+         lambda: picker_tool("redact", "Redact", ("toolRedact", "toolSignature", "pageDock"),
+                             "tool-redact-editor"))
+    step("tools", "deep-organize-pages", ["Library", "Tools", "Reorder"],
+         lambda: picker_tool("organize_pages", "Reorder",
+                             ("ux130_l4_select_pages", "btnMore", "pageDock"),
+                             "tool-organize-pages-grid"))
+
+
+def walk_rotation():
+    """Landscape captures of five key screens in the light leg only."""
+    if LEG != ROTATION_LEG:
+        return
+    adb_ok("shell", "settings", "put", "system", "accelerometer_rotation", "0")
+    adb_ok("shell", "settings", "put", "system", "user_rotation", "1")
+    time.sleep(1.5)
+
+    def case(slug, anchor, action):
+        def run():
+            action()
+            if anchor and wait_for({"rid": anchor}, timeout=15) is None:
+                return "%s anchor missing" % anchor
+            capture("rotation", slug, ["Library", "Rotated", slug],
+                    "Landscape capture (light leg)")
+            return slug
+        step("rotation", slug, ["Library", "Rotated"], run)
+
+    case("rotated-library", "swHomeSearch", lambda: launch())
+    case("rotated-tools", "swToolsSearch",
+         lambda: (launch(), tap({"rid": "swNavTools"}, timeout=10)))
+    case("rotated-viewer", "btnMore", open_viewer)
+
+    def editor():
+        if not open_viewer():
+            return False
+        return tap({"rid": "btnEdit"}, timeout=8)
+    case("rotated-editor", "pageDock", editor)
+
+    def selection():
+        if not open_viewer():
+            return False
+        return tap({"rid": "ux130_l4_select_pages"}, timeout=8)
+    case("rotated-select-pages", "btnSelAll", selection)
+
+    adb_ok("shell", "settings", "put", "system", "user_rotation", "0")
+    adb_ok("shell", "settings", "put", "system", "accelerometer_rotation", "1")
+    time.sleep(1.0)
+    recover("after rotation walk")
+
+
+def walk_photos():
+    """Import both fictional photos through the system photo picker."""
+    def action():
+        launch()
+        if not open_create_sheet():
+            return "Create sheet missing"
+        if not tap({"rid": "swCreatePhotos"}, timeout=7):
+            return "Photos entry missing"
+        wait_for_picker()
+        count = select_picker_photos(2)
+        capture("create", "photos-picker-selected",
+                ["Library", "Create", "Photos", "Selected %d" % count],
+                "Both fictional photos selected in the system picker")
+        confirm_picker()
+        arrived = wait_for_any(({"rid": "swDocMore"}, {"rid": "btnMore"},
+                                {"rid": "swHomeSearch"}), timeout=20)
+        capture("create", "photos-imported",
+                ["Library", "Create", "Photos", "Imported %d" % count],
+                "Photo picker returned to the app%s" %
+                ("" if arrived is not None else " (no app anchor within 20s)"))
+        if count < 2:
+            return "only %d/2 photos selected" % count
+        return "photos imported"
+    step("create", "photos-imported", ["Library", "Create", "Photos"], action)
 
 
 def open_viewer():
@@ -1129,6 +1567,7 @@ def write_outputs():
               "flags": {k: (len(v) if isinstance(v, list) else v.get("words", 0))
                         for k, v in s["flags"].items() if v}}
              for s in sorted(SCREENS, key=lambda s: -s["score"])[:10]]
+    verdict = "FAIL" if CAPTURE_FAILURES else "PASS"
     report = {
         "leg": LEG, "api": API, "sha": os.environ.get("GITHUB_SHA", "unknown"),
         "device": (adb("shell", "getprop", "ro.product.model") if SERIAL else "unknown"),
@@ -1136,11 +1575,17 @@ def write_outputs():
         "density": round(DENSITY, 3), "screen_size": [WIDTH, HEIGHT],
         "elapsed_minutes": round((time.monotonic() - STARTED) / 60, 1),
         "screens": SCREENS, "coverage": COVERAGE, "navigation_errors": ERRORS,
+        "hindi_labels": HINDI_NODES,
         "anrs": [{k: v for k, v in item.items() if k != "_t"} for item in ANRS],
         "crashes": CRASHES,
+        # A 0-byte / all-black NON-secure frame fails this leg's report (not the
+        # workflow run): the walk must still produce its evidence and artifacts.
+        "capture": {"verdict": verdict, "failures": CAPTURE_FAILURES,
+                    "secure_by_design": [s["slug"] for s in SCREENS if s["secure"]]},
         "totals": {"screens": len(SCREENS), "secure": sum(1 for s in SCREENS if s["secure"]),
                    "system_dialogs_dismissed": DIALOGS,
                    "anrs": len(ANRS), "crashes": len(CRASHES),
+                   "capture_failures": len(CAPTURE_FAILURES),
                    "by_flag": by_flag, "worst": worst},
     }
     (OUT / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False),
@@ -1155,15 +1600,25 @@ def write_outputs():
            ".card{background:#14202a;border:1px solid #27404d;border-radius:10px;padding:10px}"
            ".card img{width:100%;border-radius:6px;background:#000}.card b{display:block;margin:6px 0}"
            ".path{color:#9fb3bf;font-size:12px;word-break:break-word}.flag{color:#ffb86b;font-size:12px}"
-           ".secure{color:#8fd3ff}table{border-collapse:collapse}td,th{padding:4px 10px;border:1px solid #27404d}"
+           ".secure{color:#8fd3ff}.failure{color:#ff7b7b;font-weight:bold}table{border-collapse:collapse}td,th{padding:4px 10px;border:1px solid #27404d}"
            "</style></head><body>",
            "<h1>ScanWhirl screen atlas - %s (API %s)</h1>" % (html.escape(LEG), html.escape(str(API))),
-           "<p>%d screens, %d secure, %d system dialogs dismissed, %.1f min. "
+           "<p>%d screens, %d secure (by design), %d capture failures, "
+            "%d system dialogs dismissed, %.1f min. "
            "Density %.2f, %dx%d. Commit %s.</p>" % (
-               len(SCREENS), report["totals"]["secure"], DIALOGS,
+               len(SCREENS), report["totals"]["secure"],
+                report["totals"]["capture_failures"], DIALOGS,
                report["elapsed_minutes"], DENSITY, WIDTH, HEIGHT,
                html.escape(str(report["sha"])[:12])),
-           "<h2>Flags by type</h2><table><tr><th>check</th><th>hits</th></tr>"]
+           "<p>Leg report: <b class='%s'>%s</b> - secure (by design) screens are "
+            "never defects; only 0-byte / all-black non-secure captures fail it.</p>" % (
+                "failure" if verdict == "FAIL" else "secure", verdict),
+            "<h2>Capture failures (%d)</h2><ul>" % len(CAPTURE_FAILURES)]
+    for failure in CAPTURE_FAILURES:
+        doc.append("<li class='failure'>%s / %s: %s (%s attempts)</li>" % (
+            html.escape(failure["area"]), html.escape(failure["slug"]),
+            html.escape(failure["detail"]), failure["attempts"]))
+    doc.append("</ul><h2>Flags by type</h2><table><tr><th>check</th><th>hits</th></tr>")
     for key, count in by_flag.items():
         doc.append("<tr><td>%s</td><td>%d</td></tr>" % (html.escape(key), count))
     doc.append("</table><h2>Worst 10 screens</h2><ol>")
@@ -1197,7 +1652,12 @@ def write_outputs():
                            html.escape(screen["slug"]), screen["n"],
                            html.escape(screen["slug"]), html.escape(screen["path"])))
             if screen["secure"]:
-                doc.append("<div class='secure'>SECURE (black screenshot expected)</div>")
+                doc.append("<div class='secure'>secure (by design) - %s; black/empty "
+                           "screenshot expected, not a defect</div>" %
+                           html.escape(screen["secure_reason"] or "FLAG_SECURE"))
+            if screen["capture_status"] == "capture-failed":
+                doc.append("<div class='failure'>CAPTURE FAILURE: %s</div>" %
+                           html.escape(screen["capture_label"]))
             for key, value in screen["flags"].items():
                 if not value:
                     continue
@@ -1214,15 +1674,18 @@ def write_outputs():
 
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
-            handle.write("\n### Atlas %s\n\n- screens: %d\n- secure: %d\n- flags: %s\n"
+            handle.write("\n### Atlas %s\n\n- screens: %d\n- secure (by design): %d\n"
+                         "- leg report: %s (%d capture failures)\n- flags: %s\n"
                          "- tools visited: %d/%d\n- navigation errors: %d\n"
                          "- ANRs (recovered): %d\n- crashes: %d\n" % (
-                             LEG, len(SCREENS), report["totals"]["secure"], by_flag,
+                             LEG, len(SCREENS), report["totals"]["secure"], verdict,
+                             len(CAPTURE_FAILURES), by_flag,
                              len(COVERAGE["tools_visited"]), COVERAGE["tools_total"],
                              len(ERRORS), len(ANRS), len(CRASHES)))
     print(json.dumps({"screens": len(SCREENS), "by_flag": by_flag,
                       "tools": len(COVERAGE["tools_visited"]),
-                      "errors": len(ERRORS)}, sort_keys=True), flush=True)
+                      "errors": len(ERRORS), "leg_report": verdict,
+                      "capture_failures": len(CAPTURE_FAILURES)}, sort_keys=True), flush=True)
 
 
 # ------------------------------------------------------------------------- main
@@ -1245,14 +1708,20 @@ def main():
 
     try:
         step("fixtures", "seed", [], lambda: seed())
+        if LEG == "hindi":
+            step("locale", "hindi", ["Library", "Me", "Settings", "Language"],
+                 ensure_hindi_locale)
         step("import", "fixture", ["Library", "Create", "Import PDF"], import_fixture)
         walk_library()
         walk_tabs()
         walk_tools()
+        walk_deep_tools()
         walk_viewer()
         walk_vault()
         walk_me()
         walk_create()
+        walk_photos()
+        walk_rotation()
         capture("shell", "final", ["Library"], "Final state after the full walk")
     finally:
         try:
