@@ -131,6 +131,29 @@ class AdbTest(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:3], ["adb", "-s", "emulator-5554"])
 
 
+class IncidentHelperTest(unittest.TestCase):
+    def test_anr_owner_is_named(self):
+        self.assertEqual(atlas.classify_anr("ScanWhirl isn't responding"), "ScanWhirl")
+        self.assertEqual(atlas.classify_anr("Pixel Launcher isn't responding"),
+                         "Pixel Launcher")
+        self.assertEqual(atlas.classify_anr(""), "unknown")
+
+    def test_crash_log_is_parsed_and_nearest_screen_attached(self):
+        raw = "\n".join([
+            "100.0 100 100 E AndroidRuntime: FATAL EXCEPTION: main",
+            "100.0 100 100 E AndroidRuntime: Process: com.scanwhirl.app.test, PID: 1",
+            "100.0 100 100 E AndroidRuntime: java.lang.IllegalStateException: boom",
+            "100.0 100 100 E AndroidRuntime: \tat com.scanwhirl.app.ui.ShellActivity.foo(ShellActivity.kt:1)",
+        ])
+        screens = [{"slug": "before", "captured_at": 90.0},
+                   {"slug": "after", "captured_at": 110.0}]
+        findings = atlas.parse_crash_log(raw, screens)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["app"], "com.scanwhirl.app.test")
+        self.assertEqual(findings[0]["screen"], "before")
+        self.assertIn("IllegalStateException: boom", findings[0]["top"])
+
+
 class ScreenshotTest(unittest.TestCase):
     def test_black_frame_is_measurable(self):
         width, height = 32, 32

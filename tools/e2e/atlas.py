@@ -78,6 +78,10 @@ ERRORS = []
 COVERAGE = {"tools_total": len(TOOLS), "tools_visited": [], "tools_failed": []}
 N = 0
 DIALOGS = 0
+CURRENT_STEP = "startup"
+LAST_SCREEN = None
+ANRS = []
+CRASHES = []
 DENSITY = 1.0
 WIDTH = 1080
 HEIGHT = 2400
@@ -131,6 +135,43 @@ def words(text):
 def slugify(text, limit=64):
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", text or "").strip("-").lower()
     return slug[:limit].rstrip("-") or "screen"
+
+
+def classify_anr(title):
+    """Which app owns an 'isn't responding' dialog? System apps are named too."""
+    text = title or ""
+    if re.search(r"ScanWhirl|" + re.escape(PKG), text, re.I):
+        return "ScanWhirl"
+    match = re.match(r"(.+?)\s+isn't responding", text, re.I)
+    return match.group(1).strip() if match else (text.strip() or "unknown")
+
+
+def parse_crash_log(raw, screens):
+    """FATAL EXCEPTION blocks -> findings, attached to the nearest earlier screen."""
+    findings = []
+    lines = (raw or "").splitlines()
+    for index, line in enumerate(lines):
+        if "FATAL EXCEPTION" not in line:
+            continue
+        block = "\n".join(lines[index:index + 14])
+        process = re.search(r"Process:\s*([^\s,]+)", block)
+        app = process.group(1) if process else "unknown"
+        try:
+            epoch = float(line.split()[0])
+        except (ValueError, IndexError):
+            epoch = None
+        screen = ""
+        if epoch is not None:
+            earlier = [s for s in screens if s.get("captured_at", 0) <= epoch + 2]
+            if earlier:
+                screen = earlier[-1]["slug"]
+        findings.append({
+            "app": app,
+            "screen": screen,
+            "at_epoch": epoch,
+            "top": block[:1800],
+        })
+    return findings
 
 
 def visible_nodes(root, width, height):
@@ -363,6 +404,34 @@ def has_secure_flag():
     return "FLAG_SECURE" in output
 
 
+def collect_anr_evidence(title, step, screen):
+    """Pull whatever ANR evidence this disposable CI emulator exposes."""
+    chunks = ["ANR dialog: %s" % title, "leg: %s api: %s" % (LEG, API),
+              "step: %s" % step, "screen: %s" % screen]
+    for label, command in (
+        ("dumpsys activity anr", ("shell", "dumpsys", "activity", "anr")),
+        ("logcat -b events (am_anr)", ("shell", "logcat", "-d", "-b", "events")),
+    ):
+        try:
+            output = adb(*command, timeout=30)
+            chunks.append("--- %s ---\n%s" % (label, output[:12000]))
+        except Exception as exc:  # noqa: BLE001 - evidence is best effort
+            chunks.append("--- %s unavailable: %s ---" % (label, exc))
+    try:
+        listing = adb("shell", "ls", "-t", "/data/anr", timeout=20)
+        for name in [n for n in listing.split() if n.endswith(".txt")][:2]:
+            try:
+                chunks.append("--- /data/anr/%s ---\n%s" % (
+                    name, adb("shell", "cat", "/data/anr/" + name, timeout=30)[:12000]))
+            except Exception as exc:  # noqa: BLE001
+                chunks.append("--- /data/anr/%s unavailable: %s ---" % (name, exc))
+    except Exception as exc:  # noqa: BLE001
+        chunks.append("--- /data/anr listing unavailable: %s ---" % exc)
+    path = OUT / ("anr-%02d.txt" % (len(ANRS) + 1))
+    path.write_text("\n".join(chunks), encoding="utf-8", errors="replace")
+    return path.name
+
+
 # -------------------------------------------------------- uiautomator navigation
 def hierarchy():
     """Fresh hierarchy; tap 'Wait' on a system ANR dialog that stole focus.
@@ -383,6 +452,20 @@ def hierarchy():
         dialog = find(root, rid="aerr_wait")
         if dialog is None:
             break
+        title_node = find(root, rid="alertTitle")
+        title = (title_node.get("text") if title_node is not None else "") or "isn't responding"
+        recent = ANRS[-1] if ANRS else None
+        if not (recent and recent["title"] == title and time.time() - recent["_t"] < 8):
+            evidence = collect_anr_evidence(title, CURRENT_STEP,
+                                            LAST_SCREEN["slug"] if LAST_SCREEN else "startup")
+            ANRS.append({
+                "leg": LEG, "api": API, "app": classify_anr(title), "title": title,
+                "step": CURRENT_STEP,
+                "screen": LAST_SCREEN["slug"] if LAST_SCREEN else "startup",
+                "area": LAST_SCREEN["area"] if LAST_SCREEN else "startup",
+                "evidence": evidence, "_t": time.time(),
+            })
+            print("ANR finding: %s at %s (%s)" % (title, CURRENT_STEP, evidence), flush=True)
         tap_node(root, dialog)
         DIALOGS += 1
         print("dismissed system 'not responding' dialog (#%d)" % DIALOGS, flush=True)
@@ -556,7 +639,7 @@ def recover(reason):
 
 # ----------------------------------------------------------------- capture step
 def capture(area, slug, path, note=None):
-    global N
+    global N, LAST_SCREEN
     N += 1
     name = "%03d-%s" % (N, slugify(slug))
     png_path = OUT / (name + ".png")
@@ -589,8 +672,10 @@ def capture(area, slug, path, note=None):
         "path": " > ".join(path), "png": png_path.name, "xml": xml_path.name,
         "window": current_window(), "secure": secure, "screenshot": stats,
         "flags": flags, "score": score, "note": note or "",
+        "step": CURRENT_STEP, "captured_at": time.time(),
     }
     SCREENS.append(record)
+    LAST_SCREEN = record
     print("screen %s [%s] secure=%s score=%d flags=%s" % (
         name, area, secure, score,
         {k: len(v) if isinstance(v, list) else v.get("words", 0)
@@ -600,6 +685,8 @@ def capture(area, slug, path, note=None):
 
 def step(area, slug, path, action):
     """Run one navigation action; a failure is evidence, never a full-stop."""
+    global CURRENT_STEP
+    CURRENT_STEP = slug
     if (time.monotonic() - STARTED) / 60 > MAX_MINUTES:
         print("atlas deadline reached, skipping %s" % slug, flush=True)
         return None
@@ -1009,6 +1096,28 @@ def walk_create():
 
 
 # ---------------------------------------------------------------- report output
+def collect_crashes():
+    """Save the crash buffer and parse FATAL EXCEPTION blocks into findings."""
+    raw = ""
+    for args in (("logcat", "-d", "-b", "crash", "-v", "epoch"),
+                 ("logcat", "-d", "-v", "epoch")):
+        try:
+            raw = adb(*args, timeout=35)
+            if raw and "FATAL EXCEPTION" in raw:
+                break
+        except Exception:  # noqa: BLE001 - a missing buffer is not an app finding
+            raw = ""
+    (OUT / "atlas-crash-log.txt").write_text(raw, encoding="utf-8", errors="replace")
+    seen = set()
+    for finding in parse_crash_log(raw, SCREENS):
+        key = finding["top"].splitlines()[0][:180]
+        if key not in seen:
+            seen.add(key)
+            CRASHES.append(finding)
+    print("crash findings: %d" % len(CRASHES), flush=True)
+    return len(CRASHES)
+
+
 def write_outputs():
     by_flag = {
         key: sum(len(s["flags"][key]) if isinstance(s["flags"][key], list)
@@ -1027,8 +1136,11 @@ def write_outputs():
         "density": round(DENSITY, 3), "screen_size": [WIDTH, HEIGHT],
         "elapsed_minutes": round((time.monotonic() - STARTED) / 60, 1),
         "screens": SCREENS, "coverage": COVERAGE, "navigation_errors": ERRORS,
+        "anrs": [{k: v for k, v in item.items() if k != "_t"} for item in ANRS],
+        "crashes": CRASHES,
         "totals": {"screens": len(SCREENS), "secure": sum(1 for s in SCREENS if s["secure"]),
                    "system_dialogs_dismissed": DIALOGS,
+                   "anrs": len(ANRS), "crashes": len(CRASHES),
                    "by_flag": by_flag, "worst": worst},
     }
     (OUT / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False),
@@ -1060,6 +1172,19 @@ def write_outputs():
             html.escape(item["slug"]), html.escape(item["area"]), item["score"],
             html.escape(json.dumps(item["flags"]))))
     doc.append("</ol>")
+    doc.append("<h2>ANRs (%d) - recovered, reported separately from layout flags</h2><ul>" % len(ANRS))
+    for finding in ANRS:
+        doc.append("<li>%s: <b>%s</b> in %s screen / %s step - <a href='%s'>evidence</a></li>" % (
+            html.escape(finding["app"]), html.escape(finding["title"]),
+            html.escape(finding["screen"]), html.escape(finding["step"]),
+            html.escape(finding["evidence"])))
+    doc.append("</ul><h2>App crashes (%d)</h2><ul>" % len(CRASHES))
+    for finding in CRASHES:
+        doc.append("<li>%s near %s screen%s</li>" % (
+            html.escape(finding["app"]), html.escape(finding["screen"]),
+            ": %s" % html.escape(finding["top"].splitlines()[0][:160])
+            if finding["top"] else ""))
+    doc.append("</ul>")
     areas = {}
     for screen in SCREENS:
         areas.setdefault(screen["area"], []).append(screen)
@@ -1090,10 +1215,11 @@ def write_outputs():
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
             handle.write("\n### Atlas %s\n\n- screens: %d\n- secure: %d\n- flags: %s\n"
-                         "- tools visited: %d/%d\n- navigation errors: %d\n" % (
+                         "- tools visited: %d/%d\n- navigation errors: %d\n"
+                         "- ANRs (recovered): %d\n- crashes: %d\n" % (
                              LEG, len(SCREENS), report["totals"]["secure"], by_flag,
                              len(COVERAGE["tools_visited"]), COVERAGE["tools_total"],
-                             len(ERRORS)))
+                             len(ERRORS), len(ANRS), len(CRASHES)))
     print(json.dumps({"screens": len(SCREENS), "by_flag": by_flag,
                       "tools": len(COVERAGE["tools_visited"]),
                       "errors": len(ERRORS)}, sort_keys=True), flush=True)
@@ -1133,6 +1259,10 @@ def main():
             logs = adb("logcat", "-d", "-v", "brief", timeout=30)
             (OUT / "atlas-logcat.txt").write_text(logs, encoding="utf-8", errors="replace")
         except Exception:  # noqa: BLE001 - the report must survive a logcat failure
+            traceback.print_exc()
+        try:
+            collect_crashes()
+        except Exception:  # noqa: BLE001
             traceback.print_exc()
         write_outputs()
     return 0 if len(SCREENS) >= 10 else 1
