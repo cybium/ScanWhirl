@@ -398,7 +398,9 @@ class FormReadyActivity : BaseActivity() {
         dims.addView(heightField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(dims)
 
-        // Four editable range bounds; shown only in Range mode. Units sit beside each field.
+        // Four editable range bounds; shown only in Range mode. The fields are created before the
+        // bottom action bar exists, so seed their text with the watcher muted.
+        settingFields = true
         rangeFields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             isVisible = false
@@ -444,6 +446,7 @@ class FormReadyActivity : BaseActivity() {
         rangeFieldsLayout.addView(rangeRow1)
         rangeFieldsLayout.addView(rangeRow2)
         column.addView(rangeFields)
+        settingFields = false
 
         column.addView(fieldLabel(R.id.formReadyUnitLabel, R.string.form1_unit_label).apply {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)

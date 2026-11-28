@@ -74,7 +74,7 @@ class J1ResultHonestyTest {
             "form_ready", files = listOf(file), mime = "image/jpeg",
             note = "413 × 531 px · 32 KB\nOK 32 KB · 200 DPI",
             sourceKept = true,
-            facts = ResultSpec.Facts(file.length(), 413, 531),
+            facts = ResultSpec.Facts(bytes = file.length(), width = 413, height = 531),
             adjustIntent = Intent(app, FormReadyActivity::class.java)
         ))
     }
