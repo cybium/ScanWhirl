@@ -67,6 +67,10 @@ class SignatureSheetFixUiTest {
     @Test
     fun `Done saves the drawn signature and closes the sheet`() {
         val dialog = openPad()
+        val remember = J34TestFlow.all(dialog.window!!.decorView).first {
+            it.tag == "remember-signature"
+        } as android.widget.CheckBox
+        remember.isChecked = true
         val pad = requireNotNull(dialog.findViewById<SignaturePadView>(R.id.stampSignaturePad))
         pad.layout(0, 0, 300, 240)
         val down = System.currentTimeMillis()

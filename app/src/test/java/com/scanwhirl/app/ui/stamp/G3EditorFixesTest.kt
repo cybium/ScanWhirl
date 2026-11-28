@@ -113,8 +113,8 @@ class G3EditorFixesTest {
         val warning = ShadowDialog.getLatestDialog()
         assertNotNull("redaction destroys pixels; warn before writing", warning)
         assertEquals(
-            "the permanent-redaction warning is shown",
-            app.getString(R.string.stamp_redact_warn_title),
+            "the mandatory redaction review is shown",
+            app.getString(R.string.j34_check_title),
             warning!!.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
         )
         return warning
@@ -135,14 +135,16 @@ class G3EditorFixesTest {
 
         screen.findViewById<View>(R.id.saveCopy).performClick()
         idle()
-        assertNull(
-            "no burn-in warning without redaction marks",
-            ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }
-        )
+        assertEquals("plain edits need only the name sheet",
+            app.getString(R.string.j34_name_title),
+            ShadowDialog.getLatestDialog()!!.findViewById<TextView>(R.id.swSheetTitle).text.toString())
+        J34TestFlow.confirmName()
         assertTrue(
-            "the plain copy is saved and the editor closes",
+            "the plain copy is saved and the shared result opens",
             waitFor("the plain copy") {
-                repo.listDocuments(includeVaulted = true).any { it.id != id } && screen.isFinishing
+                repo.listDocuments(includeVaulted = true).any { it.id != id } &&
+                    shadowOf(screen).peekNextStartedActivity()?.component?.className ==
+                    com.scanwhirl.app.ui.tools.ToolResultActivity::class.java.name
             }
         )
         val latest = ShadowDialog.getLatestDialog()
@@ -164,7 +166,9 @@ class G3EditorFixesTest {
 
         screen.findViewById<View>(R.id.saveCopy).performClick()
         idle()
-        confirmBurnInWarning().findViewById<View>(R.id.swSheetPrimary).performClick()
+        confirmBurnInWarning()
+        J34TestFlow.completeReview()
+        J34TestFlow.confirmName()
         assertTrue("the persistent receipt still appears", waitFor("receipt") { receiptShowing() })
         assertFalse("the redaction outcome keeps the screen open", screen.isFinishing)
         StampSaveRunner.consume(id)
@@ -193,13 +197,15 @@ class G3EditorFixesTest {
         // what writeCopy derives from the marks, so the editor joins this promise.
         val copy = repo.getDocument(id)!!
         val release = CompletableDeferred<Unit>()
-        StampSaveRunner.submit(id, SaveMeta(screen.editor.edits(), R.string.private_info_label)) {
+        StampSaveRunner.submit(id, SaveMeta(screen.editor.edits(), R.string.private_info_label, J34TestFlow.COPY_NAME)) {
             release.await()
             copy
         }
         screen.findViewById<View>(R.id.saveCopy).performClick()
         idle()
-        confirmBurnInWarning().findViewById<View>(R.id.swSheetPrimary).performClick()
+        confirmBurnInWarning()
+        J34TestFlow.completeReview()
+        J34TestFlow.confirmName()
         idle()
         val saveButton = screen.findViewById<TextView>(R.id.saveCopy)
         assertEquals(
@@ -214,10 +220,15 @@ class G3EditorFixesTest {
         assertFalse("the screen stays open for the receipt", screen.isFinishing)
         assertEquals(
             "the Save button label is restored after delivery",
-            app.getString(R.string.stamp_save_copy),
+            app.getString(R.string.j34_review),
             saveButton.text.toString()
         )
-        assertTrue("Save is usable again after delivery", saveButton.isEnabled)
+        assertFalse("duplicate Save is disabled after delivery", saveButton.isEnabled)
+        // A genuinely new edit proves delivery released the write lock, rather than merely
+        // changing the button label while leaving the old saving flag latched.
+        screen.editor.add(PageStamp.Mark.Text("new edit", PageStamp.Box(.1f,.5f,.3f,.6f)))
+        screen.refresh()
+        assertTrue("new edits can be reviewed after delivery", saveButton.isEnabled)
 
         screen.onBackPressedDispatcher.onBackPressed()
         idle()
@@ -225,7 +236,7 @@ class G3EditorFixesTest {
         assertNotNull("Back reaches the normal exit confirmation", exitSheet)
         assertEquals(
             "Back is no longer swallowed by a 'still saving' notice",
-            app.getString(R.string.stamp_discard_title),
+            app.getString(R.string.j34_save_changes),
             exitSheet!!.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
         )
         assertFalse("the person may keep editing behind the receipt", screen.isFinishing)

@@ -117,7 +117,7 @@ class StampEditorActivityTest {
     }
 
     @Test
-    fun `a redaction warns that it is permanent before saving`() {
+    fun `a redaction requires check before saving without a premature permanence claim`() {
         val id = DocFixtures.saved(repo, context, pages = 1)
         val screen = activity(id)
         val canvas = screen.findViewById<StampCanvasView>(R.id.canvas)
@@ -130,9 +130,10 @@ class StampEditorActivityTest {
 
         screen.findViewById<android.view.View>(R.id.saveCopy).performClick()
 
-        val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "a warning sheet opens" }
-        val message = sheet.findViewById<TextView>(R.id.swSheetMessage)?.text?.toString().orEmpty()
-        assertTrue("the warning must be explicit, got: $message", message.contains("removed for good"))
+        val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "a review sheet opens" }
+        assertEquals(context.getString(R.string.j34_check_title),
+            sheet.findViewById<TextView>(R.id.swSheetTitle).text.toString())
+        assertFalse("unchecked review cannot save", sheet.findViewById<android.view.View>(R.id.swSheetPrimary).isEnabled)
         assertEquals(
             "nothing is written before the user confirms",
             before,
@@ -169,7 +170,7 @@ class StampEditorActivityTest {
     }
 
     @Test
-    fun `suggest turns recognised sensitive lines into redaction boxes`() {
+    fun `suggest opens candidate search without applying uninspected boxes`() {
         val id = DocFixtures.saved(repo, context, pages = 1)
         val doc = requireNotNull(repo.getDocument(id))
         val page = doc.pageFiles.single()
@@ -184,8 +185,10 @@ class StampEditorActivityTest {
         val screen = activity(id)
         screen.findViewById<android.view.View>(R.id.toolSuggest).performClick()
 
-        assertEquals(1, screen.editor.marks().size)
-        assertTrue(screen.editor.marks().single() is PageStamp.Mark.Redact)
+        assertTrue("search never auto-applies candidates", screen.editor.marks().isEmpty())
+        val sheet = requireNotNull(ShadowDialog.getLatestDialog())
+        assertEquals(context.getString(R.string.find_title),
+            sheet.findViewById<TextView>(R.id.swSheetTitle).text.toString())
     }
 
     @Test
@@ -208,7 +211,7 @@ class StampEditorActivityTest {
 
         val sheet = requireNotNull(ShadowDialog.getLatestDialog()) { "the prompt must open on the first Back" }
         assertEquals(
-            context.getString(R.string.stamp_discard_title),
+            context.getString(R.string.j34_save_changes),
             sheet.findViewById<TextView>(R.id.swSheetTitle)?.text?.toString()
         )
         assertFalse("the editor must stay open behind the prompt", screen.isFinishing)

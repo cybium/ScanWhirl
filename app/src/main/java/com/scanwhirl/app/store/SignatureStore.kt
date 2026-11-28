@@ -36,7 +36,8 @@ class SignatureStore(context: Context) {
         val strokes: List<PageStamp.Stroke>,
         val createdAt: Long,
         /** Set for an imported bitmap signature (transparent PNG); null for drawn ink. */
-        val pngFile: File? = null
+        val pngFile: File? = null,
+        val aspectRatio: Float = 3f
     ) {
         val isBitmap: Boolean get() = pngFile != null
     }
@@ -75,7 +76,8 @@ class SignatureStore(context: Context) {
      * Saves a new signature. Refuses a sixth, and refuses ink that has no point at all.
      * [PageStamp.Stroke]s with no points are dropped.
      */
-    fun save(name: String, strokes: List<PageStamp.Stroke>): SavedSignature {
+    fun save(name: String, strokes: List<PageStamp.Stroke>, aspectRatio: Float = 3f): SavedSignature {
+        require(aspectRatio.isFinite() && aspectRatio > 0f)
         val clean = strokes.mapNotNull { stroke ->
             val points = stroke.points.filter { it.x.isFinite() && it.y.isFinite() }
             if (points.isEmpty()) null else PageStamp.Stroke(points)
@@ -91,7 +93,8 @@ class SignatureStore(context: Context) {
             id = id,
             name = name.trim().ifBlank { "Signature" },
             strokes = clean,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            aspectRatio = aspectRatio
         )
         dir.mkdirs()
         Durable.atomicWriteText(File(dir, id + EXT), encode(saved))
@@ -177,6 +180,7 @@ class SignatureStore(context: Context) {
             saved.strokes.forEach { stroke ->
                 append(stroke.points.joinToString(" ") { "${it.x},${it.y}" }).append('\n')
             }
+            append("aspect=").append(saved.aspectRatio).append('\n')
         }
     }
 
@@ -220,6 +224,8 @@ class SignatureStore(context: Context) {
             }
             strokes += PageStamp.Stroke(points)
         }
-        return SavedSignature(id, name, strokes, createdAt)
+        val aspect = lines.getOrNull(5 + count)?.removePrefix("aspect=")?.toFloatOrNull()
+            ?.takeIf { it.isFinite() && it > 0f } ?: 3f
+        return SavedSignature(id, name, strokes, createdAt, aspectRatio = aspect)
     }
 }

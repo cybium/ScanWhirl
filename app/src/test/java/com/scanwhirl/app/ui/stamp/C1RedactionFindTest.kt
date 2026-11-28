@@ -143,7 +143,8 @@ class C1RedactionFindTest {
 
         screen.findViewById<View>(R.id.saveCopy).performClick()
         idle()
-        ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+        J34TestFlow.completeReview()
+        J34TestFlow.confirmName()
         assertTrue(
             "a neutral new copy is saved",
             waitFor("the saved copy") {
@@ -197,6 +198,7 @@ class C1RedactionFindTest {
         screen.editor.add(PageStamp.Mark.Text("note", PageStamp.Box(0.1f, 0.1f, 0.3f, 0.12f)))
         screen.refresh()
         screen.findViewById<View>(R.id.saveCopy).performClick()
+        J34TestFlow.confirmName()
         assertTrue(
             "the copy is saved without a hide warning",
             waitFor("the saved copy") { repo.listDocuments(includeVaulted = true).size > 1 }

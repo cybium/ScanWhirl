@@ -325,6 +325,7 @@ class StampEditorActivity : BaseActivity() {
         })
 
         showPage()
+        savedInstanceState?.getBundle("j34_viewport")?.let { binding.canvas.restoreViewport(it) }
         receiptCopyId = savedInstanceState?.getString("j34_receipt")
         outputName = savedInstanceState?.getString("j34_name").orEmpty()
         if (receiptCopyId != null) {
@@ -357,6 +358,7 @@ class StampEditorActivity : BaseActivity() {
         outState.putInt(KEY_HIDE_LABEL, hideLabelRes)
         outState.putString("j34_receipt", receiptCopyId)
         outState.putString("j34_name", outputName)
+        outState.putBundle("j34_viewport", binding.canvas.saveViewport())
         val dir = File(cacheDir, STATE_DIR).apply { mkdirs() }
         val file = File(dir, "state_${document.id}_${UUID.randomUUID().toString().take(8)}.bin")
         try {
@@ -487,7 +489,6 @@ class StampEditorActivity : BaseActivity() {
             openFindSheet()
         }
         if (hideJourney) {
-            row.addView(action(R.string.j34_find) { openFindSheet() })
             row.addView(action(R.string.j34_select) { disarm(); refresh() })
         } else row.addView(action(R.string.j34_date) {
             StampPrompts.text(this, R.string.j34_date, R.string.stamp_text_hint,
@@ -495,6 +496,10 @@ class StampEditorActivity : BaseActivity() {
                 addMark(PageStamp.Mark.Text(it, PageStamp.Box(.08f, .7f, .35f, .75f), size = .035f))
             }
         })
+        (binding.findRedactions.parent as ViewGroup).removeView(binding.findRedactions)
+        binding.findRedactions.setText(R.string.j34_find)
+        binding.findRedactions.visibility = if (hideJourney) View.VISIBLE else View.GONE
+        row.addView(binding.findRedactions, if (hideJourney) 1 else row.childCount)
         row.addView(action(R.string.j34_more) { openMore() })
         // Secondary controls live in More, not in two extra rows that consume the form.
         (binding.deleteMark.parent as View).visibility = View.GONE
@@ -526,6 +531,9 @@ class StampEditorActivity : BaseActivity() {
         entry(R.string.stamp_redo) { if (editor.redo()) refresh() }
         entry(R.string.j34_marks) { marksSheet() }
         entry(R.string.j34_position) { positionSheet() }
+        if (!hideJourney) entry(if (binding.canvas.snapEnabled) R.string.j34_snap_on else R.string.j34_snap_off) {
+            binding.canvas.snapEnabled = !binding.canvas.snapEnabled
+        }
         entry(R.string.j34_add_box) {
             editor.add(PageStamp.Mark.Redact(PageStamp.Box(.1f, .1f, .5f, .15f)))
             disarm(); refresh(); positionSheet()
@@ -606,15 +614,21 @@ class StampEditorActivity : BaseActivity() {
                 content.addView(this)
             }
         }
+        val coarse = CheckBox(this).apply {
+            setText(R.string.j34_nudge_five)
+            minHeight = dp(SwStyle.TOUCH_MIN_DP)
+        }
+        content.addView(coarse)
         listOf(R.string.a11y_move_left to (-1f to 0f), R.string.a11y_move_right to (1f to 0f),
             R.string.a11y_move_up to (0f to -1f), R.string.a11y_move_down to (0f to 1f)).forEach { (label, delta) ->
             content.addView(action(label) {
-                editor.moveBy(index, delta.first / 612f, delta.second / height)
+                val step = if (coarse.isChecked) 5f else 1f
+                editor.moveBy(index, delta.first * step / 612f, delta.second * step / height)
                 refresh()
                 val x = fields[0].text.toString().toFloatOrNull() ?: 0f
                 val y = fields[1].text.toString().toFloatOrNull() ?: 0f
-                fields[0].setText((x + delta.first).coerceAtLeast(0f).toString())
-                fields[1].setText((y + delta.second).coerceAtLeast(0f).toString())
+                fields[0].setText((x + delta.first * step).coerceIn(0f, 612f-values[2]).toString())
+                fields[1].setText((y + delta.second * step).coerceIn(0f, height-values[3]).toString())
             })
         }
         val sheet = SwSheet.builder(this).setTitle(R.string.j34_position).setContent(content)
@@ -627,7 +641,7 @@ class StampEditorActivity : BaseActivity() {
                 fields[0].error = getString(R.string.j34_position_error)
             } else {
                 editor.resizeTo(index, PageStamp.Box(v[0]!! / 612f, v[1]!! / height,
-                    (v[0]!! + v[2]!!) / 612f, (v[1]!! + v[3]!!) / height))
+                    (v[0]!! + v[2]!!) / 612f, (v[1]!! + v[3]!!) / height), precise = true)
                 refresh(); sheet.dismiss()
             }
         }
@@ -697,8 +711,8 @@ class StampEditorActivity : BaseActivity() {
     }
 
     internal fun applySignatureToAll(saved: SignatureStore.SavedSignature) {
-        val mark = saved.pngFile?.let { PageStamp.Mark.Picture(it, signatureBox()) }
-            ?: PageStamp.Mark.Signature(saved.strokes, signatureBox())
+        val mark = saved.pngFile?.let { PageStamp.Mark.Picture(it, signatureBox(imageAspect(it))) }
+            ?: PageStamp.Mark.Signature(saved.strokes, signatureBox(saved.aspectRatio))
         applySignatureMarkToAll(mark)
     }
 
@@ -767,11 +781,11 @@ class StampEditorActivity : BaseActivity() {
     private fun arm(tool: StampCanvasView.Tool, hintRes: Int) {
         binding.canvas.cancelActiveGesture()
         binding.canvas.placement = null
-        editor.select(null)
         binding.canvas.tool = tool
         binding.hint.setText(hintRes)
         binding.hint.visibility = android.view.View.VISIBLE
-        binding.findRedactions.visibility = View.GONE
+        binding.findRedactions.visibility = if (tool == StampCanvasView.Tool.REDACT || hideJourney)
+            View.VISIBLE else View.GONE
         refreshSelection()
     }
 
@@ -779,7 +793,7 @@ class StampEditorActivity : BaseActivity() {
         binding.canvas.placement = null
         binding.canvas.tool = StampCanvasView.Tool.SELECT
         binding.hint.visibility = android.view.View.GONE
-        binding.findRedactions.visibility = android.view.View.GONE
+        binding.findRedactions.visibility = if (hideJourney) View.VISIBLE else View.GONE
     }
 
     private fun addMark(mark: PageStamp.Mark) {
@@ -835,12 +849,12 @@ class StampEditorActivity : BaseActivity() {
             onPick = { saved ->
                 val file = saved.pngFile
                 if (file != null) {
-                    armPlacement(PageStamp.Mark.Picture(file, signatureBox()))
+                    armPlacement(PageStamp.Mark.Picture(file, signatureBox(imageAspect(file))))
                 } else {
                     armPlacement(
                         PageStamp.Mark.Signature(
                             strokes = saved.strokes,
-                            box = signatureBox(),
+                            box = signatureBox(saved.aspectRatio),
                             color = android.graphics.Color.BLACK
                         )
                     )
@@ -1111,14 +1125,35 @@ class StampEditorActivity : BaseActivity() {
             )
         // Partial failure: the counts below do not cover the pages that could not be read.
         if (unreadablePages.isNotEmpty()) builder.setMessage(unreadableMessage(unreadablePages))
-        builder
+        val sheet = builder
             .setOptions(labels, multiChecked = checked) { index, isChecked ->
                 checked[index] = isChecked
             }
             .setPrimary(R.string.find_hide_selected) { applyFind(hits, categories, checked) }
             .setSecondary(android.R.string.cancel)
             .build()
-            .show()
+        val candidatePages = hits.map { it.first }.distinct().sorted()
+        var candidatePage = 0
+        val preview = StampCanvasView(this).apply {
+            tag = "find-candidate-preview"
+            isEnabled = false
+            originalReview = true
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(200f))
+        }
+        fun showCandidate() {
+            val page = candidatePages[candidatePage]
+            preview.pageNumber = page + 1
+            preview.pageCount = document.pageCount
+            preview.pageBitmap = loadPreview(document.pageFiles[page])
+            preview.marks = hits.filter { it.first == page }.map { PageStamp.Mark.Redact(it.second.box) }
+        }
+        sheet.contentContainer.addView(preview)
+        sheet.contentContainer.addView(action(R.string.j34_next_candidate_page) {
+            candidatePage = (candidatePage + 1) % candidatePages.size
+            showCandidate()
+        })
+        showCandidate()
+        sheet.show()
     }
 
     private fun applyFind(
@@ -1138,10 +1173,12 @@ class StampEditorActivity : BaseActivity() {
         }
         editor.currentPage = chosen.minOf { it.first }
         var added = 0
+        editor.beginGesture()
         chosen.groupBy({ it.first }, { it.second.box }).forEach { (page, boxes) ->
             editor.addAllAt(page, boxes.map { PageStamp.Mark.Redact(it) })
             added += boxes.size
         }
+        editor.endGesture()
         hideMode = true
         // C1: only claim "private info hidden" when every found item was actually hidden.
         hideLabelRes = if (checked.all { it }) R.string.private_info_label else R.string.c1_redacted_label
@@ -1166,6 +1203,9 @@ class StampEditorActivity : BaseActivity() {
         binding.canvas.pageNumber = editor.currentPage + 1
         binding.canvas.pageCount = document.pageCount
         binding.canvas.pageBitmap = bitmap
+        val geometry = repo.ocrStore.readGeo(document.id)[page.name]
+        binding.canvas.snapBaselines = geometry?.lines?.map { it.bottom.toFloat() / geometry.height }
+            ?: emptyList()
         refresh()
     }
 
@@ -1538,23 +1578,7 @@ class StampEditorActivity : BaseActivity() {
     private fun loadInk(file: File) {
         // NonCancellable owns bitmap cleanup even if rotation destroys this Activity on IO.
         lifecycleScope.launch(kotlinx.coroutines.NonCancellable) {
-            val loaded = withContext(Dispatchers.IO) {
-                var source: Bitmap? = null
-                try {
-                    source = InkExtract.decodeSampled(file)
-                    val extracted = source?.let { InkExtract.extract(it, InkExtract.Recolor.ORIGINAL) }
-                    if (source == null || extracted == null) {
-                        source?.recycle()
-                        null
-                    } else source to extracted
-                } catch (_: OutOfMemoryError) {
-                    source?.recycle()
-                    null
-                } catch (_: Exception) {
-                    source?.recycle()
-                    null
-                }
-            }
+            val loaded = StampInkLoader.load(file)
             if (loaded == null) {
                 if (!isDestroyed && !isFinishing) note(getString(R.string.stamp_ink_none))
             } else if (isDestroyed || isFinishing) {
@@ -1615,11 +1639,7 @@ class StampEditorActivity : BaseActivity() {
                     busy = true
                     sheet.primaryButton.isEnabled = false
                     lifecycleScope.launch(kotlinx.coroutines.NonCancellable) {
-                        val next = withContext(Dispatchers.IO) {
-                            try { InkExtract.extract(source, recolor) }
-                            catch (_: OutOfMemoryError) { null }
-                            catch (_: Exception) { null }
-                        }
+                        val next = StampInkLoader.recolor(source, recolor)
                         busy = false
                         if (closed || isDestroyed) {
                             next?.bitmap?.recycle()
@@ -1787,7 +1807,18 @@ class StampEditorActivity : BaseActivity() {
 
     private fun textBox() = PageStamp.Box(0.08f, 0.06f, 0.92f, 0.16f)
 
-    private fun signatureBox() = PageStamp.Box(0.22f, 0.58f, 0.78f, 0.72f)
+    private fun signatureBox(aspect: Float = 3f): PageStamp.Box {
+        val h = minOf(.35f, .4f * 612f / binding.canvas.pagePointsHeight() / aspect)
+        val w = h * binding.canvas.pagePointsHeight() / 612f * aspect
+        return PageStamp.Box(.22f, .58f, .22f + w, .58f + h)
+    }
+
+    private fun imageAspect(file: File): Float {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        return if (bounds.outWidth > 0 && bounds.outHeight > 0)
+            bounds.outWidth.toFloat() / bounds.outHeight else 3f
+    }
 
     private fun badgeBox() = PageStamp.Box(0.52f, 0.62f, 0.92f, 0.75f)
 

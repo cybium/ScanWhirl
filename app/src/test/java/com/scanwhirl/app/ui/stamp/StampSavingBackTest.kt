@@ -71,11 +71,12 @@ class StampSavingBackTest {
         screen.editor.add(PageStamp.Mark.Text("RECEIPT", PageStamp.Box(0.1f, 0.1f, 0.5f, 0.2f)))
         val edits = screen.editor.edits()
         val release = CompletableDeferred<Unit>()
-        StampSaveRunner.submit(id, SaveMeta(edits, 0)) {
+        StampSaveRunner.submit(id, SaveMeta(edits, 0, J34TestFlow.COPY_NAME)) {
             release.await()
             source
         }
         screen.findViewById<View>(R.id.saveCopy).performClick()
+        J34TestFlow.confirmName()
         idle()
 
         assertEquals(
@@ -96,7 +97,10 @@ class StampSavingBackTest {
         }
         val result = shadowOf(screen).resultIntent!!
         assertNotNull("the new copy id is returned", result.getStringExtra(StampEditorActivity.EXTRA_NEW_DOC_ID))
-        assertTrue("the screen closes only after the receipt", screen.isFinishing)
+        assertFalse("workspace retained for Adjust", screen.isFinishing)
+        assertEquals("receipt opens the shared result",
+            com.scanwhirl.app.ui.tools.ToolResultActivity::class.java.name,
+            shadowOf(screen).nextStartedActivity.component!!.className)
 
         StampSaveRunner.consume(id)
     }

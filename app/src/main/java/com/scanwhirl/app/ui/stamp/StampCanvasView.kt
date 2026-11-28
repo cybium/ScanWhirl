@@ -76,11 +76,28 @@ class StampCanvasView @JvmOverloads constructor(
     private var down = PointF()
     private var origin = PointF()
     private var dragged = false
+    var snapEnabled = false
+    var snapBaselines: List<Float> = emptyList()
+    private var snapY: Float? = null
+    private var snapResidualY = 0f
+    private var gestureChanged = false
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
 
     fun setZoom(value: Float) {
         zoom = value.coerceIn(1f, 5f)
         boundPan()
+        invalidate()
+    }
+
+    fun saveViewport(): Bundle = Bundle().apply {
+        putFloat("zoom", zoom); putFloat("panX", panX); putFloat("panY", panY)
+        putString("tool", tool.name); putBoolean("snap", snapEnabled)
+    }
+    fun restoreViewport(saved: Bundle) {
+        zoom = saved.getFloat("zoom", 1f).coerceIn(1f,5f)
+        panX = saved.getFloat("panX"); panY = saved.getFloat("panY")
+        tool = Tool.values().firstOrNull { it.name == saved.getString("tool") } ?: Tool.SELECT
+        snapEnabled = saved.getBoolean("snap")
         invalidate()
     }
 
@@ -309,6 +326,7 @@ class StampCanvasView @JvmOverloads constructor(
 
     private var resizeIndex = -1
     private var resizeAnchor = PointF()
+    private var resizeCorner = PointF()
 
     private var rotateIndex = -1
     private var lastAngle = 0f
@@ -346,6 +364,10 @@ class StampCanvasView @JvmOverloads constructor(
             if (tool == Tool.REDACT && !originalReview) {
                 canvas.drawRect(toView(box, page), Paint().apply { color = Color.BLACK })
             } else canvas.drawRect(toView(box, page), previewPaint)
+        }
+        snapY?.let { y ->
+            canvas.drawLine(page.left, page.top + y * page.height(),
+                page.right, page.top + y * page.height(), selectionPaint)
         }
         if (originalReview) marks.filterIsInstance<PageStamp.Mark.Redact>().forEach {
             canvas.drawRect(toView(box(it.box), page), previewPaint)
@@ -503,6 +525,9 @@ class StampCanvasView @JvmOverloads constructor(
                 origin.set(norm)
                 down.set(event.x, event.y)
                 dragged = false
+                gestureChanged = false
+                snapY = null
+                snapResidualY = 0f
                 if (placement != null) {
                     mode = Mode.PLACE
                     return true
@@ -553,16 +578,31 @@ class StampCanvasView @JvmOverloads constructor(
                     }
                     Mode.MOVE -> {
                         val dx = norm.x - lastNorm.x
-                        val dy = norm.y - lastNorm.y
+                        var dy = norm.y - lastNorm.y
+                        val mark = marks.getOrNull(moveIndex)
+                        val bounds = mark?.let(::normalizedBounds)
+                        if (snapEnabled && mark !is PageStamp.Mark.Redact && bounds != null) {
+                            val proposed = bounds.bottom + dy + snapResidualY
+                            val latched = snapY
+                            val candidate = if (latched != null && kotlin.math.abs(proposed-latched)*page.height() <= dp(10f))
+                                latched else snapBaselines.minByOrNull { kotlin.math.abs(proposed-it) }
+                                    ?.takeIf { kotlin.math.abs(proposed-it)*page.height() <= dp(6f) }
+                            snapY = candidate
+                            snapResidualY = if (candidate != null) proposed - candidate else 0f
+                            dy = (candidate ?: proposed) - bounds.bottom
+                        }
                         if (kotlin.math.abs(dx) + kotlin.math.abs(dy) > 0.001f) {
+                            gestureChanged = true
                             listener?.onMove(moveIndex, dx, dy)
                             lastNorm.set(norm)
                         }
                     }
                     Mode.RESIZE -> {
+                        val target = PointF(resizeCorner.x + norm.x - origin.x,
+                            resizeCorner.y + norm.y - origin.y)
                         var box = PageStamp.Box(
-                            min(resizeAnchor.x, norm.x), min(resizeAnchor.y, norm.y),
-                            max(resizeAnchor.x, norm.x), max(resizeAnchor.y, norm.y)
+                            min(resizeAnchor.x, target.x), min(resizeAnchor.y, target.y),
+                            max(resizeAnchor.x, target.x), max(resizeAnchor.y, target.y)
                         )
                         val mark = marks.getOrNull(resizeIndex)
                         if (mark is PageStamp.Mark.Signature || mark is PageStamp.Mark.Picture) {
@@ -571,12 +611,13 @@ class StampCanvasView @JvmOverloads constructor(
                                 val ratio = old.width() / old.height()
                                 val w = min(box.right - box.left, (box.bottom - box.top) * ratio)
                                 val h = w / ratio
-                                val l = if (norm.x < resizeAnchor.x) resizeAnchor.x - w else resizeAnchor.x
-                                val t = if (norm.y < resizeAnchor.y) resizeAnchor.y - h else resizeAnchor.y
+                                val l = if (target.x < resizeAnchor.x) resizeAnchor.x - w else resizeAnchor.x
+                                val t = if (target.y < resizeAnchor.y) resizeAnchor.y - h else resizeAnchor.y
                                 box = PageStamp.Box(l, t, l + w, t + h)
                             }
                         }
                         listener?.onResize(resizeIndex, box)
+                        gestureChanged = true
                     }
                     Mode.ROTATE -> {
                         val mark = marks.getOrNull(rotateIndex)
@@ -592,6 +633,7 @@ class StampCanvasView @JvmOverloads constructor(
                             if (delta < -180f) delta += 360f
                             if (kotlin.math.abs(delta) > 0.5f) {
                                 listener?.onRotate(rotateIndex, delta)
+                                gestureChanged = true
                                 lastAngle = angle
                             }
                         }
@@ -624,6 +666,7 @@ class StampCanvasView @JvmOverloads constructor(
                         if (!cancelled && previewStroke.isNotEmpty()) {
                             val points = previewStroke.map { PageStamp.Point(it.x, it.y) }
                             listener?.onFreehand(listOf(PageStamp.Stroke(points)))
+                            gestureChanged = true
                         }
                         previewStroke.clear()
                     }
@@ -636,6 +679,7 @@ class StampCanvasView @JvmOverloads constructor(
                                 armed,
                                 PageStamp.Box(box.left, box.top, box.right, box.bottom)
                             )
+                            gestureChanged = true
                         }
                         previewBox = null
                     }
@@ -653,6 +697,7 @@ class StampCanvasView @JvmOverloads constructor(
                                 val l = (requested?.left ?: (origin.x - w / 2)).coerceIn(0f, 1f - w)
                                 val t = (requested?.top ?: (origin.y - h / 2)).coerceIn(0f, 1f - h)
                                 listener?.onPlace(mark, PageStamp.Box(l, t, l + w, t + h))
+                                gestureChanged = true
                                 placement = null
                             }
                         }
@@ -662,6 +707,11 @@ class StampCanvasView @JvmOverloads constructor(
                 mode = Mode.NONE
                 previewStroke.clear()
                 previewBox = null
+                snapY = null
+                if (!cancelled && gestureChanged) {
+                    performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30)
+                        HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY)
+                }
                 invalidate()
                 if (!cancelled) performClick()
                 return true
@@ -689,8 +739,8 @@ class StampCanvasView @JvmOverloads constructor(
                         rotateIndex = selected
                         lastAngle = Math.toDegrees(
                             atan2(
-                                (event.y - rect.centerY()).toDouble(),
-                                (event.x - rect.centerX()).toDouble()
+                                (norm.y - bounds.centerY()).toDouble(),
+                                (norm.x - bounds.centerX()).toDouble()
                             )
                         ).toFloat()
                         return
@@ -709,6 +759,12 @@ class StampCanvasView @JvmOverloads constructor(
                             1 -> PointF(bounds.left, bounds.bottom)
                             2 -> PointF(bounds.left, bounds.top)
                             else -> PointF(bounds.right, bounds.top)
+                        }
+                        resizeCorner = when (corner) {
+                            0 -> PointF(bounds.left, bounds.top)
+                            1 -> PointF(bounds.right, bounds.top)
+                            2 -> PointF(bounds.right, bounds.bottom)
+                            else -> PointF(bounds.left, bounds.bottom)
                         }
                         return
                     }

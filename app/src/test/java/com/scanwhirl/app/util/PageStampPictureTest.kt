@@ -56,7 +56,9 @@ class PageStampPictureTest {
             state.rotateBy(index, 20f)
             val mark = state.marks().single() as PageStamp.Mark.Picture
             assertEquals(0.3f, mark.box.left, 0.0001f)
-            assertEquals(0.8f, mark.box.right, 0.0001f)
+            // P placement keeps imported signature ink's aspect instead of stretching to 0.8.
+            assertEquals(0.7f, mark.box.right, 0.0001f)
+            assertEquals(2f, (mark.box.right-mark.box.left)/(mark.box.bottom-mark.box.top), 0.0001f)
             assertEquals(20f, mark.rotation, 0.0001f)
         } finally {
             file.delete()

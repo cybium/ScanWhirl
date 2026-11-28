@@ -131,7 +131,7 @@ class C1SaveTimeoutTest {
         // Create the receiver first (onCreate), then submit: the runner captures the app context
         // here, so the app-context fallback really runs after the screen is destroyed. The gated
         // write is the one the screen's Save JOINS - no second, generic save may be started.
-        StampSaveRunner.submit(id, SaveMeta(edits, R.string.c1_redacted_label)) {
+        StampSaveRunner.submit(id, SaveMeta(edits, R.string.c1_redacted_label, J34TestFlow.COPY_NAME)) {
             writes++
             gate.await()
             withContext(Dispatchers.IO) { repo.stampDocument(id, edits, null) }
@@ -139,8 +139,9 @@ class C1SaveTimeoutTest {
         try {
             screen.findViewById<View>(R.id.saveCopy).performClick()
             idle()
-            // Redaction destroys pixels, so Save asks for confirmation first.
-            ShadowDialog.getLatestDialog()!!.findViewById<View>(R.id.swSheetPrimary).performClick()
+            // Review every affected page, then confirm the editable copy name.
+            J34TestFlow.completeReview()
+            J34TestFlow.confirmName()
             idle()
             assertEquals(
                 "Save joined the running write instead of starting another",
@@ -193,12 +194,13 @@ class C1SaveTimeoutTest {
         val before = repo.listDocuments(includeVaulted = true).size
         val gate = CompletableDeferred<Unit>()
         var writes = 0
-        StampSaveRunner.submit(id, SaveMeta(edits, 0)) {
+        StampSaveRunner.submit(id, SaveMeta(edits, 0, J34TestFlow.COPY_NAME)) {
             writes++
             gate.await()
             withContext(Dispatchers.IO) { ScanRepository(app).stampDocument(id, edits, null) }
         }
         first.findViewById<View>(R.id.saveCopy).performClick()
+        J34TestFlow.confirmName()
         idle()
 
         // The bounded wait expires and the first screen really goes away.
@@ -214,6 +216,7 @@ class C1SaveTimeoutTest {
         second.editor.add(mark)
         second.refresh()
         second.findViewById<View>(R.id.saveCopy).performClick()
+        J34TestFlow.confirmName()
         idle()
         assertEquals(
             "the reopened editor joins the running write instead of starting another",

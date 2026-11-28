@@ -13,7 +13,7 @@
     <string name="stamp_tool_watermark">हल्की छाप लगाएँ</string>
     <string name="stamp_tool_page_numbers">पन्नों पर नंबर डालें</string>
     <string name="stamp_tool_stamp">मोहर लगाएँ</string>
-    <string name="stamp_tool_redact">छिपाने का बॉक्स</string>
+    <string name="stamp_tool_redact">छिपाने का खांचा</string>
     <string name="stamp_suggest">सुझाव</string>
     <string name="stamp_undo">वापस लाएँ</string>
     <string name="stamp_redo">फिर से करें</string>
@@ -114,22 +114,22 @@
     <string name="j34_more">और विकल्प</string>
     <string name="j34_marks">इस पन्ने के निशान</string>
     <string name="j34_position">जगह और आकार</string>
-    <string name="j34_add_box">छिपाने का बॉक्स जोड़ें</string>
+    <string name="j34_add_box">छिपाने का खांचा जोड़ें</string>
     <string name="j34_zoom_in">बड़ा करके देखें</string>
     <string name="j34_zoom_out">छोटा करके देखें</string>
     <string name="j34_page_jump">पन्ना चुनें</string>
     <string name="j34_help">मदद</string>
-    <string name="j34_help_body">मूल दस्तावेज़ नहीं बदलता। प्रति की जाँच सफल होने के बाद ही बॉक्स के अंदर के पिक्सेल और पहचाना गया पाठ हटता है।</string>
+    <string name="j34_help_body">मूल दस्तावेज़ नहीं बदलता। प्रति की जाँच सफल होने के बाद ही खांचे के अंदर की तस्वीर और पहचानी गई लिखावट हटती है।</string>
     <string name="j34_page">पन्ना %1$d</string>
     <string name="j34_area">छिपाया गया हिस्सा %1$d, पन्ना %2$d</string>
     <string name="j34_mark">निशान %1$d, पन्ना %2$d</string>
-    <string name="j34_x">बाईं दूरी (पेज पॉइंट)</string>
-    <string name="j34_y">ऊपरी दूरी (पेज पॉइंट)</string>
-    <string name="j34_width">चौड़ाई (पेज पॉइंट)</string>
-    <string name="j34_height">ऊँचाई (पेज पॉइंट)</string>
+    <string name="j34_x">बाईं दूरी (पन्ने के बिंदु)</string>
+    <string name="j34_y">ऊपरी दूरी (पन्ने के बिंदु)</string>
+    <string name="j34_width">चौड़ाई (पन्ने के बिंदु)</string>
+    <string name="j34_height">ऊँचाई (पन्ने के बिंदु)</string>
     <string name="j34_apply">लागू करें</string>
     <string name="j34_position_error">जगह और आकार पन्ने के अंदर रखें।</string>
-    <string name="j34_place">रखने के लिए टैप करें या खींचें।</string>
+    <string name="j34_place">रखने के लिए छुएँ या खींचें।</string>
     <string name="j34_review">जाँचें</string>
     <string name="j34_hidden">छिपाया हुआ</string>
     <string name="j34_original">मूल</string>
@@ -148,4 +148,8 @@
     <string name="j34_areas_pages">%2$d पन्नों पर %1$d हिस्से</string>
     <string name="j34_remember_signature">यह हस्ताक्षर इस फ़ोन पर रखें</string>
     <string name="j34_clear">साफ़ करें</string>
+    <string name="j34_snap_on">लिखावट की रेखा से मिलाना: चालू</string>
+    <string name="j34_snap_off">लिखावट की रेखा से मिलाना: बंद</string>
+    <string name="j34_nudge_five">5 बिंदु खिसकाएँ (बंद होने पर 1 बिंदु)</string>
+    <string name="j34_next_candidate_page">अगले मिले पन्ने को देखें</string>
 </resources>

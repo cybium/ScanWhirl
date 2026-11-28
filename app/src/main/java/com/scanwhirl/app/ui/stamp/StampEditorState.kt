@@ -185,9 +185,9 @@ class StampEditorState(val pageCount: Int) {
     }
 
     /** Resize handle: replaces the box of a boxed mark, keeping it on the page and usable. */
-    fun resizeTo(index: Int, box: PageStamp.Box): Boolean {
+    fun resizeTo(index: Int, box: PageStamp.Box, precise: Boolean = false): Boolean {
         val mark = pages[currentPage].getOrNull(index) ?: return false
-        val requested = fitted(box)
+        val requested = fitted(box, if (precise) EPSILON else MIN_SIZE)
         val old = when (mark) {
             is PageStamp.Mark.Signature -> mark.box
             is PageStamp.Mark.Picture -> mark.box
@@ -471,17 +471,17 @@ class StampEditorState(val pageCount: Int) {
         return PageStamp.Box(left, top, left + width, top + height)
     }
 
-    private fun fitted(box: PageStamp.Box): PageStamp.Box {
+    private fun fitted(box: PageStamp.Box, minimum: Float = MIN_SIZE): PageStamp.Box {
         var left = min(box.left, box.right).coerceIn(0f, 1f)
         var top = min(box.top, box.bottom).coerceIn(0f, 1f)
         var right = max(box.left, box.right).coerceIn(0f, 1f)
         var bottom = max(box.top, box.bottom).coerceIn(0f, 1f)
         // The epsilon keeps the width genuinely ≥ MIN_SIZE after float rounding.
-        if (right - left < MIN_SIZE) right = (left + MIN_SIZE + EPSILON).coerceAtMost(1f)
-        if (bottom - top < MIN_SIZE) bottom = (top + MIN_SIZE + EPSILON).coerceAtMost(1f)
+        if (right - left < minimum) right = (left + minimum + EPSILON).coerceAtMost(1f)
+        if (bottom - top < minimum) bottom = (top + minimum + EPSILON).coerceAtMost(1f)
         // A corner drag can pin a box to the far edge; keep the minimum by moving the near edge.
-        if (right - left < MIN_SIZE) left = (right - MIN_SIZE - EPSILON).coerceAtLeast(0f)
-        if (bottom - top < MIN_SIZE) top = (bottom - MIN_SIZE - EPSILON).coerceAtLeast(0f)
+        if (right - left < minimum) left = (right - minimum - EPSILON).coerceAtLeast(0f)
+        if (bottom - top < minimum) top = (bottom - minimum - EPSILON).coerceAtLeast(0f)
         return PageStamp.Box(left, top, right, bottom)
     }
 

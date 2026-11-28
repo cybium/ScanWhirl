@@ -151,4 +151,8 @@
     <string name="j34_areas_pages">%1$d areas on %2$d pages</string>
     <string name="j34_remember_signature">Keep this signature on this phone</string>
     <string name="j34_clear">Clear</string>
+    <string name="j34_snap_on">Snap to text baselines: on</string>
+    <string name="j34_snap_off">Snap to text baselines: off</string>
+    <string name="j34_nudge_five">Nudge by 5 points (off: 1 point)</string>
+    <string name="j34_next_candidate_page">Preview next candidate page</string>
 </resources>

@@ -180,8 +180,10 @@ object StampPrompts {
             }
             val name = activity.getString(R.string.stamp_signature_name, store.list().size + 1)
             try {
-                val saved = if (remember.isChecked) store.save(name, pad.vectorStrokes())
-                    else SignatureStore.SavedSignature("session", name, pad.vectorStrokes(), System.currentTimeMillis())
+                val aspect = pad.width.toFloat() / pad.height.coerceAtLeast(1)
+                val saved = if (remember.isChecked) store.save(name, pad.vectorStrokes(), aspect)
+                    else SignatureStore.SavedSignature("session", name, pad.vectorStrokes(),
+                        System.currentTimeMillis(), aspectRatio = aspect)
                 sheet.dismiss()
                 pad.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30)
                     android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.VIRTUAL_KEY)

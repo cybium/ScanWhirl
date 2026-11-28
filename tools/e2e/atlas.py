@@ -882,6 +882,140 @@ def walk_results():
     recover("after shared result walk")
 
 
+def editor_scroll_to(want, backwards=False, attempts=6):
+    """J34 additive: sheet controls can be above or below a 200% viewport."""
+    for _ in range(attempts):
+        if tap(want, timeout=1):
+            return True
+        root = hierarchy()
+        containers = [n for n in root.iter("node")
+                      if n.get("scrollable") == "true"] if root is not None else []
+        if not containers:
+            return False
+        node = max(containers, key=lambda n: rect_area(parse_bounds(n.get("bounds"))))
+        l, t, r, b = parse_bounds(node.get("bounds"))
+        x = (l + r) // 2
+        a, z = t + (b-t)//4, b - (b-t)//4
+        adb("shell", "input", "swipe", x, a if backwards else z,
+            x, z if backwards else a, 350)
+        time.sleep(.4)
+    return False
+
+
+def walk_j34(suffix=""):
+    """Real fictional ink and draft boxes, never fixture injection or a save-gate bypass."""
+    def shot(slug):
+        return capture("j34" + suffix, "j34-" + slug + suffix,
+                       ["Tools", "Shared editor", slug])
+
+    def require(condition, message):
+        if not condition:
+            raise AssertionError("J34 coverage: " + message)
+
+    def open_editor(hide):
+        launch()
+        require(tap({"rid": "swNavTools"}), "Tools tab")
+        title = (r"^Hide private info$|^निजी जानकारी छिपाएँ$" if hide else
+                 r"^Sign or fill a form$|^फ़ॉर्म पर हस्ताक्षर करें या भरें$|हस्ताक्षर.*फ़ॉर्म|फ़ॉर्म.*हस्ताक्षर")
+        require(tap({"regex": title, "pkg": PKG}), "student job")
+        if wait_for({"rid": "canvas"}, timeout=2) is None:
+            require(tap({"regex": FIXTURE, "pkg": PKG}), "fictional document picker row")
+        require(wait_for({"rid": "canvas"}, timeout=15) is not None, "editor canvas")
+
+    def page_point(fx, fy):
+        node = find(hierarchy(), rid="canvas")
+        require(node is not None, "visible canvas for gesture")
+        l, t, r, b = parse_bounds(node.get("bounds"))
+        return int(l + (r-l)*fx), int(t + (b-t)*fy)
+
+    def box(a, b):
+        x, y = page_point(*a)
+        x2, y2 = page_point(*b)
+        adb("shell", "input", "swipe", x, y, x2, y2, 500)
+        time.sleep(.4)
+
+    def sign():
+        open_editor(False)
+        shot("sign-workspace")
+        require(tap({"rid": "toolSignature"}), "Sign rail")
+        require(wait_for({"rid": "stampSignaturePad"}, timeout=8) is not None, "offline pad")
+        shot("signature-pad")
+        node = find(hierarchy(), rid="stampSignaturePad")
+        l, t, r, b = parse_bounds(node.get("bounds"))
+        adb("shell", "input", "swipe", l+(r-l)//5, t+(b-t)//2,
+            r-(r-l)//5, t+(b-t)//3, 450)
+        require(tap({"rid": "swSheetPrimary"}), "Use signature")
+        shot("signature-armed")
+        x, y = page_point(.6, .65)
+        adb("shell", "input", "tap", x, y)
+        time.sleep(.5)
+        shot("signature-handles")
+        require(tap({"rid": "saveCopy"}), "Save copy")
+        shot("sign-name-sheet")
+        require(tap({"rid": "swSheetPrimary"}), "save named signed copy")
+        require(capture_result("j34-sign" + suffix), "signed result")
+        shot("sign-result")
+        return "signature placed and saved through the real pad, name sheet and shared result"
+
+    def hide():
+        open_editor(True)
+        shot("hide-armed")
+        box((.25,.28),(.65,.34))
+        box((.25,.40),(.70,.46))
+        shot("many-hide-boxes")
+        require(tap({"rid": "nextPage"}), "page 2")
+        require(tap({"rid": "nextPage"}), "page 3")
+        box((.3,.3),(.65,.37))
+        shot("hide-page-3")
+        require(tap({"regex": r"^Find$|^खोजें$"}), "Find sheet")
+        shot("find-sheet")
+        dismiss_sheet()
+        require(tap({"rid": "saveCopy"}), "Review")
+        shot("review-hidden")
+        require(editor_scroll_to({"regex": r"^Next page$|^अगला पन्ना$|^अगला पृष्ठ$"}), "second affected page")
+        shot("review-second-page")
+        require(editor_scroll_to({"regex": r"^Original$|^मूल$"}, backwards=True), "Original comparison")
+        shot("review-original-save-disabled")
+        primary = find(hierarchy(), rid="swSheetPrimary")
+        require(primary is not None and primary.get("enabled") == "false", "Original must disable Save")
+        require(editor_scroll_to({"regex": r"^Hidden$|^छिपाया हुआ$"}, backwards=True), "Hidden comparison")
+        require(editor_scroll_to({"regex": r"^I checked every page$|^मैंने हर पन्ना जाँच लिया है$"}), "acknowledgement")
+        require(tap({"rid": "swSheetPrimary"}), "Save hidden copy")
+        shot("hide-name-sheet")
+        require(tap({"rid": "swSheetPrimary"}), "save named hidden copy")
+        require(wait_for({"rid": "swSheetPrimary"}, timeout=50) is not None, "verified receipt")
+        shot("verified-privacy-receipt")
+        require(tap({"rid": "swSheetPrimary"}), "Keep original")
+        require(capture_result("j34-hide" + suffix), "hidden result")
+        shot("hide-result")
+        return "three boxes on two pages reviewed in both modes and saved"
+
+    step("j34" + suffix, "sign" + suffix, ["Tools", "Sign"], sign)
+    step("j34" + suffix, "hide" + suffix, ["Tools", "Hide private info"], hide)
+    recover("after J34" + suffix)
+
+
+def walk_j34_hindi():
+    """Fifth appearance on light's emulator via the app's own language picker."""
+    launch()
+    if not tap({"rid": "swNavMe"}):
+        raise AssertionError("J34 Hindi: Me unavailable")
+    if not tap_reachable({"regex": r"^Settings$"}):
+        raise AssertionError("J34 Hindi: Settings unavailable")
+    if not tap_reachable({"rid": "rowLanguage"}):
+        raise AssertionError("J34 Hindi: language picker unavailable")
+    if not tap({"regex": r"हिन्दी|हिंदी|Hindi"}):
+        raise AssertionError("J34 Hindi: Hindi choice unavailable")
+    time.sleep(1)
+    walk_j34("-hindi")
+    launch()
+    tap({"rid": "swNavMe"})
+    tap_reachable({"regex": r"सेटिंग"})
+    tap_reachable({"rid": "rowLanguage"})
+    tap({"regex": r"English"})
+    launch()
+
+
 def walk_library():
     launch()
 
@@ -1363,6 +1497,9 @@ def main():
         walk_library()
         walk_tabs()
         walk_results()
+        walk_j34()
+        if LEG == "light":
+            step("j34-hindi", "language", ["Me", "Settings", "Language"], walk_j34_hindi)
         walk_tools()
         walk_viewer()
         walk_vault()
