@@ -80,7 +80,7 @@ class LiveVaultEntryTest {
     @Test
     fun `free live Vault entry asks the existing PIN and never redirects to Pro`() {
         Prefs.setVaultPin(app, "2580")
-        ActivityScenario.launch(VaultActivity.intent(app)).use { scenario ->
+        ActivityScenario.launch<VaultActivity>(VaultActivity.intent(app)).use { scenario ->
             scenario.onActivity { activity ->
                 assertFalse("really Free", ProGate.isPro(activity))
                 val sheet = legacyPinSheet()
@@ -97,7 +97,7 @@ class LiveVaultEntryTest {
     @Test
     fun `wrong PIN keeps the live Vault closed and the right PIN advances the gate`() {
         Prefs.setVaultPin(app, "2580")
-        ActivityScenario.launch(VaultActivity.intent(app)).use { scenario ->
+        ActivityScenario.launch<VaultActivity>(VaultActivity.intent(app)).use { scenario ->
             scenario.onActivity { activity ->
                 val wrong = legacyPinSheet()
                 assertNotNull(wrong)
