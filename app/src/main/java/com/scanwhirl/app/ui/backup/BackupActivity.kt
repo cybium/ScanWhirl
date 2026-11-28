@@ -1,5 +1,6 @@
 package com.scanwhirl.app.ui.backup
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -69,6 +70,10 @@ class BackupActivity : BaseActivity() {
         // private cache dir that PrivacySweep clears eventually.
         private const val STATE_PENDING = "ux_uxg_backup_pending"
         private const val STATE_PENDING_WARNINGS = "ux_uxg_backup_pending_warnings"
+
+        // B1 R03 F1: only the path of the private picked copy survives rotation. The secret
+        // typed into the sheet is never saved; it is asked for again after recreation.
+        private const val STATE_RESTORE_SOURCE = "ux_b1_restore_source_path"
 
         // V2R R1: only the operation name and a path are persisted. Never a password or code.
         private const val PREF_INTERRUPTED = "ux_v2r_interrupted_operation"
@@ -220,12 +225,12 @@ class BackupActivity : BaseActivity() {
                     })
                     return@launch
                 }
-                restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
+                restoreSource?.let { releaseRestoreCopy(it) }
                 restoreSource = copied
                 askRestoreSecret(copied)
                 handedOff = true
             } finally {
-                if (!handedOff) com.scanwhirl.app.util.BoundedCopy.release(copied)
+                if (!handedOff) releaseRestoreCopy(copied)
             }
         }
     }
@@ -254,6 +259,18 @@ class BackupActivity : BaseActivity() {
                 showInterruptionReceipt(marker)
                 clearInterruptionMarker()
                 receiptShown = true
+            }
+        }
+        // B1 R03 F1: a configuration change destroyed the secret / Vault-unlock sheet, but the
+        // picked copy is still ours. Re-offer the secret sheet with the same file; no secret is
+        // restored, so the person types it again. The copy stays untouched until a real exit or
+        // until the restore starts (the restore coroutine then owns it).
+        val restorePath = savedInstanceState?.getString(STATE_RESTORE_SOURCE)
+        if (restorePath != null) {
+            val file = File(restorePath)
+            if (file.isFile) {
+                restoreSource = file
+                askRestoreSecret(file)
             }
         }
     }
@@ -298,6 +315,10 @@ class BackupActivity : BaseActivity() {
                 }
             }
         }
+        // B1 R03 F1: a path only. Never the backup password or the Vault recovery code.
+        restoreSource?.let { file ->
+            if (file.isFile) outState.putString(STATE_RESTORE_SOURCE, file.absolutePath)
+        }
     }
 
     override fun onDestroy() {
@@ -312,11 +333,13 @@ class BackupActivity : BaseActivity() {
             // Deliberate exit, not an interruption: do not promise a receipt on next launch.
             if (activeOp != null) clearInterruptionMarker()
             activeArchive?.delete()
+            // B1 R03 F1: a real exit (unlike rotation) ends the restore prompt for good, so the
+            // picked copy is released here. On rotation it survives for the recreated screen.
+            restoreSource?.let { releaseRestoreCopy(it) }
         }
         // The coroutine's finally may run after this callback; it must keep the marker so the
         // new instance can report the interruption.
         destroyed = true
-        restoreSource?.let { com.scanwhirl.app.util.BoundedCopy.release(it) }
         super.onDestroy()
     }
 
@@ -656,6 +679,11 @@ class BackupActivity : BaseActivity() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = FullBackup.MIME
             putExtra(Intent.EXTRA_STREAM, uri)
+            // R05 F1: EXTRA_STREAM alone is not covered by the read grant on Android 12+ — the
+            // sharesheet reads it from ClipData and otherwise logs "Permission Denial ...
+            // call Intent#setClipData()", so the recipient cannot open the attachment. Mirror
+            // ShareUtils' single-file share with the same URI.
+            clipData = ClipData.newUri(contentResolver, file.name, uri)
             putExtra(Intent.EXTRA_SUBJECT, getString(R.string.backup_subject))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
@@ -712,12 +740,18 @@ class BackupActivity : BaseActivity() {
     // Restore
     // ------------------------------------------------------------------
 
+    /** The picked archive is a private scratch copy: release it exactly once, including on exit. */
+    private fun releaseRestoreCopy(file: File) {
+        if (restoreSource == file) restoreSource = null
+        com.scanwhirl.app.util.BoundedCopy.release(file)
+    }
+
     private fun askRestoreSecret(file: File) {
         var restoreRequested = false
         val header = runCatching { backup.header(file) }.getOrNull()
         if (header == null) {
             toast(R.string.backup_not_a_backup)
-            com.scanwhirl.app.util.BoundedCopy.release(file)
+            releaseRestoreCopy(file)
             return
         }
         if (header.wrap == FullBackup.Wrap.RECOVERY_CODE) {
@@ -738,9 +772,9 @@ class BackupActivity : BaseActivity() {
                 sheet.dismiss()
                 runRestore(file, code)
             }
-            sheet.setSecondary(R.string.backup_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
+            sheet.setSecondary(R.string.backup_cancel) { releaseRestoreCopy(file) }
             sheet.setOnDismissListener {
-                if (!restoreRequested) com.scanwhirl.app.util.BoundedCopy.release(file)
+                if (!restoreRequested) releaseRestoreCopy(file)
             }
             sheet.secure().show()
         } else {
@@ -763,15 +797,23 @@ class BackupActivity : BaseActivity() {
                 sheet.dismiss()
                 runRestore(file, secret)
             }
-            sheet.setSecondary(R.string.backup_cancel) { com.scanwhirl.app.util.BoundedCopy.release(file) }
+            sheet.setSecondary(R.string.backup_cancel) { releaseRestoreCopy(file) }
             sheet.setOnDismissListener {
-                if (!restoreRequested) com.scanwhirl.app.util.BoundedCopy.release(file)
+                if (!restoreRequested) releaseRestoreCopy(file)
             }
             sheet.secure().show()
         }
     }
 
     private fun runRestore(file: File, secret: String, allowPrompt: Boolean = true) {
+        // B1 R03 F2: check BEFORE beginOperation, as create() does. The old order overwrote the
+        // in-flight backup's marker with RESTORE and then silently dropped this restore. Reuse
+        // the generic "Working…" message rather than adding copy just for this refusal.
+        if (busy) {
+            toast(R.string.progress_title)
+            releaseRestoreCopy(file)
+            return
+        }
         // The backup carries Vault entries and this phone's Vault is set up: unlock it first, so
         // the entries can be re-encrypted under its key instead of being skipped. The interruption
         // marker starts only AFTER this gate: cancelling the prompt is not an interrupted restore.
@@ -782,15 +824,17 @@ class BackupActivity : BaseActivity() {
             )
             return
         }
+        // From here the restore coroutine owns the scratch copy; its finally releases it. Keeping
+        // restoreSource unset also stops a rotation mid-restore from re-offering the secret sheet.
+        if (restoreSource == file) restoreSource = null
         beginOperation(WorkOp.RESTORE)
-        if (busy) return
         startWork(getString(R.string.ux130_l5_backup_restoring))
         lifecycleScope.launch {
             try {
                 val report = try {
                     runCatching { kotlinx.coroutines.runInterruptible(Dispatchers.IO) { backup.restore(file, secret) } }
                 } finally {
-                    com.scanwhirl.app.util.BoundedCopy.release(file)
+                    releaseRestoreCopy(file)
                 }
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 report.onSuccess { r ->
