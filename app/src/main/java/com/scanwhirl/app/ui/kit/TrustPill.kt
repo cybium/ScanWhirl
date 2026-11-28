@@ -19,6 +19,9 @@ class TrustPill(context: Context) : AppCompatTextView(context) {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
         typeface = SwType.bold(context)
         maxLines = 1
+        // W5a-2 (V072): never split a word; show an ellipsis when the pill is capped.
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
         // The three trust pills share one row; cap the label so 2.0x font
         // cannot make the row wider than the phone.
         val density = resources.displayMetrics.density
