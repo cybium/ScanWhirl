@@ -741,7 +741,11 @@ def import_fixture():
     capture("create", "create-sheet", ["Library", "Create"], "Create sheet before import")
     if not tap({"rid": "swCreateImport"}, timeout=6):
         return False
-    wait_for({"desc": "Show roots"}, timeout=15)
+    # W5e D1: the import door first says pages become images; continue once before DocumentsUI.
+    if wait_for({"desc": "Show roots"}, timeout=2) is None:
+        if not tap({"rid": "swSheetPrimary"}, timeout=3):
+            tap({"text": "Continue"}, timeout=2)
+    wait_for({"desc": "Show roots"}, timeout=20)
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
     # The seeded PDF appears in DocumentsUI "Recent files". Take it directly when it is
     # offered; navigating roots first used to leave the picker and lose the fixture.
@@ -921,6 +925,8 @@ def walk_j34(suffix=""):
                  r"Sign or fill a form|हस्ताक्षर.*फ़ॉर्म|फ़ॉर्म.*हस्ताक्षर")
         require(tap({"regex": title, "pkg": PKG}), "student job")
         if wait_for({"rid": "canvas"}, timeout=2) is None:
+            require(wait_for({"rid": "swSheetRoot"}, timeout=10) is not None,
+                    "document picker")
             require(tap({"regex": FIXTURE, "pkg": PKG}), "fictional document picker row")
         require(wait_for({"rid": "canvas"}, timeout=15) is not None, "editor canvas")
 
@@ -972,7 +978,13 @@ def walk_j34(suffix=""):
         require(tap({"regex": r"^Find$|^खोजें$"}), "Find sheet")
         shot("find-sheet")
         require(tap({"rid": "swSheetPrimary"}), "Find candidates without applying")
-        require(wait_for({"rid": "swSheetRoot"}, timeout=50) is not None,
+        # The options sheet closes while OCR runs; the results sheet replaces it. Wait for the
+        # options sheet to go first, so the capture is never mistaken for the candidate list.
+        for _ in range(20):
+            if find(hierarchy(), rid="swSheetRoot") is None:
+                break
+            time.sleep(.4)
+        require(wait_for({"rid": "swSheetRoot"}, timeout=70) is not None,
                 "candidate or honest unreadable outcome")
         shot("find-candidates")
         dismiss_sheet()
