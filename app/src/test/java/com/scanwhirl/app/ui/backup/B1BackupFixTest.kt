@@ -356,6 +356,9 @@ class B1BackupFixTest {
         try {
             val activity = launch()
             pickArchive(activity, archive)
+            // The picker hands off on lifecycleScope: wait for the private copy
+            // before asserting it (the assertion itself is unchanged).
+            assertTrue("the picker made a private copy", await { restoreSourceOf(activity) != null })
             val copy = restoreSourceOf(activity)!!
             awaitSheet(app.getString(R.string.backup_restore))
                 .findViewById<EditText>(R.id.backupPassword).setText(password)

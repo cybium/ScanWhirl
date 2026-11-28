@@ -28,7 +28,8 @@
          on ok-soft) so the success pill and status text clear the AA floor. -->
     <color name="tok_ok">#16753e</color>
     <color name="tok_ok_soft">#e3f4ea</color>
-    <color name="tok_warn">#9a6400</color>
+    <!-- Deepened from tokens.css #9a6400 (4.47:1 on surface-2) to clear AA there. -->
+    <color name="tok_warn">#946000</color>
     <color name="tok_warn_soft">#fff3db</color>
     <color name="tok_danger">#c0392b</color>
     <color name="tok_danger_soft">#fde8e6</color>
