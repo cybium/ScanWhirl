@@ -59,7 +59,7 @@ abstract class CopyDietRsBase {
     )
 
     @Test(timeout = 30_000)
-    fun `hero is P-hero white 28sp and the receipt is S14`() {
+    fun `facts and prominent location use the shared type and colour roles`() {
         var controller: ActivityController<ToolResultActivity>? = null
         try {
             controller = Robolectric.buildActivity(ToolResultActivity::class.java, resultIntent())
@@ -68,12 +68,12 @@ abstract class CopyDietRsBase {
             val activity = controller.get()
             val density = app.resources.displayMetrics.density
             val hero = activity.findViewById<TextView>(R.id.toolResultSummary)
-            assertEquals(28f * density, hero.textSize, 1f)
+            assertEquals(com.scanwhirl.app.ui.kit.SwType.HEADING_SP * density, hero.textSize, 1f)
             // W5a: P-hero and S roles resolve through the one token palette.
             assertEquals(app.getColor(R.color.tok_text), hero.currentTextColor)
             val receipt = activity.findViewById<TextView>(R.id.toolResultName)
-            assertEquals(14f * density, receipt.textSize, 1f)
-            assertEquals(app.getColor(R.color.tok_text_2), receipt.currentTextColor)
+            assertEquals(com.scanwhirl.app.ui.kit.SwType.BODY_SP * density, receipt.textSize, 1f)
+            assertEquals(app.getColor(R.color.tok_text), receipt.currentTextColor)
         } finally {
             controller?.destroy()
         }

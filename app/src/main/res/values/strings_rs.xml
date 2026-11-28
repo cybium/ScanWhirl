@@ -6,7 +6,7 @@
     <string name="rs_file_ready">File ready</string>
     <string name="rs_not_saved_yet">Not saved yet</string>
     <string name="rs_library_as">In your ScanWhirl library as “%1$s”</string>
-    <string name="rs_image_facts">%1$d × %2$d px · JPG · %3$s</string>
+    <string name="rs_image_facts">%1$d × %2$d px · %3$s · %4$s</string>
     <string name="rs_save_to_phone">Save to phone</string>
     <string name="rs_adjust">Adjust</string>
     <string name="rs_retry">Retry</string>

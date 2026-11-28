@@ -38,8 +38,8 @@ class ResultLocationSafetyTest {
         try {
             idle()
             val activity = controller.get()
-            assertEquals(app.getString(R.string.rs_not_saved_yet),
-                activity.findViewById<TextView>(R.id.toolResultName).text.toString())
+            assertTrue(activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+                .startsWith(app.getString(R.string.rs_not_saved_yet)))
             val primary = activity.window.decorView.findViewWithTag<TextView>("result-primary")
             assertEquals(app.getString(R.string.rs_save_to_phone), primary.text.toString())
             assertTrue(primary.isEnabled)

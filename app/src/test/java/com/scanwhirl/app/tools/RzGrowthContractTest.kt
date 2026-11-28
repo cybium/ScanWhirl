@@ -114,8 +114,9 @@ class RzGrowthContractTest {
             val job = flow.doResize(source, "exam.jpg", opts)
             drive(job, activity)
             val started = startedResult(activity)
-            assertEquals(ExportResultActivity::class.java.name, started.component?.className)
-            val outputPath = started.getStringExtra("output_path")!!
+            assertEquals(com.scanwhirl.app.ui.tools.ToolResultActivity::class.java.name, started.component?.className)
+            val spec = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started)
+            val outputPath = spec.files.single().path
             val written = File(outputPath).readBytes()
             assertTrue(
                 "legitimate upscale output may grow: src=${source.size} out=${written.size}",
@@ -123,10 +124,10 @@ class RzGrowthContractTest {
             )
             assertEquals(Pair(600, 400), ImageTools.imageSize(written))
             assertEquals(source.size.toLong(), started.getLongExtra("before_bytes", -1L))
-            assertEquals(written.size.toLong(), started.getLongExtra("after_bytes", -1L))
-            assertEquals(outputPath, started.getStringExtra("preview_path"))
+            assertEquals(written.size.toLong(), spec.files.single().length())
+            assertEquals(listOf(outputPath), spec.files.map { it.path })
             assertNull("byte growth is not a rejection", started.getStringExtra("compare_outcome"))
-            assertNull("no byte target, no warning", started.getStringExtra("warning"))
+            assertNull("no byte target, no warning", spec.note)
             assertEquals("source bytes must be retained", sourceHash, sha(source))
         } finally {
             controller.destroy()
@@ -147,7 +148,7 @@ class RzGrowthContractTest {
             val job = flow.doResize(source, "equal.jpg", opts)
             drive(job, activity)
             val started = startedResult(activity)
-            val written = File(started.getStringExtra("output_path")!!).readBytes()
+            val written = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started).files.single().readBytes()
             assertEquals("equal-byte output must be kept", source.size, written.size)
             assertEquals(Pair(120, 80), ImageTools.imageSize(written))
             assertNull("equal bytes are not a rejection", started.getStringExtra("compare_outcome"))
@@ -167,7 +168,7 @@ class RzGrowthContractTest {
             val job = flow.doResize(source, "small.jpg", opts)
             drive(job, activity)
             val started = startedResult(activity)
-            val written = File(started.getStringExtra("output_path")!!).readBytes()
+            val written = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started).files.single().readBytes()
             assertTrue("downscale must reduce bytes: src=${source.size} out=${written.size}",
                 written.size < source.size)
             assertEquals(Pair(40, 30), ImageTools.imageSize(written))
@@ -188,9 +189,9 @@ class RzGrowthContractTest {
             val job = flow.doResize(source, "target_miss.jpg", opts)
             drive(job, activity)
             val started = startedResult(activity)
-            val written = File(started.getStringExtra("output_path")!!).readBytes()
+            val written = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started).files.single().readBytes()
             assertEquals("miss must not shrink or hide the image", Pair(160, 120), ImageTools.imageSize(written))
-            val warning = started.getStringExtra("warning")
+            val warning = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started).note
             assertNotNull("a byte-target miss must be reported", warning)
             assertTrue("warning must name the target: $warning", warning!!.contains(SizeUnits.format(1L)))
             assertTrue("warning must name the exact pixels: $warning",
@@ -215,7 +216,7 @@ class RzGrowthContractTest {
                 ExactResize.Options(240, 180, ExactResize.Mode.CROP))
             drive(job, activity)
             val started = startedResult(activity)
-            assertTrue(File(started.getStringExtra("output_path")!!).isFile)
+            assertTrue(com.scanwhirl.app.ui.result.ResultSpec.fromIntent(started).files.single().isFile)
             assertEquals("the picked file must never be rewritten", before, sha(sourceFile.readBytes()))
         } finally {
             controller.destroy()

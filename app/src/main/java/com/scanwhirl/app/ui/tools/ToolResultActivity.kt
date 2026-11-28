@@ -1126,11 +1126,16 @@ class ToolResultActivity : BaseActivity() {
         }
         savedLine.isVisible = true
         savedLine.text = when {
-            docIds.any { repo.getDocument(it) != null } -> getString(R.string.rs_library_as, name)
+            docIds.any { repo.getDocument(it) != null } -> getString(R.string.rs_library_as, name) +
+                when {
+                    sourceKept -> getString(R.string.rs_saved_suffix_kept).removePrefix("”")
+                    receiptSourceId != null -> getString(R.string.rs_saved_suffix_missing).removePrefix("”")
+                    else -> ""
+                }
             chosenLocationName != null -> getString(R.string.rs_where_chosen) + "\n" + chosenLocationName
             savedCopy != null -> getString(R.string.rs_where_documents) + "\n" + savedCopy!!.name
             documentsExistingName != null -> getString(R.string.rs_where_documents_existing) + "\n" + documentsExistingName
-            else -> getString(R.string.rs_not_saved_yet)
+            else -> getString(R.string.rs_not_saved_yet) + "\n" + name
         }
         savedLine.contentDescription = savedLine.text
     }
@@ -1165,7 +1170,8 @@ class ToolResultActivity : BaseActivity() {
                 val size = if (toolId == "form_ready")
                     String.format(java.util.Locale.getDefault(), "%.1f KB", bytes / 1024.0)
                 else StatusLine.formatBytes(bytes)
-                summary.text = getString(R.string.rs_image_facts, measured.second, measured.third, size)
+                summary.text = getString(R.string.rs_image_facts, measured.second, measured.third,
+                    files.firstOrNull()?.extension?.uppercase(java.util.Locale.ROOT).orEmpty(), size)
             }
         }
         if (docIds.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
