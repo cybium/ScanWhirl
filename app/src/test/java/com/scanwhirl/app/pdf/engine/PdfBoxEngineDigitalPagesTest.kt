@@ -238,6 +238,10 @@ class PdfBoxEngineDigitalPagesTest {
         assertTrue(expectError { engine.open(protected, "wrong-password") } is PdfEngineError.InvalidPassword)
         assertEquals(1, engine.open(protected, "right-password").pageCount)
 
+        // A literal "/Encrypt" in page text must not turn a plain PDF into an encrypted one.
+        val literal = makePdf("literal-encrypt.pdf", 1, "/Encrypt literal text")
+        assertEquals(1, engine.open(literal).pageCount)
+
         // An encrypted file whose /Filter is not Standard must be refused before PDFBox sees it.
         val patched = String(protected.readBytes(), Charset.forName("ISO-8859-1"))
             .replace("/Standard", "/NoStdFlt").toByteArray(Charset.forName("ISO-8859-1"))
@@ -256,17 +260,21 @@ class PdfBoxEngineDigitalPagesTest {
             expectError { it.open(makePdf("many.pdf", 2, "M")) } is PdfEngineError.LimitExceeded
         })
         assertTrue(engineWith(PdfEngineBudgets(maxRenderPixels = 1)).use { limited ->
-            expectError {
+            val ok = expectError {
                 limited.redact(limited.open(plain), 0, emptyList(), File(dir, "px.pdf").path)
             } is PdfEngineError.LimitExceeded
+            assertEquals("failed redact leaked a temp", 0, limited.stagedTempPaths().size)
+            ok
         })
         assertTrue(engineWith(PdfEngineBudgets(wallTimeMs = -1)).use {
             expectError { it.open(plain) } is PdfEngineError.LimitExceeded
         })
-        assertTrue(engineWith(PdfEngineBudgets(maxOutputBytes = 4)).use {
-            expectError {
-                it.copyPages(it.open(plain), intArrayOf(0), File(dir, "tiny.pdf").path)
+        assertTrue(engineWith(PdfEngineBudgets(maxOutputBytes = 4)).use { limited ->
+            val ok = expectError {
+                limited.copyPages(limited.open(plain), intArrayOf(0), File(dir, "tiny.pdf").path)
             } is PdfEngineError.LimitExceeded
+            assertEquals("failed save leaked a temp", 0, limited.stagedTempPaths().size)
+            ok
         })
         val bigHandle = engine.open(plain)
         assertTrue(engineWith(PdfEngineBudgets(maxInputBytes = 4)).use { limited ->
@@ -286,10 +294,29 @@ class PdfBoxEngineDigitalPagesTest {
             ApplicationProvider.getApplicationContext(), File(dir, "private-work"),
             enforceWorkerThread = false
         )
-        scoped.open(protected, "user-fictional")
-        val temps = scoped.stagedTempPaths()
-        assertTrue(temps.isNotEmpty())
-        assertTrue(temps.all { it.parentFile == ApplicationProvider.getApplicationContext<Context>().filesDir })
+        val handle = scoped.open(protected, "user-fictional")
+        val retainedCount = scoped.stagedTempPaths().size
+        assertTrue(retainedCount > 0) // the open() handle legitimately owns one decrypted temp
+        assertTrue(scoped.stagedTempPaths().all {
+            it.parentFile == ApplicationProvider.getApplicationContext<Context>().filesDir
+        })
+        scoped.saveEncrypted(handle, File(dir, "private-save.pdf"), "user-fictional")
+        assertEquals("saveEncrypted leaked a plaintext temp", retainedCount, scoped.stagedTempPaths().size)
+        scoped.verifyText(protected, "user-fictional")
+        assertEquals("verifyText leaked a plaintext temp", retainedCount, scoped.stagedTempPaths().size)
+
+        // A second engine must not sweep the first engine's live handle temp.
+        val other = PdfBoxEngine(
+            ApplicationProvider.getApplicationContext(), File(dir, "other-work"),
+            enforceWorkerThread = false
+        )
+        assertEquals(retainedCount, scoped.stagedTempPaths().size)
+        other.close()
+        assertEquals(retainedCount, scoped.stagedTempPaths().size)
+
+        scoped.cancel()
+        assertTrue(expectError { scoped.verifyText(protected, "user-fictional") } is PdfEngineError.Cancelled)
+        assertEquals(retainedCount, scoped.stagedTempPaths().size)
         scoped.close()
         assertTrue(scoped.stagedTempPaths().isEmpty())
 

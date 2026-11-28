@@ -76,21 +76,19 @@
 -dontwarn org.bouncycastle.**
 -dontwarn com.tom_roush.pdfbox.pdmodel.encryption.**
 
-# Standard-14 AFM resources and the embedded-font loader are reached from asset
-# names, not from bytecode references. Keep the font model intact.
--keep class com.tom_roush.pdfbox.** { *; }
--keep class com.tom_roush.fontbox.** { *; }
-
 # W7a engine is not yet called from any screen (W7b wiring is deferred), so R8
-# would remove the whole package from the minified APK. Keep it for the
-# instrumented runtime check and for the later UI integration.
+# would remove the whole package from the minified APK. Keeping this package is
+# the single root; PDFBox/fontbox classes reachable from it are kept transitively.
 -keep class com.scanwhirl.app.pdf.engine.** { *; }
 
-# The AndroidX test runner (instrumented smoke test) is Kotlin-compiled and
-# resolves Intrinsics from the target APK's class loader. Keep it in the
-# minified release build so the runtime smoke test can start.
--keep class kotlin.jvm.internal.** { *; }
--keep class androidx.tracing.** { *; }
+# These two are reached through asset names / static initialisers rather than a
+# direct bytecode reference from the engine.
+-keep class com.tom_roush.pdfbox.android.PDFBoxResourceLoader { *; }
+-keep class com.tom_roush.pdfbox.pdmodel.font.Standard14Fonts { *; }
+
+# Kotlin runtime helpers used by the engine's compiled Kotlin classes.
+-keep class kotlin.jvm.internal.Intrinsics { *; }
+-keep class kotlin.jvm.internal.Lambda { *; }
 
 # PDFBox-Android's JPX filter references the optional Gemalto JP2 decoder, which
 # is deliberately not shipped (no INTERNET/JCenter dependency). JPX input fails

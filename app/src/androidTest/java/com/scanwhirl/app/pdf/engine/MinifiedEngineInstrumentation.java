@@ -82,6 +82,26 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
 
             File a = makePdf(new File(dir, "a.pdf"), "MINIFIED_MARKER_A");
             File b = makePdf(new File(dir, "b.pdf"), "MINIFIED_MARKER_B");
+
+            // The workflow below uses enforceWorkerThread=false because am instrument
+            // runs on one thread; verify the production guard still fires on main.
+            final boolean[] guardFired = { false };
+            final PdfBoxEngine guarded = new PdfBoxEngine(getTargetContext(),
+                new File(dir, "guard"), new PdfEngineBudgets(), true);
+            runOnMainSync(new Runnable() {
+                @Override public void run() {
+                    try {
+                        guarded.open(a);
+                    } catch (IllegalStateException expected) {
+                        guardFired[0] = true;
+                    } catch (Throwable ignored) {
+                        // Any other failure means the guard did not fire first.
+                    }
+                }
+            });
+            guarded.close();
+            if (!guardFired[0]) throw new AssertionError("main-thread guard did not fire");
+
             PdfHandle merged = engine.merge(java.util.Arrays.asList(a, b),
                 new File(dir, "merged.pdf").getPath());
             if (merged.getPageCount() != 2) throw new AssertionError("merge page count");

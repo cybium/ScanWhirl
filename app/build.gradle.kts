@@ -259,8 +259,6 @@ dependencies {
     // first use; keeps the APK small, consistent with the scanner).
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:18.0.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
-    // W7a: AndroidX test runner resolves Trace from the target APK at runtime.
-    implementation("androidx.tracing:tracing:1.2.0")
     // Vault unlock (70_APP_DESIGN §4.1): in-app fingerprint/face sheet with device-credential fallback. Offline, no permission beyond USE_BIOMETRIC.
     implementation("androidx.biometric:biometric:1.1.0")
     // Play Billing for the one-time Pro unlock. The store talks to Play itself; ScanWhirl keeps
@@ -284,13 +282,8 @@ dependencies {
         exclude(group = "org.bouncycastle", module = "bcutil-jdk15to18")
     }
 
-    // W7a minified-runtime smoke test (androidTest runs against the R8 release APK).
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    // The AndroidX test runner itself is Kotlin-compiled; the test APK needs the
-    // stdlib on its own classpath when instrumenting the minified target APK.
-    androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.20")
-    androidTestImplementation("androidx.tracing:tracing:1.2.0")
+    // The minified-runtime smoke is a plain Java Instrumentation class: no
+    // AndroidX/Kotlin test dependencies are needed in the test APK.
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

@@ -59,6 +59,7 @@ class PdfBoxEngine(
     }
     private val cancelled = AtomicBoolean(false)
     private val sequence = AtomicLong(0)
+    private val engineId = "${Process.myPid()}-${System.nanoTime()}"
     private val dir = workDir.apply { mkdirs() }
     private val opTemps = ThreadLocal<MutableList<File>>()
     private val retained = Collections.synchronizedList(mutableListOf<File>())
@@ -67,12 +68,19 @@ class PdfBoxEngine(
     override val isCancelled: Boolean get() = cancelled.get()
 
     init {
+        synchronized(activeEngines) { activeEngines.add(engineId) }
         sweep()
     }
 
-    /** Removes plaintext staging left by a previous process death. */
+    /**
+     * Removes plaintext staging not owned by a live engine in this process. A second
+     * engine can never delete the first engine's handle plaintext.
+     */
     private fun sweep() {
-        context.filesDir.listFiles { f -> f.name.startsWith(TEMP_PREFIX) }?.forEach { it.delete() }
+        val owned = synchronized(activeEngines) { activeEngines.toSet() }
+        context.filesDir.listFiles { f ->
+            f.name.startsWith(TEMP_PREFIX) && owned.none { id -> f.name.contains("-$id-") }
+        }?.forEach { it.delete() }
         dir.listFiles()?.forEach { it.delete() }
     }
 
@@ -82,7 +90,7 @@ class PdfBoxEngine(
             (dir.listFiles()?.toList().orEmpty())).sortedBy { it.name }
 
     private fun temp(name: String): File {
-        val fileName = "$TEMP_PREFIX${Process.myPid()}-${sequence.incrementAndGet()}-$name.pdf"
+        val fileName = "$TEMP_PREFIX$engineId-${sequence.incrementAndGet()}-$name.pdf"
         // MODE_PRIVATE creates 0600; never use writeBytes/default umask for plaintext.
         context.openFileOutput(fileName, Context.MODE_PRIVATE).use { }
         val file = File(context.filesDir, fileName)
@@ -101,25 +109,26 @@ class PdfBoxEngine(
         if (enforceWorkerThread && Looper.myLooper() == Looper.getMainLooper()) {
             throw IllegalStateException("PdfEngine must not be called on the main thread")
         }
-        val temps = mutableListOf<File>()
-        opTemps.set(temps)
-        try {
-            return try {
-                executor.submit(Callable {
+        return try {
+            executor.submit(Callable {
+                // The registry must live on the worker: temp() runs inside this Callable.
+                val temps = mutableListOf<File>()
+                opTemps.set(temps)
+                try {
                     if (cancelled.get()) throw PdfEngineError.Cancelled()
                     block()
-                }).get()
-            } catch (e: CancellationException) {
-                throw PdfEngineError.Cancelled()
-            } catch (e: ExecutionException) {
-                throw mapError(e.cause ?: e)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw PdfEngineError.Cancelled()
-            }
-        } finally {
-            temps.forEach { it.delete() }
-            opTemps.remove()
+                } finally {
+                    temps.forEach { it.delete() }
+                    opTemps.remove()
+                }
+            }).get()
+        } catch (e: CancellationException) {
+            throw PdfEngineError.Cancelled()
+        } catch (e: ExecutionException) {
+            throw mapError(e.cause ?: e)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw PdfEngineError.Cancelled()
         }
     }
 
@@ -169,23 +178,18 @@ class PdfBoxEngine(
         return file
     }
 
-    /** Only the trailer region is inspected; a plain file never reaches PDFBox with a password. */
-    private fun hasEncryptDictionary(raw: ByteArray): Boolean {
-        val needle = "/Encrypt".toByteArray(Charset.forName("ISO-8859-1"))
-        val from = maxOf(0, raw.size - 65_536)
-        outer@ for (i in from..raw.size - needle.size) {
-            for (j in needle.indices) if (raw[i + j] != needle[j]) continue@outer
-            return true
-        }
-        return false
-    }
-
-    private fun decryptToTemp(raw: ByteArray, password: String): File {
+    /**
+     * Uses the app's parser, not a byte scan: a literal "/Encrypt" in page content can
+     * never make a plain file look encrypted, and an encrypted dictionary outside a
+     * 64 KB window cannot slip through. Returns null only for a genuinely plain PDF.
+     */
+    private fun decryptToTemp(raw: ByteArray, password: String): File? {
         val plain = try {
             PdfDecryptor.decrypt(raw, password)
         } catch (e: PdfDecryptor.WrongPassword) {
             throw PdfEngineError.InvalidPassword()
         } catch (e: PdfDecryptor.UnsupportedScheme) {
+            if (e.message == NO_ENCRYPTION_MESSAGE) return null
             // Real encrypted-but-unsupported scheme: never hand those bytes to PDFBox.
             throw PdfEngineError.UnsupportedFeature(
                 e.message ?: "a password format ScanWhirl cannot open"
@@ -236,12 +240,19 @@ class PdfBoxEngine(
         override fun close() = delegate.close()
     }
 
+    /** Every write path is bounded in-flight, not only checked at publish time. */
+    private fun saveBounded(doc: PDDocument, file: File, started: Long) {
+        FileOutputStream(file).use { stream ->
+            doc.save(BoundedOutputStream(stream, started))
+        }
+        deadline(started)
+    }
+
     private fun textOf(file: File, password: String? = null, page: Int = 0): String {
         val raw = checkedInput(file).readBytes()
-        val plain = if (hasEncryptDictionary(raw)) {
-            if (password.isNullOrEmpty()) throw PdfEngineError.InvalidPassword()
-            decryptToTemp(raw, password)
-        } else file
+        val decrypted = decryptToTemp(raw, password.orEmpty())
+        if (decrypted != null && password.isNullOrEmpty()) throw PdfEngineError.InvalidPassword()
+        val plain = decrypted ?: file
         PDDocument.load(checkedInput(plain)).use { doc ->
             val stripper = PDFTextStripper()
             if (page > 0) {
@@ -267,9 +278,7 @@ class PdfBoxEngine(
         val started = System.nanoTime()
         val input = checkedInput(source, started)
         val raw = input.readBytes()
-        val plain = if (hasEncryptDictionary(raw)) {
-            decryptToTemp(raw, password.orEmpty()).also { retain(it) }
-        } else input
+        val plain = decryptToTemp(raw, password.orEmpty())?.also { retain(it) } ?: input
         PDDocument.load(checkedInput(plain, started)).use { doc ->
             if (doc.numberOfPages > budgets.maxPages) throw PdfEngineError.LimitExceeded("page count")
             deadline(started)
@@ -293,7 +302,7 @@ class PdfBoxEngine(
                     deadline(started)
                     doc.importPage(src.getPage(index))
                 }
-                doc.save(out)
+                saveBounded(doc, out, started)
             }
         }
         deadline(started)
@@ -317,7 +326,7 @@ class PdfBoxEngine(
                     deadline(started)
                     doc.importPage(src.getPage(index))
                 }
-                doc.save(out)
+                saveBounded(doc, out, started)
             }
         }
         deadline(started)
@@ -341,7 +350,7 @@ class PdfBoxEngine(
             val page = doc.getPage(pageIndex)
             expected = ((page.rotation + degrees) % 360 + 360) % 360
             page.rotation = expected
-            doc.save(out)
+            saveBounded(doc, out, started)
         }
         deadline(started)
         verifyPages(out, actualPages, started)
@@ -370,7 +379,7 @@ class PdfBoxEngine(
                 deadline(started)
                 doc.removePage(index)
             }
-            doc.save(out)
+            saveBounded(doc, out, started)
         }
         deadline(started)
         verifyPages(out, actualPages - unique.size, started)
@@ -424,7 +433,7 @@ class PdfBoxEngine(
                         checkCancelled()
                         doc.importPage(src.getPage(index))
                     }
-                    doc.save(out)
+                    saveBounded(doc, out, started)
                 }
                 deadline(started)
                 verifyPages(out, range.count(), started)
@@ -469,7 +478,7 @@ class PdfBoxEngine(
                 cs.showText(date)
                 cs.endText()
             }
-            doc.save(out)
+            saveBounded(doc, out, started)
         }
         deadline(started)
         verifyPages(out, actualPages, started)
@@ -531,7 +540,7 @@ class PdfBoxEngine(
                     val imported = doc.importPage(src.getPage(i))
                     sanitizePage(imported)
                 }
-                doc.save(out)
+                saveBounded(doc, out, started)
             }
         }
         deadline(started)
@@ -562,6 +571,7 @@ class PdfBoxEngine(
         deadline(started)
         Durable.syncFile(out)
         val roundTrip = decryptToTemp(out.readBytes(), userPassword)
+            ?: throw PdfEngineError.VerificationFailed("encrypted output is not encrypted")
         PDDocument.load(checkedInput(roundTrip, started)).use { doc ->
             var sourcePages = 0
             PDDocument.load(checkedInput(handle.file, started)).use { source ->
@@ -585,10 +595,7 @@ class PdfBoxEngine(
     override fun verifyText(file: File, password: String?): String = execute {
         ensureReady()
         val started = System.nanoTime()
-        val raw = checkedInput(file, started).readBytes()
-        if (hasEncryptDictionary(raw) && password.isNullOrEmpty()) {
-            throw PdfEngineError.InvalidPassword()
-        }
+        checkedInput(file, started)
         textOf(file, password)
     }
 
@@ -607,6 +614,7 @@ class PdfBoxEngine(
             retained.forEach { it.delete() }
             retained.clear()
         }
+        synchronized(activeEngines) { activeEngines.remove(engineId) }
         sweep()
     }
 
@@ -622,5 +630,7 @@ class PdfBoxEngine(
 
     companion object {
         private const val TEMP_PREFIX = "swpdf-private-"
+        private const val NO_ENCRYPTION_MESSAGE = "This PDF does not use the standard password format"
+        private val activeEngines = mutableSetOf<String>()
     }
 }
