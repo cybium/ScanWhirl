@@ -6,6 +6,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -89,8 +90,8 @@ class J2CompressHarmTest {
     fun `both modes never show at once`() {
         openSetup { scenario ->
             ready(scenario) { activity ->
-                val quality = activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_QUALITY_TAG)
-                val size = activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)
+                val quality = activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_QUALITY_TAG)
+                val size = activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)
                 assertNotNull("the quality aim is offered", quality)
                 assertNotNull("the size aim is offered", size)
                 assertTrue("Balanced starts as the chosen aim", quality.isSelected)
@@ -109,7 +110,7 @@ class J2CompressHarmTest {
 
                 // Each aim keeps its own choice across a switch.
                 activity.findViewById<EditText>(R.id.toolSetupTarget).setText("1.5")
-                activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_UNIT_MB_TAG)!!.performClick()
+                activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_UNIT_MB_TAG)!!.performClick()
                 quality.performClick()
                 idle()
                 size.performClick()
@@ -117,7 +118,7 @@ class J2CompressHarmTest {
                 assertEquals("1.5", activity.findViewById<EditText>(R.id.toolSetupTarget).text.toString())
                 assertTrue(
                     "the unit survives the switch",
-                    activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_UNIT_MB_TAG)!!.isSelected
+                    activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_UNIT_MB_TAG)!!.isSelected
                 )
             }
         }
@@ -245,7 +246,7 @@ class J2CompressHarmTest {
             }
             assertTrue("the engine was reached", entered.await(10, TimeUnit.SECONDS))
             scenario.onActivity { activity ->
-                val cancel = activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_CANCEL_TAG)
+                val cancel = activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_CANCEL_TAG)
                 assertNotNull("one safe Cancel is offered while staging", cancel)
                 cancel.performClick()
                 idle()
@@ -272,7 +273,7 @@ class J2CompressHarmTest {
                     "the library is listed before the run",
                     pollUntil { activity.findViewById<View>(R.id.toolSetupDocName)?.isShown == true }
                 )
-                activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
+                activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
                 idle()
                 activity.findViewById<EditText>(R.id.toolSetupTarget).setText("not a size")
                 idle()

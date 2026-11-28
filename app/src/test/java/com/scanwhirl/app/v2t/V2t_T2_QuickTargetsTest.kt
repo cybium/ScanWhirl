@@ -106,7 +106,7 @@ class V2t_T2_QuickTargetsTest {
             .use { scenario ->
                 scenario.onActivity { activity ->
                     waitUntil { activity.findViewById<View>(R.id.toolSetupRun)?.isShown == true }
-                    activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
+                    activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
                     idle()
                     val field = activity.findViewById<EditText>(R.id.toolSetupTarget)
                     assertNotNull("target field", field)
