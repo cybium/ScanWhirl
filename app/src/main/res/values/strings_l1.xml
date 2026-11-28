@@ -52,7 +52,7 @@
     <string name="home_protected">Protected</string>
 
     <string name="tools_title">Tools</string>
-    <string name="tools_search_hint">Find a tool, e.g. "OCR"</string>
+    <string name="tools_search_hint">Find a tool</string>
     <string name="tools_no_match">No tool for “%1$s”</string>
     <string name="tools_group_create">Create</string>
     <string name="tools_group_organize">Organize</string>
@@ -64,7 +64,7 @@
 
     <!-- B4-TOOLS: the seven jobs (UI_PLAN §0b), in the order they are read -->
     <string name="tools_job_smaller">Compress &amp; resize</string>
-    <string name="tools_job_organise">Combine &amp; organize</string>
+    <string name="tools_job_organise">Combine</string>
     <string name="tools_job_markup">Sign &amp; mark up</string>
     <string name="tools_job_private">Privacy</string>
     <string name="tools_job_text">OCR &amp; search</string>

@@ -316,12 +316,31 @@ class ToolsDensityTest {
                 // The tab content stops where the bottom dock starts (780 - 100dp dock).
                 val content = activity.findViewById<View>(R.id.swTabContent)
                 val body = activity.findViewById<ViewGroup>(R.id.swToolsBody)
-                val firstHeader = ((body.getChildAt(0) as ViewGroup).getChildAt(0) as ViewGroup)
+                // B3: three named student jobs lead; the grouped catalogue starts below them.
+                assertEquals(
+                    "the student jobs are the first card",
+                    ToolsHubScreen.TAG_STUDENT_JOBS,
+                    (body.getChildAt(0) as? ViewGroup)?.tag
+                )
+                val firstHeader = ((body.getChildAt(1) as ViewGroup).getChildAt(0) as ViewGroup)
                     .getChildAt(0) as TextView
                 assertEquals(
                     app.getString(R.string.tools_job_smaller),
                     firstHeader.text.toString()
                 )
+
+                // One normal scroll down from the jobs brings the first group into view.
+                var scrollParent = body.parent
+                while (scrollParent != null && scrollParent !is android.widget.ScrollView) {
+                    scrollParent = scrollParent.parent
+                }
+                val scroll = scrollParent as android.widget.ScrollView
+                val compress = ToolsHubScreen.tiles(body).first { it.tool?.id == "compress" }
+                val start = Rect(0, 0, compress.width, compress.height)
+                (root as ViewGroup).offsetDescendantRectToMyCoords(compress, start)
+                scroll.scrollTo(0, scroll.scrollY + start.top - content.top - 24)
+                shadowOf(Looper.getMainLooper()).idle()
+                repeat(2) { root.measure(w, h); root.layout(0, 0, dm.widthPixels, dm.heightPixels) }
 
                 val visible = mutableListOf<String>()
                 val bad = mutableListOf<String>()
@@ -343,7 +362,7 @@ class ToolsDensityTest {
                     }
                 }
                 assertTrue(
-                    "Compress and Resize are visible in the first job without scrolling, saw " +
+                    "Compress and Resize are reachable in the first job after one scroll, saw " +
                         "${visible.joinToString(",")}; labels=${bad.joinToString(" | ")}",
                     visible.containsAll(listOf("compress", "resize"))
                 )

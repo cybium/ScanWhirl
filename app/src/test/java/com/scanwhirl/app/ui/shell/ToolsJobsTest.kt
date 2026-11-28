@@ -117,7 +117,7 @@ abstract class ToolsJobsBase {
                 "job names, in reading order",
                 listOf(
                     "Compress & resize",
-                    "Combine & organize",
+                    "Combine",
                     "Sign & mark up",
                     "Privacy",
                     "OCR & search",

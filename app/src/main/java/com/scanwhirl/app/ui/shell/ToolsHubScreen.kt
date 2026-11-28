@@ -428,11 +428,9 @@ class ToolsHubScreen(
         // T2 owner 2026-11-21: icon grid. Grow labels rather than hiding any part of a name.
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
         labelView.ellipsize = null
-        // 320dp / 2.0: keep wrapping and let the tile grow; a 2dp inset stops a centred
-        // label from touching the column beside it, and no word is ever cut.
+        // 320dp / 2.0: keep wrapping and let the tile grow; no word is ever cut.
+        // No label inset: it changed greedy wrapping and broke "Watermark" mid-word at 100%.
         labelView.maxLines = Int.MAX_VALUE
-        val inset = SwStyle.dp(context, 2f)
-        labelView.setPadding(inset, 0, inset, 0)
         // One focus stop, full tool name + Pro from bind(), not separate icon/label/badge nodes.
         (getChildAt(0) as ViewGroup).importantForAccessibility =
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
