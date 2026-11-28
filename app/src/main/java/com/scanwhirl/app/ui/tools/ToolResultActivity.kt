@@ -489,7 +489,10 @@ class ToolResultActivity : BaseActivity() {
         )
         bar.addView(textAction(getString(R.string.tools_result_done)).apply {
             tag = "result-done"
-            isVisible = !alreadyCompact && !idCardFlow
+            // J2: a miss keeps Back -> library and hides the duplicate Done, so the decision
+            // screen and its forty-word receipt stay within budget.
+            isVisible = !alreadyCompact && !idCardFlow &&
+                !(isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED)
             minimumWidth = SwStyle.dp(this@ToolResultActivity, SwStyle.TOUCH_MIN_DP)
             setOnClickListener { showInLibrary() }
         })
@@ -793,9 +796,7 @@ class ToolResultActivity : BaseActivity() {
             ) add(
                 button(getString(R.string.rs_adjust), tag = "result-adjust") { adjust() }
             )
-            // J2: a miss already shows the real preview and owns a Keep/Choose decision; Open
-            // would add a second destination and two words to an already full decision screen.
-            if (!(isCompressResult && outcomeClass == OutcomeClass.TARGET_MISSED)) add(open)
+            add(open)
             if (resultSpec.primary != ResultSpec.Action.SHARE) add(share)
             add(more)
         }
