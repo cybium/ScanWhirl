@@ -1169,7 +1169,11 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .setPageLimit(ScanLauncher.CAMERA_PAGE_LIMIT)
             .build()
         GmsDocumentScanning.getClient(options).getStartScanIntent(this)
-            .addOnSuccessListener { sender ->
+            // The Task can finish after a rotation. An activity-scoped listener is removed on
+            // destroy; the guard also covers a callback already queued on the main thread,
+            // whose launcher would otherwise be unregistered and throw on launch.
+            .addOnSuccessListener(this) { sender ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 insertScanner.launch(IntentSenderRequest.Builder(sender).build())
             }
             .addOnFailureListener { e ->

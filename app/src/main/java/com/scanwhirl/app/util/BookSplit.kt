@@ -132,6 +132,13 @@ object BookSplit {
     }
 
     /**
+     * Test-only view of the bitmap decoded by [splitToJpeg], so a test can prove it was recycled
+     * even in the 0° case where [rotate] hands back that very same object.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal var decodeProbeForTest: ((Bitmap) -> Unit)? = null
+
+    /**
      * Full analysis of a scanner-cropped page: text direction, rotation, shape and gutter.
      * The returned bitmap rotation is applied by the UI preview and by [splitToJpeg].
      */
@@ -469,12 +476,16 @@ object BookSplit {
         quality: Int = 90
     ): Pair<ByteArray, ByteArray> {
         val bitmap = decode(bytes)
+        decodeProbeForTest?.invoke(bitmap)
         val upright = rotate(bitmap, analysis.rotation)
-        if (upright !== bitmap) bitmap.recycle()
+        // rotate() returns the source unchanged at 0°, so the two names can be the same object.
+        // Recycle each distinct bitmap exactly once, whichever way the rotation went: the
+        // decoded spread must not outlive this call (the caller only gets the two JPEGs).
         val split = try {
             split(upright, analysis.gutter)
         } finally {
             if (upright !== bitmap) upright.recycle()
+            bitmap.recycle()
         }
         return try {
             ImageTools.encodeJpeg(split.left, quality) to ImageTools.encodeJpeg(split.right, quality)

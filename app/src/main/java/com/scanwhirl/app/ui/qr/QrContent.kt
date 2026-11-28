@@ -69,32 +69,39 @@ data class QrContent(
          * the scanner's value type (used when the text alone is ambiguous); TEXT is the
          * honest fallback for anything unrecognised.
          */
-        /** [contactFallback] is the localised "Contact" title used when a card has no name. */
+        /**
+         * [contactFallback] is the localised "Contact" title used when a card has no name;
+         * [wifiFallback] is the neutral "Wi-Fi network" title for a code with no SSID. Both
+         * defaults mirror the English resources; every UI call site passes getString(...).
+         */
         fun parse(
             rawValue: String,
             reported: QrKind = QrKind.TEXT,
-            contactFallback: String = "Contact"
+            contactFallback: String = "Contact",
+            wifiFallback: String = "Wi-Fi network"
         ): QrContent {
             val value = rawValue.take(MAX_VALUE).trim()
             val upper = value.uppercase()
             return when {
                 upper.startsWith("HTTP://") || upper.startsWith("HTTPS://") -> url(value)
                 upper.startsWith("WWW.") -> url(value)
-                upper.startsWith("WIFI:") -> wifi(value)
+                upper.startsWith("WIFI:") -> wifi(value, wifiFallback)
                 upper.startsWith(VCARD_PREFIX) -> vcard(value, contactFallback)
                 upper.startsWith(MECARD_PREFIX) -> mecard(value, contactFallback)
                 upper.startsWith("TEL:") -> phone(value.substring(4))
                 upper.startsWith("MAILTO:") -> email(value.substring(7).substringBefore('?'))
                 upper.startsWith("SMSTO:") || upper.startsWith("SMS:") -> sms(value)
                 upper.startsWith("GEO:") -> geo(value.substring(4))
-                reported != QrKind.TEXT -> byReported(reported, value, contactFallback)
+                reported != QrKind.TEXT -> byReported(reported, value, contactFallback, wifiFallback)
                 else -> text(value)
             }
         }
 
-        private fun byReported(reported: QrKind, value: String, contactFallback: String): QrContent = when (reported) {
+        private fun byReported(
+            reported: QrKind, value: String, contactFallback: String, wifiFallback: String
+        ): QrContent = when (reported) {
             QrKind.URL -> url(value)
-            QrKind.WIFI -> wifi(value)
+            QrKind.WIFI -> wifi(value, wifiFallback)
             QrKind.CONTACT -> if (value.uppercase().startsWith(MECARD_PREFIX)) {
                 mecard(value, contactFallback)
             } else {
@@ -162,7 +169,7 @@ data class QrContent(
             return if (ascii.equals(unicode, ignoreCase = true)) unicode else "$unicode ($ascii)"
         }
 
-        private fun wifi(value: String): QrContent {
+        private fun wifi(value: String, fallback: String): QrContent {
             val fields = parseWifi(value.removePrefixPrefix(WIFI_PREFIX))
             val ssid = fields['S'].orEmpty()
             val password = fields['P'].orEmpty()
@@ -176,7 +183,10 @@ data class QrContent(
             }
             return QrContent(
                 kind = QrKind.WIFI,
-                title = clip(ssid.ifEmpty { value }),
+                // The raw code can contain P:<password>, and the title is a big selectable
+                // TextView. With no SSID it must never be used as a title: the password
+                // belongs only in the masked secret row.
+                title = clip(ssid.ifEmpty { fallback }),
                 fields = rows,
                 actions = listOf(QrAction.COPY),
                 raw = value,

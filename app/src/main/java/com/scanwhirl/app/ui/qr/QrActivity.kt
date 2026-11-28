@@ -79,7 +79,8 @@ class QrActivity : BaseActivity() {
                 current = QrContent.parse(
                     value,
                     runCatching { QrKind.valueOf(kind.orEmpty()) }.getOrDefault(QrKind.TEXT),
-                    getString(R.string.qr_contact_fallback)
+                    getString(R.string.qr_contact_fallback),
+                    getString(R.string.qr_kind_wifi)
                 )
             }
         }
@@ -208,7 +209,8 @@ class QrActivity : BaseActivity() {
         when (outcome) {
             is QrScanOutcome.Found -> {
                 val content = QrContent.parse(
-                    outcome.rawValue, outcome.kind, getString(R.string.qr_contact_fallback)
+                    outcome.rawValue, outcome.kind,
+                    getString(R.string.qr_contact_fallback), getString(R.string.qr_kind_wifi)
                 )
                 if (content.raw.isBlank()) {
                     showError(getString(R.string.qr_empty_code))
@@ -479,7 +481,8 @@ class QrActivity : BaseActivity() {
                     setOnClickListener {
                         SecureView.clear(window)
                         current = QrContent.parse(
-                            item.value, item.kind, getString(R.string.qr_contact_fallback)
+                            item.value, item.kind,
+                            getString(R.string.qr_contact_fallback), getString(R.string.qr_kind_wifi)
                         )
                         render()
                     }
@@ -512,7 +515,10 @@ class QrActivity : BaseActivity() {
         )
         addView(
             SwStyle.text(this@QrActivity, 14f, SwStyle.color(this@QrActivity, R.color.text_hologram_hi)).apply {
-                text = QrContent.parse(item.value, item.kind).title
+                text = QrContent.parse(
+                    item.value, item.kind,
+                    getString(R.string.qr_contact_fallback), getString(R.string.qr_kind_wifi)
+                ).title
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
             },
