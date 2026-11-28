@@ -34,7 +34,9 @@
     <color name="tok_danger">#c0392b</color>
     <color name="tok_danger_soft">#fde8e6</color>
 
-    <color name="tok_scrim">#730a191e</color>
+    <!-- 70% navy (was 45%) so white ink on this scrim clears 4.5:1 even over a
+         white page thumbnail. -->
+    <color name="tok_scrim">#b30a191e</color>
     <color name="tok_canvas">#dfe6e8</color>
     <color name="tok_pro">#8a5a00</color>
     <color name="tok_pro_soft">#fff1cf</color>

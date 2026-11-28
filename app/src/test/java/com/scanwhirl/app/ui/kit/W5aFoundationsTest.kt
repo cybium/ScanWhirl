@@ -1,7 +1,9 @@
 package com.scanwhirl.app.ui.kit
 
+import android.app.Activity
 import android.app.Application
 import android.os.Looper
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.SwitchCompat
@@ -21,6 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -195,9 +198,31 @@ class W5aFoundationsTest {
         val ink = ContextCompat.getColor(app, R.color.tok_text)
         assertTrue("snackbar/picker ink on surface-2 ${ratio(ink, surface2)}",
             ratio(ink, surface2) >= 4.5)
-        val scrim = ContextCompat.getColor(app, R.color.tok_scrim)
-        val onScrim = ContextCompat.getColor(app, R.color.tok_on_scrim)
-        assertTrue("page scrim label ${ratio(onScrim, scrim)}", ratio(onScrim, scrim) >= 4.5)
+        // Alpha matters: a raw ratio against a #730a19.. scrim ignored the white
+        // page thumbnail showing through and was a false green. Composite the
+        // scrim over the worst-case (white) background before measuring, in both
+        // themes, and check the opaque label chip too.
+        fun composite(fg: Int, bg: Int): Int {
+            val a = (fg ushr 24 and 0xFF) / 255.0
+            fun ch(shift: Int) = (((fg shr shift and 0xFF) * a) +
+                ((bg shr shift and 0xFF) * (1 - a))).toInt().coerceIn(0, 255)
+            return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+        }
+        for (q in listOf("notnight", "night")) {
+            RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
+            val scrim = ContextCompat.getColor(app, R.color.tok_scrim)
+            val onScrim = ContextCompat.getColor(app, R.color.tok_on_scrim)
+            val overWhite = composite(scrim, 0xFFFFFF)
+            val overPaper = composite(scrim, 0xFFE9E8E3.toInt())
+            val chip = ContextCompat.getColor(app, R.color.tok_preview_backdrop)
+            assertTrue("$q scrim label over white ${ratio(onScrim, overWhite)}",
+                ratio(onScrim, overWhite) >= 4.5)
+            assertTrue("$q scrim label over paper ${ratio(onScrim, overPaper)}",
+                ratio(onScrim, overPaper) >= 4.5)
+            assertTrue("$q opaque label chip ${ratio(onScrim, chip)}",
+                ratio(onScrim, chip) >= 4.5)
+        }
+        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-notnight-xhdpi")
         val text3 = ContextCompat.getColor(app, R.color.tok_text_3)
         for (bg in listOf(R.color.tok_surface, R.color.tok_surface_2,
             R.color.tok_surface_3, R.color.tok_canvas)) {
@@ -236,6 +261,30 @@ class W5aFoundationsTest {
             assertTrue("$q disabled is distinguishable",
                 offTrackDisabled != offTrack && offThumbDisabled != offThumb)
         }
+    }
+
+    // ---- 3c. API-qualified nav-bar icons ----------------------------------
+
+    private fun themedNavigationBarColor(): Int {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val tv = TypedValue()
+        assertTrue("navigationBarColor is set by the theme",
+            activity.theme.resolveAttribute(android.R.attr.navigationBarColor, tv, true))
+        return ContextCompat.getColor(activity, tv.resourceId)
+    }
+
+    @Test(timeout = 30_000)
+    @Config(sdk = [24, 26])
+    fun `API 24 to 26 keeps a dark nav bar for white system icons`() {
+        assertEquals("dark nav bar on SDK ${RuntimeEnvironment.getApiLevel()}",
+            ContextCompat.getColor(app, R.color.tok_nav_bar_dark), themedNavigationBarColor())
+    }
+
+    @Test(timeout = 30_000)
+    @Config(sdk = [27, 35])
+    fun `API 27 plus uses the themed nav bar with light icons`() {
+        assertEquals("themed nav bar on SDK ${RuntimeEnvironment.getApiLevel()}",
+            ContextCompat.getColor(app, R.color.tok_bg), themedNavigationBarColor())
     }
 
     // ---- 4. one "save to Documents" preference ----------------------------

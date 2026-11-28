@@ -31,7 +31,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/tok_scrim"
+        android:background="@color/tok_preview_backdrop"
         android:gravity="center"
         android:importantForAccessibility="no"
         android:textColor="@color/tok_on_scrim"

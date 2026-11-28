@@ -113,7 +113,7 @@ class ToolNamesCouncilParityTest {
         "ocr_screen_title" to ("OCR" to "OCR"),
         // Settings - COUNCIL §1 "Settings"
         "me_pro_summary" to ("All Pro tools" to "सभी Pro काम"),
-        "me_settings_summary" to ("Look, language, privacy" to "रंग-रूप, भाषा, निजता"),
+        "me_settings_summary" to ("Look & language" to "रंग-रूप और भाषा"),
         "settings_font" to ("Text size" to "लिखाई का आकार"),
         "settings_greeting" to ("Home status line" to "मुख्य पन्ने की स्थिति-पंक्ति"),
         "settings_searchable_pdf" to ("Searchable PDFs" to "खोजने लायक PDF"),

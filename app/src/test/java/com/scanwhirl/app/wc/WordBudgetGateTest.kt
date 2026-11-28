@@ -108,8 +108,7 @@ class WordBudgetGateTest {
             "Shell Tools" to 40,
             "Tool setup - unlock" to 40,
             "Form photo (loaded)" to 38,
-            // W5a: Me gained the approved Theme and Also-save rows (B2/B1).
-            "Shell Me" to 50,
+            "Shell Me" to 38,
             "Tool setup - form_ready" to 38,
             "Shell Library" to 31,
             "Tool setup - merge" to 31,
