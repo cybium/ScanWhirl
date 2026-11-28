@@ -53,7 +53,9 @@
     <color name="sf_on_surface">@color/tok_text</color>
     <color name="sf_surface_variant">@color/tok_surface_2</color>
     <color name="sf_on_surface_variant">@color/tok_text_2</color>
-    <color name="sf_outline">@color/tok_line</color>
+    <!-- W5a-2: colorOutline is used ONLY for the row chevrons; it must be a
+         functional affordance colour, not the decorative tok_line. -->
+    <color name="sf_outline">@color/tok_chevron</color>
     <color name="sf_outline_variant">@color/tok_line</color>
     <color name="pro_gold">@color/tok_pro</color>
     <color name="pro_badge_bg">@color/tok_pro_soft</color>
@@ -112,13 +114,16 @@
     <color name="ok_green_hair">@color/tok_ok</color>
     <color name="sw_boundary_functional">@color/tok_boundary</color>
     <color name="sw_divider_boundary">@color/tok_line</color>
-    <color name="sw_cyan_hair">@color/tok_accent_soft</color>
+    <!-- W5a-2: a shared outline must be visible on the card in BOTH themes.
+         tok_accent_soft was 1.1:1 on white and ~1.2:1 on the dark sheet. -->
+    <color name="sw_cyan_hair">@color/tok_hairline_functional</color>
     <color name="sw_cyan_hair_strong">@color/tok_accent_line</color>
     <color name="sw_cyan_soft">@color/tok_accent_soft</color>
     <color name="sw_gold_hair">@color/tok_pro</color>
     <color name="sw_gold_soft">@color/tok_pro_soft</color>
     <color name="sw_scrim_sheet">@color/tok_scrim</color>
-    <color name="sw_sheet_grab">@color/tok_text_3</color>
+    <!-- W5a-2 (V089): the sheet drag handle is a visible affordance. -->
+    <color name="sw_sheet_grab">@color/tok_drag_handle</color>
     <color name="sw_field_border">@color/tok_line</color>
     <color name="sw_chip_border">@color/tok_line</color>
     <color name="sw_paper_thumb">#E9EDF0</color>
