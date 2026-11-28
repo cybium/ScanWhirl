@@ -853,15 +853,16 @@ def walk_results():
             return "Choose photo unavailable"
         if not tap_reachable({"rid": "formReadyPick"}):
             return "Choose photo unavailable"
-        # GetContent often offers the seeded photo in Recent; only browse roots if
-        # it is not already visible.
-        if not tap({"regex": r"atlas-photo-1(?:\.png)?"}, timeout=5):
+        # The Android Photo Picker labels tiles "Photo taken on ...", not by filename;
+        # older SAF pickers show the file name. Accept either before browsing roots.
+        photo_tile = {"regex": r"Photo taken on|atlas-photo-1(?:\.png)?"}
+        if not tap(photo_tile, timeout=6):
             tap({"text": "Files"}, timeout=1)
             if tap({"desc": "Show roots"}, timeout=5):
                 if not tap({"text": "Images"}, timeout=3):
                     tap({"text": "Pictures"}, timeout=2)
             tap({"text": "Pictures"}, timeout=2)
-        if not tap({"regex": r"atlas-photo-1(?:\.png)?"}, timeout=8):
+        if not tap(photo_tile, timeout=8):
             capture("result", "form-photo-picker-no-input", ["Tools", "Form photo", "Picker"],
                     "Seeded fictional photo not listed")
             back()
