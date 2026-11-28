@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a: one design system. These are the LIGHT values of frontend-v09/core/tokens.css.
+     The DARK mirror lives in values-night/colors_tokens.xml. Every legacy colour name
+     in colors*.xml is an alias to one of these tokens, so all existing call sites follow
+     the system theme without a second palette. Do not add ad-hoc hex values to screens. -->
+<resources>
+    <color name="tok_bg">#f3f6f7</color>
+    <color name="tok_surface">#ffffff</color>
+    <color name="tok_surface_2">#eef3f4</color>
+    <color name="tok_surface_3">#e3eaec</color>
+    <color name="tok_line">#d9e3e6</color>
+
+    <color name="tok_text">#13252a</color>
+    <color name="tok_text_2">#566d74</color>
+    <color name="tok_text_3">#87999e</color>
+    <!-- Derived from tokens.css --line: a functional boundary must clear 3:1 on --surface. -->
+    <color name="tok_boundary">#6b7c82</color>
+
+    <color name="tok_accent">#007884</color>
+    <color name="tok_on_accent">#ffffff</color>
+    <color name="tok_accent_soft">#e0f1f3</color>
+    <color name="tok_accent_line">#73007884</color>
+
+    <color name="tok_ok">#1d8a4b</color>
+    <color name="tok_ok_soft">#e3f4ea</color>
+    <color name="tok_warn">#9a6400</color>
+    <color name="tok_warn_soft">#fff3db</color>
+    <color name="tok_danger">#c0392b</color>
+    <color name="tok_danger_soft">#fde8e6</color>
+
+    <color name="tok_scrim">#730a191e</color>
+    <color name="tok_canvas">#dfe6e8</color>
+    <color name="tok_pro">#8a5a00</color>
+    <color name="tok_pro_soft">#fff1cf</color>
+</resources>

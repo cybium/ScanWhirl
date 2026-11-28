@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a: the Kotlin-facing type / space / shape / touch scale from core/tokens.css.
+     SwType and SwStyle are the only Kotlin accessors; these are their resource source. -->
+<resources>
+    <!-- --fs-* : sp, read through SwType constants. -->
+    <dimen name="sw_text_title">20sp</dimen>
+    <dimen name="sw_text_heading">17sp</dimen>
+    <dimen name="sw_text_body">15sp</dimen>
+    <dimen name="sw_text_small">13sp</dimen>
+    <dimen name="sw_text_caption">12sp</dimen>
+
+    <!-- --r-* : shape. -->
+    <dimen name="sw_radius_card">16dp</dimen>
+    <dimen name="sw_radius_control">12dp</dimen>
+    <dimen name="sw_radius_sheet">24dp</dimen>
+
+    <!-- --touch : the one accessibility floor for kit controls. -->
+    <dimen name="sw_touch_min">48dp</dimen>
+</resources>
