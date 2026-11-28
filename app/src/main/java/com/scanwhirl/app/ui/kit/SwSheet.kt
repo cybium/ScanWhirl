@@ -373,11 +373,10 @@ class SwSheet private constructor(
                     }
                 }
                 SwMotion.press(row)
+                // Rows stay the ONLY children of swSheetItems: callers and tests address
+                // options by index. The inset hairline is available via SwStyle.divider()
+                // for hosts that lay out their own sections.
                 list.addView(row)
-                // W5a-2 (V063/V091): inset separators, not full-bleed hairlines.
-                if (index < labels.lastIndex) {
-                    list.addView(SwStyle.divider(context, insetDp = 6f))
-                }
             }
         }
         render()

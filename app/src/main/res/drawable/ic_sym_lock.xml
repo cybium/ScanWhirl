@@ -1,28 +1,30 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- W5a-2 (V010): closed padlock. House 1.75dp stroke; the Unlock glyph has an
-     OPEN shackle so the two meanings never share one picture. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M7.2,10V7a4.8,4.8 0 0,1 9.6,0v3"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M5.4,10h13.2v10H5.4z"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M12,14a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3zM12,17v1.5"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
+    <group android:translateY="960">
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M7.2,10V7a4.8,4.8 0 0,1 9.6,0v3"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M5.4,10h13.2v10H5.4z"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M12,14a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3zM12,17v1.5"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+        </group>
+    </group>
 </vector>

@@ -1,15 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- W5a-2: text-scan glyph for the read-text/OCR meaning. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M6,4.5h8.2l3.8,3.8v11.2H6zM14.2,4.5v3.8h3.8M8.6,11h6.4M8.6,14h6.4M8.6,17h4M3.2,8.4V4.6h3.2M20.8,15.6v3.8h-3.2"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
+    <group android:translateY="960">
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M6,4.5h8.2l3.8,3.8v11.2H6zM14.2,4.5v3.8h3.8M8.6,11h6.4M8.6,14h6.4M8.6,17h4M3.2,8.4V4.6h3.2M20.8,15.6v3.8h-3.2"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+        </group>
+    </group>
 </vector>

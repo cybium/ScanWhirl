@@ -1,28 +1,30 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- W5a-2: one coherent eye-with-slash. Used only by the password reveal toggle
-     now; the Clear metadata tool has its own honest glyph (ic_sw_clear_metadata). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M2.6,12s3.4,-5.4 9.4,-5.4 9.4,5.4 9.4,5.4 -3.4,5.4 -9.4,5.4S2.6,12 2.6,12z"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M9.9,9.9a3,3 0 0,0 4.2,4.2"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M3.5,20.5 20.5,3.5"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
+    <group android:translateY="960">
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M2.6,12s3.4,-5.4 9.4,-5.4 9.4,5.4 9.4,5.4 -3.4,5.4 -9.4,5.4S2.6,12 2.6,12z"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M9.9,9.9a3,3 0 0,0 4.2,4.2"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M3.5,20.5 20.5,3.5"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+        </group>
+    </group>
 </vector>
