@@ -146,7 +146,7 @@ class W5dBackupRenderTest {
     private fun renderState(tag: String, dark: Boolean, scale: Float, action: (BackupActivity) -> Unit) {
         ShadowDialog.reset()
         RuntimeEnvironment.setQualifiers(
-            "en-rUS-w360dp-h800dp-xxhdpi-${if (dark) "night" else "notnight"}"
+            "en-rUS-w360dp-h800dp-${if (dark) "night" else "notnight"}-xxhdpi"
         )
         RuntimeEnvironment.setFontScale(scale)
         BackupActivity.vaultOverride = readyVault()
