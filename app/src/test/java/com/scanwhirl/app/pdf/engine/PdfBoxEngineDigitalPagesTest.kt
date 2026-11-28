@@ -260,7 +260,7 @@ class PdfBoxEngineDigitalPagesTest {
                 limited.redact(limited.open(plain), 0, emptyList(), File(dir, "px.pdf").path)
             } is PdfEngineError.LimitExceeded
         })
-        assertTrue(engineWith(PdfEngineBudgets(wallTimeMs = 0)).use {
+        assertTrue(engineWith(PdfEngineBudgets(wallTimeMs = -1)).use {
             expectError { it.open(plain) } is PdfEngineError.LimitExceeded
         })
         assertTrue(engineWith(PdfEngineBudgets(maxOutputBytes = 4)).use {
