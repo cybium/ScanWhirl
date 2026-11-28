@@ -74,6 +74,12 @@
     <string name="tools_job_fewer">Show fewer</string>
     <string name="tools_search_results">Results</string>
 
+    <!-- B3: the three named student jobs lead the Tools hub. One short line each;
+         the detail lives in the workflow the row opens, never on this screen. -->
+    <string name="student_job_form_ready">Fit a photo to a form</string>
+    <string name="student_job_sign">Sign or fill a form</string>
+    <string name="student_job_hide_info">Hide private info</string>
+
     <string name="tool_scan">Scan</string>
     <string name="tool_id_card">ID card</string>
     <string name="tool_book_pages">Book pages</string>
@@ -106,7 +112,8 @@
     <string name="tool_watermark">Watermark</string>
     <string name="tool_page_numbers">Page numbers</string>
     <string name="tool_stamp">Stamp</string>
-    <string name="tool_redact">Redact</string>
+    <!-- B4: plain word on the tile; "redact" and "blackout" remain search aliases. -->
+    <string name="tool_redact">Hide info</string>
     <string name="tool_protect">Protect</string>
     <string name="tool_unlock">Unlock</string>
     <string name="tool_vault">Vault</string>

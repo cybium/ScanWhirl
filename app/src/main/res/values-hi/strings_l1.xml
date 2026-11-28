@@ -69,6 +69,11 @@
     <string name="tools_job_fewer">कम दिखाएँ</string>
     <string name="tools_search_results">नतीजे</string>
 
+    <!-- B3: तीन नाम वाले छात्र काम, Tools के शीर्ष पर; एक छोटी पंक्ति प्रति काम। -->
+    <string name="student_job_form_ready">फ़ोटो को फ़ॉर्म में फिट करें</string>
+    <string name="student_job_sign">फ़ॉर्म पर हस्ताक्षर या जानकारी भरें</string>
+    <string name="student_job_hide_info">निजी जानकारी छिपाएँ</string>
+
     <string name="tool_scan">स्कैन</string>
     <string name="tool_id_card">पहचान पत्र</string>
     <string name="tool_book_pages">किताब के पन्ने</string>

@@ -144,11 +144,17 @@ abstract class T1RecentToolsBase {
                 "no Recent heading placeholder: ${allText(body)}",
                 allText(body).contains(expectedHeading)
             )
-            // The seven jobs really start at the top: the first card is "Make it smaller".
+            // B3: the three named student jobs lead even on a fresh install; the grouped
+            // catalogue starts with "Compress & resize" immediately after them.
             assertEquals(
-                "the first card is the first job when there are no recents",
-                ToolJob.SMALLER,
+                "the student jobs are the first card when there are no recents",
+                ToolsHubScreen.TAG_STUDENT_JOBS,
                 (body.getChildAt(0) as? ViewGroup)?.tag
+            )
+            assertEquals(
+                "the first grouped job follows the student jobs",
+                ToolJob.SMALLER,
+                (body.getChildAt(1) as? ViewGroup)?.tag
             )
         }
     }
@@ -167,9 +173,14 @@ abstract class T1RecentToolsBase {
             val card = recentCard(body)
             assertNotNull("a returning person sees the Recent row", card)
             assertEquals(
-                "the Recent row is above the seven jobs",
+                "the Recent row follows the three student jobs",
                 card,
-                body.getChildAt(0)
+                body.getChildAt(1)
+            )
+            assertEquals(
+                "the student jobs stay first",
+                ToolsHubScreen.TAG_STUDENT_JOBS,
+                (body.getChildAt(0) as? ViewGroup)?.tag
             )
             assertEquals(expectedHeading, headingOf(card!!).text.toString())
             assertEquals(
@@ -360,7 +371,12 @@ class T1RecentToolsNarrowTest : T1RecentToolsBase() {
         toolsTab { _, body ->
             val card = recentCard(body)
             assertNotNull("the Recent card renders at 200 % on 320dp", card)
-            assertEquals("it stays above the jobs", card, body.getChildAt(0))
+            assertEquals("it stays below the student jobs", card, body.getChildAt(1))
+            assertEquals(
+                "the student jobs still lead at 200% / 320dp",
+                ToolsHubScreen.TAG_STUDENT_JOBS,
+                (body.getChildAt(0) as? ViewGroup)?.tag
+            )
 
             val heading = headingOf(card!!)
             val headingLayout = heading.layout

@@ -2,6 +2,8 @@ package com.scanwhirl.app.ui.shell
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.RippleDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.TypedValue
@@ -17,6 +19,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.scanwhirl.app.R
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.StudentJob
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.SwType
 import com.scanwhirl.app.ui.kit.ToolHost
@@ -31,10 +34,15 @@ import com.scanwhirl.app.util.Prefs
 /**
  * UI_PLAN §0b / tools_v4 — the Tools tab answers "what do I want done?".
  *
- * T1 (owner-approved 2026-11-20): everyday tools come first. Under the search field sits
- * "Recent tools" — the last up-to-six distinct tools this person launched, most recent first,
- * each one tap on the same launch path as any other tool (so Pro gating is unchanged). The row
- * is absent for someone who has never launched a tool (no placeholder), and while searching.
+ * B3 (APPROVALS): three named student jobs lead the tab — "Fit a photo to a form",
+ * "Sign or fill a form", "Hide private info". Each is ONE full-width 64dp+ row with a short
+ * label; tapping it opens that tool's picker on the same launch path as any tile. The block
+ * disappears while searching, so results are the only thing on screen.
+ *
+ * T1 (owner-approved 2026-11-20): "Recent tools" follows the student jobs — the last up-to-six
+ * distinct tools this person launched, most recent first, each one tap on the same launch path
+ * as any other tool (so Pro gating is unchanged). The row is absent for someone who has never
+ * launched a tool (no placeholder), and while searching.
  *
  * Then the seven approved jobs come first in reading order (Make it smaller / Combine and
  * organise / Sign and mark up / Keep it private / Get the text / Change the format / Start
@@ -208,7 +216,9 @@ class ToolsHubScreen(
                 )
                 return
             }
-            // T1: the everyday tools first, then every job with every tool open.
+            // B3: the three named student jobs first; T1's Recent follows them; the grouped
+            // catalogue comes last. Search never builds any of these blocks.
+            body.addView(studentJobCard())
             val recents = recentTools()
             if (recents.isNotEmpty()) body.addView(recentCard(recents))
             for ((job, tools) in jobs) body.addView(jobCard(job, tools))
@@ -279,6 +289,99 @@ class ToolsHubScreen(
         .take(Prefs.MAX_RECENT_TOOLS)
 
     /**
+     * B3: one card holding the three approved student jobs. It is built only for a blank
+     * query; while searching, the body contains results alone (UX_EVIDENCE Tools 1–3).
+     */
+    private fun studentJobCard(): View {
+        val card = card()
+        card.tag = TAG_STUDENT_JOBS
+        // No section heading or paragraph: the three named rows ARE the section, and the
+        // 40-word screen budget stays intact at 100% / 360dp (WordBudgetGateTest).
+        for (job in ToolRegistry.studentJobs()) card.addView(studentJobRow(job))
+        return card
+    }
+
+    /**
+     * A destination row, not a tile: 44dp icon plate, one short label, chevron, 64dp minimum
+     * height and the whole row as one 48dp+ touch target. The label wraps (never clips) at
+     * font 2.0 / 320dp; a Pro job goes through the same [ToolHost.launchTool] gate as a tile.
+     */
+    private fun studentJobRow(job: StudentJob): View {
+        val tool = ToolRegistry.toolFor(job)
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            tag = job
+            isClickable = true
+            isFocusable = true
+            minimumHeight = SwStyle.dp(context, 64f)
+            setPadding(SwStyle.dp(context, 12f), SwStyle.dp(context, 8f), SwStyle.dp(context, 12f), SwStyle.dp(context, 8f))
+            background = SwStyle.rounded(context, Color.TRANSPARENT, radiusDp = 12f)
+            foreground = RippleDrawable(
+                ColorStateList.valueOf(SwStyle.color(context, R.color.sw_cyan_soft)),
+                null,
+                SwStyle.rounded(context, Color.WHITE, radiusDp = 12f)
+            )
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        }
+        val iconBox = FrameLayout(context).apply {
+            background = SwStyle.rounded(
+                context, SwStyle.color(context, R.color.glass_surface_high), radiusDp = 14f
+            )
+        }
+        iconBox.addView(
+            ImageView(context).apply {
+                setImageResource(tool.icon)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+            },
+            FrameLayout.LayoutParams(SwStyle.dp(context, 24f), SwStyle.dp(context, 24f), Gravity.CENTER)
+        )
+        row.addView(iconBox, LayoutParams(SwStyle.dp(context, 44f), SwStyle.dp(context, 44f)))
+
+        val showPro = tool.pro && !com.scanwhirl.app.util.ProGate.isPro(context)
+        val label = SwStyle.text(context, 15f, SwStyle.color(context, R.color.text_hologram_hi)).apply {
+            id = R.id.swToolLabel
+            typeface = SwType.semibold(context)
+            text = context.getString(job.title)
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            maxLines = 3
+            ellipsize = null
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+        }
+        row.addView(
+            label,
+            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = SwStyle.dp(context, 12f) }
+        )
+        row.addView(
+            ImageView(context).apply {
+                setImageResource(R.drawable.ic_sym_chevron_right)
+                imageTintList = ColorStateList.valueOf(SwStyle.color(context, R.color.cyan_dim))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LayoutParams(SwStyle.dp(context, 20f), SwStyle.dp(context, 20f)).apply {
+                marginStart = SwStyle.dp(context, 8f)
+            }
+        )
+        row.contentDescription = buildString {
+            append(label.text)
+            if (showPro) append(", ").append(context.getString(R.string.badge_pro))
+        }
+        row.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(
+                host: View, info: android.view.accessibility.AccessibilityNodeInfo
+            ) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+            }
+        }
+        row.setOnClickListener { this@ToolsHubScreen.host.launchTool(tool) }
+        return row
+    }
+
+    /**
      * "Recent tools": the same tiles as a job, in one horizontally scrollable row, each one
      * tapping into the one launch path ([ToolHost.launchTool]) so Pro gating is unchanged.
      */
@@ -323,7 +426,11 @@ class ToolsHubScreen(
         // T2 owner 2026-11-21: icon grid. Grow labels rather than hiding any part of a name.
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
         labelView.ellipsize = null
+        // 320dp / 2.0: keep wrapping and let the tile grow; a 2dp inset stops a centred
+        // label from touching the column beside it, and no word is ever cut.
         labelView.maxLines = Int.MAX_VALUE
+        val inset = SwStyle.dp(context, 2f)
+        labelView.setPadding(inset, 0, inset, 0)
         // One focus stop, full tool name + Pro from bind(), not separate icon/label/badge nodes.
         (getChildAt(0) as ViewGroup).importantForAccessibility =
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -533,6 +640,9 @@ class ToolsHubScreen(
     }
 
     companion object {
+        /** Tag of the B3 student-jobs card, so tests find it without a private id. */
+        const val TAG_STUDENT_JOBS = "swToolsStudentJobs"
+
         /** Tag of the "Recent tools" card, so tests can find it without a private id. */
         const val TAG_RECENT = "swToolsRecent"
 
@@ -559,6 +669,14 @@ class ToolsHubScreen(
             }
             walk(root)
             return found
+        }
+
+        /** The three B3 destination rows in approved order (blank query only). */
+        fun studentJobRows(root: View): List<View> {
+            val card = cardTagged(root, TAG_STUDENT_JOBS) ?: return emptyList()
+            return (card as? ViewGroup)?.let { group ->
+                (0 until group.childCount).mapNotNull { group.getChildAt(it).takeIf { v -> v.tag is StudentJob } }
+            }.orEmpty()
         }
 
         /** Catalogue and Recent tiles in row-major order (search intentionally uses rows). */
