@@ -83,7 +83,12 @@ function Get-Paged {
     do {
         $pageUri = $Uri
         if ($next) { $pageUri += '&page-token=' + [uri]::EscapeDataString($next) }
-        $page = Invoke-CircleApi -Uri $pageUri
+        try {
+            $page = Invoke-CircleApi -Uri $pageUri
+        } catch {
+            # An expired page token must not lose the pages already collected.
+            break
+        }
         foreach ($item in $page.items) { $items += $item }
         $next = $page.next_page_token
         $pages++
@@ -96,14 +101,36 @@ function Find-Pipeline {
     $isSha = $Wanted -match '^[0-9a-fA-F]{7,40}$'
     if ($isSha) {
         $wanted = $Wanted.ToLowerInvariant()
-        $pipelines = Get-Paged -Uri "$ApiBase/project/$Project/pipeline"
-        $match = $pipelines | Where-Object {
-            $_.vcs -and $_.vcs.revision -and $_.vcs.revision.ToLowerInvariant().StartsWith($wanted)
-        } | Select-Object -First 1
-        if (-not $match) {
-            throw "No CircleCI pipeline found in $Project for commit $Wanted. Push it to a cc/atlas-* branch first."
+        # The unfiltered project pipeline list can omit VCS metadata and its page
+        # tokens expire; walk atlas branches instead (branch-filtered lists keep
+        # vcs.revision). Try unauthenticated, then CIRCLE_TOKEN if needed.
+        $branches = @()
+        try {
+            $info = Invoke-CircleApi -Uri "$ApiBase/insights/$Project/branches?workflow-name=atlas"
+            $branches = @($info.branches | Select-Object -First 100)
+        } catch { $branches = @() }
+        if ($branches.Count -eq 0) { $branches = @('cc/atlas-circleci-test') }
+        foreach ($b in $branches) {
+            $pipelines = Get-Paged -Uri "$ApiBase/project/$Project/pipeline?branch=" +
+                                   [uri]::EscapeDataString($b)
+            $match = $pipelines | Where-Object {
+                $_.vcs -and $_.vcs.revision -and $_.vcs.revision.ToLowerInvariant().StartsWith($wanted)
+            } | Select-Object -First 1
+            if ($match) { return $match }
         }
-        return $match
+        # Fallback: GitHub's commit status links the CircleCI workflow; resolve
+        # that workflow and its pipeline through the CircleCI API v2.
+        try {
+            $statusJson = & gh api "repos/cybium/ScanWhirl/commits/$Wanted/status" 2>$null
+            $status = $statusJson | ConvertFrom-Json
+            $statusUrl = @($status.statuses | Where-Object { $_.context -like 'ci/circleci:*' } |
+                           Select-Object -First 1).target_url
+            if ($statusUrl -match '/workflow/([0-9a-f-]{36})') {
+                $wf = Invoke-CircleApi -Uri "$ApiBase/workflow/$($Matches[1])"
+                return Invoke-CircleApi -Uri "$ApiBase/pipeline/$($wf.pipeline_id)"
+            }
+        } catch { }
+        throw "No CircleCI pipeline found in $Project for commit $Wanted. Push it to a cc/atlas-* branch first."
     }
 
     $encoded = [uri]::EscapeDataString($Wanted)
@@ -123,7 +150,7 @@ function Format-InsightsDate {
 function Get-JobCreditsTimeSeries {
     param([string]$Branch, [DateTime]$Start, [DateTime]$End)
     $uri = "$ApiBase/insights/time-series/$Project/workflows/atlas/jobs?branch=" +
-           [uri]::EscapeDataString($Branch) + '&granularity=daily&start-date=' +
+           [uri]::EscapeDataString($Branch) + '&granularity=hourly&start-date=' +
            [uri]::EscapeDataString((Format-InsightsDate $Start)) + '&end-date=' +
            [uri]::EscapeDataString((Format-InsightsDate $End))
     $result = @()
@@ -152,12 +179,13 @@ function Show-Credits {
         if ($Branch) { $uri += '&branch=' + [uri]::EscapeDataString($Branch) }
         else { $uri += '&all-branches=true' }
         $rows = @(Get-Paged -Uri $uri)
-        if ($rows.Count -eq 0 -and $Branch) {
+        $withCredits = @($rows | Where-Object { $_.metrics.total_credits_used -gt 0 })
+        if (($rows.Count -eq 0 -or $withCredits.Count -eq 0) -and $Branch) {
             $rows = @(Get-JobCreditsTimeSeries -Branch $Branch -Start $window.Start -End $now)
         }
         foreach ($row in $rows) {
-            $runs = [int]$row.metrics.total_runs
-            $credits = [int]$row.metrics.total_credits_used
+            $runs = if ($null -ne $row.runs) { [int]$row.runs } else { [int]$row.metrics.total_runs }
+            $credits = if ($null -ne $row.credits) { [int]$row.credits } else { [int]$row.metrics.total_credits_used }
             $perRun = if ($runs -gt 0) { [math]::Round($credits / $runs, 1) } else { 0 }
             Write-Host ("  {0}: {1} credits total, {2} runs, ~{3}/run" -f $row.name, $credits, $runs, $perRun)
         }
