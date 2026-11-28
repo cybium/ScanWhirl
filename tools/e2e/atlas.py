@@ -808,7 +808,8 @@ def open_tool(title):
     back()
     # A tool row is a custom TextView, not a Button. Match the app's own node only:
     # the IME suggestion strip repeats the typed word and swallowed the old tap.
-    return tap_reachable({"text": title, "pkg": PKG}, swipes=2)
+    # The search EditText's own text is the query, so match the row's content-desc.
+    return tap_reachable({"desc": title, "pkg": PKG}, swipes=2)
 
 
 def capture_result(kind):
