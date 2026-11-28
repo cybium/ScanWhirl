@@ -102,8 +102,10 @@ class LiveVaultEntryTest {
                 val wrong = legacyPinSheet()
                 assertNotNull(wrong)
                 submitPin(wrong!!, "1111")
-                assertEquals(app.getString(R.string.vault_pin_wrong),
-                    ShadowToast.getTextOfLatestToast()?.toString())
+                assertEquals("the wrong PIN is reported on the field, not as a toast",
+                    app.getString(R.string.vault_legacy_wrong),
+                    wrong.findViewById<EditText>(R.id.vaultLegacyPin).error?.toString())
+                assertNotNull("the PIN sheet stays open after a wrong try", legacyPinSheet())
                 assertFalse("wrong PIN must not open the Vault",
                     activity.findViewById<View>(R.id.vaultBanner) != null)
                 assertFalse("no Pro redirect after a wrong PIN",

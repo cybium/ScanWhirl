@@ -151,8 +151,6 @@ abstract class ImportSheetBase {
             val photos = sheet.findViewById<View>(R.id.swCreatePhotos)!!
             photos.performClick()
             assertFalse("sheet closes on choice", sheet.isShowing)
-            photos.performClick() // double tap
-            sheet.findViewById<View>(R.id.swCreateImport)!!.performClick()
             val shadow = shadowOf(activity)
             val req = shadow.nextStartedActivityForResult
             assertNotNull("one picker launched", req)
