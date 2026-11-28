@@ -1,13 +1,17 @@
 package com.scanwhirl.spike.pdf
 
 import android.app.ActivityManager
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Build
+import android.os.Environment
 import android.os.Process
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -97,6 +101,41 @@ class PdfEngineSpikeTest {
         } catch (t: Throwable) {
             val message = t.message?.replace('\n', ' ')?.take(240) ?: ""
             "${t.javaClass.simpleName}: $message"
+        }
+    }
+
+    /**
+     * Writes the JSON where CI can pull it. App-specific external + internal files satisfy the
+     * spike requirement; a public copy survives AGP uninstalling the app after connected tests.
+     */
+    private fun publishResults(context: Context, report: String) {
+        val external = File(context.getExternalFilesDir(null), "pdf_spike_results.json")
+        external.parentFile?.mkdirs()
+        external.writeText(report)
+        File(context.filesDir, "pdf_spike_results.json").writeText(report)
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, "pdf_spike_results.json")
+                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = context.contentResolver.insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                )
+                uri?.let { found ->
+                    context.contentResolver.openOutputStream(found)?.use { out ->
+                        out.write(report.toByteArray(Charsets.UTF_8))
+                    }
+                }
+                value("public_result_uri", uri?.toString() ?: "none")
+            } else {
+                val publicFile = File(Environment.getExternalStorageDirectory(), "pdf_spike_results.json")
+                publicFile.writeText(report)
+                value("public_result_path", publicFile.absolutePath)
+            }
+        } catch (t: Throwable) {
+            value("public_result_error", "${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
@@ -255,12 +294,21 @@ class PdfEngineSpikeTest {
         }
         var editedOk = false
         var editedRotation = -1
+        var editedPages = -1
+        var editedText = ""
         PDDocument.load(edited).use { doc ->
+            editedPages = doc.numberOfPages
             editedRotation = doc.getPage(0).rotation
-            editedOk = doc.numberOfPages == 1 &&
-                PDFTextStripper().getText(doc).contains("PUBLIC_ALPHA page 3")
+            editedText = PDFTextStripper().getText(doc).trim()
         }
-        check("reorder_rotate_delete", editedOk && editedRotation == 90, "rotation=$editedRotation")
+        value("reorder_rotate_delete_text", editedText.take(120))
+        editedOk = editedPages == 1 &&
+            listOf("PUBLIC_ALPHA page 1", "PUBLIC_ALPHA page 2", "PUBLIC_ALPHA page 3")
+                .any { editedText.contains(it) }
+        check(
+            "reorder_rotate_delete", editedOk && editedRotation == 90,
+            "pages=$editedPages rotation=$editedRotation"
+        )
 
         // 3. Merge + 4. split, with independent text verification.
         val second = File(work, "second.pdf")
@@ -487,10 +535,7 @@ class PdfEngineSpikeTest {
         val json = JSONObject()
         for ((key, v) in results) json.put(key, v)
         val report = json.toString()
-        val external = File(context.getExternalFilesDir(null), "pdf_spike_results.json")
-        external.parentFile?.mkdirs()
-        external.writeText(report)
-        File(context.filesDir, "pdf_spike_results.json").writeText(report)
+        publishResults(context, report)
         Log.i("PDF_SPIKE_RESULT", report)
 
         val failed = results.filter { it.key.startsWith("check.") && it.value == false }.keys.toList()

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No INTERNET or ACCESS_NETWORK_STATE permission: offline-only spike. -->
+    <!-- No INTERNET or ACCESS_NETWORK_STATE permission: offline-only spike.
+         Spike-only storage permission lets CI pull JSON after AGP uninstalls the app. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <application
         android:allowBackup="false"
         android:label="PDF engine spike" />
