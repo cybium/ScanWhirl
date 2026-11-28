@@ -18,4 +18,5 @@
     <!-- M07: TalkBack custom actions on a Trash row. -->
     <item name="a11y_trash_restore" type="id" />
     <item name="a11y_trash_delete" type="id" />
+    <item name="proDossierStatus" type="id" />
 </resources>

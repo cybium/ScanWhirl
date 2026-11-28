@@ -98,7 +98,6 @@
     <color name="sw_scan">@color/tok_accent</color>
     <color name="sw_on_scan">@color/tok_on_accent</color>
     <color name="sw_paper">#E9E8E3</color>
-    <color name="sw_paper_line">#C9CBC6</color>
     <color name="sw_paper_back">#7E878C</color>
     <color name="sw_paper_fold">#C3C7C4</color>
     <color name="sw_page_dim">#FFEDEDED</color>
