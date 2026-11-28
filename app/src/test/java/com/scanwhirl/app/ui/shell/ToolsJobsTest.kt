@@ -118,7 +118,7 @@ abstract class ToolsJobsBase {
                 listOf(
                     "Compress & resize",
                     "Combine",
-                    "Sign & mark up",
+                    "Sign & mark",
                     "Privacy",
                     "OCR & search",
                     "Convert",

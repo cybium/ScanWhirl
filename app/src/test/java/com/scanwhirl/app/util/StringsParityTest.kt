@@ -92,6 +92,11 @@ class StringsParityTest {
             "the old word is gone from the tile",
             !Regex("name=\"tool_redact\">Redact<").containsMatchIn(en)
         )
+        assertTrue(
+            "VQA V080: the search prompt no longer uses the OCR acronym",
+            !Regex("name=\"tools_search_hint\">[^<]*OCR").containsMatchIn(en) &&
+                !Regex("name=\"tools_search_hint\">[^<]*OCR").containsMatchIn(hi)
+        )
     }
 
     @Test

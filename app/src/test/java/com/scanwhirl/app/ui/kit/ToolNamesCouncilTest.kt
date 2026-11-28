@@ -87,7 +87,8 @@ class ToolNamesCouncilParityTest {
         "tools_job_smaller" to ("Compress & resize" to "छोटा करें"),
         // B3 word budget: one plain word instead of "Combine & organize" (3 → 1).
         "tools_job_organise" to ("Combine" to "जोड़ें"),
-        "tools_job_markup" to ("Sign & mark up" to "हस्ताक्षर और निशान"),
+        // B3 word budget: one word shorter, same plain meaning.
+        "tools_job_markup" to ("Sign & mark" to "हस्ताक्षर और निशान"),
         "tools_job_private" to ("Privacy" to "निजता"),
         "tools_job_text" to ("OCR & search" to "OCR और खोजें"),
         "tools_job_format" to ("Convert" to "फ़ॉर्मैट बदलें"),

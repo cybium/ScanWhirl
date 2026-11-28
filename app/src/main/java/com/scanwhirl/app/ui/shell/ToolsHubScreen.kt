@@ -431,6 +431,8 @@ class ToolsHubScreen(
         // 320dp / 2.0: keep wrapping and let the tile grow; no word is ever cut.
         // No label inset: it changed greedy wrapping and broke "Watermark" mid-word at 100%.
         labelView.maxLines = Int.MAX_VALUE
+        // VQA V023: a 640dp-tall phone cannot show two 94dp tile rows above the dock.
+        if (resources.configuration.screenHeightDp <= 640) compact()
         // One focus stop, full tool name + Pro from bind(), not separate icon/label/badge nodes.
         (getChildAt(0) as ViewGroup).importantForAccessibility =
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -458,7 +460,12 @@ class ToolsHubScreen(
         private var rowHeights = emptyList<Int>()
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val minimum = SwStyle.dp(context, 64f * maxOf(1f, resources.configuration.fontScale))
+            val scale = maxOf(1f, resources.configuration.fontScale)
+            // VQA V082: at 200% a 64dp column squeezes "Form photo" onto a second line while
+            // its siblings stay whole, making one tile taller than the rest. Use wider
+            // columns at large fonts (fewer columns, same whole words) and keep five at 100%.
+            val base = if (scale >= 1.6f) 72f else 64f
+            val minimum = SwStyle.dp(context, base * scale)
             // HorizontalScrollView gives its child UNSPECIFIED width; use its actual viewport.
             val available = if (singleRow) viewportWidth else MeasureSpec.getSize(widthMeasureSpec)
             // Five columns is the design ceiling at 100% (a wider phone must not squeeze

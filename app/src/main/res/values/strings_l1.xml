@@ -65,7 +65,7 @@
     <!-- B4-TOOLS: the seven jobs (UI_PLAN §0b), in the order they are read -->
     <string name="tools_job_smaller">Compress &amp; resize</string>
     <string name="tools_job_organise">Combine</string>
-    <string name="tools_job_markup">Sign &amp; mark up</string>
+    <string name="tools_job_markup">Sign &amp; mark</string>
     <string name="tools_job_private">Privacy</string>
     <string name="tools_job_text">OCR &amp; search</string>
     <string name="tools_job_format">Convert</string>

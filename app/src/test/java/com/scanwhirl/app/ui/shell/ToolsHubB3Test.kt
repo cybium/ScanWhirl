@@ -1,6 +1,7 @@
 package com.scanwhirl.app.ui.shell
 
 import android.app.Application
+import android.graphics.Rect
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +12,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.kit.StudentJob
+import com.scanwhirl.app.ui.kit.ToolJob
 import com.scanwhirl.app.ui.kit.ToolRegistry
 import com.scanwhirl.app.ui.kit.ToolStatus
 import com.scanwhirl.app.util.Prefs
@@ -328,6 +330,92 @@ class ToolsHubB3NarrowTest : ToolsHubB3Base() {
                 assertTrue("student job rows must not overlap", rows[i - 1].bottom <= rows[i].top)
             }
             assertTrue("320dp / 2.0 layout problems: ${problems.joinToString(" | ")}", problems.isEmpty())
+        }
+    }
+}
+
+/** VQA V023: the API 24 leg must never show an icon-only tool tile. */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [24], qualifiers = "w384dp-h640dp-xhdpi")
+class ToolsHubB3Small24Test : ToolsHubB3Base() {
+    override val jobLabels = listOf("Fit a photo to a form", "Sign or fill a form", "Hide private info")
+    override val hideInfoLabel = "Hide info"
+    override val synonymQueries = listOf("make smaller" to "compress", "combine" to "merge")
+
+    @Test
+    fun `API 24 small phone keeps a whole label under every tile including Folders and Batch`() {
+        toolsTab { activity, body ->
+            val tiles = ToolsHubScreen.tiles(body)
+            assertEquals("every working tool still has a tile", 37, tiles.size)
+            for (tile in tiles) {
+                val label = tile.labelView
+                val layout = label.layout
+                assertNotNull("${tile.tool?.id} has no text layout", layout)
+                assertTrue("${tile.tool?.id} has no label height", label.height > 0)
+                assertEquals(
+                    "${tile.tool?.id} label is cut",
+                    label.text.length,
+                    layout!!.getLineEnd(layout.lineCount - 1)
+                )
+                assertTrue("${tile.tool?.id} is not a 48dp target", tile.height >= dp(48f))
+            }
+            // The two second-row tiles in Combine are the ones VQA saw with no labels.
+            val card = ToolsHubScreen.cardTagged(body, ToolJob.ORGANISE) as ViewGroup
+            val secondRow = ToolsHubScreen.tiles(card).filter { it.tool?.id in listOf("folders", "batch_tools") }
+            assertEquals("Folders and Batch are still reachable", 2, secondRow.size)
+            // B3 puts the student jobs above the catalogue, so scroll the group into view
+            // the way a person would, then check both second-row labels clear the dock.
+            val content = activity.findViewById<View>(R.id.swTabContent)
+            val root = (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0) as ViewGroup
+            var parent = body.parent
+            while (parent != null && parent !is android.widget.ScrollView) parent = parent.parent
+            val scroll = parent as android.widget.ScrollView
+            val first = Rect(0, 0, secondRow.first().width, secondRow.first().height)
+            root.offsetDescendantRectToMyCoords(secondRow.first(), first)
+            scroll.scrollTo(0, scroll.scrollY + first.top - content.top - dp(8f))
+            idle()
+            layoutRoot(activity)
+            for (tile in secondRow) {
+                val rect = Rect(0, 0, tile.width, tile.height)
+                root.offsetDescendantRectToMyCoords(tile, rect)
+                assertTrue(
+                    "${tile.tool?.id} label must clear the dock (tile ${rect.top}..${rect.bottom}, " +
+                        "content ${content.top}..${content.bottom})",
+                    rect.bottom <= content.bottom
+                )
+            }
+        }
+    }
+}
+
+/** VQA V082: at 200% no single tile may grow taller than its row-mates. */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w411dp-h937dp-xhdpi")
+class ToolsHubB3Font200Test : ToolsHubB3Base() {
+    override val jobLabels = listOf("Fit a photo to a form", "Sign or fill a form", "Hide private info")
+    override val hideInfoLabel = "Hide info"
+    override val synonymQueries = listOf("make smaller" to "compress", "combine" to "merge")
+
+    @Test
+    fun `200 percent keeps Form photo on one line like its siblings`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        toolsTab { _, body ->
+            val card = ToolsHubScreen.cardTagged(body, ToolJob.SMALLER) as ViewGroup
+            val tiles = ToolsHubScreen.tiles(card)
+            assertEquals(3, tiles.size)
+            for (tile in tiles) {
+                val layout = tile.labelView.layout
+                assertNotNull("${tile.tool?.id} label is not laid out", layout)
+                assertEquals("${tile.tool?.id} wraps alone at 200%", 1, layout!!.lineCount)
+                assertEquals(
+                    "${tile.tool?.id} label is cut",
+                    tile.labelView.text.length,
+                    layout.getLineEnd(layout.lineCount - 1)
+                )
+            }
+            assertEquals("tile heights stay equal in one row", 1, tiles.map { it.height }.toSet().size)
         }
     }
 }
