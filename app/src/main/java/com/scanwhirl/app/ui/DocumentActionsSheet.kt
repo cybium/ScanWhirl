@@ -171,7 +171,8 @@ object DocumentActionsSheet {
             // Owner add-on (atlas 007_actions_sheet_2.0): the sheet's Close row is fixed below the
             // scroll, so the content carries its own bottom inset. Without it the last row (and,
             // at 200 %, a half-row) ran flush into the footer with no way to sit clear of it.
-            setPadding(0, 0, 0, SwStyle.dp(activity, 12f))
+            // V092: the last destructive row clears the sheet's fixed close row.
+            setPadding(0, 0, 0, SwStyle.dp(activity, 16f))
         }
         rows.addView(header(activity, doc))
 
@@ -418,7 +419,9 @@ object DocumentActionsSheet {
         ))
 
         val scroll = CappedScrollView(activity).apply {
-            maxFraction = 0.62f
+            // V030: 0.62 of a short screen hid the Danger row under its own heading.
+            // The sheet scrolls; it must not stop between a heading and the row it names.
+            maxFraction = 0.82f
             addView(rows)
         }
         val built = SwSheet.builder(activity)
@@ -462,6 +465,24 @@ object DocumentActionsSheet {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         stack.addView(glyph)
+        // V031: even while the real page is decoding, the thumb carries the page-count
+        // badge used on the document cards; it is never a bare white square.
+        stack.addView(TextView(activity).apply {
+            tag = TAG_PREFIX + "thumb-pages"
+            text = activity.resources.getQuantityString(
+                R.plurals.pages, doc.pageCount, doc.pageCount
+            )
+            textSize = 11f
+            setTextColor(SwStyle.color(activity, R.color.sw_disc_ink))
+            background = SwStyle.rounded(
+                activity, SwStyle.color(activity, R.color.cyan_primary), radiusDp = 8f
+            )
+            setPadding(dp(4f), dp(2f), dp(4f), dp(2f))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.END
+        ))
         // The one privacy rule for page images: locked and Vault documents never decode one.
         DocThumbBinder.bind(thumb, glyph, doc)
         header.addView(stack)

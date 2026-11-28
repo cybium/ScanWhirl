@@ -119,10 +119,11 @@ abstract class U4CopyIconsBase {
             root.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY))
             root.layout(0, 0, root.measuredWidth, root.measuredHeight)
-            assertEquals(2, name.maxLines)
+            assertEquals("location must wrap rather than truncate", Int.MAX_VALUE, name.maxLines)
             assertFalse("hero must not repeat output name", summary.text.contains("Fictional receipt"))
             assertTrue("one saved receipt line: ${name.text}", name.text.toString().contains("Fictional receipt"))
-            assertTrue("the hero is a visual headline", summary.textSize >= 20f)
+            assertNotNull("headline precedes the real preview",
+                activity.window.decorView.findViewWithTag<View>("result-headline"))
             assertTrue("measured result precedes receipt", summary.top < name.top)
             val also = activity.findViewById<View>(R.id.toolResultAlsoSave)
             assertNotNull("the save offer exists in the More panel", also)

@@ -299,7 +299,7 @@ class VaultPasswordsWiringTest {
                 scenario.onActivity {
                     started = shadowOf(it).peekNextStartedActivity()?.component?.className
                 }
-                started == com.scanwhirl.app.ui.ExportResultActivity::class.java.name
+                started == com.scanwhirl.app.ui.tools.ToolResultActivity::class.java.name
             })
             val prompt = ShadowDialog.getLatestDialog()
             assertNotNull("the Vault prompt follows the save", prompt)

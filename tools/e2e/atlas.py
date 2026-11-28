@@ -481,10 +481,11 @@ def hierarchy():
 
 
 def match(node, rid=None, desc=None, text=None, regex=None, cls=None,
-          text_contains=None):
+          text_contains=None, pkg=None):
     resource_id = node.get("resource-id") or ""
     return (
-        (rid is None or rid_name(node) == rid or resource_id.endswith("/" + rid))
+        (pkg is None or (node.get("package") or "") == pkg)
+        and (rid is None or rid_name(node) == rid or resource_id.endswith("/" + rid))
         and (desc is None or (node.get("content-desc") or "") == desc)
         and (text is None or (node.get("text") or "") == text)
         and (text_contains is None or text_contains in (node.get("text") or ""))
@@ -717,10 +718,14 @@ def seed():
     adb("shell", "mkdir", "-p", "/sdcard/Download")
     adb("shell", "mkdir", "-p", "/sdcard/Pictures")
     adb("push", fixture, "/sdcard/Download/" + FIXTURE_PDF, timeout=40)
+    adb_ok("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+           "-d", "file:///sdcard/Download/" + FIXTURE_PDF)
     for index, accent in enumerate(((40, 120, 200), (200, 90, 60)), 1):
         photo = OUT / ("atlas-photo-%d.png" % index)
         write_fictional_png(photo, 640, 480, accent)
         adb("push", photo, "/sdcard/Pictures/atlas-photo-%d.png" % index, timeout=40)
+        adb_ok("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+               "-d", "file:///sdcard/Pictures/atlas-photo-%d.png" % index)
     ok = adb_ok("shell", "test", "-s", "/sdcard/Download/" + FIXTURE_PDF)
     print("fixtures seeded: pdf=%s" % ok, flush=True)
     return ok
@@ -736,7 +741,23 @@ def import_fixture():
         return False
     wait_for({"desc": "Show roots"}, timeout=15)
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
+    # The seeded PDF appears in DocumentsUI "Recent files". Take it directly when it is
+    # offered; navigating roots first used to leave the picker and lose the fixture.
+    if tap({"text": FIXTURE_PDF}, timeout=5):
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=8) is not None)
+        if opened:
+            capture("viewer", "imported-document", ["Library", "Create", "Import PDF", "Viewer"],
+                    "Fictional PDF opened straight from Recent files")
+            dismiss_sheet()
+            launch()
+            return True
     tap({"desc": "Show roots"}, timeout=4)
+    # API 24 hides the filesystem root until this menu option is enabled.
+    if tap({"desc": "More options"}, timeout=1):
+        if not tap({"regex": r"Show (internal storage|SD card)"}, timeout=1):
+            back()
+        tap({"desc": "Show roots"}, timeout=2)
     model = adb("shell", "getprop", "ro.product.model")
     root_node = None
     for label in (model, "Internal storage", "Downloads", "This device"):
@@ -768,6 +789,99 @@ def import_fixture():
 
 
 # ------------------------------------------------------------------------ walks
+def tap_reachable(want, swipes=8):
+    """Scroll actual visible containers, never guess coordinates of an offscreen control."""
+    for _ in range(swipes + 1):
+        if tap(want, timeout=1):
+            return True
+        if not scroll_page():
+            return False
+    return False
+
+
+def open_tool(title):
+    launch()
+    if not tap({"rid": "swNavTools"}, timeout=8):
+        return False
+    tap({"rid": "swToolsSearch"}, timeout=8)
+    type_text(title)
+    back()
+    # A tool row is a custom TextView, not a Button. Match the app's own node only:
+    # the IME suggestion strip repeats the typed word and swallowed the old tap.
+    # The search EditText's own text is the query, so match the row's content-desc.
+    return tap_reachable({"desc": title, "pkg": PKG}, swipes=2)
+
+
+def capture_result(kind):
+    if wait_for({"rid": "toolResultName"}, timeout=70) is None:
+        capture("result", kind + "-not-reached", ["Tools", kind],
+                "Result was not reached; this is a coverage failure, not result evidence")
+        return False
+    # Wait for the real output image decoder, not an artificial product delay.
+    time.sleep(1)
+    capture("result", kind + "-preview", ["Tools", kind, "Result", "Preview"])
+    scroll_page()
+    capture("result", kind + "-where", ["Tools", kind, "Result", "Facts and location"])
+    return True
+
+
+def walk_results():
+    """W5b: reach both kinds through their real picker and processing UI."""
+    def compress():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if wait_for({"rid": "toolSetupDocName"}, timeout=12) is None:
+            capture("result", "compress-no-input", ["Tools", "Compress"],
+                    "No imported document; result coverage unavailable")
+            return "no input"
+        if not tap_reachable({"rid": "toolSetupRun"}):
+            return "Compress action unavailable"
+        if capture_result("compress"):
+            tap({"text": "Done"}, timeout=3)
+            wait_for({"rid": "swHomeSearch"}, timeout=12)
+            capture("library", "result-new-copy", ["Compress", "Result", "Done", "Library"])
+        return "compression attempted"
+
+    step("result", "compress", ["Tools", "Compress"], compress)
+
+    def form():
+        if not open_tool("Form photo"):
+            return "Form photo tile unavailable"
+        if wait_for({"rid": "formReadyPick"}, timeout=12) is None:
+            capture("result", "form-photo-no-pick", ["Tools", "Form photo"],
+                    "Setup did not expose Choose photo")
+            return "Choose photo unavailable"
+        if not tap_reachable({"rid": "formReadyPick"}):
+            return "Choose photo unavailable"
+        # The Android Photo Picker labels tiles "Photo taken on ...", not by filename;
+        # older SAF pickers show the file name. Accept either before browsing roots.
+        photo_tile = {"regex": r"Photo taken on|atlas-photo-1(?:\.png)?"}
+        if not tap(photo_tile, timeout=6):
+            tap({"text": "Files"}, timeout=1)
+            if tap({"desc": "Show roots"}, timeout=5):
+                if not tap({"text": "Images"}, timeout=3):
+                    tap({"text": "Pictures"}, timeout=2)
+            tap({"text": "Pictures"}, timeout=2)
+        if not tap(photo_tile, timeout=8):
+            capture("result", "form-photo-picker-no-input", ["Tools", "Form photo", "Picker"],
+                    "Seeded fictional photo not listed")
+            back()
+            return "photo unavailable"
+        if not tap_reachable({"rid": "formReadyApply"}):
+            capture("result", "form-photo-no-apply", ["Tools", "Form photo", "Setup"],
+                    "Processing action was not reachable")
+            return "Make photo unavailable"
+        if capture_result("form-photo"):
+            # Capture Adjust and the unchanged workspace as well as the unsaved receipt.
+            if tap_reachable({"text": "Adjust"}, swipes=3):
+                capture("result", "form-photo-adjust", ["Form photo", "Result", "Adjust"],
+                        "Original workspace retained; no new selection")
+        return "form photo attempted"
+
+    step("result", "form-photo", ["Tools", "Form photo"], form)
+    recover("after shared result walk")
+
+
 def walk_library():
     launch()
 
@@ -1248,6 +1362,7 @@ def main():
         step("import", "fixture", ["Library", "Create", "Import PDF"], import_fixture)
         walk_library()
         walk_tabs()
+        walk_results()
         walk_tools()
         walk_viewer()
         walk_vault()

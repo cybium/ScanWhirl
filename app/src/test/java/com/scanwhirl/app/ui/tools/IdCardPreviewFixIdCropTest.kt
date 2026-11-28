@@ -145,7 +145,7 @@ class IdCardPreviewFixIdCropTest {
     }
 
     @Test
-    fun `other tool results keep the white preview box`() {
+    fun `other tool results show their real output without ID card padding`() {
         val id = cardDocument()
         ActivityScenario.launch<ToolResultActivity>(
             ToolResultActivity.intent(app, "passport", docIds = listOf(id))
@@ -154,8 +154,13 @@ class IdCardPreviewFixIdCropTest {
                 val host = requireNotNull(activity.findViewById<View>(R.id.toolResultPreviewHost))
                 val preview = requireNotNull(activity.findViewById<ImageView>(R.id.toolResultPreview))
                 assertEquals("no dark padding for other tools", 0, host.paddingStart)
-                assertEquals("no duplicate full-page preview card", View.GONE, host.visibility)
-                assertNull("no white preview drawable", preview.drawable)
+                val deadline = System.currentTimeMillis() + 8_000
+                while (preview.drawable == null && System.currentTimeMillis() < deadline) {
+                    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                    Thread.sleep(10)
+                }
+                assertEquals("the actual output preview is shown", View.VISIBLE, host.visibility)
+                assertNotNull("the output, not a blank white placeholder", preview.drawable)
             }
         }
     }

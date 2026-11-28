@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Lane rs: the compact, honest result screen. Every visible line has EN/HI parity. -->
 <resources>
+    <string name="rs_photo_ready">Photo ready</string>
+    <string name="rs_copy_ready">PDF ready</string>
+    <string name="rs_file_ready">File ready</string>
+    <string name="rs_not_saved_yet">Not saved yet</string>
+    <string name="rs_library_as">In your ScanWhirl library as “%1$s”</string>
+    <string name="rs_image_facts">%1$d × %2$d px · %3$s · %4$s</string>
+    <string name="rs_save_to_phone">Save to phone</string>
+    <string name="rs_adjust">Adjust</string>
+    <string name="rs_retry">Retry</string>
+    <string name="rs_new">New</string>
+    <string name="rs_about_short">ScanWhirl %1$s\nDocuments stay on your phone.</string>
     <!-- The one hero line for a size tool. -->
     <string name="rs_size_hero">%1$s → %2$s</string>
     <string name="rs_chip_percent"> %1$d%% smaller</string>
@@ -24,7 +35,7 @@
     <string name="rs_try_strong">Try Strong</string>
 
     <!-- The comparison zoom. -->
-    <string name="rs_zoom_caption">Zoomed to check sharpness</string>
+    <string name="rs_zoom_caption">Zoomed preview</string>
     <string name="rs_before_size_label">Before · %1$s</string>
     <string name="rs_after_size_label">After · %1$s</string>
     <string name="rs_after_label">After</string>
@@ -55,6 +66,10 @@
     <string name="rs_where_documents_existing">Already in Documents/ScanWhirl</string>
     <string name="rs_where_chosen">Saved to chosen location</string>
     <string name="rs_details_title">Details</string>
+    <!-- V029: the size sort states its direction; V028: selected rows are announced. -->
+    <string name="rs_sort_size_desc">Size, largest first</string>
+    <string name="sort_selected">Selected: %1$s</string>
+    <string name="rs_categories_separate">Categories · separate from folders</string>
     <string name="rs_unsaved_output">Save a copy to keep this file</string>
     <string name="rs_state_only">Preview unavailable</string>
     <string name="rs_exact_bytes">%1$d bytes</string>

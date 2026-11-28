@@ -690,7 +690,7 @@
     <string name="trash_delete_failed">Some items couldn’t be deleted. They are still in Trash.</string>
     <string name="trash_empty_title">Trash is empty</string>
     <string name="trash_empty_body">Items older than 30 days are deleted automatically.</string>
-    <string name="trash_header_note">Restore brings back every page.</string>
+    <string name="trash_header_note">Deleted items stay here for 30 days, then are removed.</string>
     <string name="trash_error_title">Couldn’t open Trash</string>
     <string name="trash_error_body">Your documents weren’t changed. Try again.</string>
     <string name="trash_retry">Try again</string>

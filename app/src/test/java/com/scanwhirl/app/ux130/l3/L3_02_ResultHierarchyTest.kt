@@ -39,15 +39,15 @@ class L3_02_ResultHierarchyTest {
     }
 
     @Test
-    fun `result screen pairs Open and Share and keeps the consequence visible before consent`() {
+    fun `result screen separates secondary navigation from its single dock action`() {
         val src = java.io.File("src/main/java/com/scanwhirl/app/ui/tools/ToolResultActivity.kt").readText()
-        assertTrue("must pair the two actions in a horizontal row", src.contains("pairPrimaryActions()"))
-        assertTrue("must stack them at fontScale 2", src.contains("stacksActionsAtLargeFont()"))
+        assertTrue("secondary navigation must scroll", src.contains("column.addView(secondary)"))
+        assertTrue("one primary belongs in the dock", src.contains("bottomBar.addView(primary,"))
         assertTrue("must use the lane remove-copy label", src.contains("R.string.ux130_l3_result_remove_copy"))
         assertTrue(
             "must state the original is kept beside removal",
             src.contains("R.string.rs_remove_copy_note")
         )
-        assertTrue("every action is at least 56dp", src.contains("56f"))
+        assertTrue("every action meets the shared 48dp floor", src.contains("SwStyle.TOUCH_MIN_DP"))
     }
 }

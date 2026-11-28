@@ -363,7 +363,6 @@ class LibraryScreen(
             ellipsize = null
             background = readableBand()
         }
-        addView(docHeading)
         // A sort persisted from before this screen was created must already have the
         // right heading; renderSortLabel() ran while docHeading was not yet initialised.
         renderSortLabel()
@@ -383,6 +382,7 @@ class LibraryScreen(
             ))
         }
         addView(quickRow)
+        addView(docHeading)
 
         val selectBar = selectionBar()
 
@@ -391,7 +391,13 @@ class LibraryScreen(
             orientation = VERTICAL
             // L1-04: reserve the fast-scroll strip's gutter so its >=48dp target never covers
             // a card's Share/More hit area. The last card still clears the real dock (M5).
-            setPadding(0, 0, SwStyle.dp(context, 48f), listBottomInset())
+            setPadding(0, 0, 0, listBottomInset())
+            // U5: the lifted Scan disc grows the measured dock AFTER the first layout pass.
+            // Re-read it on every layout so the last card always clears the real dock.
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val inset = listBottomInset()
+                if (paddingBottom != inset) setPadding(paddingLeft, paddingTop, paddingRight, inset)
+            }
         }
 
         emptyView = LinearLayout(context).apply {
@@ -658,6 +664,14 @@ class LibraryScreen(
      */
     fun revealDocument(id: String) {
         revealId = id
+        query = ""
+        searchInput.setText("")
+        searchInput.clearFocus()
+        folder = null
+        category = null
+        sort = com.scanwhirl.app.util.Prefs.LIB_NEWEST
+        com.scanwhirl.app.util.Prefs.setLibrarySort(context, sort)
+        renderSortLabel()
         reload()
     }
 
@@ -728,7 +742,7 @@ class LibraryScreen(
             this.id = id
             minimumHeight = SwStyle.dp(context, 48f)
             gravity = Gravity.CENTER_VERTICAL
-            maxLines = 1
+            maxLines = if (largeFont()) Int.MAX_VALUE else 1
             ellipsize = null
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
@@ -900,6 +914,17 @@ class LibraryScreen(
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             isClickable = true
             isFocusable = true
+            if (active) {
+                // V028: the selected folder/category has a visible marker, not just teal text.
+                val check = androidx.appcompat.content.res.AppCompatResources
+                    .getDrawable(context, R.drawable.ic_sym_check)?.mutate()
+                val size = SwStyle.dp(context, 18f)
+                check?.setBounds(0, 0, size, size)
+                check?.setTint(SwStyle.color(context, R.color.cyan_primary))
+                setCompoundDrawablesRelative(check, null, null, null)
+                compoundDrawablePadding = SwStyle.dp(context, 8f)
+                contentDescription = context.getString(R.string.sort_selected, label)
+            }
             setOnClickListener { onClick() }
         }
 
@@ -1005,7 +1030,9 @@ class LibraryScreen(
             )
         }
 
-        list.addView(sheetHeading(context.getString(R.string.cb_categories)))
+        // V111: say plainly that categories are a second, separate way to organise, so
+        // "All folders", "Manage folders" and "Set category" do not read as one system.
+        list.addView(sheetHeading(context.getString(R.string.rs_categories_separate)))
         categoryRow = LinearLayout(context).apply {
             id = R.id.swChipRow
             orientation = VERTICAL
@@ -1028,6 +1055,8 @@ class LibraryScreen(
             .setContent(scroll)
             .setSecondary(R.string.sheet_cancel)
             .build()
+        // The footer stays the reachable creation action in the empty state; the row under
+        // "All folders" is the same action's quick entry point (both pinned by tests).
         built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
         chooserSheet = built
         built.show()
@@ -1035,7 +1064,8 @@ class LibraryScreen(
 
     /** A section caption inside the shared folder/category chooser. */
     private fun sheetHeading(label: String): TextView =
-        SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
+        // V028: a group caption is neutral, not another teal "selected" control.
+        SwStyle.text(context, 13f, SwStyle.color(context, R.color.text_hologram_mid), bold = true).apply {
             text = label
             contentDescription = label
             minimumHeight = SwStyle.dp(context, 48f)
@@ -1159,23 +1189,42 @@ class LibraryScreen(
                 }
             }
         }
+        // V017: a short visible label (the spoken name keeps the full one) fits at 200%.
+        // V018: More opens a real sheet so the second state is unmistakable; the two chip
+        // views stay in the tree (hidden) as the named controls the rest of the app uses.
+        val renameSelected: () -> Unit = {
+            if (selected.size >= 2) requirePro { showBatchRename() }
+            else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
+        }
+        val deleteSelected: () -> Unit = { confirmDeleteSelection() }
         val more = SwChip(context).apply {
             id = R.id.cbSelMore
-            bind(R.drawable.ic_sym_more_horiz, context.getString(R.string.cb_more_actions))
+            bind(R.drawable.ic_sym_more_horiz, context.getString(R.string.rs_more))
+            contentDescription = context.getString(R.string.cb_more_actions)
             minimumHeight = SwStyle.dp(context, 48f)
             minimumWidth = SwStyle.dp(context, 48f)
-            setOnClickListener { overflow.isVisible = !overflow.isVisible }
+            setOnClickListener {
+                com.scanwhirl.app.ui.kit.SwSheet.builder(context)
+                    .setTitle(context.getString(R.string.cb_more_actions))
+                    .setOptions(
+                        listOf(
+                            context.getString(R.string.sel_rename),
+                            context.getString(R.string.ux130_l1_move_to_trash)
+                        )
+                    ) { which, _ ->
+                        if (which == 0) renameSelected() else deleteSelected()
+                    }
+                    .build()
+                    .show()
+            }
         }
         actions.addView(
             more,
             LayoutParams(LayoutParams.WRAP_CONTENT, SwStyle.dp(context, 48f))
                 .apply { marginEnd = SwStyle.dp(context, 8f) }
         )
-        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename) {
-            if (selected.size >= 2) requirePro { showBatchRename() }
-            else Toast.makeText(context, context.getString(R.string.batch_select_hint), Toast.LENGTH_SHORT).show()
-        }
-        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash) { confirmDeleteSelection() }
+        action(overflow, R.id.swSelRename, R.drawable.ic_sym_drive_file_rename, R.string.sel_rename, renameSelected)
+        action(overflow, R.id.swSelDelete, R.drawable.ic_sym_delete, R.string.ux130_l1_move_to_trash, deleteSelected)
         scroll.addView(actions)
         bar.addView(
             scroll,
@@ -1762,7 +1811,8 @@ class LibraryScreen(
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             //noinspection WrongConstant
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
-            setPadding(0, SwStyle.dp(context, 6f), 0, 0)
+            // V095: give the count its own breathing room under the field in every leg.
+            setPadding(0, SwStyle.dp(context, 10f), 0, SwStyle.dp(context, 6f))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             isFocusable = true
             // P1: these lines sit on the bare wallpaper scrim without a surface otherwise.
@@ -1770,10 +1820,14 @@ class LibraryScreen(
         }
         val wrap = LinearLayout(context).apply {
             orientation = VERTICAL
-            background = readableBand()
+            // V026: the field owns the one visible outline. The wrapper keeps an explicit
+            // transparent drawable (not a second band) so the exposed row still has a surface.
+            background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
         }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
-        wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = SwStyle.dp(context, 4f)
+        })
         return wrap.apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 val m = SwStyle.dp(context, 18f)
@@ -1792,7 +1846,7 @@ class LibraryScreen(
         val pad = SwStyle.dp(context, if (largeFont()) 12f else 18f)
         val actionPad = SwStyle.dp(context, if (largeFont()) 4f else 8f)
         val row = LinearLayout(context).apply {
-            orientation = HORIZONTAL
+            orientation = if (largeFont()) VERTICAL else HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             // The 48dp Customize control sets the row height.
             val top = if (resources.configuration.fontScale >= 1.6f) SwStyle.dp(context, 4f) else 0
@@ -1804,7 +1858,8 @@ class LibraryScreen(
                 // than clip (AccessibilityAuditTest caught this on the 2.0x Library).
                 text = context.getString(R.string.home_quick_tools)
             },
-            LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            if (largeFont()) LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            else LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         )
         quickAll = SwStyle.text(context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true).apply {
             id = R.id.swQuickAll
@@ -1817,7 +1872,12 @@ class LibraryScreen(
             setPadding(actionPad, 0, actionPad, 0)
             setOnClickListener { callbacks.onAllTools() }
         }
-        row.addView(quickAll)
+        val actionRow = if (largeFont()) LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            row.addView(this, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        } else row
+        actionRow.addView(quickAll, if (largeFont()) LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            else LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         quickCustomize = SwStyle.text(
             context, 13f, SwStyle.color(context, R.color.cyan_primary), bold = true
         ).apply {
@@ -1836,7 +1896,8 @@ class LibraryScreen(
             isFocusable = true
             setOnClickListener { showQuickEditor() }
         }
-        row.addView(quickCustomize)
+        actionRow.addView(quickCustomize, if (largeFont()) LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            else LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         return row
     }
 
@@ -2161,7 +2222,7 @@ class LibraryScreen(
             context.getString(R.string.sort_oldest),
             context.getString(R.string.sort_name_az),
             context.getString(R.string.sort_name_za),
-            context.getString(R.string.sort_size)
+            context.getString(R.string.rs_sort_size_desc)
         )
         val checked = values.indexOf(sort).coerceAtLeast(0)
         SwSheet.builder(context)
@@ -2285,7 +2346,7 @@ class LibraryScreen(
             com.scanwhirl.app.util.Prefs.LIB_SIZE -> filtered.sortedByDescending { docSize(it) }
             else -> filtered.sortedByDescending { it.createdAt }
         }
-        return VisibleDocs(sorted, textHits)
+        return VisibleDocs(if (revealId == null) sorted else sorted.sortedByDescending { it.id == revealId }, textHits)
     }
 
     /**
@@ -2393,6 +2454,24 @@ class LibraryScreen(
             search = hit
         )
         card.setSelection(selectionMode, doc.id in selected)
+        // The badge belongs to the name column, not an overlay on the document or its actions.
+        val info = card.findViewById<TextView>(R.id.swDocName).parent as LinearLayout
+        val badge = info.findViewWithTag<TextView>("result-new-badge") ?: SwStyle.text(
+            context, com.scanwhirl.app.ui.kit.SwType.CAPTION_SP,
+            SwStyle.color(context, R.color.cyan_primary), bold = true
+        ).apply {
+            tag = "result-new-badge"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            text = context.getString(R.string.rs_new)
+            background = SwStyle.rounded(context, SwStyle.color(context, R.color.rv_surface_2),
+                SwStyle.RADIUS_CONTROL_DP)
+            setPadding(SwStyle.dp(context, SwStyle.SPACE_2_DP), SwStyle.dp(context, SwStyle.SPACE_1_DP),
+                SwStyle.dp(context, SwStyle.SPACE_2_DP), SwStyle.dp(context, SwStyle.SPACE_1_DP))
+            info.addView(this, 0, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        }
+        badge.isVisible = doc.id == revealId
+        if (doc.id == revealId)
+            card.contentDescription = context.getString(R.string.rs_new) + " · " + card.contentDescription
         card.setOnClickListener {
             if (selectionMode) {
                 toggleSelection(doc.id)
@@ -2633,13 +2712,14 @@ class LibraryScreen(
         filterRow.isVisible = !searching && (folder != null || category != null)
         quickHeader.isVisible = !searching && !firstRun
         quickRow.isVisible = !searching && !firstRun && quickStrip.childCount > 0
-        docHeading.isVisible = !searching && !firstRun
+        docHeading.isVisible = !searching && allVisibleDocs.isNotEmpty()
         listHeader.isVisible = !searching && !firstRun
         searchStatus.isVisible = query.isNotBlank() || folder != null || category != null
         // M5: keep the list's bottom inset at or above the dock's real height (it grows when
         // the scan disc rises over the page); never a smaller magic number.
         val inset = listBottomInset()
-        val gutter = SwStyle.dp(context, 48f)
+        val gutter = if (allVisibleDocs.size >= LibraryFastScrollBar.MIN_DOCUMENTS)
+            SwStyle.dp(context, SwStyle.TOUCH_MIN_DP) else 0
         if (docList.paddingBottom != inset || docList.paddingRight != gutter) {
             docList.setPadding(0, docList.paddingTop, gutter, inset)
         }
@@ -2653,10 +2733,11 @@ class LibraryScreen(
     private fun listBottomInset(): Int {
         val dock = (context as? ShellActivity)?.dockClearancePx() ?: 0
         val base = maxOf(SwStyle.dp(context, 96f), dock)
-        // G6: a wrapped dock can grow a few pixels after this pass; keep a small high-font
-        // margin so the reserved clearance still covers the measured dock on the next frame.
+        // U5/G6: at 200 % the Scan action is lifted 40 dp above the pill, so the measured
+        // dock is taller than the nav host. Reserve that lift up front (the dock is measured
+        // only after the first layout) so the last card never hides under the disc.
         return if (resources.configuration.fontScale >= 1.6f) {
-            base + SwStyle.dp(context, 8f)
+            base + SwStyle.dp(context, 48f)
         } else base
     }
 

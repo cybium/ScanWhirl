@@ -138,8 +138,7 @@ class ResizeCropDefectTest {
             org.junit.Assert.assertFalse("crop must not fail as unreadable: $toast", toast == unreadable)
             val intent = shadowOf(activity).nextStartedActivity
                 ?: throw AssertionError("no result screen opened; toast=$toast")
-            val path = intent.getStringExtra("output_path")
-                ?: throw AssertionError("no output_path in result intent")
+            val path = com.scanwhirl.app.ui.result.ResultSpec.fromIntent(intent).files.single().path
             val saved = File(path).readBytes()
             assertEquals("saved JPG must be exact, got ${ImageTools.imageSize(saved)}",
                 targetW to targetH, ImageTools.imageSize(saved))

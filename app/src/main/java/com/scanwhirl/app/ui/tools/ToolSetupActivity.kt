@@ -1491,6 +1491,7 @@ class ToolSetupActivity : BaseActivity() {
                     else -> return fail(getString(R.string.tools_setup_bad_target))
                 }
                 target = targetBytes
+                val before = doc.pdfFile.takeIf { it.isFile }?.length()
                 execute({
                     val out = if (targetBytes != null) {
                         repo.compressScanToTargetForResult(doc.id, targetBytes)?.id
@@ -1512,7 +1513,7 @@ class ToolSetupActivity : BaseActivity() {
                         return@execute
                     }
                     openDocs(ids, targetBytes = targetBytes,
-                        receiptSourceId = doc.id, outputIdentity = identity)
+                        receiptSourceId = doc.id, outputIdentity = identity, beforeBytes = before)
                 }
             }
             "pdf_to_images" -> {
@@ -1657,13 +1658,15 @@ class ToolSetupActivity : BaseActivity() {
         ids: List<String>,
         targetBytes: Long? = null,
         receiptSourceId: String? = null,
-        outputIdentity: String? = null
+        outputIdentity: String? = null,
+        beforeBytes: Long? = null
     ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
             ToolResultActivity.intent(
-                this, tool.id, docIds = ids, targetBytes = targetBytes,
-                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity
+                this, com.scanwhirl.app.ui.result.ResultSpec(tool.id, docIds = ids, targetBytes = targetBytes,
+                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity,
+                adjustIntent = Intent(intent), beforeBytes = beforeBytes)
             )
         )
     }
@@ -1675,8 +1678,8 @@ class ToolSetupActivity : BaseActivity() {
         outputIdentity: String? = null
     ) {
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, files = files,
-            mime = mime, note = note, outputIdentity = outputIdentity))
+        startActivity(ToolResultActivity.intent(this, com.scanwhirl.app.ui.result.ResultSpec(tool.id, files = files,
+            mime = mime, note = note, outputIdentity = outputIdentity, adjustIntent = Intent(intent))))
     }
 
     /** Blocking helpers: called only inside execute()'s Dispatchers.IO block. */
