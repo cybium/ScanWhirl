@@ -248,10 +248,14 @@ class W5aFoundationsTest {
             RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
             val track = ContextCompat.getColorStateList(app, R.color.sel_switch_track)!!
             val thumb = ContextCompat.getColorStateList(app, R.color.sel_switch_thumb)!!
-            val offTrack = track.getColorForState(intArrayOf(), 0)
-            val offThumb = thumb.getColorForState(intArrayOf(), 0)
-            val onTrack = track.getColorForState(intArrayOf(android.R.attr.state_checked), 0)
-            val onThumb = thumb.getColorForState(intArrayOf(android.R.attr.state_checked), 0)
+            // An empty state set means "disabled" to ColorStateList, so always
+            // include state_enabled when asking for the normal OFF/ON colours.
+            val enabled = intArrayOf(android.R.attr.state_enabled)
+            val checked = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked)
+            val offTrack = track.getColorForState(enabled, 0)
+            val offThumb = thumb.getColorForState(enabled, 0)
+            val onTrack = track.getColorForState(checked, 0)
+            val onThumb = thumb.getColorForState(checked, 0)
             val offTrackDisabled = track.getColorForState(intArrayOf(-android.R.attr.state_enabled), 0)
             val offThumbDisabled = thumb.getColorForState(intArrayOf(-android.R.attr.state_enabled), 0)
             val card = ContextCompat.getColor(app, R.color.tok_surface)
