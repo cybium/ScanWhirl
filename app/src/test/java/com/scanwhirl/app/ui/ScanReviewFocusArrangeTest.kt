@@ -358,7 +358,12 @@ class ScanReviewFocusArrangeTest {
             }
             // The rename + re-list can settle a tick after the click; wait for the
             // combined status line to show the new count (bounded wait, no hang).
-            await { scenario.get { it.text(R.id.reviewStatus).contains("Page 2 of 2") } }
+            // Keep the assertion; if it ever fails, report the real screen/disk state.
+            try {
+                await { scenario.get { it.text(R.id.reviewStatus).contains("Page 2 of 2") } }
+            } catch (e: AssertionError) {
+                fail("delete never settled :: " + scenario.get { deleteSnapshot(it, dir) })
+            }
             scenario.onActivity { a ->
                 assertTrue(File(dir, "page_001.jpg.del").exists())
                 assertEquals(1, a.currentIndex)
@@ -370,11 +375,15 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.findViewById<View>(com.google.android.material.R.id.snackbar_action).performClick()
             }
-            await {
-                scenario.get {
-                    File(dir, "page_001.jpg").exists() &&
-                        it.text(R.id.btnSavePdf) == "Save 3 pages"
+            try {
+                await {
+                    scenario.get {
+                        File(dir, "page_001.jpg").exists() &&
+                            it.text(R.id.btnSavePdf) == "Save 3 pages"
+                    }
                 }
+            } catch (e: AssertionError) {
+                fail("undo never settled :: " + scenario.get { deleteSnapshot(it, dir) })
             }
         }
     }
@@ -541,6 +550,14 @@ class ScanReviewFocusArrangeTest {
 
     private fun snackbarText(a: Activity): String? =
         a.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)?.text?.toString()
+
+    private fun deleteSnapshot(a: ScanReviewActivity, dir: File): String =
+        "status=" + a.text(R.id.reviewStatus) +
+            " save=" + a.text(R.id.btnSavePdf) +
+            " busy=" + a.pageOpBusy + " index=" + a.currentIndex +
+            " files=" + (dir.listFiles()?.map { it.name }?.sorted() ?: emptyList()) +
+            " snack=" + snackbarText(a) +
+            " action=" + a.findViewById<View>(com.google.android.material.R.id.snackbar_action)
 
     private fun <T> SwActivitySession<ScanReviewActivity>.get(block: (ScanReviewActivity) -> T): T =
         block(activity)
