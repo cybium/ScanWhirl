@@ -58,10 +58,23 @@ class HomeDocInfoReaderIntegrityTest {
 
     private var seq = 0
 
+    /** A real JPEG page: the indexer decodes pages, so a fake byte array is rejected. */
+    private fun jpeg(): ByteArray {
+        val bmp = android.graphics.Bitmap.createBitmap(
+            60, 85, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        android.graphics.Canvas(bmp).drawColor(android.graphics.Color.LTGRAY)
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+        bmp.recycle()
+        return out.toByteArray()
+    }
+
     private fun fixture(name: String, pages: Int): File {
         val dir = File(repo.docsDir, "status_${System.nanoTime()}_${seq++}")
         dir.mkdirs()
-        for (i in 1..pages) File(dir, "page_%03d.jpg".format(i)).writeBytes(ByteArray(16))
+        val bytes = jpeg()
+        for (i in 1..pages) File(dir, "page_%03d.jpg".format(i)).writeBytes(bytes)
         File(dir, "scan.pdf").writeBytes(ByteArray(64))
         File(dir, "meta.txt").writeText("$name\n${1_700_000_000_000L + seq * 60_000L}\n${CategoryRules.FORMS}\n")
         return dir
