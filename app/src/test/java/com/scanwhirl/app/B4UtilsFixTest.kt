@@ -31,7 +31,6 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -169,7 +168,8 @@ class B4UtilsFixTest {
             TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
             val items = listOf(BatchRename.Item("Bill", stampUtc()), BatchRename.Item("Rent", stampUtc()))
             assertEquals(
-                listOf("Bill 1 2026-11-27", "Bill 2 2026-11-27"),
+                // Each item keeps its OWN name; {n} is the position, not a forced "Bill".
+                listOf("Bill 1 2026-11-27", "Rent 2 2026-11-27"),
                 BatchRename.preview("{name} {n} {date}", items)
             )
             assertEquals(listOf("Bill 1", "Rent 2"), BatchRename.apply("{name} {n}", items))
@@ -240,7 +240,9 @@ class B4UtilsFixTest {
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(1, context.started.size)
         assertEquals("the chooser runs on main", true, context.chooserOnMain.single())
-        assertEquals("copies ran on the IO dispatcher", listOf("sw-b4-io", "sw-b4-io"), threads.toList())
+        // coroutines may append " @coroutine#N" to the thread name; compare the prefix.
+        assertEquals("two copies ran", 2, threads.size)
+        assertTrue("copies ran on the IO dispatcher: $threads", threads.all { it.startsWith("sw-b4-io") })
         @Suppress("DEPRECATION")
         val send = context.started[0].getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
         @Suppress("DEPRECATION")
@@ -331,7 +333,8 @@ class B4UtilsFixTest {
 
         val restored = store.restore(token.key)
         assertNotNull("Undo must still work", restored)
-        assertNotEquals("the restored item is a different document", first, restored)
+        // Undo returns the SAME document id: only its title is re-resolved on publish.
+        assertEquals("Undo keeps the original document identity", first, restored)
         assertEquals("UndoTitle (2)", repo.getDocument(restored!!)!!.name)
         assertEquals("the newer document is untouched", "UndoTitle", repo.getDocument(replacement)!!.name)
     }

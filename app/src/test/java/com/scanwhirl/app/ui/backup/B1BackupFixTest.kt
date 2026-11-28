@@ -201,6 +201,11 @@ class B1BackupFixTest {
         val request = shadowOf(activity).nextStartedActivityForResult
         assertNotNull("Restore opens the file picker", request)
         shadowOf(activity).receiveResult(request.intent, Activity.RESULT_OK, Intent().setData(uri))
+        // BoundedCopy.copy is suspend: the picked copy is handed to restoreSource only after
+        // that coroutine completes. One idle() races it and left restoreSourceOf() null.
+        assertTrue("the picked copy is handed to the restore sheet", await {
+            restoreSourceOf(activity) != null
+        })
         idle()
     }
 
