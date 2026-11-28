@@ -44,4 +44,21 @@ object CompressionPresentation {
         100 -> R.string.v2t_size_100
         else -> R.string.v2t_size_200
     }
+
+    /**
+     * J2 — the four "Aim for a size" chips on the Tools-hub Compress setup. These are
+     * decimal PDF bytes (KB = 1000), matching UX_EVIDENCE J2 and the shared `SizeUnits`
+     * parser. Deliberately a SEPARATE table from [quickTargetKb]: that one is also read
+     * by Resize and by the viewer-dock sheet, whose pinned contracts stay unchanged.
+     * Index order is the on-screen order: 200 KB, 500 KB, 1 MB, 2 MB.
+     */
+    val j2TargetBytes: List<Long> = listOf(200_000L, 500_000L, 1_000_000L, 2_000_000L)
+
+    @StringRes
+    fun j2TargetLabel(index: Int): Int = when (index) {
+        0 -> R.string.ux130_l3_compress_target_200kb
+        1 -> R.string.ux130_l3_compress_target_500kb
+        2 -> R.string.ux130_l3_compress_target_1mb
+        else -> R.string.ux130_l3_compress_target_2mb
+    }
 }

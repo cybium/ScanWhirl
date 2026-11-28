@@ -882,6 +882,146 @@ def walk_results():
     recover("after shared result walk")
 
 
+def set_numeric_field(rid, text):
+    """Tap a field, select its old value, and type a replacement. Best effort on a real IME."""
+    if not tap({"rid": rid}, timeout=3):
+        return False
+    adb("shell", "input", "keyevent", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
+    type_text(text)
+    return True
+
+
+def walk_j2():
+    """J2 — deep Compress steps on the real setup screen, all driven through the UI."""
+    def quality():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if wait_for({"rid": "toolSetupLevels"}, timeout=12) is None:
+            capture("j2", "quality-levels-missing", ["Tools", "Compress"],
+                    "Four labelled levels were not shown")
+            return "levels unavailable"
+        # Estimates fill in place; wait for the real measurement, never a fake delay.
+        time.sleep(1.5)
+        capture("j2", "quality-four-levels", ["Tools", "Compress", "Choose quality"],
+                "Four labelled levels, Balanced recommended, estimates in place")
+        return "quality setup captured"
+
+    step("j2", "quality", ["Tools", "Compress"], quality)
+
+    def size():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if not tap({"text": "Aim for a size"}, timeout=8):
+            capture("j2", "size-aim-missing", ["Tools", "Compress"],
+                    "The Aim for a size choice was not shown")
+            return "size aim unavailable"
+        if wait_for({"rid": "toolSetupTarget"}, timeout=8) is None:
+            return "custom field unavailable"
+        capture("j2", "size-targets", ["Tools", "Compress", "Aim for a size"],
+                "200 KB / 500 KB / 1 MB / 2 MB plus a custom numeric field with KB/MB")
+        # An invalid number must block the start with one clear inline error.
+        set_numeric_field("toolSetupTarget", "abc")
+        tap({"rid": "toolSetupRun"}, timeout=3)
+        time.sleep(0.6)
+        capture("j2", "size-invalid-blocks", ["Tools", "Compress", "Aim for a size", "Invalid"],
+                "Invalid number: one inline error and no run")
+        # Fix it with the 1 MB decimal target chip and show the unit toggle.
+        if not tap({"text": "1 MB"}, timeout=4):
+            return "1 MB target chip unavailable"
+        capture("j2", "size-custom", ["Tools", "Compress", "Aim for a size", "1 MB"],
+                "A valid decimal target with KB/MB choice")
+        return "size setup captured"
+
+    step("j2", "size", ["Tools", "Compress"], size)
+
+    def met():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if not tap({"text": "Aim for a size"}, timeout=8):
+            return "size aim unavailable"
+        if not tap({"rid": "toolSetupRun"}, timeout=6):
+            return "Compress action unavailable"
+        prog = wait_for({"regex": r"Page \d+ of \d+|Compressing \d+ pages"}, timeout=25)
+        if prog is None:
+            capture("j2", "progress-missing", ["Tools", "Compress", "Compress"],
+                    "No real page count was shown during the run")
+        else:
+            capture("j2", "progress-pages", ["Tools", "Compress", "Compress", "Progress"],
+                    "Real page count while the output is still in staging")
+        if wait_for({"rid": "toolResultName"}, timeout=70) is None:
+            capture("j2", "result-met-missing", ["Tools", "Compress"],
+                    "Result was not reached")
+            return "result unavailable"
+        time.sleep(1)
+        capture("j2", "result-met", ["Tools", "Compress", "Result"],
+                "Measured before → after with Share as the dock primary")
+        tap({"text": "Done"}, timeout=3)
+        wait_for({"rid": "swHomeSearch"}, timeout=12)
+        return "met result captured"
+
+    step("j2", "met", ["Tools", "Compress"], met)
+
+    def missed():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if not tap({"text": "Aim for a size"}, timeout=8):
+            return "size aim unavailable"
+        # A 1 KB cap cannot be met without shredding the text: the engine stops and
+        # reports the closest achieved size instead of claiming success.
+        set_numeric_field("toolSetupTarget", "1")
+        if not tap({"rid": "toolSetupRun"}, timeout=6):
+            return "Compress action unavailable"
+        if wait_for({"rid": "toolResultName"}, timeout=70) is None:
+            capture("j2", "result-missed-missing", ["Tools", "Compress"],
+                    "A missed target did not reach a result")
+            return "result unavailable"
+        time.sleep(1)
+        capture("j2", "result-missed", ["Tools", "Compress", "Result"],
+                "Closest achieved size, honest miss title, Share primary")
+        tap({"text": "Done"}, timeout=3)
+        wait_for({"rid": "swHomeSearch"}, timeout=12)
+        return "missed result captured"
+
+    step("j2", "missed", ["Tools", "Compress", "1 KB"], missed)
+
+    def no_gain():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if not tap({"rid": "toolSetupRun"}, timeout=6):
+            return "Compress action unavailable"
+        if wait_for({"rid": "toolResultName"}, timeout=70) is None:
+            capture("j2", "result-no-gain-missing", ["Tools", "Compress"],
+                    "No result after recompressing a tiny copy")
+            return "result unavailable"
+        time.sleep(1)
+        capture("j2", "result-no-gain", ["Tools", "Compress", "Result"],
+                "Already compact / no duplicate; depends on the measured source")
+        tap({"text": "Done"}, timeout=3)
+        wait_for({"rid": "swHomeSearch"}, timeout=12)
+        return "no-gain result captured"
+
+    step("j2", "no-gain", ["Tools", "Compress"], no_gain)
+
+    def cancel():
+        if not open_tool("Compress"):
+            return "Compress tile unavailable"
+        if not tap({"rid": "toolSetupRun"}, timeout=6):
+            return "Compress action unavailable"
+        if not wait_for({"regex": r"Page \d+ of \d+|Compressing \d+ pages"}, timeout=25):
+            return "progress unavailable for cancel"
+        if tap({"text": "Cancel"}, timeout=3):
+            time.sleep(0.6)
+            capture("j2", "cancel-creates-nothing", ["Tools", "Compress", "Progress", "Cancel"],
+                    "Cancelled: no result, no new document")
+        else:
+            capture("j2", "cancel-unavailable", ["Tools", "Compress", "Progress"],
+                    "No Cancel control during the run")
+        return "cancel captured"
+
+    step("j2", "cancel", ["Tools", "Compress", "Progress"], cancel)
+    recover("after J2 walk")
+
+
 def walk_library():
     launch()
 
@@ -1363,6 +1503,7 @@ def main():
         walk_library()
         walk_tabs()
         walk_results()
+        walk_j2()
         walk_tools()
         walk_viewer()
         walk_vault()

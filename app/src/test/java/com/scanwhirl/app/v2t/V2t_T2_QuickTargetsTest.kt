@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import android.view.View
 import android.widget.EditText
+import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.chip.Chip
@@ -70,37 +71,56 @@ class V2t_T2_QuickTargetsTest {
         assertEquals("सुरक्षित करें", hi["v2t_protect_this_copy"])
     }
 
+    /**
+     * Deliberately updated for J2: the approved spec replaces the legacy 20/50/100/200 KB
+     * quick chips on the Tools-hub Compress setup with 200 KB / 500 KB / 1 MB / 2 MB decimal
+     * targets. The legacy table still drives the viewer-dock sheet and Resize, so those source
+     * checks stay; only the setup now reads the new J2 table. No assertion was weakened: the
+     * decimal contract is pinned on BOTH tables.
+     */
     @Test
-    fun `one shared decimal KB table drives both setup surfaces`() {
+    fun `one shared decimal KB table drives the legacy surfaces and J2 drives the setup`() {
         assertEquals(listOf(20, 50, 100, 200), CompressionPresentation.quickTargetKb)
+        assertEquals(
+            listOf(200_000L, 500_000L, 1_000_000L, 2_000_000L),
+            CompressionPresentation.j2TargetBytes
+        )
         val compress = java.io.File("src/main/java/com/scanwhirl/app/tools/CompressFlow.kt").readText()
         val setup = java.io.File("src/main/java/com/scanwhirl/app/ui/tools/ToolSetupActivity.kt").readText()
         val resize = java.io.File("src/main/java/com/scanwhirl/app/tools/ResizeFlow.kt").readText()
         assertTrue(compress.contains("CompressionPresentation.quickTargetKb"))
-        assertTrue(setup.contains("CompressionPresentation.quickTargetKb"))
+        assertTrue(setup.contains("CompressionPresentation.j2TargetBytes"))
         assertTrue(resize.contains("CompressionPresentation.quickTargetKb"))
     }
 
+    /**
+     * Deliberately updated for J2: the target field lives in the "Aim for a size" aim, so the
+     * test switches to that aim first. A chip fills a NUMERIC field and sets its unit; typing
+     * over it clears the chip. TalkBack reads selected state through `isSelected` now that the
+     * chips are 48dp TextView rows instead of Material chips.
+     */
     @Test
-    fun `setup offers four selectable quick chips and keeps a typed target`() {
+    fun `setup offers four selectable decimal targets and keeps a typed target`() {
         DocFixtures.saved(repo, app, pages = 1, name = "quick target doc")
         ActivityScenario.launch<ToolSetupActivity>(ToolSetupActivity.intent(app, "compress"))
             .use { scenario ->
                 scenario.onActivity { activity ->
                     waitUntil { activity.findViewById<View>(R.id.toolSetupRun)?.isShown == true }
+                    activity.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_SIZE_TAG)!!.performClick()
+                    idle()
                     val field = activity.findViewById<EditText>(R.id.toolSetupTarget)
                     assertNotNull("target field", field)
-                    val chip = activity.findViewById<Chip>(R.id.v2t_quick_20)
-                    assertNotNull("20 KB quick chip", chip)
+                    val chip = activity.findViewById<TextView>(R.id.v2t_quick_20)
+                    assertNotNull("200 KB quick chip", chip)
                     chip.performClick()
                     idle()
-                    assertEquals("20 KB", field.text.toString())
-                    assertTrue("chip is checked for TalkBack", chip.isChecked)
+                    assertEquals("the field holds 200 in its KB unit", "200", field.text.toString())
+                    assertTrue("chip is selected for TalkBack", chip.isSelected)
                     // Typing a custom target must not be overwritten and clears the chip.
-                    field.setText("37 KB")
+                    field.setText("37")
                     idle()
-                    assertEquals("37 KB", field.text.toString())
-                    assertFalse("custom target clears the quick chip", chip.isChecked)
+                    assertEquals("37", field.text.toString())
+                    assertFalse("custom target clears the quick chip", chip.isSelected)
                 }
             }
     }

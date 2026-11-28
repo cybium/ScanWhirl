@@ -11,6 +11,23 @@
     <string name="ux130_l3_compress_aim_size">Aim for a size</string>
     <string name="ux130_l3_compress_from_phone_storage">From phone storage</string>
 
+    <!-- J2: the two setups are separate screens; each keeps its own choice. -->
+    <string name="ux130_l3_compress_choose_quality">Choose quality</string>
+    <string name="ux130_l3_compress_estimate_pending">Estimating…</string>
+    <string name="ux130_l3_compress_recommended">Recommended</string>
+    <!-- J2: decimal targets (KB = 1000 bytes), plus a custom numeric field with a unit. -->
+    <string name="ux130_l3_compress_target_200kb">200 KB</string>
+    <string name="ux130_l3_compress_target_500kb">500 KB</string>
+    <string name="ux130_l3_compress_target_1mb">1 MB</string>
+    <string name="ux130_l3_compress_target_2mb">2 MB</string>
+    <string name="ux130_l3_compress_custom">Custom</string>
+    <string name="ux130_l3_compress_invalid_custom">Enter a valid size in KB or MB.</string>
+    <!-- J2: real page counts and a cancel that publishes nothing. -->
+    <string name="ux130_l3_compress_progress_page">Page %1$d of %2$d</string>
+    <string name="ux130_l3_compress_progress_pages">Compressing %1$d pages</string>
+    <string name="ux130_l3_compress_failed_title">Couldn’t compress</string>
+    <string name="ux130_l3_compress_retry">Try again</string>
+
     <!-- L3-04: accessible external merge reorder. -->
     <string name="ux130_l3_merge_move_earlier">Move earlier</string>
     <string name="ux130_l3_merge_move_later">Move later</string>

@@ -23,6 +23,8 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.scanwhirl.app.R
@@ -52,6 +54,9 @@ import com.scanwhirl.app.util.StatusLine
 import com.scanwhirl.app.util.ZipExporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -99,6 +104,26 @@ class ToolSetupActivity : BaseActivity() {
     private var compressEstimates: List<Long>? = null
     private var estimatesFor: String? = null
 
+    /** J2: only one of the two compress aims is on screen; each keeps its own choice. */
+    private var compressMode: String = MODE_QUALITY
+    /** J2: the unit chosen for the custom numeric size (decimal KB / MB). */
+    private var compressUnit: String = UNIT_KB
+    /** J2: which of the four target chips is selected, if any. */
+    private var compressTargetIndex: Int? = null
+    /** J2: the four target chips, repainted after a chip, a unit or a typed value changes. */
+    private val compressTargetChips = mutableListOf<TextView>()
+    /** J2: setting the field from a chip is not the same as the person typing over it. */
+    private var compressSuppressFieldChange = false
+    /** J2: the live run, so Cancel can stop it before the engine publishes anything. */
+    private var compressJob: Job? = null
+    /** J2: both option trees are built once; only the active aim is visible. */
+    private lateinit var compressQualityBlock: View
+    private lateinit var compressSizeBlock: View
+    private lateinit var compressQualityMode: TextView
+    private lateinit var compressSizeMode: TextView
+    /** J2: the only late callbacks allowed to paint this screen are this render's. */
+    private var compressRenderSeq: Long = 0L
+
     /** V2T T2: a caller may hand us one verified output document to act on. */
     private var preselectedDocId: String? = null
 
@@ -107,6 +132,11 @@ class ToolSetupActivity : BaseActivity() {
     private lateinit var errorView: TextView
     private lateinit var runButton: TextView
     private lateinit var progressOverlay: View
+    /** J2: real page counts and the one safe Cancel, inside the progress overlay. */
+    private lateinit var compressProgressText: TextView
+    private lateinit var compressProgressCancel: TextView
+    /** J2: shown only after a compress failure, beside the inline error. */
+    private lateinit var compressRetry: TextView
     /** Scrollable spacer below the last option: the pinned Continue can never cover an input. */
     private lateinit var bottomSpacer: View
     private var pinnedBarHeight = 0
@@ -168,6 +198,9 @@ class ToolSetupActivity : BaseActivity() {
         outState.putString(KEY_TARGET, targetText)
         outState.putBoolean(KEY_WORD_PICTURES, wordPictures)
         outState.putBoolean(KEY_EXCEL_TABLES, excelTablesOnly)
+        // J2: a rotation keeps each compress aim and its own unit, never a reset to quality.
+        outState.putString(KEY_COMPRESS_MODE, compressMode)
+        outState.putString(KEY_COMPRESS_UNIT, compressUnit)
     }
 
     private fun restoreSetupState(saved: Bundle) {
@@ -185,6 +218,12 @@ class ToolSetupActivity : BaseActivity() {
         targetText = saved.getString(KEY_TARGET).orEmpty()
         wordPictures = saved.getBoolean(KEY_WORD_PICTURES, false)
         excelTablesOnly = saved.getBoolean(KEY_EXCEL_TABLES, true)
+        compressMode = saved.getString(KEY_COMPRESS_MODE)?.takeIf {
+            it == MODE_QUALITY || it == MODE_SIZE
+        } ?: MODE_QUALITY
+        compressUnit = saved.getString(KEY_COMPRESS_UNIT)?.takeIf {
+            it == UNIT_KB || it == UNIT_MB
+        } ?: UNIT_KB
     }
 
     override fun onResume() {
@@ -293,6 +332,17 @@ class ToolSetupActivity : BaseActivity() {
         bar.addView(runButton, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 56f)
         ))
+        // J2: Retry appears only after a failure, next to the error, so the exact inputs the
+        // person typed stay on screen and one tap repeats the same run.
+        compressRetry = actionButton(getString(R.string.ux130_l3_compress_retry), primary = false).apply {
+            tag = COMPRESS_RETRY_TAG
+            isVisible = false
+            minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+            setOnClickListener { run() }
+        }
+        bar.addView(compressRetry, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
         root.addView(bar, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.BOTTOM })
@@ -322,18 +372,44 @@ class ToolSetupActivity : BaseActivity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 addView(ProgressBar(this@ToolSetupActivity))
+                // J2: this label carries REAL page numbers only. The quality aim keeps the
+                // honest "N pages" count; the size aim is updated by the engine's onPage.
+                compressProgressText = SwStyle.text(
+                    this@ToolSetupActivity, 14f,
+                    SwStyle.color(this@ToolSetupActivity, R.color.text_hologram_mid)
+                ).apply {
+                    tag = COMPRESS_PROGRESS_TAG
+                    text = getString(R.string.tools_setup_working)
+                    gravity = Gravity.CENTER
+                }
                 addView(
-                    SwStyle.text(this@ToolSetupActivity, 14f, SwStyle.color(this@ToolSetupActivity, R.color.text_hologram_mid)).apply {
-                        text = getString(R.string.tools_setup_working)
-                        gravity = Gravity.CENTER
-                    },
+                    compressProgressText,
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
                     ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 12f) }
                 )
+                // J2: one safe Cancel while the work is still in staging. Cancelling the job
+                // stops the staged encode; no document is published and the inputs stay put.
+                compressProgressCancel = actionButton(
+                    getString(R.string.sheet_cancel), primary = false
+                ).apply {
+                    id = View.generateViewId()
+                    tag = COMPRESS_CANCEL_TAG
+                    minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+                    isVisible = false
+                    setOnClickListener { cancelCompress() }
+                }
+                addView(
+                    compressProgressCancel,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        SwStyle.dp(this@ToolSetupActivity, 48f)
+                    ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 16f) }
+                )
             },
             FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                SwStyle.dp(this@ToolSetupActivity, 260f),
+                ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.CENTER }
         )
     }
@@ -776,8 +852,89 @@ class ToolSetupActivity : BaseActivity() {
         optionsHost.addView(note(getString(R.string.cdf1_setup_images_note)))
     }
 
+    /**
+     * J2 — the Compress setup is TWO screens, never one page with both aims. Switching only
+     * rebuilds this tool's options; the level on one side and the numeric target + unit on the
+     * other are Activity state, so each aim keeps its own choice across a switch or a rotation.
+     */
     private fun buildCompressOptions() {
-        // The document's compress sheet wording, in the same order: quality first, smallest last.
+        val seq = ++compressRenderSeq
+        levelRows.clear()
+        levelSizes.clear()
+        compressTargetChips.clear()
+        errorView.isVisible = false
+
+        // The aim switch is a two-way choice with selected semantics, not an icon-only tab.
+        val modes = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            tag = COMPRESS_MODES_TAG
+        }
+        compressQualityMode = compressModeButton(
+            getString(R.string.ux130_l3_compress_choose_quality),
+            MODE_QUALITY, COMPRESS_MODE_QUALITY_TAG
+        )
+        compressSizeMode = compressModeButton(
+            getString(CompressionPresentation.aimForSize), MODE_SIZE, COMPRESS_MODE_SIZE_TAG
+        )
+        modes.addView(compressQualityMode, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        modes.addView(compressSizeMode, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ))
+        optionsHost.addView(modes, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 12f) })
+
+        // Both trees exist (as the storyboard's hidden panels do), but exactly one is shown.
+        // Keeping both rows lets estimates keep arriving in place while the other aim is open,
+        // and keeps a typed target when the person switches back.
+        buildCompressQualityRows()
+        buildCompressSizeRows()
+        applyCompressMode()
+        compressRetry.isVisible = false
+        startEstimate(seq)
+        // A re-render (selection change, onResume) rebuilds the size labels: show the
+        // estimates already measured instead of a fresh empty row.
+        updateEstimateLines()
+    }
+
+    /** One aim on screen: the other tree is GONE, not merely greyed out. */
+    private fun applyCompressMode() {
+        if (!::compressQualityBlock.isInitialized || !::compressSizeBlock.isInitialized) return
+        compressQualityBlock.isVisible = compressMode == MODE_QUALITY
+        compressSizeBlock.isVisible = compressMode == MODE_SIZE
+        paintChip(compressQualityMode, compressMode == MODE_QUALITY)
+        paintChip(compressSizeMode, compressMode == MODE_SIZE)
+        errorView.isVisible = false
+        compressRetry.isVisible = false
+    }
+
+    /** A labelled 48dp aim button. The tag is the stable handle for tests and the atlas. */
+    private fun compressModeButton(label: String, mode: String, tag: String): TextView =
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_dim), bold = true).apply {
+            text = label
+            this.tag = tag
+            contentDescription = label
+            isClickable = true
+            isFocusable = true
+            maxLines = Int.MAX_VALUE
+            gravity = Gravity.CENTER
+            minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+            setPadding(
+                SwStyle.dp(this@ToolSetupActivity, 8f), SwStyle.dp(this@ToolSetupActivity, 8f),
+                SwStyle.dp(this@ToolSetupActivity, 8f), SwStyle.dp(this@ToolSetupActivity, 8f)
+            )
+            setOnClickListener {
+                if (compressMode == mode) return@setOnClickListener
+                compressMode = mode
+                // The other aim's choice is state on this Activity: switching never clears it.
+                applyCompressMode()
+            }
+        }
+
+    /** The four labelled levels with their own in-place estimate, Balanced first among equals. */
+    private fun buildCompressQualityRows() {
         // L3-03: the same ordered labels as the Compress sheet, from one shared table.
         val levels = listOf(
             CompressLevel(CompressionPresentation.levelLabels[0], 0, R.id.toolSetupLevelBest),
@@ -785,13 +942,9 @@ class ToolSetupActivity : BaseActivity() {
             CompressLevel(CompressionPresentation.levelLabels[2], 2, R.id.toolSetupLevelSmaller),
             CompressLevel(CompressionPresentation.levelLabels[3], 3, R.id.toolSetupLevelSmallest)
         )
-        levelRows.clear()
-        levelSizes.clear()
         // L3-03: at larger fonts the measured size drops below its label instead of being
         // squeezed beside it. Engine parameters are untouched (see CompressionPresentation).
         val stackEstimate = resources.configuration.fontScale > 1.15f
-        // Full-width rows, one level per line: Hindi labels ("सबसे अच्छी क्वालिटी") never fit a
-        // three-up chip row at 360 dp, which is what clipped "Mediu / m" on the owner's phone.
         val stack = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             id = R.id.toolSetupLevels
@@ -820,6 +973,8 @@ class ToolSetupActivity : BaseActivity() {
                 id = R.id.toolSetupLevelSize
                 maxLines = 1
                 gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                // An honest placeholder: until the engine measures, no number is shown.
+                text = getString(R.string.ux130_l3_compress_estimate_pending)
             }
             val row = LinearLayout(this).apply {
                 id = level.id
@@ -827,17 +982,16 @@ class ToolSetupActivity : BaseActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 isFocusable = true
-                // L3-03: wrap height with a 48dp floor, never a fixed clipped row.
                 minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
                 val pad = SwStyle.dp(this@ToolSetupActivity, 12f)
                 val padV = SwStyle.dp(this@ToolSetupActivity, if (stackEstimate) 8f else 0f)
                 setPadding(pad, padV, pad, padV)
                 background = chipBackground(false)
+                contentDescription = getString(level.titleRes)
                 setOnClickListener {
+                    // J2: choosing a level changes ONLY the quality aim. The size aim's
+                    // typed value and unit survive so switching back is not a reset.
                     this@ToolSetupActivity.level = level.index
-                    target = null
-                    targetText = ""
-                    optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText("")
                     paintLevels()
                 }
             }
@@ -847,8 +1001,6 @@ class ToolSetupActivity : BaseActivity() {
                 marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
                 if (stackEstimate) bottomMargin = SwStyle.dp(this@ToolSetupActivity, 4f)
             })
-            // L3-03 P1: in a vertical row, width 0 + weight 1 measures to zero
-            // and the label disappears. A stacked label must fill the row.
             row.addView(
                 label,
                 if (stackEstimate) {
@@ -861,6 +1013,20 @@ class ToolSetupActivity : BaseActivity() {
                     }
                 }
             )
+            if (level.index == 1) {
+                row.addView(
+                    SwStyle.text(
+                        this, 12f, SwStyle.color(this, R.color.cyan_primary), bold = true
+                    ).apply {
+                        tag = COMPRESS_RECOMMENDED_TAG
+                        text = getString(R.string.ux130_l3_compress_recommended)
+                        maxLines = Int.MAX_VALUE
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) }
+                )
+            }
             row.addView(size, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { if (stackEstimate) topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
@@ -870,64 +1036,138 @@ class ToolSetupActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 8f) })
         }
+        compressQualityBlock = stack
         optionsHost.addView(stack)
-        // L3-03: an explicit aim label; the field's own judged hint stays unchanged so
-        // existing parity and fit checks still describe the same field.
-        optionsHost.addView(
-            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
-                text = getString(CompressionPresentation.aimForSize)
+        paintLevels()
+    }
+
+    /** Four decimal targets plus a Custom numeric field and its KB/MB choice. */
+    private fun buildCompressSizeRows() {
+        val block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        block.addView(
+            SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                text = getString(R.string.compress_target_help)
                 maxLines = Int.MAX_VALUE
             },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 8f) }
+            ).apply { bottomMargin = SwStyle.dp(this@ToolSetupActivity, 6f) }
         )
-        // V2T T2: the same free decimal-KB chips as the Compress sheet. A typed
-        // target always wins; the checked chip is the TalkBack-selected state.
-        var suppressChip = false
-        val quickGroup = com.google.android.material.chip.ChipGroup(this).apply {
-            id = R.id.v2t_quick_group
-            isSingleSelection = true
-        }
-        CompressionPresentation.quickTargetKb.forEach { kb ->
-            val label = getString(CompressionPresentation.quickTargetLabel(kb))
-            val chip = com.google.android.material.chip.Chip(this).apply {
-                id = when (kb) {
-                    20 -> R.id.v2t_quick_20
-                    50 -> R.id.v2t_quick_50
-                    100 -> R.id.v2t_quick_100
-                    else -> R.id.v2t_quick_200
-                }
-                text = label
-                isCheckable = true
-                isCheckedIconVisible = false
-                setOnClickListener {
-                    suppressChip = true
-                    targetText = label
-                    optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText(label)
-                    suppressChip = false
-                }
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        CompressionPresentation.j2TargetBytes.forEachIndexed { index, bytes ->
+            val label = getString(CompressionPresentation.j2TargetLabel(index))
+            // The four ids stay the judged quick-chip ids; their labels and values are the
+            // J2 decimal targets. One chip group, one selected value.
+            val id = when (index) {
+                0 -> R.id.v2t_quick_20
+                1 -> R.id.v2t_quick_50
+                2 -> R.id.v2t_quick_100
+                else -> R.id.v2t_quick_200
             }
-            quickGroup.addView(chip)
+            val chip = chip(label, id).apply {
+                tag = COMPRESS_TARGET_TAG
+                contentDescription = label
+                setOnClickListener { selectJ2Target(index, bytes) }
+            }
+            compressTargetChips += chip
+            chips.addView(chip, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, SwStyle.dp(this@ToolSetupActivity, 48f)
+            ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 6f) })
         }
-        optionsHost.addView(quickGroup, LinearLayout.LayoutParams(
+        block.addView(chips, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
-        // The sheet ends with "Custom size"; the setup page does the same.
-        optionsHost.addView(field(
+        ))
+        paintCompressTargets()
+
+        block.addView(
+            SwStyle.text(this, 16f, SwStyle.color(this, R.color.text_hologram_hi), bold = true).apply {
+                text = getString(R.string.ux130_l3_compress_custom)
+                maxLines = Int.MAX_VALUE
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 12f) }
+        )
+        val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val field = field(
             R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,
-            inputType = InputType.TYPE_CLASS_TEXT
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         ) { text ->
             targetText = text
-            if (!suppressChip) quickGroup.clearCheck()
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
-        paintLevels()
-        startEstimate()
-        // A re-render (selection change, onResume) rebuilds the size labels: show the estimates
-        // that are already known instead of waiting for a job that is skipped.
-        updateEstimateLines()
+            if (!compressSuppressFieldChange) {
+                compressTargetIndex = null
+                paintCompressTargets()
+                errorView.isVisible = false
+                compressRetry.isVisible = false
+            }
+        }
+        pair.addView(field, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        val unitKb = compressModeButton(
+            getString(R.string.ux130_l3_compress_target_200kb).substringAfter(' '),
+            UNIT_KB, COMPRESS_UNIT_KB_TAG
+        )
+        val unitMb = compressModeButton(
+            getString(R.string.ux130_l3_compress_target_1mb).substringAfter(' '),
+            UNIT_MB, COMPRESS_UNIT_MB_TAG
+        )
+        listOf(unitKb, unitMb).forEach { unit ->
+            unit.minimumWidth = SwStyle.dp(this@ToolSetupActivity, 56f)
+            unit.minimumHeight = SwStyle.dp(this@ToolSetupActivity, 48f)
+        }
+        unitKb.setOnClickListener {
+            compressUnit = UNIT_KB
+            compressTargetIndex = null
+            paintCompressUnits(unitKb, unitMb)
+            paintCompressTargets()
+            errorView.isVisible = false
+        }
+        unitMb.setOnClickListener {
+            compressUnit = UNIT_MB
+            compressTargetIndex = null
+            paintCompressUnits(unitKb, unitMb)
+            paintCompressTargets()
+            errorView.isVisible = false
+        }
+        pair.addView(unitKb, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        pair.addView(unitMb, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { marginStart = SwStyle.dp(this@ToolSetupActivity, 4f) })
+        paintCompressUnits(unitKb, unitMb)
+        block.addView(pair)
+        compressSizeBlock = block
+        optionsHost.addView(block)
+    }
+
+    private fun selectJ2Target(index: Int, bytes: Long) {
+        compressTargetIndex = index
+        // Decimal KB/MB: the chip label and the field always agree.
+        compressUnit = if (bytes >= 1_000_000L) UNIT_MB else UNIT_KB
+        // The numeric field holds the number in the chosen unit ("200" KB, "1" MB), so the
+        // decimal parser multiplies it once — never "200000 KB" (a 200 MB mistake).
+        targetText = getString(CompressionPresentation.j2TargetLabel(index))
+            .substringBefore(' ').trim()
+        compressSuppressFieldChange = true
+        optionsHost.findViewById<EditText>(R.id.toolSetupTarget)?.setText(targetText)
+        compressSuppressFieldChange = false
+        paintCompressTargets()
+        optionsHost.findViewWithTag<TextView>(COMPRESS_UNIT_KB_TAG)?.let { kb ->
+            paintCompressUnits(kb, optionsHost.findViewWithTag<TextView>(COMPRESS_UNIT_MB_TAG) ?: kb)
+        }
+        errorView.isVisible = false
+        compressRetry.isVisible = false
+    }
+
+    private fun paintCompressTargets() {
+        compressTargetChips.forEachIndexed { index, view -> paintChip(view, index == compressTargetIndex) }
+    }
+
+    private fun paintCompressUnits(kb: TextView, mb: TextView) {
+        paintChip(kb, compressUnit == UNIT_KB)
+        paintChip(mb, compressUnit == UNIT_MB)
     }
 
     private data class CompressLevel(val titleRes: Int, val index: Int, val id: Int)
@@ -981,7 +1221,7 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /** Estimates each level on two sample pages (the same extrapolation as CompressFlow). */
-    private fun startEstimate() {
+    private fun startEstimate(seq: Long) {
         val doc = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } } ?: return
         if (estimatesFor == doc.id) return
         estimatesFor = doc.id
@@ -1003,20 +1243,25 @@ class ToolSetupActivity : BaseActivity() {
                     }
                 }.getOrNull()
             }
-            if (estimates != null && selected.firstOrNull() == doc.id) {
+            // J2: a mode switch or a re-render replaces the rows; never paint into them late.
+            if (estimates != null && seq == compressRenderSeq && selected.firstOrNull() == doc.id) {
                 compressEstimates = estimates
                 updateEstimateLines()
             }
         }
     }
 
-    /** Each level's own estimate sits on its row, like the compress sheet's radio list. */
+    /**
+     * Each estimate sits on its own row. "about" (cp1_est_only) is deliberate: an estimate is
+     * never a guaranteed result, and the placeholder says so until a number is actually measured.
+     */
     private fun updateEstimateLines() {
         val estimates = compressEstimates
         levelSizes.forEachIndexed { index, view ->
-            view.text = estimates?.getOrNull(index)?.let {
+            val measured = estimates?.getOrNull(index)
+            view.text = measured?.let {
                 getString(R.string.cp1_est_only, SizeUnits.format(it))
-            }.orEmpty()
+            } ?: getString(R.string.ux130_l3_compress_estimate_pending)
         }
     }
 
@@ -1481,40 +1726,26 @@ class ToolSetupActivity : BaseActivity() {
             "compress" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
                     ?: return fail(getString(R.string.tools_setup_pick_one))
-                val size = targetText.trim()
-                val targetBytes = when (val parsed = if (size.isEmpty()) null else CompressTarget.parse(size)) {
-                    null, CompressTarget.Result.Blank -> null
-                    is CompressTarget.Result.Bytes -> parsed.value
-                    // H3-7: name the ceiling instead of silently chasing a saturated 2 GiB.
-                    CompressTarget.Result.TooLarge ->
-                        return fail(getString(R.string.compress_target_too_large))
-                    else -> return fail(getString(R.string.tools_setup_bad_target))
-                }
+                // J2: only the aim on screen is parsed. The other aim's saved choice is never
+                // read, so a stale value cannot silently start a job the person did not ask for.
+                val targetBytes = if (compressMode == MODE_SIZE) {
+                    val raw = targetText.trim()
+                    if (raw.isEmpty()) return fail(getString(R.string.compress_target_required))
+                    val number = raw.toDoubleOrNull()
+                    if (number == null || !number.isFinite() || number <= 0.0) {
+                        // One clear error tied to the field: an invalid number blocks the start.
+                        return fail(getString(R.string.ux130_l3_compress_invalid_custom))
+                    }
+                    // The same decimal-KB parser as the sheet keeps the 2 GiB safety ceiling.
+                    when (val parsed = CompressTarget.parse("$raw $compressUnit")) {
+                        is CompressTarget.Result.Bytes -> parsed.value
+                        CompressTarget.Result.TooLarge ->
+                            return fail(getString(R.string.compress_target_too_large))
+                        else -> return fail(getString(R.string.ux130_l3_compress_invalid_custom))
+                    }
+                } else null
                 target = targetBytes
-                val before = doc.pdfFile.takeIf { it.isFile }?.length()
-                execute({
-                    val out = if (targetBytes != null) {
-                        repo.compressScanToTargetForResult(doc.id, targetBytes)?.id
-                    } else {
-                        val (quality, maxDim) = compressLevel()
-                        repo.compressScanForResult(doc.id, quality, maxDim)?.id
-                    }
-                    val ids = listOfNotNull(out)
-                    // L3-02 P1: this block runs on Dispatchers.IO, so hashing here
-                    // never blocks the main thread.
-                    val identity = ToolResultActivity.captureOutputIdentityBlocking(
-                        this@ToolSetupActivity, ids, emptyList()
-                    )
-                    Pair(ids, identity)
-                }) { (ids, identity) ->
-                    if (ids.isEmpty()) {
-                        startActivity(ToolResultActivity.intentLastResult(this))
-                        finish()
-                        return@execute
-                    }
-                    openDocs(ids, targetBytes = targetBytes,
-                        receiptSourceId = doc.id, outputIdentity = identity, beforeBytes = before)
-                }
+                runCompressJ2(doc, targetBytes)
             }
             "pdf_to_images" -> {
                 val doc = docId?.let { id -> docs.firstOrNull { it.id == id } }
@@ -1651,6 +1882,100 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /**
+     * J2 — one Compress run. The progress shows REAL page numbers from the target engine's
+     * onPage callback; the quality engine has no such callback, so it reports the honest total
+     * instead of an invented counter. Cancel stops the job while its output is still in staging.
+     */
+    private fun runCompressJ2(doc: ScanDocument, targetBytes: Long?) {
+        compressJob?.cancel()
+        errorView.isVisible = false
+        compressRetry.isVisible = false
+        runButton.isVisible = true
+        runButton.isEnabled = false
+        progressOverlay.isVisible = true
+        compressProgressCancel.isVisible = true
+        val total = doc.pageCount.coerceAtLeast(1)
+        compressProgressText.text = getString(R.string.ux130_l3_compress_progress_pages, total)
+        val before = doc.pdfFile.takeIf { it.isFile }?.length()
+        val job = lifecycleScope.launch {
+            try {
+                val outcome = withContext(Dispatchers.IO) {
+                    compressBeforeRunForTest?.invoke()
+                    currentCoroutineContext().ensureActive()
+                    val out = if (targetBytes != null) {
+                        repo.compressScanToTargetForResult(doc.id, targetBytes) { done, pages ->
+                            this@ToolSetupActivity.runOnUiThread {
+                                compressProgressText.text = getString(
+                                    R.string.ux130_l3_compress_progress_page, done, pages
+                                )
+                            }
+                        }
+                    } else {
+                        val (quality, maxDim) = compressLevel()
+                        repo.compressScanForResult(doc.id, quality, maxDim)
+                    }
+                    val ids = listOfNotNull(out?.id)
+                    // L3-02 P1: hashing happens on IO, never on the Main thread.
+                    val identity = ToolResultActivity.captureOutputIdentityBlocking(
+                        this@ToolSetupActivity, ids, emptyList()
+                    )
+                    Triple(ids, out?.pdfFile?.takeIf { it.isFile }?.length() ?: 0L, identity)
+                }
+                progressOverlay.isVisible = false
+                runButton.isEnabled = true
+                val (ids, after, identity) = outcome
+                if (ids.isEmpty()) {
+                    // No gain: the engine discarded the grown output and persisted the
+                    // NOT_SMALLER receipt. There is no document to name in a result.
+                    startActivity(ToolResultActivity.intentLastResult(this@ToolSetupActivity))
+                    finish()
+                    return@launch
+                }
+                // A target is met only when the measured file is at or below the cap. A miss
+                // names the closest achieved size and is never titled a success.
+                val missed = targetBytes != null && after > targetBytes
+                val note = if (missed) getString(
+                    R.string.cp1_compress_floor_miss,
+                    StatusLine.formatBytes(targetBytes!!), StatusLine.formatBytes(after)
+                ) else null
+                openDocs(ids, targetBytes = targetBytes, receiptSourceId = doc.id,
+                    outputIdentity = identity, beforeBytes = before,
+                    outcomeClass = if (missed) J2_OUTCOME_MISSED else null,
+                    compressTargetMissed = missed, note = note)
+            } catch (e: CancellationException) {
+                // Cancel: staging stops before publish, so no result and no new file exist.
+                progressOverlay.isVisible = false
+                compressProgressCancel.isVisible = false
+                runButton.isVisible = true
+                runButton.isEnabled = true
+                Toast.makeText(
+                    this@ToolSetupActivity, getString(R.string.cp1_compress_cancelled), Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Throwable) {
+                progressOverlay.isVisible = false
+                compressProgressCancel.isVisible = false
+                runButton.isEnabled = true
+                compressFail(getString(R.string.compress_failed, setupFailureReason(e)))
+            }
+        }
+        compressJob = job
+        job.invokeOnCompletion { compressJob = null }
+    }
+
+    private fun cancelCompress() {
+        compressJob?.cancel()
+        compressJob = null
+    }
+
+    /** Failure keeps every input on screen and replaces Continue with one Retry action. */
+    private fun compressFail(message: String) {
+        errorView.text = message
+        errorView.isVisible = true
+        runButton.isVisible = false
+        compressRetry.isVisible = true
+    }
+
+    /**
      * Opens the result for new library documents. [targetBytes] is Compress's wanted size, so the
      * result can say honestly when that size was not reached (T05).
      */
@@ -1659,14 +1984,19 @@ class ToolSetupActivity : BaseActivity() {
         targetBytes: Long? = null,
         receiptSourceId: String? = null,
         outputIdentity: String? = null,
-        beforeBytes: Long? = null
+        beforeBytes: Long? = null,
+        outcomeClass: String? = null,
+        compressTargetMissed: Boolean = false,
+        note: String? = null
     ) {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
             ToolResultActivity.intent(
                 this, com.scanwhirl.app.ui.result.ResultSpec(tool.id, docIds = ids, targetBytes = targetBytes,
                 receiptSourceId = receiptSourceId, outputIdentity = outputIdentity,
-                adjustIntent = Intent(intent), beforeBytes = beforeBytes)
+                adjustIntent = Intent(intent), beforeBytes = beforeBytes,
+                note = note, outcomeClass = outcomeClass,
+                compressTargetMissed = compressTargetMissed)
             )
         )
     }
@@ -1814,6 +2144,27 @@ class ToolSetupActivity : BaseActivity() {
         const val BOTTOM_SPACER_TAG = "co_bottom_spacer"
         /** Inline required-name error under the editable field. */
         const val NAME_ERROR_TAG = "co_name_required"
+        /** J2: tags let tests and the atlas find the two-mode setup without new shared ids. */
+        const val COMPRESS_MODES_TAG = "j2:compress-modes"
+        const val COMPRESS_MODE_QUALITY_TAG = "j2:compress-mode-quality"
+        const val COMPRESS_MODE_SIZE_TAG = "j2:compress-mode-size"
+        const val COMPRESS_RECOMMENDED_TAG = "j2:compress-recommended"
+        const val COMPRESS_TARGET_TAG = "j2:compress-target"
+        const val COMPRESS_UNIT_KB_TAG = "j2:compress-unit-kb"
+        const val COMPRESS_UNIT_MB_TAG = "j2:compress-unit-mb"
+        const val COMPRESS_PROGRESS_TAG = "j2:compress-progress"
+        const val COMPRESS_CANCEL_TAG = "j2:compress-cancel"
+        const val COMPRESS_RETRY_TAG = "j2:compress-retry"
+        const val MODE_QUALITY = "quality"
+        const val MODE_SIZE = "size"
+        const val UNIT_KB = "KB"
+        const val UNIT_MB = "MB"
+        /** The shared result's persisted miss class; a miss is never titled a success. */
+        const val J2_OUTCOME_MISSED = "TARGET_MISSED"
+
+        /** Test seam: hold the run just before the engine, so Cancel can be proven deterministic. */
+        @VisibleForTesting
+        internal var compressBeforeRunForTest: (() -> Unit)? = null
         /** Material's disabled alpha: a disabled button at full alpha still looks tappable. */
         private const val DISABLED_ALPHA = 0.38f
 
@@ -1827,6 +2178,8 @@ class ToolSetupActivity : BaseActivity() {
         private const val KEY_TARGET = "com.scanwhirl.app.ui.tools.TARGET"
         private const val KEY_WORD_PICTURES = "com.scanwhirl.app.ui.tools.WORD_PICTURES"
         private const val KEY_EXCEL_TABLES = "com.scanwhirl.app.ui.tools.EXCEL_TABLES"
+        private const val KEY_COMPRESS_MODE = "com.scanwhirl.app.ui.tools.J2_COMPRESS_MODE"
+        private const val KEY_COMPRESS_UNIT = "com.scanwhirl.app.ui.tools.J2_COMPRESS_UNIT"
         private const val DOCX_MIME =
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         private const val PPTX_MIME =

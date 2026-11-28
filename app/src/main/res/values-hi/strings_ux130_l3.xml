@@ -10,6 +10,23 @@
     <string name="ux130_l3_compress_aim_size">आकार तय करें</string>
     <string name="ux130_l3_compress_from_phone_storage">फ़ोन के संग्रहण से</string>
 
+    <!-- J2: दो अलग सेटअप; हर अपनी पसंद बनाए रखता है. -->
+    <string name="ux130_l3_compress_choose_quality">गुणवत्ता चुनें</string>
+    <string name="ux130_l3_compress_estimate_pending">मापा जा रहा है…</string>
+    <string name="ux130_l3_compress_recommended">सुझावी</string>
+    <!-- J2: दशमलव आकार (KB = 1000 बाइट) और कस्टम संख्या तथा इकाई. -->
+    <string name="ux130_l3_compress_target_200kb">200 KB</string>
+    <string name="ux130_l3_compress_target_500kb">500 KB</string>
+    <string name="ux130_l3_compress_target_1mb">1 MB</string>
+    <string name="ux130_l3_compress_target_2mb">2 MB</string>
+    <string name="ux130_l3_compress_custom">कस्टम</string>
+    <string name="ux130_l3_compress_invalid_custom">KB या MB में मान्य आकार दर्ज करें।</string>
+    <!-- J2: वास्तविक पृष्ठ गणना और रद्द करने पर कुछ भी नहीं बनता. -->
+    <string name="ux130_l3_compress_progress_page">पृष्ठ %1$d / %2$d</string>
+    <string name="ux130_l3_compress_progress_pages">%1$d पृष्ठ छोटे किए जा रहे हैं</string>
+    <string name="ux130_l3_compress_failed_title">छोटा नहीं किया जा सका</string>
+    <string name="ux130_l3_compress_retry">फिर प्रयास करें</string>
+
     <!-- L3-04: बाहरी PDF का क्रम बदलना. -->
     <string name="ux130_l3_merge_move_earlier">पहले ले जाएँ</string>
     <string name="ux130_l3_merge_move_later">बाद में ले जाएँ</string>
