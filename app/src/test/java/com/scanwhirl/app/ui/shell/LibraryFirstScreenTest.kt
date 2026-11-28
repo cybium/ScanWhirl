@@ -230,7 +230,10 @@ abstract class LibraryFirstScreenBase {
     }
 
     @Test
-    fun `about carries the trust line`() {
+    fun `about has no orphan trust fragment but keeps the privacy promise`() {
+        // V068: the trailing "Private · No ads" pill text used to sit alone above
+        // Privacy policy / Licences. The About body now carries the promise once;
+        // the pill itself is still asserted on the empty library above.
         launch { activity ->
             activity.findViewById<View>(R.id.swNavMe).performClick()
             idle()
@@ -241,10 +244,12 @@ abstract class LibraryFirstScreenBase {
             val message = dialog!!.findViewById<TextView>(R.id.swSheetMessage)
             assertNotNull("About shows its text", message)
             val trust = activity.getString(R.string.trust_offline_no_ads)
-            assertTrue(
-                "About must say \"$trust\" (found \"${message.text}\")",
+            assertFalse(
+                "About must not repeat the orphan trust fragment (found \"${message.text}\")",
                 message.text.contains(trust)
             )
+            val promise = activity.getString(R.string.about_message, "1.0").substringAfter("\n\n")
+            assertTrue("About keeps the on-phone promise", message.text.contains(promise))
             dialog.dismiss()
         }
     }
