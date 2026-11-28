@@ -195,7 +195,7 @@ class W5aFoundationsTest {
         val ink = ContextCompat.getColor(app, R.color.tok_text)
         assertTrue("snackbar/picker ink on surface-2 ${ratio(ink, surface2)}",
             ratio(ink, surface2) >= 4.5)
-        val scrim = ContextCompat.getColor(app, R.color.tok_scrim_sheet)
+        val scrim = ContextCompat.getColor(app, R.color.tok_scrim)
         val onScrim = ContextCompat.getColor(app, R.color.tok_on_scrim)
         assertTrue("page scrim label ${ratio(onScrim, scrim)}", ratio(onScrim, scrim) >= 4.5)
         val text3 = ContextCompat.getColor(app, R.color.tok_text_3)
