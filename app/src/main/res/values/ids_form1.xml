@@ -46,4 +46,18 @@
     <item name="formReadyApply" type="id" />
     <item name="formReadyError" type="id" />
     <item name="formReadyProgress" type="id" />
+
+    <!-- J1: rules mode, whole-photo fit preview and explicit framing. -->
+    <item name="formReadyModeRange" type="id" />
+    <item name="formReadyModeExact" type="id" />
+    <item name="formReadyMinWidth" type="id" />
+    <item name="formReadyMaxWidth" type="id" />
+    <item name="formReadyMinHeight" type="id" />
+    <item name="formReadyMaxHeight" type="id" />
+    <item name="formReadyKbInfo" type="id" />
+    <item name="formReadyFitPreview" type="id" />
+    <item name="formReadyKeepWhole" type="id" />
+    <item name="formReadyCropButton" type="id" />
+    <item name="formReadyCropCancel" type="id" />
+    <item name="formReadyFramingNote" type="id" />
 </resources>

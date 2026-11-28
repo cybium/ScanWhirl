@@ -5,6 +5,10 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
@@ -35,7 +39,9 @@ import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.CropView
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.tools.ExactResize
+import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.result.ResultSpec
 import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.util.Durable
 import com.scanwhirl.app.util.ExactKbEncoder
@@ -51,6 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import kotlin.math.min
 
 /**
  * FORM1: prepare a photo, signature, thumb impression or declaration for an Indian exam/government
@@ -90,6 +97,25 @@ class FormReadyActivity : BaseActivity() {
     private lateinit var contentColumn: LinearLayout
     private lateinit var presetStatusView: TextView
     private lateinit var applyBar: FrameLayout
+
+    // J1: rules mode and framing. Exact keeps the typed pixels; Range uses fitInside so a whole
+    // portrait survives. Crop is ALWAYS an explicit opt-in, never a silent side effect of a size.
+    private var rangeMode = false
+    private var cropExplicit = false
+    private var cropVisible = false
+    private var cropRectBeforeExplicit: RectF? = null
+    private var minW = 350
+    private var maxW = 600
+    private var minH = 450
+    private var maxH = 800
+    private lateinit var fitPreview: FitPreviewView
+    private lateinit var modeRangeChip: TextView
+    private lateinit var modeExactChip: TextView
+    private lateinit var keepWholeButton: TextView
+    private lateinit var cropButton: TextView
+    private lateinit var cropCancelButton: TextView
+    private lateinit var framingNote: TextView
+    private lateinit var rangeFields: LinearLayout
 
     private val presetChips = mutableMapOf<String, TextView>()
     private val dpiChips = mutableMapOf<Int, TextView>()
@@ -141,6 +167,13 @@ class FormReadyActivity : BaseActivity() {
     @Volatile
     internal var lastNoteForTest: String? = null
 
+    /** Tests: the Adjust hand-off, carrying the EXACT inputs back to this screen. */
+    @Volatile
+    internal var lastAdjustIntentForTest: Intent? = null
+
+    /** Tests: "whole" / "bars" / "crop" - what the live preview is actually showing. */
+    internal var lastFramingForTest: String = "whole"
+
     /** Lane F2: the accessible status announced whenever a source starts preparing. */
     internal var lastAnnouncedForTest: String? = null
 
@@ -191,9 +224,13 @@ class FormReadyActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(buildRoot())
         if (savedInstanceState == null) {
-            // PM-3: Resize can hand a true min/max band over to Form photo. Consume it once on a
-            // fresh launch; rotation below restores the exact fields from the saved state.
-            if (!applyIncomingFormExtras()) selectPreset(FormPresets.PHOTO)
+            // J1 Adjust: a shared-result hand-off resumes this exact workspace, even if the
+            // process died, instead of resetting to a preset.
+            when {
+                intent.hasExtra(KEY_ADJUST) -> restoreState(adjustBundle(intent))
+                applyIncomingFormExtras() -> Unit
+                else -> selectPreset(FormPresets.PHOTO)
+            }
         } else {
             // restoreState applies the aspect BEFORE the async image load. Setting it afterwards
             // races the decode: when the image arrived first, CropView's aspect setter re-fitted
@@ -314,13 +351,6 @@ class FormReadyActivity : BaseActivity() {
             column.addView(row)
         }
 
-        // Critique: the primary next action sits immediately under the presets, not after a long
-        // scroll of fields. It disappears as soon as a photo has been picked.
-        pickButton = action(getString(R.string.form1_pick), R.id.formReadyPick, true) { pick.launch("image/*") }
-        column.addView(pickButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 10f) })
-
         val exampleLabel = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
             text = getString(R.string.form1_example_label)
             maxLines = Int.MAX_VALUE
@@ -332,6 +362,20 @@ class FormReadyActivity : BaseActivity() {
             maxLines = Int.MAX_VALUE
         }
         column.addView(example)
+
+        // J1: pixel rules are grouped. Exact keeps typed pixels (bars are an explicit framing
+        // choice); Range uses fitInside, so a whole portrait is never silently cut.
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 10f), 0, 0)
+        }
+        modeRangeChip = modeChip(R.id.formReadyModeRange, R.string.form1_mode_range) { changeMode(false) }
+        modeExactChip = modeChip(R.id.formReadyModeExact, R.string.form1_mode_exact) { changeMode(true) }
+        modeRow.addView(modeRangeChip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = SwStyle.dp(this@FormReadyActivity, 8f)
+        })
+        modeRow.addView(modeExactChip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        column.addView(modeRow)
 
         val dimLabels = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -353,6 +397,53 @@ class FormReadyActivity : BaseActivity() {
         })
         dims.addView(heightField, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         column.addView(dims)
+
+        // Four editable range bounds; shown only in Range mode. Units sit beside each field.
+        rangeFields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isVisible = false
+        }
+        val rangeFieldsLayout = rangeFields
+        val rangeRow1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val rangeRow2 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 6f), 0, 0)
+        }
+        listOf(
+            R.id.formReadyMinWidth to R.string.form1_min_width,
+            R.id.formReadyMaxWidth to R.string.form1_max_width
+        ).forEachIndexed { index, (id, label) ->
+            val cell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            cell.addView(fieldLabel(0, label))
+            val field = rangeNumberField(id, if (index == 0) minW else maxW) {
+                if (index == 0) minW = it else maxW = it
+            }
+            cell.addView(field, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+            rangeRow1.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index == 0) marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+            })
+        }
+        listOf(
+            R.id.formReadyMinHeight to R.string.form1_min_height,
+            R.id.formReadyMaxHeight to R.string.form1_max_height
+        ).forEachIndexed { index, (id, label) ->
+            val cell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            cell.addView(fieldLabel(0, label))
+            val field = rangeNumberField(id, if (index == 0) minH else maxH) {
+                if (index == 0) minH = it else maxH = it
+            }
+            cell.addView(field, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+            rangeRow2.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index == 0) marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+            })
+        }
+        rangeFieldsLayout.addView(rangeRow1)
+        rangeFieldsLayout.addView(rangeRow2)
+        column.addView(rangeFields)
 
         column.addView(fieldLabel(R.id.formReadyUnitLabel, R.string.form1_unit_label).apply {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)
@@ -410,6 +501,30 @@ class FormReadyActivity : BaseActivity() {
             setPadding(0, SwStyle.dp(this@FormReadyActivity, 4f), 0, 0)
         }
         column.addView(bandErrorView)
+
+        // J1: the 1024-byte convention is explained on demand, not in a tutorial wall.
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_action_accent), bold = true).apply {
+            id = R.id.formReadyKbInfo
+            text = getString(R.string.form1_kb_info)
+            maxLines = Int.MAX_VALUE
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                SwSheet.note(
+                    this@FormReadyActivity,
+                    getString(R.string.form1_kb_info_title),
+                    getString(R.string.form1_kb_info_body)
+                )
+            }
+        }.also { column.addView(it) }
+
+        // The one filled primary of the rules step. It disappears once a photo is picked.
+        pickButton = action(getString(R.string.form1_pick), R.id.formReadyPick, true) { pick.launch("image/*") }
+        column.addView(pickButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 10f) })
 
         val dpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -500,6 +615,20 @@ class FormReadyActivity : BaseActivity() {
         }
         column.addView(readout)
 
+        // J1 default: the WHOLE photo in the output shape, with honest bars when the exact target
+        // has a different aspect. This view never crops; CropView appears only on an explicit tap.
+        fitPreview = FitPreviewView(this).apply {
+            id = R.id.formReadyFitPreview
+            isVisible = false
+            background = SwStyle.rounded(
+                this@FormReadyActivity, SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2),
+                radiusDp = 14f
+            )
+        }
+        column.addView(fitPreview, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@FormReadyActivity, 220f)
+        ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 12f) })
+
         cropView = CropView(this).apply {
             id = R.id.formReadyCrop
             // Critique: an empty canvas is not a preview. Only show it once a photo exists.
@@ -513,6 +642,33 @@ class FormReadyActivity : BaseActivity() {
         column.addView(cropView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, SwStyle.dp(this@FormReadyActivity, 220f)
         ).apply { topMargin = SwStyle.dp(this@FormReadyActivity, 12f) })
+
+        framingNote = SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_secondary)).apply {
+            id = R.id.formReadyFramingNote
+            maxLines = Int.MAX_VALUE
+            setPadding(0, SwStyle.dp(this@FormReadyActivity, 8f), 0, 0)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        column.addView(framingNote)
+
+        val framingRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        keepWholeButton = action(getString(R.string.form1_keep_whole), R.id.formReadyKeepWhole, false) {
+            setCropExplicit(false)
+        }
+        cropButton = action(getString(R.string.form1_crop_to_fit), R.id.formReadyCropButton, false) {
+            setCropExplicit(true)
+        }
+        cropCancelButton = action(getString(R.string.form1_cancel_crop), R.id.formReadyCropCancel, false) {
+            setCropExplicit(false)
+        }
+        framingRow.addView(keepWholeButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+        })
+        framingRow.addView(cropButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = SwStyle.dp(this@FormReadyActivity, 6f)
+        })
+        framingRow.addView(cropCancelButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        column.addView(framingRow)
 
         // Critique: Make file is pinned to the bottom of the screen only when the form is
         // actionable. It lives outside the ScrollView, so it can never scroll out of reach.
@@ -627,6 +783,151 @@ class FormReadyActivity : BaseActivity() {
         })
     }
 
+    private fun modeChip(id: Int, labelRes: Int, onClick: () -> Unit): TextView =
+        SwStyle.text(this, 14f, SwStyle.color(this, R.color.f2_text_primary), bold = true).apply {
+            this.id = id
+            text = getString(labelRes)
+            gravity = Gravity.CENTER
+            maxLines = Int.MAX_VALUE
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }.also { chipA11y(it) }
+
+    private fun rangeNumberField(id: Int, initial: Int, onValue: (Int) -> Unit): EditText =
+        EditText(this).apply {
+            this.id = id
+            setText(initial.toString())
+            inputType = InputType.TYPE_CLASS_NUMBER
+            isSingleLine = true
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(SwStyle.color(this@FormReadyActivity, R.color.f2_text_primary))
+            setHintTextColor(SwStyle.color(this@FormReadyActivity, R.color.f2_text_secondary))
+            minimumHeight = SwStyle.dp(this@FormReadyActivity, 48f)
+            val pad = SwStyle.dp(this@FormReadyActivity, 12f)
+            setPadding(pad, SwStyle.dp(this@FormReadyActivity, 8f), pad, SwStyle.dp(this@FormReadyActivity, 8f))
+            background = SwStyle.rounded(
+                this@FormReadyActivity, SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2),
+                radiusDp = 12f, stroke = SwStyle.color(this@FormReadyActivity, R.color.sw_cyan_hair)
+            )
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    if (settingFields) return
+                    onValue(s?.toString()?.toIntOrNull() ?: 0)
+                    refresh()
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
+        }
+
+    /**
+     * J1: the live output shape. The source is drawn with ONE uniform scale inside the target
+     * aspect; anything left over is a bar, never a stretch and never a cut. Bars are therefore a
+     * visible, reversible choice, not a silent crop.
+     */
+    private inner class FitPreviewView(context: Context) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        private var targetW = 1
+        private var targetH = 1
+
+        fun setTarget(w: Int, h: Int) {
+            targetW = w.coerceAtLeast(1)
+            targetH = h.coerceAtLeast(1)
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val source = bitmap?.takeIf { !it.isRecycled } ?: return
+            val vw = width.toFloat()
+            val vh = height.toFloat()
+            if (vw <= 0f || vh <= 0f) return
+            canvas.drawColor(SwStyle.color(this@FormReadyActivity, R.color.rv_surface_2))
+            val aspect = targetW.toFloat() / targetH.toFloat()
+            val fw: Float
+            val fh: Float
+            if (vw / vh > aspect) {
+                fh = vh; fw = vh * aspect
+            } else {
+                fw = vw; fh = vw / aspect
+            }
+            val left = (vw - fw) / 2f
+            val top = (vh - fh) / 2f
+            paint.color = SwStyle.color(this@FormReadyActivity, R.color.tok_preview_backdrop)
+            canvas.drawRect(left, top, left + fw, top + fh, paint)
+            val scale = min(fw / source.width.toFloat(), fh / source.height.toFloat())
+            val dw = source.width * scale
+            val dh = source.height * scale
+            val dx = left + (fw - dw) / 2f
+            val dy = top + (fh - dh) / 2f
+            paint.color = Color.WHITE
+            canvas.drawBitmap(source, null, RectF(dx, dy, dx + dw, dy + dh), paint)
+        }
+    }
+
+    /** Exact keeps typed pixels; Range asks fitInside for a whole-photo size inside the bounds. */
+    private fun outputPixels(): Pair<Int, Int>? {
+        if (!rangeMode) return currentPixels()
+        val source = bitmap?.takeIf { !it.isRecycled } ?: return currentPixels()
+        val fit = FormCrop.fitInside(source.width, source.height, minW, maxW, minH, maxH)
+        return if (fit.fits) fit.width to fit.height else null
+    }
+
+    private fun changeMode(exact: Boolean) {
+        val nextRange = !exact
+        if (rangeMode == nextRange) return
+        rangeMode = nextRange
+        cropExplicit = false // returning to either rule restores the whole photo
+        updateCropAspect()
+        refresh()
+    }
+
+    /** Crop is an opt-in. Cancelling puts back the frame that was there before the tap. */
+    private fun setCropExplicit(show: Boolean) {
+        if (show == cropExplicit) return
+        if (show) {
+            cropRectBeforeExplicit = cropView.getCropRect().takeUnless { it.isEmpty }
+        } else {
+            cropRectBeforeExplicit?.let { cropView.setCropRect(it) }
+        }
+        cropExplicit = show
+        updateFraming()
+        refresh()
+    }
+
+    private fun updateFraming() {
+        val live = cropVisible
+        fitPreview.isVisible = live && !cropExplicit
+        cropView.isVisible = live && cropExplicit
+        keepWholeButton.isVisible = live
+        cropButton.isVisible = live
+        cropCancelButton.isVisible = live && cropExplicit
+        if (!live) {
+            framingNote.text = ""
+            lastFramingForTest = "whole"
+            return
+        }
+        val (w, h) = outputPixels() ?: currentPixels()
+        fitPreview.setTarget(w, h)
+        val source = bitmap
+        val bars = source != null &&
+            kotlin.math.abs(w.toFloat() / h - source.width.toFloat() / source.height) > 1e-3f
+        framingNote.text = when {
+            outputPixels() == null -> getString(R.string.form1_doesnt_fit)
+            cropExplicit -> getString(R.string.form1_crop_hint)
+            bars -> getString(R.string.form1_bars_note)
+            else -> getString(R.string.form1_whole_kept)
+        }
+        val framing = getString(
+            R.string.form1_fitting_summary, w, h,
+            getString(if (cropExplicit) R.string.form1_crop_to_fit else R.string.form1_whole_kept)
+        )
+        fitPreview.contentDescription = framing + if (bars) " · " + getString(R.string.form1_bars_note) else ""
+        lastFramingForTest = if (cropExplicit) "crop" else if (bars) "bars" else "whole"
+    }
+
     /**
      * TalkBack announces which preset/unit/DPI chip is active. [refresh] writes the current state
      * into the chip tag; the delegate reads it so it stays correct after every edit and rotation.
@@ -698,7 +999,8 @@ class FormReadyActivity : BaseActivity() {
     private fun isSignatureMode(): Boolean = spec.id == "signature"
 
     private fun showCrop(show: Boolean) {
-        cropView.isVisible = show
+        cropVisible = show
+        updateFraming()
     }
 
     /** Each broken rule names itself; a decimal is not silently rounded into a zero KB limit. */
@@ -787,7 +1089,7 @@ class FormReadyActivity : BaseActivity() {
 
     /** F1: editing dimensions must re-shape the crop frame; the aspect setter is CropView's API. */
     private fun updateCropAspect() {
-        val (w, h) = currentPixels()
+        val (w, h) = outputPixels() ?: currentPixels()
         cropView.aspectRatio = w.toFloat() / h.coerceAtLeast(1)
     }
 
@@ -876,7 +1178,7 @@ class FormReadyActivity : BaseActivity() {
         }
         // P2 pre-review: the preview must show EXACTLY the region the encoder will save. Use the
         // same exact-aspect snapping as apply(), never the raw float drag rectangle.
-        val (targetW, targetH) = currentPixels()
+        val (targetW, targetH) = outputPixels() ?: currentPixels()
         val snapped = FormCrop.snapToAspect(
             rect, targetW.toFloat() / targetH, source.width, source.height
         )
@@ -939,12 +1241,19 @@ class FormReadyActivity : BaseActivity() {
         val tooLarge = !FormPresets.fitsFormLimit(w, h)
         readout.text = getString(R.string.form1_readout, w, h)
         example.text = getString(R.string.form1_example, spec.widthPx, spec.heightPx, spec.minKb, spec.maxKb)
-        // An impossible target is refused before any bitmap is allocated.
+        // An impossible target is refused before any bitmap is allocated. A Range with no
+        // aspect-preserving size inside the bounds says "doesn't fit" instead of cropping.
         val sizeMessage = getString(R.string.form1_size_too_large)
+        val fitMessage = getString(R.string.form1_doesnt_fit)
+        val targetMissed = rangeMode && outputPixels() == null && hasImageForTest()
+        rangeFields.isVisible = rangeMode
         if (tooLarge) {
             errorView.text = sizeMessage
             errorView.isVisible = true
-        } else if (errorView.text.toString() == sizeMessage) {
+        } else if (targetMissed) {
+            errorView.text = fitMessage
+            errorView.isVisible = true
+        } else if (errorView.text.toString() == sizeMessage || errorView.text.toString() == fitMessage) {
             errorView.isVisible = false
             errorView.text = ""
         }
@@ -967,8 +1276,9 @@ class FormReadyActivity : BaseActivity() {
             settingFields = false
         }
         usePresetButton.isEnabled = FormPresets.loadEditable(this) != null
-        setApplyEnabled(hasImageForTest() && !tooLarge && bandMessage == null)
+        setApplyEnabled(hasImageForTest() && !tooLarge && !targetMissed && bandMessage == null)
         refreshCleanupPreview()
+        updateFraming()
         val hi = SwStyle.color(this, R.color.text_hologram_hi)
         val ink = SwStyle.color(this, R.color.sw_disc_ink)
         val cyan = SwStyle.color(this, R.color.cyan_primary)
@@ -994,6 +1304,12 @@ class FormReadyActivity : BaseActivity() {
             chip.setTextColor(if (on) ink else hi)
             chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
         }
+        for ((chip, on) in listOf(modeRangeChip to rangeMode, modeExactChip to !rangeMode)) {
+            chip.tag = on
+            chip.isSelected = on
+            chip.setTextColor(if (on) ink else hi)
+            chip.background = SwStyle.rounded(this, if (on) cyan else surface, 12f)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1008,6 +1324,12 @@ class FormReadyActivity : BaseActivity() {
         outState.putBoolean(KEY_CLEANUP, cleanup)
         outState.putString(KEY_OP_ID, opId)
         outState.putString(KEY_SOURCE_NAME, sourceName)
+        outState.putBoolean(KEY_RANGE, rangeMode)
+        outState.putBoolean(KEY_CROP, cropExplicit)
+        outState.putInt(KEY_MIN_W, minW)
+        outState.putInt(KEY_MAX_W, maxW)
+        outState.putInt(KEY_MIN_H, minH)
+        outState.putInt(KEY_MAX_H, maxH)
         imagePath?.let { outState.putString(KEY_IMAGE, it) }
         val rect = cropView.getCropRect()
         if (rect.width() > 0f && rect.height() > 0f) {
@@ -1026,11 +1348,17 @@ class FormReadyActivity : BaseActivity() {
         cleanup = state.getBoolean(KEY_CLEANUP, spec.signatureCleanup)
         opId = state.getString(KEY_OP_ID).takeUnless { it.isNullOrBlank() } ?: UUID.randomUUID().toString()
         sourceName = state.getString(KEY_SOURCE_NAME).takeUnless { it.isNullOrBlank() } ?: "photo"
+        rangeMode = state.getBoolean(KEY_RANGE, false)
+        cropExplicit = state.getBoolean(KEY_CROP, false)
+        minW = state.getInt(KEY_MIN_W, 350)
+        maxW = state.getInt(KEY_MAX_W, 600)
+        minH = state.getInt(KEY_MIN_H, 450)
+        maxH = state.getInt(KEY_MAX_H, 800)
         writeFields()
         refresh()
         // Apply the aspect while the crop view has no image: the setter cannot re-fit anything
         // yet. setImage() then fits the frame once, and setCropRect() restores the exact frame.
-        cropView.aspectRatio = currentPixels().let { (w, h) -> w.toFloat() / h }
+        cropView.aspectRatio = (outputPixels() ?: currentPixels()).let { (w, h) -> w.toFloat() / h }
         val path = state.getString(KEY_IMAGE)
         val rect = state.getFloatArray(KEY_RECT)
         if (path == null) {
@@ -1069,6 +1397,43 @@ class FormReadyActivity : BaseActivity() {
             refresh()
             pickButton.isVisible = false
         }
+    }
+
+    /**
+     * J1 Adjust: the result screen resumes this activity with CLEAR_TOP/SINGLE_TOP. Replay the
+     * producer's snapshot so the exact rules, source and framing come back even if the process died.
+     */
+    private fun adjustBundle(intent: Intent): Bundle =
+        (intent.extras?.let { Bundle(it) } ?: Bundle()).also { it.remove(KEY_ADJUST) }
+
+    /** The exact inputs Adjust must restore: rules, source name/path, framing and crop rect. */
+    private fun snapshotBundle(): Bundle = Bundle().apply {
+        putString(KEY_SPEC, spec.id)
+        putString(KEY_UNIT, unit.name)
+        putFloat(KEY_W, widthValue)
+        putFloat(KEY_H, heightValue)
+        putInt(KEY_MIN, minKb)
+        putInt(KEY_MAX, maxKb)
+        putInt(KEY_DPI, dpi)
+        putBoolean(KEY_CLEANUP, cleanup)
+        putString(KEY_OP_ID, opId)
+        putString(KEY_SOURCE_NAME, sourceName)
+        putBoolean(KEY_RANGE, rangeMode)
+        putBoolean(KEY_CROP, cropExplicit)
+        putInt(KEY_MIN_W, minW)
+        putInt(KEY_MAX_W, maxW)
+        putInt(KEY_MIN_H, minH)
+        putInt(KEY_MAX_H, maxH)
+        imagePath?.let { putString(KEY_IMAGE, it) }
+        val r = cropView.getCropRect()
+        if (r.width() > 0f && r.height() > 0f) {
+            putFloatArray(KEY_RECT, floatArrayOf(r.left, r.top, r.right, r.bottom))
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasExtra(KEY_ADJUST)) restoreState(adjustBundle(intent))
     }
 
     // ---- picked photo -----------------------------------------------------
@@ -1141,12 +1506,20 @@ class FormReadyActivity : BaseActivity() {
         val source = bitmap ?: return
         val rect = cropView.getCropRect()
         if (rect.width() < 1f || rect.height() < 1f) return
-        // FX2: snap the confirmed frame to the EXACT target aspect in EXIF-normalised source
-        // pixels. The encoder then uses one uniform scale; no independent x/y stretch is possible.
-        val (targetW, targetH) = currentPixels()
-        val snapped = FormCrop.snapToAspect(rect, targetW.toFloat() / targetH, source.width, source.height)
-        lastExportRect = RectF(snapped)
-        if (snapped.width() < 1 || snapped.height() < 1) return
+        // J1: WHOLE photo by default. Only an explicit crop mode cuts pixels. ExactKbEncoder
+        // applies one uniform scale and writes honest bars; it never stretches or silently crops.
+        val (targetW, targetH) = outputPixels() ?: run {
+            errorView.text = getString(R.string.form1_doesnt_fit)
+            errorView.isVisible = true
+            return
+        }
+        val snapped: Rect? = if (cropExplicit) {
+            FormCrop.snapToAspect(rect, targetW.toFloat() / targetH, source.width, source.height)
+                .takeIf { it.width() >= 1 && it.height() >= 1 }
+        } else null
+        if (cropExplicit && snapped == null) return
+        lastExportRect = if (snapped != null) RectF(snapped)
+        else RectF(0f, 0f, source.width.toFloat(), source.height.toFloat())
         if (!FormPresets.fitsFormLimit(targetW, targetH)) {
             errorView.text = getString(R.string.form1_size_too_large)
             errorView.isVisible = true
@@ -1167,12 +1540,14 @@ class FormReadyActivity : BaseActivity() {
         encodeJob = lifecycleScope.launch {
             try {
                 val (result, file, identity) = withContext(Dispatchers.IO) {
-                    val rawRegion = Bitmap.createBitmap(
-                        source, snapped.left, snapped.top, snapped.width(), snapped.height()
-                    )
+                    // Whole-photo mode passes the immutable source straight to the encoder; the
+                    // only pixels removed here are those the person cut in explicit Crop mode.
+                    val rawRegion = snapped?.let {
+                        Bitmap.createBitmap(source, it.left, it.top, it.width(), it.height())
+                    }
                     // PM-2: crop == whole immutable source => rawRegion === source. Recycle only
                     // our own copy, never the bitmap CropView and Make file still display.
-                    val region = ownedCopy(source, rawRegion)
+                    val region = if (rawRegion != null) ownedCopy(source, rawRegion) else source
                     val cleaned = if (doCleanup) SignatureCleanup.clean(region) else null
                     try {
                         val encoded = ExactKbEncoder.encode(
@@ -1196,19 +1571,31 @@ class FormReadyActivity : BaseActivity() {
                         Triple(encoded, out, identity)
                     } finally {
                         cleaned?.recycle()
-                        region.recycle()
+                        if (region !== source) region.recycle()
                     }
                 }
                 progress.isVisible = false
                 busy = false
                 lastOutput = file
-                // FX2: every number is measured from the bytes actually published.
-                val note = buildNote(file, targetW, targetH, dpiNow, minNow, maxNow)
+                // FX2: every number is measured from the bytes actually published. J1: an
+                // over/under KB target is named honestly, never reported as a fit.
+                val note = buildNote(file, targetW, targetH, dpiNow, minNow, maxNow, result.outcome)
                 lastNoteForTest = note
+                val adjust = Intent(intent).apply {
+                    putExtras(snapshotBundle())
+                    putExtra(KEY_ADJUST, true)
+                }
+                lastAdjustIntentForTest = adjust
+                val missed = result.outcome != ExactKbEncoder.Outcome.IN_BAND
                 startActivity(ToolResultActivity.intent(
-                    this@FormReadyActivity, com.scanwhirl.app.ui.result.ResultSpec(TOOL_ID,
+                    this@FormReadyActivity, ResultSpec(TOOL_ID,
                     files = listOf(file), mime = "image/jpeg", note = note,
-                    outputIdentity = identity, adjustIntent = android.content.Intent(intent)
+                    outputIdentity = identity, sourceKept = true,
+                    outcomeClass = if (missed) "TARGET_MISSED" else null,
+                    adjustIntent = adjust,
+                    facts = ResultSpec.Facts(
+                        bytes = file.length(), width = result.width, height = result.height
+                    )
                 )))
                 // SEC2 N3: ownership moves to the result screen before this exits.
                 outputHandedOff = true
@@ -1276,7 +1663,8 @@ class FormReadyActivity : BaseActivity() {
         requestedHeight: Int,
         requestedDpi: Int,
         min: Int,
-        max: Int
+        max: Int,
+        outcome: ExactKbEncoder.Outcome? = null
     ): String {
         val savedBytes = file.length()
         val raw = file.readBytes()
@@ -1302,6 +1690,15 @@ class FormReadyActivity : BaseActivity() {
         if (savedBytes !in (min * FormPresets.BYTES_PER_KB)..(max * FormPresets.BYTES_PER_KB)) {
             ready = false
             lines += getString(R.string.form1_result_band_bad, sizeText, bandText, dpiNow ?: 0)
+        }
+        // J1: an honest plain-language line for each miss, so the result never says "matches"
+        // when the encoder could not reach the requested band.
+        when (outcome) {
+            ExactKbEncoder.Outcome.ABOVE_MAX ->
+                lines += getString(R.string.form1_result_over, sizeText)
+            ExactKbEncoder.Outcome.BELOW_MIN ->
+                lines += getString(R.string.form1_result_under, sizeText)
+            else -> Unit
         }
         if (ready) {
             lines += getString(R.string.form1_result_ok, sizeText, requestedDpi)
@@ -1393,8 +1790,24 @@ class FormReadyActivity : BaseActivity() {
     }
 
     /** Test seams for the confirmed crop frame (the view keeps it in image pixels). */
-    internal fun setCropRectForTest(rect: RectF) = cropView.setCropRect(rect)
+    internal fun setCropRectForTest(rect: RectF) {
+        cropExplicit = true
+        cropView.setCropRect(rect)
+        updateFraming()
+    }
     internal fun cropRectForTest(): RectF = cropView.getCropRect()
+
+    /** Test seam for Range mode and its editable bounds. */
+    internal fun setRangeForTest(minW: Int, maxW: Int, minH: Int, maxH: Int) {
+        rangeMode = true
+        cropExplicit = false
+        this.minW = minW; this.maxW = maxW; this.minH = minH; this.maxH = maxH
+        updateCropAspect()
+        refresh()
+    }
+    internal fun cropExplicitForTest(): Boolean = cropExplicit
+    internal fun rangeModeForTest(): Boolean = rangeMode
+    internal fun outputPixelsForTest(): Pair<Int, Int>? = outputPixels()
 
     /** Real signal that the crop view has published its image and rect, not just our own field. */
     internal fun cropReadyForTest(): Boolean = !cropView.getCropRect().isEmpty
@@ -1427,6 +1840,13 @@ class FormReadyActivity : BaseActivity() {
         private const val KEY_IMAGE = "form1_image"
         private const val KEY_RECT = "form1_rect"
         private const val KEY_SOURCE_NAME = "form1_source_name"
+        private const val KEY_RANGE = "form1_range_mode"
+        private const val KEY_CROP = "form1_crop_explicit"
+        private const val KEY_MIN_W = "form1_min_w"
+        private const val KEY_MAX_W = "form1_max_w"
+        private const val KEY_MIN_H = "form1_min_h"
+        private const val KEY_MAX_H = "form1_max_h"
+        private const val KEY_ADJUST = "form1_adjust_snapshot"
 
         fun intent(context: Context): Intent = Intent(context, FormReadyActivity::class.java)
     }

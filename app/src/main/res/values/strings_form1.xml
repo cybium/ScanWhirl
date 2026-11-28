@@ -82,6 +82,27 @@
     <string name="form1_out_of_memory">Photo too large. Choose a smaller one.</string>
     <string name="form1_selected">Selected</string>
     <string name="form1_not_selected">Not selected</string>
+
+    <!-- J1: rules first, whole photo by default, explicit framing. Fictional examples only. -->
+    <string name="form1_mode_range">Range</string>
+    <string name="form1_mode_exact">Exact</string>
+    <string name="form1_min_width">Min width</string>
+    <string name="form1_max_width">Max width</string>
+    <string name="form1_min_height">Min height</string>
+    <string name="form1_max_height">Max height</string>
+    <string name="form1_kb_info">About KB</string>
+    <string name="form1_kb_info_title">What KB means here</string>
+    <string name="form1_kb_info_body">Form photos use 1 KB = 1024 bytes. This tool measures the saved JPG and shows its real size. A form notice may use a different rule; check yours.</string>
+    <string name="form1_keep_whole">Keep whole photo</string>
+    <string name="form1_crop_to_fit">Crop to fit</string>
+    <string name="form1_cancel_crop">Cancel crop</string>
+    <string name="form1_crop_hint">Drag the corners to crop.</string>
+    <string name="form1_bars_note">Bars added. Check that your form allows them.</string>
+    <string name="form1_whole_kept">Whole photo kept</string>
+    <string name="form1_fitting_summary">Output %1$d × %2$d px · %3$s</string>
+    <string name="form1_doesnt_fit">This photo’s shape doesn’t fit these limits. Change the limits or crop explicitly.</string>
+    <string name="form1_result_over">Closest: %1$s. A smaller file may blur the photo.</string>
+    <string name="form1_result_under">Only %1$s. Some forms still accept it; check your notice.</string>
     <!-- Tools tile (Free): form photo. Title and registry share this label. -->
     <string name="tool_form_ready">Form photo</string>
 </resources>

@@ -115,4 +115,25 @@ class Sec2Form1CacheTest {
             if (!destroyed) controller.destroy()
         }
     }
+
+    @Test(timeout = 30_000)
+    fun `R07 F1 a real run directory is deleted when the result screen really exits`() {
+        // Production layout: form1_out/<uuid>/<file>. The old flat-only check never reached it.
+        val output = cache("form1_out/6c1f3e7a/photo signature.jpg")
+        val runDir = output.parentFile!!
+        val intent = ToolResultActivity.intent(
+            app, "form1", files = listOf(output), mime = "image/jpeg"
+        )
+        val controller = Robolectric.buildActivity(ToolResultActivity::class.java, intent).setup()
+        var destroyed = false
+        try {
+            controller.get().finish()
+            controller.destroy()
+            destroyed = true
+            assertFalse("the plaintext form photo is gone", output.exists())
+            assertFalse("the run directory is gone too", runDir.exists())
+        } finally {
+            if (!destroyed) controller.destroy()
+        }
+    }
 }

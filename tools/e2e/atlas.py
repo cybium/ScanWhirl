@@ -882,6 +882,135 @@ def walk_results():
     recover("after shared result walk")
 
 
+def walk_j1():
+    """J1: rules -> photo -> whole-photo fit/bars -> explicit crop -> result -> saved.
+
+    Additive only: the shared result walk above is untouched. Every step is bounded and every
+    screenshot is taken from the real on-screen state, including a failing save.
+    """
+    def rules():
+        if not open_tool("Form photo"):
+            return "Form photo tile unavailable"
+        if wait_for({"rid": "formReadyPick"}, timeout=12) is None:
+            capture("j1", "rules-missing", ["Tools", "Form photo"],
+                    "Rules step did not expose one Choose photo primary")
+            return "rules unavailable"
+        capture("j1", "rules", ["Tools", "Form photo"],
+                "Editable fictional presets, KB and pixel limits; one Choose photo primary")
+        return "rules captured"
+
+    step("j1", "rules", ["Tools", "Form photo"], rules)
+
+    def kb_sheet():
+        if not tap_reachable({"rid": "formReadyKbInfo"}):
+            return "KB info control unavailable"
+        time.sleep(0.6)
+        capture("j1", "kb-info-sheet", ["Tools", "Form photo", "About KB"],
+                "1 KB = 1024 bytes explained in an info sheet")
+        dismiss_sheet()
+        return "KB info captured"
+
+    step("j1", "kb-info-sheet", ["Tools", "Form photo"], kb_sheet)
+
+    def pick():
+        if not tap_reachable({"rid": "formReadyPick"}):
+            return "Choose photo unavailable"
+        photo_tile = {"regex": r"Photo taken on|atlas-photo-1(?:\.png)?"}
+        if not tap(photo_tile, timeout=6):
+            tap({"text": "Files"}, timeout=1)
+            if tap({"desc": "Show roots"}, timeout=5):
+                if not tap({"text": "Images"}, timeout=3):
+                    tap({"text": "Pictures"}, timeout=2)
+            tap({"text": "Pictures"}, timeout=2)
+        if not tap(photo_tile, timeout=8):
+            capture("j1", "picker-no-photo", ["Tools", "Form photo", "Picker"],
+                    "Seeded fictional portrait not listed")
+            back()
+            return "photo unavailable"
+        if wait_for({"rid": "formReadyFitPreview"}, timeout=15) is None:
+            capture("j1", "fit-preview-missing", ["Tools", "Form photo", "Picked"],
+                    "No whole-photo fit preview after picking")
+            return "fit preview unavailable"
+        capture("j1", "fit-preview-bars", ["Tools", "Form photo", "Fit preview"],
+                "Whole portrait kept; exact target adds visible bars, no silent crop")
+        return "fit preview captured"
+
+    step("j1", "fit-preview-bars", ["Tools", "Form photo", "Picker"], pick)
+
+    def range_whole():
+        if not tap_reachable({"rid": "formReadyModeRange"}):
+            return "Range mode unavailable"
+        time.sleep(0.5)
+        capture("j1", "range-whole", ["Tools", "Form photo", "Range"],
+                "Range keeps the whole portrait via fitInside")
+        if not tap_reachable({"rid": "formReadyModeExact"}):
+            return "Exact mode unavailable"
+        time.sleep(0.4)
+        capture("j1", "exact-bars", ["Tools", "Form photo", "Exact"],
+                "Return to Exact restores the whole photo with bars")
+        return "range and exact captured"
+
+    step("j1", "range-whole", ["Tools", "Form photo", "Fit preview"], range_whole)
+
+    def crop():
+        if not tap_reachable({"rid": "formReadyCropButton"}):
+            return "Crop to fit unavailable"
+        if wait_for({"rid": "formReadyCropCancel"}, timeout=8) is None:
+            capture("j1", "crop-missing", ["Tools", "Form photo", "Crop"],
+                    "Explicit crop mode did not expose its Cancel control")
+            return "crop unavailable"
+        capture("j1", "crop-handles", ["Tools", "Form photo", "Crop"],
+                "Explicit crop: 12 dp handles with 48 dp hit areas, ratio locked")
+        if not tap_reachable({"rid": "formReadyCropCancel"}):
+            return "Cancel crop unavailable"
+        time.sleep(0.4)
+        capture("j1", "crop-cancelled", ["Tools", "Form photo", "Crop cancelled"],
+                "Cancel restored the previous whole-photo framing")
+        return "crop captured and cancelled"
+
+    step("j1", "crop-handles", ["Tools", "Form photo", "Range"], crop)
+
+    def unsaved_result():
+        if not tap_reachable({"rid": "formReadyApply"}):
+            capture("j1", "make-photo-missing", ["Tools", "Form photo"],
+                    "Make photo action was not reachable")
+            return "Make photo unavailable"
+        if wait_for({"rid": "toolResultName"}, timeout=70) is None:
+            capture("j1", "result-not-reached", ["Tools", "Form photo", "Make photo"],
+                    "Result was not reached")
+            return "result unavailable"
+        time.sleep(1)
+        capture("j1", "result-not-saved", ["Tools", "Form photo", "Result"],
+                "Not saved yet with measured JPG pixels and size; Save is the one primary")
+        scroll_page()
+        capture("j1", "result-where", ["Tools", "Form photo", "Result", "Facts"],
+                "Facts and unsaved where-line before any write")
+        return "unsaved result captured"
+
+    step("j1", "result-not-saved", ["Tools", "Form photo", "Crop"], unsaved_result)
+
+    def saved():
+        # Save to phone opens the Android document picker. Drive it with labels only; if the
+        # platform picker differs, the capture still records the truthful unsaved state.
+        if not tap_reachable({"regex": r"Save to phone"}, swipes=4):
+            return "Save to phone unavailable"
+        if wait_for({"text": "Save"}, timeout=12) is None:
+            capture("j1", "save-picker", ["Form photo", "Result", "Save"],
+                    "System save picker did not expose a Save action")
+            return "save picker unavailable"
+        for label in ("Documents", "Downloads", "This device", "Internal storage"):
+            if tap({"text": label}, timeout=1):
+                break
+        if tap({"text": "Save"}, timeout=4):
+            time.sleep(1.2)
+        capture("j1", "saved", ["Form photo", "Result", "Save to phone"],
+                "After a real write: actual location and a disabled duplicate Save")
+        return "saved state captured"
+
+    step("j1", "saved", ["Tools", "Form photo", "Result"], saved)
+    recover("after J1 walk")
+
+
 def walk_library():
     launch()
 
@@ -1363,6 +1492,7 @@ def main():
         walk_library()
         walk_tabs()
         walk_results()
+        walk_j1()
         walk_tools()
         walk_viewer()
         walk_vault()

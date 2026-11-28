@@ -86,4 +86,45 @@ object FormCrop {
         if (rect.height() <= 0 || aspect <= 0f) return 1f
         return kotlin.math.abs(rect.width().toFloat() / rect.height() / aspect - 1f)
     }
+
+    /**
+     * J1 whole-photo fit. The largest aspect-preserving integer size inside BOTH requested ranges.
+     * No crop and no padding happen here: bars are a separate, explicit framing choice made by the
+     * screen, so a portrait is never silently cut or stretched to reach a number.
+     *
+     * [fits] is false when no size in the ranges can keep the source aspect without upscaling;
+     * callers must say "doesn't fit" instead of guessing a size or cropping behind the person's back.
+     */
+    data class FitInside(val width: Int, val height: Int, val fits: Boolean) {
+        val doesntFit: Boolean get() = !fits
+        val aspect: Float get() = width.toFloat() / height.coerceAtLeast(1)
+    }
+
+    fun fitInside(
+        srcW: Int,
+        srcH: Int,
+        minW: Int,
+        maxW: Int,
+        minH: Int,
+        maxH: Int,
+        allowUpscale: Boolean = false
+    ): FitInside {
+        require(srcW > 0 && srcH > 0) { "Source dimensions must be positive" }
+        require(minW > 0 && maxW >= minW && minH > 0 && maxH >= minH) { "Invalid pixel range" }
+        val aspect = srcW.toFloat() / srcH.toFloat()
+        var w = min(maxW.toFloat(), maxH.toFloat() * aspect)
+        if (!allowUpscale) w = min(w, srcW.toFloat())
+        var iw = max(1, floor(w).toInt())
+        var ih = max(1, round(iw / aspect).toInt())
+        if (ih > maxH) {
+            ih = maxH
+            iw = max(1, floor(ih * aspect).toInt())
+        }
+        if (iw > maxW) {
+            iw = maxW
+            ih = max(1, round(iw / aspect).toInt())
+        }
+        if (iw < minW || ih < minH) return FitInside(iw, ih, false)
+        return FitInside(iw, ih, true)
+    }
 }

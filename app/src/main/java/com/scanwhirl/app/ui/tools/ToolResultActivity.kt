@@ -2093,7 +2093,16 @@ class ToolResultActivity : BaseActivity() {
             val form1Cache = File(cacheDir, "form1_out").canonicalFile
             files.forEach { file ->
                 runCatching {
-                    if (file.canonicalFile.parentFile == form1Cache) file.delete()
+                    // R07 F1: real outputs live in form1_out/<uuid>/<file>. Walk at most one parent
+                    // so the run directory is removed too, while a flat legacy file is still
+                    // handled. Never climb past form1_out to an unrelated cache directory.
+                    val canonical = file.canonicalFile
+                    val parent = canonical.parentFile
+                    if (parent == form1Cache) {
+                        canonical.delete() // legacy flat file
+                    } else if (parent?.parentFile == form1Cache) {
+                        parent.deleteRecursively() // real form1_out/<uuid>/<file>
+                    }
                 }
             }
         }
