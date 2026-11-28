@@ -179,9 +179,54 @@ class PdfBoxEngine(
     }
 
     /**
-     * Uses the app's parser, not a byte scan: a literal "/Encrypt" in page content can
-     * never make a plain file look encrypted, and an encrypted dictionary outside a
-     * 64 KB window cannot slip through. Returns null only for a genuinely plain PDF.
+     * Bounded parse of the final trailer dictionary. A literal "/Encrypt" in page
+     * content or a comment cannot make a plain file look encrypted; an encrypted
+     * dictionary in the trailer is found regardless of file size.
+     */
+    private fun hasEncryptDictionary(raw: ByteArray): Boolean {
+        val text = String(raw, Charset.forName("ISO-8859-1"))
+        val start = text.lastIndexOf("trailer")
+        if (start < 0) return false
+        var i = start + "trailer".length
+        var depth = 0
+        var inLiteral = false
+        var inHex = false
+        while (i < text.length) {
+            if (text.startsWith("startxref", i)) break
+            val c = text[i]
+            when {
+                c == '%' -> {
+                    while (i < text.length && text[i] != '\n' && text[i] != '\r') i++
+                    continue
+                }
+                inLiteral -> {
+                    if (c == '\\') i++ else if (c == ')') inLiteral = false
+                }
+                inHex -> if (c == '>') inHex = false
+                c == '(' -> inLiteral = true
+                c == '<' && i + 1 < text.length && text[i + 1] != '<' -> inHex = true
+                c == '<' && i + 1 < text.length && text[i + 1] == '<' -> { depth++; i++ }
+                c == '>' && i + 1 < text.length && text[i + 1] == '>' -> { depth--; i++ }
+                c == '/' && depth == 1 -> {
+                    i++
+                    val from = i
+                    while (i < text.length && !isNameDelimiter(text[i])) i++
+                    if (text.substring(from, i) == "Encrypt") return true
+                    continue
+                }
+            }
+            i++
+        }
+        return false
+    }
+
+    private fun isNameDelimiter(c: Char): Boolean =
+        c.isWhitespace() || c in "/[]()<>{}%"
+
+    /**
+     * Distinguishes a genuinely plain PDF from an encrypted/unsupported one using
+     * the parser, not a byte window. Returns null only when there is no /Encrypt
+     * dictionary in the trailer.
      */
     private fun decryptToTemp(raw: ByteArray, password: String): File? {
         val plain = try {
@@ -189,7 +234,7 @@ class PdfBoxEngine(
         } catch (e: PdfDecryptor.WrongPassword) {
             throw PdfEngineError.InvalidPassword()
         } catch (e: PdfDecryptor.UnsupportedScheme) {
-            if (e.message == NO_ENCRYPTION_MESSAGE) return null
+            if (e.message == NO_ENCRYPTION_MESSAGE && !hasEncryptDictionary(raw)) return null
             // Real encrypted-but-unsupported scheme: never hand those bytes to PDFBox.
             throw PdfEngineError.UnsupportedFeature(
                 e.message ?: "a password format ScanWhirl cannot open"

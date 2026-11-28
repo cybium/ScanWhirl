@@ -91,7 +91,7 @@ public class MinifiedEngineInstrumentation extends Instrumentation {
             runOnMainSync(new Runnable() {
                 @Override public void run() {
                     try {
-                        guarded.open(a);
+                        guarded.open(a, null);
                     } catch (IllegalStateException expected) {
                         guardFired[0] = true;
                     } catch (Throwable ignored) {
