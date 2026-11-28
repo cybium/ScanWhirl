@@ -133,8 +133,8 @@ class W5dBackupRenderTest {
         names += file.name
         // A FLAG_SECURE screen is black in the device atlas; it must not be black here.
         val colours = HashSet<Int>()
-        for (y in listOf(40, 300, 900, 1500, 2100)) {
-            for (x in listOf(40, 400, 800, 1040)) colours += bmp.getPixel(x, y)
+        for (y in 0 until h step 40) {
+            for (x in 0 until w step 40) colours += bmp.getPixel(x, y)
         }
         assertTrue("$name rendered blank (FLAG_SECURE leaked into the Robolectric draw)", colours.size > 2)
     }
