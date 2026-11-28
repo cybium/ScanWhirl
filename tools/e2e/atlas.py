@@ -740,6 +740,17 @@ def import_fixture():
         return False
     wait_for({"desc": "Show roots"}, timeout=15)
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
+    # The seeded PDF appears in DocumentsUI "Recent files". Take it directly when it is
+    # offered; navigating roots first used to leave the picker and lose the fixture.
+    if tap({"text": FIXTURE_PDF}, timeout=5):
+        opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
+                  or wait_for({"rid": "btnMore"}, timeout=8) is not None)
+        if opened:
+            capture("viewer", "imported-document", ["Library", "Create", "Import PDF", "Viewer"],
+                    "Fictional PDF opened straight from Recent files")
+            dismiss_sheet()
+            launch()
+            return True
     tap({"desc": "Show roots"}, timeout=4)
     # API 24 hides the filesystem root until this menu option is enabled.
     if tap({"desc": "More options"}, timeout=1):
@@ -794,7 +805,9 @@ def open_tool(title):
     tap({"rid": "swToolsSearch"}, timeout=8)
     type_text(title)
     back()
-    return tap({"regex": re.escape(title), "cls": "Button"}, timeout=8)
+    # A tool row is a custom TextView, not a Button; the old cls filter silently
+    # dropped every result and left both result walks uncovered.
+    return tap_reachable({"regex": re.escape(title)}, swipes=2)
 
 
 def capture_result(kind):
@@ -834,12 +847,14 @@ def walk_results():
             return "Form photo tile unavailable"
         if not tap_reachable({"rid": "formReadyPick"}):
             return "Choose photo unavailable"
-        # GetContent may initially expose a provider chooser on older images.
-        tap({"text": "Files"}, timeout=1)
-        if tap({"desc": "Show roots"}, timeout=5):
-            if not tap({"text": "Images"}, timeout=3):
-                tap({"text": "Pictures"}, timeout=2)
-        tap({"text": "Pictures"}, timeout=2)
+        # GetContent often offers the seeded photo in Recent; only browse roots if
+        # it is not already visible.
+        if not tap({"regex": r"atlas-photo-1(?:\.png)?"}, timeout=5):
+            tap({"text": "Files"}, timeout=1)
+            if tap({"desc": "Show roots"}, timeout=5):
+                if not tap({"text": "Images"}, timeout=3):
+                    tap({"text": "Pictures"}, timeout=2)
+            tap({"text": "Pictures"}, timeout=2)
         if not tap({"regex": r"atlas-photo-1(?:\.png)?"}, timeout=8):
             capture("result", "form-photo-picker-no-input", ["Tools", "Form photo", "Picker"],
                     "Seeded fictional photo not listed")
