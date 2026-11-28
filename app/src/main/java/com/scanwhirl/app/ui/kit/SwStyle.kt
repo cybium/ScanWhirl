@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -191,6 +192,38 @@ object SwStyle {
             // callers with an explicit smaller box (e.g. VaultCard) keep their old glyph size.
             setPadding(dp(context, 8f), dp(context, 8f), dp(context, 8f), dp(context, 8f))
         }
+
+    /**
+     * W5a-2 (V072): a kit label that never splits a word. At font 2.0 on a 320dp
+     * screen a long single word would otherwise be broken mid-glyph ("Messa / ges").
+     * Two whole lines are allowed; anything longer ellipsizes.
+     */
+    fun twoLineLabel(
+        context: Context,
+        sizeSp: Float,
+        textColor: Int,
+        maxLines: Int = 2
+    ): TextView = text(context, sizeSp, textColor).apply {
+        this.maxLines = maxLines
+        ellipsize = TextUtils.TruncateAt.END
+        hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+        includeFontPadding = false
+    }
+
+    /**
+     * W5a-2 (V063/V091): the one kit divider. It stops at the card's padding on
+     * both ends instead of running into the border, and uses the visible
+     * functional hairline so "Results" separators no longer vanish in dark.
+     */
+    fun divider(context: Context, insetDp: Float = SPACE_4_DP): View = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1f).coerceAtLeast(1)
+        ).apply {
+            setMargins(dp(context, insetDp), 0, dp(context, insetDp), 0)
+        }
+        setBackgroundColor(color(context, R.color.tok_hairline_functional))
+    }
 
     /** Section header: uppercase label + count, on a glass card. */
     fun sectionHeader(context: Context, title: String, count: Int): LinearLayout =

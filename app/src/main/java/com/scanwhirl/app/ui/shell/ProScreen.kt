@@ -266,7 +266,9 @@ class ProScreen(
             R.drawable.ic_sym_watermark to R.string.pro_feat_watermark,
             R.drawable.ic_sym_ink_eraser to R.string.pro_feat_redact,
             R.drawable.ic_sym_qr_code_scanner to R.string.pro_feat_scan,
-            R.drawable.ic_sym_check_circle to R.string.pro_feat_batch,
+            // W5a-2 (V099): the Pro Batch tools tile uses the same stack glyph as
+            // the tool hub, result and selection chip.
+            R.drawable.ic_sw_batch to R.string.pro_feat_batch,
             // UX5-12: the feature is Tags; a label/badge glyph, not a folder.
             R.drawable.ic_sym_badge to R.string.pro_feat_folders
         )

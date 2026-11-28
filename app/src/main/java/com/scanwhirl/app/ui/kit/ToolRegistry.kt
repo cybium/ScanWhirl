@@ -173,7 +173,9 @@ object ToolRegistry {
             pro = true, note = R.string.soon_batch_rename
         ),
         // Council §2: Batch owns `apps`; `view_module` belongs to Pages/Reorder.
-        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_apps, "batch batch tools many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // W5a-2 (V099): one Batch glyph replaces the alternating nine-dot / page-grid
+        // / check-circle pictures used for the same feature.
+        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sw_batch, "batch batch tools many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Optimize (3) — FORM1 is Free (PRO_PLAN.md does not list it, so it never moves behind Pro).
         // Plain-language aliases, EN + HI (B4): "make smaller" / "reduce size" and
@@ -200,7 +202,8 @@ object ToolRegistry {
         ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "ocr ocr pdf searchable searchable pdf search search pdf text layer pdf"),
         SwTool(
             // Council §2: PDF/A owns `archive`; Stamp keeps `approval`.
-            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_archive,
+            // W5a-2 (V101): PDF/A no longer shares the ZIP/Backup archive glyph.
+            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sw_pdfa,
             true, ToolStatus.READY, "pdf a archive long term pdfa 2b",
             launch = { host, tool ->
                 val activity = host as? androidx.appcompat.app.AppCompatActivity
@@ -295,7 +298,8 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "clear clear metadata remove metadata metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // W5a-2 (V011): a struck-through metadata page, not the password eye.
+        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sw_clear_metadata, "clear clear metadata remove metadata metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Council §1: OCR is the single text tile; `to_text` and `hindi_text` are not tools.
         // Hindi is a language chip inside OCR, and .txt export is the Save .txt button there.
@@ -308,8 +312,10 @@ object ToolRegistry {
         // LX: Pro with one free successful use. The Activity owns the disclosure,
         // the counter and the ProOffer gate after that first use.
         ready(
+            // W5a-2 (V100): the numbered list belongs to Page numbers; Link index
+            // gets its own linked-list glyph.
             "link_index", ToolGroup.TEXT, R.string.lx_tool_title,
-            R.drawable.ic_sym_format_list_numbered,
+            R.drawable.ic_sw_link_index,
             "link index contents table of contents bookmarks outline titles pages सूची लिंक",
             pro = true,
             launch = { host, tool ->

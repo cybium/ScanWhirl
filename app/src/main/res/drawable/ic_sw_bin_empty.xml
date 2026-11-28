@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W5a-2 (V075): a bin motif for the empty Trash state. Provided by the kit;
+     W5b wires it into activity_trash.xml's trashEmptyIcon. The old state used the
+     app logo with a white shape invisible on a pale card. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4.6,6.8h14.8M9,6.8V4.6h6v2.2M6.6,6.8l0.9,12.6h9l0.9,-12.6M10,10.4v5.6M14,10.4v5.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
