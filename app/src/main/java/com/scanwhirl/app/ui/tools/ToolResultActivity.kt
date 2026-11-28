@@ -2101,7 +2101,7 @@ class ToolResultActivity : BaseActivity() {
                     if (parent == form1Cache) {
                         canonical.delete() // legacy flat file
                     } else if (parent?.parentFile == form1Cache) {
-                        parent.deleteRecursively() // real form1_out/<uuid>/<file>
+                        parent?.deleteRecursively() // real form1_out/<uuid>/<file>
                     }
                 }
             }
