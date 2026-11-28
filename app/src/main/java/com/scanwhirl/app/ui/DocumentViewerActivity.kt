@@ -2647,9 +2647,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             .build()
         if (organize) sheet.setMessage(changeSummary())
         sheet.keepOpenOnPrimary()
+        var submitted = false
         sheet.primaryButton.setOnClickListener {
+            if (submitted) return@setOnClickListener
+            val name = sheet.inputView?.text?.toString().orEmpty().trim()
+            if (organize && name.isBlank()) {
+                sheet.inputView?.error = getString(R.string.j5_name_required)
+                return@setOnClickListener
+            }
+            submitted = true
             sheet.dismiss()
-            onOk(sheet.inputView?.text?.toString().orEmpty())
+            onOk(name)
         }
         sheet.show()
         sheet.inputView?.requestFocus()

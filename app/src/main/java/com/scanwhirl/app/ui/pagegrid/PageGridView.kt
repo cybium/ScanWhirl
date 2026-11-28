@@ -506,9 +506,8 @@ class PageGridView @JvmOverloads constructor(
                     android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
             }
         }
-        announceForAccessibility(
-            context.getString(R.string.a11y_moved_to, to + 1, gridAdapter.itemCount)
-        )
+        if (onOrderDropped == null) announceForAccessibility(
+            context.getString(R.string.a11y_moved_to, to + 1, gridAdapter.itemCount))
     }
 
     /** Index of the top-most visible cell (used by "save this page"). */

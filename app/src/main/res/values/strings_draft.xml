@@ -3,6 +3,7 @@
 <resources>
     <string name="j5_title">Organize pages</string>
     <string name="j5_organized_name">%1$s (organized)</string>
+    <string name="j5_name_required">Enter a name for this copy.</string>
     <string name="j5_save_failed_title">Couldn’t save</string>
     <string name="j5_save_failed">Your changes are still here. %1$s</string>
     <string name="j5_retry">Try again</string>

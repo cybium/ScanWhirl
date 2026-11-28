@@ -740,11 +740,17 @@ def import_fixture():
     capture("create", "create-sheet", ["Library", "Create"], "Create sheet before import")
     if not tap({"rid": "swCreateImport"}, timeout=6):
         return False
+    root = hierarchy()
+    if find(root, rid="swSheetTitle", regex=r"Before you import|आयात से पहले") is not None:
+        capture("import", "raster-notice", ["Library", "Create", "Import PDF", "Before import"])
+        if not tap({"rid": "swSheetPrimary"}, timeout=5):
+            return False
     wait_for({"desc": "Show roots"}, timeout=15)
     capture("import", "picker-roots", ["Library", "Create", "Import PDF"])
     # The seeded PDF appears in DocumentsUI "Recent files". Take it directly when it is
     # offered; navigating roots first used to leave the picker and lose the fixture.
     if tap({"text": FIXTURE_PDF}, timeout=5):
+        accept_fixture_import_plan()
         opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
                   or wait_for({"rid": "btnMore"}, timeout=8) is not None)
         if opened:
@@ -776,6 +782,7 @@ def import_fixture():
         return False
     capture("import", "picker-fixture", ["Library", "Create", "Import PDF", FIXTURE_PDF])
     tap({"text": FIXTURE_PDF}, timeout=6)
+    accept_fixture_import_plan()
     opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
               or wait_for({"rid": "btnMore"}, timeout=8) is not None)
     if not opened:
@@ -787,6 +794,14 @@ def import_fixture():
     dismiss_sheet()
     launch()
     return True
+
+
+def accept_fixture_import_plan():
+    """Only the known fixture import plan, never an arbitrary sheet's primary action."""
+    if wait_for({"rid": "toolImportChoosePages"}, timeout=8) is not None:
+        capture("import", "fixture-import-plan", ["Import PDF", FIXTURE_PDF, "Import plan"])
+        if not tap({"rid": "swSheetPrimary"}, timeout=5):
+            raise AssertionError("Fictional fixture import plan could not be confirmed")
 
 
 # ------------------------------------------------------------------------ walks
@@ -1111,7 +1126,13 @@ def walk_j5_organize():
 
         root = hierarchy()
         third = find(root, rid="pageNum", text="3")
+        if third is None:
+            # At font 2.0 page 3's paper may be visible while its lower label is clipped
+            # by the scrolling viewport. Its accessible page identity still names the card.
+            third = find(root, regex=r"^Page 3 of |^पेज 3", pkg=PKG)
         first = find(root, rid="pageNum", text="1")
+        if first is None:
+            first = find(root, regex=r"^Page 1 of |^पेज 1", pkg=PKG)
         if third is None or first is None:
             raise AssertionError("J5 real page identities unavailable")
         a = parse_bounds(clickable_ancestor(root, third).get("bounds"))
@@ -1120,7 +1141,7 @@ def walk_j5_organize():
         sx = (a[0] + a[2]) // 2
         sy = min((a[1] + a[3]) // 2, grid[3] - int(24 * DENSITY))
         tx = b[0] + int((b[2] - b[0]) * 0.35)
-        ty = max(grid[1] + int(24 * DENSITY), b[1] + int((b[3] - b[1]) * 0.35))
+        ty = grid[1] + int(24 * DENSITY)
         command = ["adb", "-s", SERIAL, "shell", "input", "draganddrop",
                    str(sx), str(sy), str(tx), str(ty), "12000"]
         drag = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1138,7 +1159,10 @@ def walk_j5_organize():
                 drag.communicate(timeout=5)
         time.sleep(1)
         root = hierarchy()
-        if find(root, regex=r"was p\.3|पहले पेज 3") is None:
+        was = find(root, regex=r"was p\.3|originally page 3|पहले पेज 3")
+        first = find(root, rid="pageNum", text="1")
+        if (was is None or first is None or
+                clickable_ancestor(root, was) is not clickable_ancestor(root, first)):
             raise AssertionError("J5 drop did not put page 3 first with provenance")
         capture("j5", "j5-after-drop-was-p3", path + ["Drop page 3 first"])
         tap({"rid": "pageNum", "text": "2"}, timeout=5)
@@ -1151,15 +1175,18 @@ def walk_j5_organize():
         tap({"rid": "btnDraftSave"}, timeout=5)
         if wait_for({"rid": "swSheetInput"}, timeout=8) is None:
             raise AssertionError("J5 save name sheet missing")
-        back()  # keyboard only
+        ime = adb("shell", "dumpsys", "input_method", timeout=15)
+        if "mInputShown=true" in ime or "inputShown=true" in ime:
+            back()  # keyboard only, never dismiss the name sheet itself
         capture("j5", "j5-save-name-sheet", path + ["Save copy", "Name"])
         tap({"rid": "swSheetPrimary"}, timeout=5)
         if wait_for({"rid": "toolResultShare"}, timeout=40) is None:
             raise AssertionError("J5 verified result missing")
         capture("j5", "j5-result", path + ["Save copy", "Result"])
         return "J5 grid, lift, provenance, selection, save sheet and result captured"
-    step("j5", "j5-complete-organize", ["Tools", "Reorder"], journey)
+    result = step("j5", "j5-complete-organize", ["Tools", "Reorder"], journey)
     recover("after J5")
+    return result is not None
 
 
 def walk_vault():
@@ -1437,10 +1464,13 @@ def main():
     try:
         step("fixtures", "seed", [], lambda: seed())
         step("import", "fixture", ["Library", "Create", "Import PDF"], import_fixture)
+        if not walk_j5_organize():
+            # A green atlas without the requested journey is not acceptance evidence.
+            # Fail early instead of spending the rest of a paid emulator walk on other tools.
+            return 1
         walk_library()
         walk_tabs()
         walk_results()
-        walk_j5_organize()
         walk_tools()
         walk_viewer()
         walk_vault()
