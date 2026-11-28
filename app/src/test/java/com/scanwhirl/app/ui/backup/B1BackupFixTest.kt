@@ -262,7 +262,10 @@ class B1BackupFixTest {
         cleanFiles()
         VaultSession.close()
 
-        val thisPhone = vaultStore().setupConfirmed("135790")
+        // Base fix (compilation): setupConfirmed() returns a Setup result, not the store.
+        // Keep the store so the same phone can be locked before the restore prompt.
+        val thisPhone = vaultStore()
+        thisPhone.setupConfirmed("135790")
         thisPhone.lock()
         BackupActivity.vaultOverride = thisPhone
         try {

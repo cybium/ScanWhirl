@@ -4,7 +4,7 @@ import android.app.Application
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
-import android.widget.SwitchCompat
+import androidx.appcompat.widget.SwitchCompat
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
