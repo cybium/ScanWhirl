@@ -23,8 +23,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.ui.shell.ShellActivity
-import com.scanwhirl.app.ui.tools.PdfImportSheets
-import com.scanwhirl.app.util.PdfImportBudget
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -179,28 +177,48 @@ abstract class ImportSheetBase {
     }
 
     @Test
-    fun `a picked pdf still shows the localized import notice and cancel imports nothing`() {
-        // W8: MainActivity's old "rasterize confirmation" string no longer exists in main
-        // (D1 gap, grep: pdf_rasterize_note only in MainActivity + string resource). The live
-        // shell routes through DevicePdfGate/PdfImportSheets: keep the honesty + no-write
-        // assertions against that live gate.
-        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                val plan = PdfImportBudget.plan(100, 2_000_000_000L)
-                var decision: String? = null
-                val gate = PdfImportSheets.ask(activity, plan) { decision = it.javaClass.simpleName }
-                gate.show()
-                val text = gate.view.allText()
-                assertTrue("the sheet names the page count",
-                    text.contains(app.getString(R.string.tools_import_plan_title, 100)))
-                assertTrue("the sheet states the size/free facts before any write",
-                    text.contains(app.getString(R.string.tools_import_plan_msg,
-                        PdfImportSheets.formatSize(plan.estimateBytes),
-                        PdfImportSheets.formatSize(plan.freeBytes))))
-                gate.view.findViewById<View>(R.id.swSheetSecondary).performClick()
-                assertEquals("the cancelled decision is Cancel", "Cancel", decision)
-                assertEquals("cancel imports nothing", 0, docCount())
-            }
+    fun `a picked pdf still shows the rasterize confirmation and cancel imports nothing`() {
+        // W8 round 2: the live rasterisation notice is MergePdfActivity.confirmMerge's
+        // sheet (pdf_rasterize_note), not the size/free import-plan sheet. Drive that live
+        // screen with two picked PDFs, confirm the name, assert the localized data-loss
+        // warning, then Cancel and assert nothing was written.
+        val controller = org.robolectric.Robolectric.buildActivity(
+            MergePdfActivity::class.java, MergePdfActivity.intent(app)
+        ).setup()
+        try {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val activity = controller.get()
+            val pickedType = Class.forName("com.scanwhirl.app.ui.MergePdfActivity\$Picked")
+            val ctor = pickedType.getDeclaredConstructor(Uri::class.java, String::class.java)
+            ctor.isAccessible = true
+            val pickedField = MergePdfActivity::class.java.getDeclaredField("picked")
+            pickedField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val picked = pickedField.get(activity) as MutableList<Any>
+            picked.add(ctor.newInstance(Uri.parse("content://w8/first.pdf"), "First.pdf"))
+            picked.add(ctor.newInstance(Uri.parse("content://w8/second.pdf"), "Second.pdf"))
+
+            val promptName = MergePdfActivity::class.java.getDeclaredMethod(
+                "promptName", String::class.java
+            )
+            promptName.isAccessible = true
+            promptName.invoke(activity, null)
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val nameSheet = ShadowDialog.getLatestDialog()
+            assertNotNull("the merge name sheet opens", nameSheet)
+            nameSheet!!.findViewById<View>(R.id.swSheetPrimary)!!.performClick()
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+
+            val confirm = ShadowDialog.getLatestDialog()
+            assertNotNull("the rasterize confirmation opens", confirm)
+            val text = confirm!!.window!!.decorView.allText()
+            assertTrue("title kept", text.contains(app.getString(R.string.merge_builder_title)))
+            assertTrue("rasterize warning kept", text.contains(app.getString(R.string.pdf_rasterize_note)))
+            confirm.findViewById<View>(R.id.swSheetSecondary)!!.performClick() // Cancel
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertEquals("cancel imports nothing", 0, docCount())
+        } finally {
+            controller.close()
         }
     }
 

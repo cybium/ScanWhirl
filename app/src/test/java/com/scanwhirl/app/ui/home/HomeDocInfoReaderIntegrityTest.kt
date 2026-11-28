@@ -1,25 +1,34 @@
 package com.scanwhirl.app.ui.home
 
 import android.app.Application
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.TextView
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.scanwhirl.app.ScanWhirlApp
 import com.scanwhirl.app.model.ScanDocument
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.shell.ShellActivity
 import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.Prefs
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 
 /**
  * W8 port of the two HomeSlice2Test text-status integrity assertions. The legacy
- * scanList card is retired, but HomeDocInfoReader (the live status source) still
- * exists; these assertions keep the honesty contract at the reader layer:
- * the pending marker and stored page text are the only evidence, and finishing
- * indexing re-reads the status.
+ * scanList card is retired, but HomeDocInfoReader (the status source) and the real
+ * OcrIndexer worker are still live; the second test drives indexNow on that worker
+ * and asserts the live Library row's text evidence updates after completion.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -33,6 +42,17 @@ class HomeDocInfoReaderIntegrityTest {
         app = ApplicationProvider.getApplicationContext()
         repo = ScanRepository(app)
         Prefs.setIndexBackfillDone(app, true)
+    }
+
+    private fun pollUntil(timeoutMs: Long = 8000, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (condition()) return true
+            Thread.sleep(25)
+        }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        return condition()
     }
 
     private var seq = 0
@@ -75,15 +95,32 @@ class HomeDocInfoReaderIntegrityTest {
     }
 
     @Test
-    fun `the indexer finishing a document re-reads its status`() {
-        val waiting = fixture("Lecture notes", 1)
-        File(waiting, "ocr_pending").writeText("")
-        val dir = repo.docsDir
-        assertEquals(TextState.WAITING, HomeDocInfoReader.read(dir, doc(waiting)).text)
-        // The indexer stores text and clears the marker, then goes idle.
-        File(waiting, "ocr.txt").writeText("#scanwhirl-ocr-v2\npage_001.jpg\taGVsbG8=\n")
-        File(waiting, "ocr_pending").delete()
-        assertEquals("status refreshes to Search ready",
-            TextState.READY, HomeDocInfoReader.read(dir, doc(waiting)).text)
+    fun `the indexer finishing a document re-reads its status on the live Library row`() {
+        val dir = fixture("Lecture notes", 1)
+        File(dir, "ocr_pending").writeText("")
+        assertEquals(TextState.WAITING, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
+
+        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+            scenario.onActivity { shell ->
+                assertTrue("the live Library shows the document",
+                    pollUntil { shell.findViewById<ViewGroup>(R.id.swDocList)?.childCount == 1 })
+
+                // The real indexing worker the live Library enqueues: store text, clear the
+                // pending marker, then run OcrIndexer.indexNow (no fake reader swap).
+                File(dir, "ocr.txt").writeText("#scanwhirl-ocr-v2\npage_001.jpg\taGVsbG8=\n")
+                File(dir, "ocr_pending").delete()
+                runBlocking { ScanWhirlApp.from(shell).indexer.indexNow(dir.name) }
+
+                // The live Library row rebinds with page evidence from the indexed text.
+                shell.findViewById<EditText>(R.id.swHomeSearch).setText("hello")
+                assertTrue("the live row shows the page hit after indexing", pollUntil {
+                    val card = shell.findViewById<ViewGroup>(R.id.swDocList)?.getChildAt(0)
+                    card?.findViewById<TextView>(R.id.swSearchSnippet)
+                        ?.text?.toString().orEmpty().contains("hello")
+                })
+                assertEquals("status refreshes to Search ready",
+                    TextState.READY, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
+            }
+        }
     }
 }
