@@ -56,7 +56,7 @@ TOOL_ALIASES = {
     "form_ready": "form ready",
     "compress": "compress smaller",
     "sign": "sign signature ink",
-    "redact": "aadhaar",
+    "redact": "confidential",
     "organize_pages": "organize pages reorder",
 }
 
@@ -698,22 +698,32 @@ def hindi_node_count(root):
 def ensure_hindi_locale():
     """Verify the fifth leg really renders Hindi; fall back to the app setting."""
     global HINDI_NODES
+    path = ["Library"]
     launch()
     HINDI_NODES = hindi_node_count(hierarchy())
     if HINDI_NODES == 0:
-        tap({"rid": "swNavMe"}, timeout=8)
-        tap({"rid": "swMeSettings"}, timeout=7)
-        if tap({"rid": "rowLanguage"}, timeout=7):
-            time.sleep(0.8)
+        # The Home A/अ chip is the shortest human route to the app language.
+        if tap({"rid": "swLanguageChip"}, timeout=7):
+            path += ["A/अ language", "हिन्दी"]
+            time.sleep(0.7)
             root = hierarchy()
-            node = (find(root, regex="हिन्दी") or find(root, regex="Hindi")
-                    or find(root, regex="hi-IN")) if root else None
+            node = find(root, regex="हिन्दी") if root else None
             if node is not None:
                 tap_node(root, node)
-                time.sleep(2.0)
-                launch()
+                time.sleep(2.5)
                 HINDI_NODES = hindi_node_count(hierarchy())
-    capture("shell", "hindi-locale", ["Library", "Me", "Settings", "Language"],
+        if HINDI_NODES == 0:  # older build: Settings > App language
+            tap({"rid": "swNavMe"}, timeout=8)
+            tap({"rid": "swMeSettings"}, timeout=7)
+            if tap({"rid": "rowLanguage"}, timeout=7):
+                time.sleep(0.8)
+                root = hierarchy()
+                node = find(root, regex="हिन्दी") if root else None
+                if node is not None:
+                    tap_node(root, node)
+                    time.sleep(2.5)
+                    HINDI_NODES = hindi_node_count(hierarchy())
+    capture("shell", "hindi-locale", path,
             "Hindi labels visible: %d" % HINDI_NODES)
     return "Hindi labels: %d" % HINDI_NODES
 
@@ -1162,18 +1172,27 @@ def select_picker_photos(count=2):
 
 
 def confirm_picker():
-    """Press the picker's Add/Done/Use control, or ENTER if it has no label."""
+    """Press the picker's Add/Done control, or ENTER if it has no label.
+
+    The Media picker also has a clickable "Selected" checkbox; matching "select"
+    here would toggle it instead of the "Add (2)" button (observed in run 1).
+    """
     root = hierarchy()
     if root is not None:
+        candidates = []
         for node in root.iter("node"):
             if node.get("clickable") != "true":
                 continue
             rid = rid_name(node)
             text = (node.get("text") or "").strip().lower()
-            if (re.search(r"(confirm|apply|add|done|select|choose)", rid, re.I)
-                    or text in ("add", "done", "use", "ok", "select", "open")):
-                tap_node(root, node)
-                return True
+            score = (2 if re.search(r"(confirm|apply|add|done)", rid, re.I)
+                     or text.startswith("add") else
+                     1 if text in ("done", "use", "ok", "open") else 0)
+            if score:
+                candidates.append((score, node))
+        if candidates:
+            tap_node(root, sorted(candidates, key=lambda pair: -pair[0])[0][1])
+            return True
     adb("shell", "input", "keyevent", "KEYCODE_ENTER")
     time.sleep(0.5)
     return False
@@ -1194,9 +1213,13 @@ def walk_deep_tools():
         capture("tools", "tool-form-ready-photo-picker",
                 ["Library", "Tools", "Form photo", "Pick", "Selected %d" % count],
                 "Fictional photo selected in the system picker")
-        confirm_picker()
-        arrived = wait_for_any(({"rid": "formReadyCrop"}, {"rid": "formReadyApplyBar"},
-                                {"rid": "formReadyReadout"}), timeout=20)
+        edit_wants = ({"rid": "formReadyCrop"}, {"rid": "formReadyApplyBar"},
+                      {"rid": "formReadyReadout"})
+        # A single-photo picker returns on the tap; a multi-photo picker needs Add.
+        arrived = wait_for_any(edit_wants, timeout=6)
+        if arrived is None:
+            confirm_picker()
+            arrived = wait_for_any(edit_wants, timeout=15)
         if arrived is None:
             capture("tools", "tool-form-ready-photo-stuck",
                     ["Library", "Tools", "Form photo", "Pick", "open"],
@@ -1250,11 +1273,12 @@ def walk_deep_tools():
     step("tools", "deep-form-ready", ["Library", "Tools", "Form photo"], photo_form)
     step("tools", "deep-compress", ["Library", "Tools", "Compress"],
          lambda: setup_tool("compress", "Compress"))
+    # StampEditorActivity's layout is activity_stamp_editor.xml: stampToolRow / canvas.
     step("tools", "deep-sign", ["Library", "Tools", "Sign"],
-         lambda: picker_tool("sign", "Sign", ("toolSignature", "toolRedact", "pageDock"),
+         lambda: picker_tool("sign", "Sign", ("stampToolRow", "canvas", "saveCopy"),
                              "tool-sign-editor"))
     step("tools", "deep-redact", ["Library", "Tools", "Redact"],
-         lambda: picker_tool("redact", "Redact", ("toolRedact", "toolSignature", "pageDock"),
+         lambda: picker_tool("redact", "Redact", ("stampToolRow", "canvas", "saveCopy"),
                              "tool-redact-editor"))
     step("tools", "deep-organize-pages", ["Library", "Tools", "Reorder"],
          lambda: picker_tool("organize_pages", "Reorder",
@@ -1318,7 +1342,8 @@ def walk_photos():
                 "Both fictional photos selected in the system picker")
         confirm_picker()
         arrived = wait_for_any(({"rid": "swDocMore"}, {"rid": "btnMore"},
-                                {"rid": "swHomeSearch"}), timeout=20)
+                                {"rid": "toolResultName"}, {"rid": "swHomeSearch"}),
+                               timeout=20)
         capture("create", "photos-imported",
                 ["Library", "Create", "Photos", "Imported %d" % count],
                 "Photo picker returned to the app%s" %

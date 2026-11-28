@@ -236,6 +236,24 @@ class DeepCoverageTest(unittest.TestCase):
             self.assertIn(tool_id, atlas.TOOL_ALIASES)
             self.assertTrue(atlas.TOOL_ALIASES[tool_id].isascii())
 
+    def test_confirm_picker_prefers_add_over_selected_checkbox(self):
+        # Harm prevented: the picker's "Selected" tick was tapped instead of
+        # "Add (2)", so neither fictional photo was ever imported.
+        root = ET.fromstring(
+            '<hierarchy><node clickable="true" text="Selected" '
+            'resource-id="pkg:id/preview_selected_check_button" bounds="[0,0][10,10]"/>'
+            '<node clickable="true" text="Add (2)" '
+            'resource-id="pkg:id/preview_add_button" bounds="[0,0][10,10]"/></hierarchy>')
+        with patch.object(atlas, "hierarchy", return_value=root), \
+             patch.object(atlas, "tap_node", return_value=True) as tap:
+            atlas.confirm_picker()
+        self.assertEqual(tap.call_args.args[1].get("text"), "Add (2)")
+
+    def test_redact_alias_does_not_open_id_card(self):
+        # "aadhaar" is also an ID-card keyword; "confidential" is unique.
+        self.assertEqual(atlas.TOOL_ALIASES["redact"], "confidential")
+        self.assertNotIn("aadhaar", atlas.TOOL_ALIASES["redact"])
+
     def test_picker_items_finds_media_thumbs_and_fixture_files(self):
         root = ET.fromstring(
             '<hierarchy><node clickable="true" bounds="[0,0][10,10]">'

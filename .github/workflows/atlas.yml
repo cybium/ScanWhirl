@@ -98,7 +98,7 @@ jobs:
             api: 35
             profile: pixel_6
             arch: x86_64
-            setup: "adb shell cmd locale set-locale hi-IN || adb shell settings put system system_locales hi-IN"
+            setup: "adb shell cmd locale set-app-locales com.scanwhirl.app.test --locales hi-IN; adb shell settings put system system_locales hi-IN"
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
