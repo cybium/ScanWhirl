@@ -355,14 +355,15 @@ class ScanReviewFocusArrangeTest {
             await { !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a ->
                 a.findViewById<View>(R.id.btnToolDelete).performClick()
-            }
-            // The rename + re-list can settle a tick after the click; wait for the
-            // combined status line to show the new count (bounded wait, no hang).
-            // Keep the assertion; if it ever fails, report the real screen/disk state.
-            try {
-                await { scenario.get { it.text(R.id.reviewStatus).contains("Page 2 of 2") } }
-            } catch (e: AssertionError) {
-                fail("delete never settled :: " + scenario.get { deleteSnapshot(it, dir) })
+                // Delete is synchronous: it renames the page to `.del` and calls
+                // reloadFromDisk() -> renderPages() -> renderStatus() on this very
+                // call. A wall-clock await here only added a 20s flake window on a
+                // loaded runner (the merge's 3.9k-test gate hit it once); assert the
+                // real product effect at the point it must exist instead.
+                assertFalse("delete refused while busy", a.pageOpBusy)
+                assertTrue("page was not hidden", File(dir, "page_001.jpg.del").exists())
+                assertTrue("status did not follow the delete: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 2 of 2"))
             }
             scenario.onActivity { a ->
                 assertTrue(File(dir, "page_001.jpg.del").exists())
@@ -375,15 +376,13 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.findViewById<View>(com.google.android.material.R.id.snackbar_action).performClick()
             }
-            try {
-                await {
-                    scenario.get {
-                        File(dir, "page_001.jpg").exists() &&
-                            it.text(R.id.btnSavePdf) == "Save 3 pages"
-                    }
-                }
-            } catch (e: AssertionError) {
-                fail("undo never settled :: " + scenario.get { deleteSnapshot(it, dir) })
+            // Undo is synchronous too: the action click restores the `.del` page and
+            // re-renders the Save label before performClick() returns.
+            scenario.onActivity { a ->
+                assertTrue("undo did not restore the page: " + deleteSnapshot(a, dir),
+                    File(dir, "page_001.jpg").exists())
+                assertEquals("Save label did not follow the undo: " + deleteSnapshot(a, dir),
+                    "Save 3 pages", a.text(R.id.btnSavePdf))
             }
         }
     }
