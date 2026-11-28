@@ -285,6 +285,9 @@ dependencies {
     // W7a minified-runtime smoke test (androidTest runs against the R8 release APK).
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    // The AndroidX test runner itself is Kotlin-compiled; the test APK needs the
+    // stdlib on its own classpath when instrumenting the minified target APK.
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.20")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
