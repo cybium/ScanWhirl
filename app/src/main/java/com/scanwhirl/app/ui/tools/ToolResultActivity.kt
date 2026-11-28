@@ -43,6 +43,8 @@ import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwProgress
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.result.ResultSpec
 import com.scanwhirl.app.ui.kit.CompareModel
 import com.scanwhirl.app.ui.kit.CompareMode
 import com.scanwhirl.app.ui.kit.ComparePane
@@ -81,6 +83,10 @@ import java.io.IOException
 class ToolResultActivity : BaseActivity() {
 
     private lateinit var repo: ScanRepository
+    private lateinit var resultSpec: ResultSpec
+    private var phoneSaveBusy = false
+    private var retrySave: (() -> Unit)? = null
+    private var phonePrimary: TextView? = null
     private lateinit var rootView: View
     private lateinit var toolName: String
     private var docIds: MutableList<String> = mutableListOf()
@@ -209,12 +215,13 @@ class ToolResultActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ScanWhirlApp.from(this).repository
-        toolId = intent.getStringExtra(EXTRA_TOOL_ID).orEmpty()
+        resultSpec = ResultSpec.fromIntent(intent)
+        toolId = resultSpec.toolId
         toolName = ToolRegistry.byId(toolId)?.let { getString(it.title) }.orEmpty()
-        docIds = intent.getStringArrayListExtra(EXTRA_DOC_IDS)?.toMutableList() ?: mutableListOf()
-        files = intent.getStringArrayListExtra(EXTRA_FILES)?.map { File(it) }?.toMutableList() ?: mutableListOf()
-        mime = intent.getStringExtra(EXTRA_MIME) ?: defaultMime()
-        note = intent.getStringExtra(EXTRA_NOTE)
+        docIds = resultSpec.docIds.toMutableList()
+        files = resultSpec.files.toMutableList()
+        mime = resultSpec.mime ?: defaultMime()
+        note = resultSpec.note
         targetBytes = intent.getLongExtra(EXTRA_TARGET, 0L).takeIf { it > 0 }
         beforeBytes = intent.getLongExtra(EXTRA_BEFORE, 0L).takeIf { it > 0 }
         outputIdentity = intent.getStringExtra(EXTRA_OUTPUT_IDENTITY)
@@ -316,11 +323,26 @@ class ToolResultActivity : BaseActivity() {
             onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() = confirmDiscardIdCard()
             })
-        }
+        } else {
+            onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = showInLibrary()
+            })
+        } // PDF Done/Back returns to the Library; Adjust is explicit.
+        resultSpec = resultSpec.copy(toolId = toolId, docIds = docIds.toList(), files = files.toList(), mime = mime)
         rootView = buildRoot()
         setContentView(rootView)
         if (savedCopy != null || documentsExistingName != null) markDocumentsSaved()
         render()
+        if (!undone && !alreadyCompact && savedInstanceState == null &&
+            !intent.getBooleanExtra(EXTRA_USE_LAST_RECEIPT, false) &&
+            docIds.size == 1 && com.scanwhirl.app.util.Prefs.autoCopyToDocuments(this) &&
+            repo.getDocument(docIds.single())?.contentKind != com.scanwhirl.app.model.ContentKind.DIGITAL
+        ) {
+            if (DownloadSaver.needsLegacyStoragePermission(this)) {
+                retrySave = { alsoSave() }
+                fail(getString(R.string.f7save_autocopy_no_permission))
+            } else alsoSave()
+        }
         // W3: if this result was already undone before a rotation, do not offer its actions again.
         if (undone) showAlreadyUndone()
         // v2 UI: 74_motion — the one success moment call for every tool result.
@@ -459,6 +481,11 @@ class ToolResultActivity : BaseActivity() {
                 marginStart = SwStyle.dp(this@ToolResultActivity, 8f)
             }
         )
+        bar.addView(textAction(getString(R.string.tools_result_done)).apply {
+            tag = "result-done"
+            minimumWidth = SwStyle.dp(this@ToolResultActivity, SwStyle.TOUCH_MIN_DP)
+            setOnClickListener { showInLibrary() }
+        })
         root.addView(bar)
 
         val scroll = ScrollView(this)
@@ -468,15 +495,25 @@ class ToolResultActivity : BaseActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        // 2. One hero row + one chip + one receipt row. No other sentences above the visual.
+        column.addView(SwStyle.text(this, SwType.TITLE_SP, hi, bold = true).apply {
+            tag = "result-headline"
+            text = getString(when {
+                alreadyCompact -> R.string.rs_already_compact_title
+                outcomeClass == OutcomeClass.TARGET_MISSED -> R.string.cp1_compress_header_missed
+                resultSpec.kind == ResultSpec.Kind.IMAGE -> R.string.rs_photo_ready
+                docIds.isNotEmpty() -> R.string.rs_copy_ready
+                else -> R.string.rs_file_ready
+            })
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+            setPadding(0, SwStyle.dp(context, SwStyle.SPACE_4_DP), 0, 0)
+        })
+        // Facts follow the real preview, not the producer's requested dimensions.
         val heroBlock = LinearLayout(this).apply {
             id = R.id.rsHeroBlock
             orientation = LinearLayout.VERTICAL
         }
-        summary = SwStyle.text(this, 28f, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
+        summary = SwStyle.text(this, SwType.HEADING_SP, SwStyle.color(this, R.color.sw_text_primary), bold = true).apply {
             id = R.id.toolResultSummary
-            maxLines = 3
-            ellipsize = TextUtils.TruncateAt.END
         }
         heroBlock.addView(summary, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -497,21 +534,13 @@ class ToolResultActivity : BaseActivity() {
         heroBlock.addView(chipView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
-        column.addView(heroBlock, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 16f) })
 
-        savedLine = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_secondary)).apply {
+        savedLine = SwStyle.text(this, SwType.BODY_SP, hi, bold = true).apply {
             id = R.id.toolResultName
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-            movementMethod = LinkMovementMethod.getInstance()
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             minimumHeight = SwStyle.dp(this@ToolResultActivity, 48f)
             gravity = Gravity.CENTER_VERTICAL
         }
-        column.addView(savedLine, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
 
         // V2T T1: an a11y status node, deliberately not a visible line.
         v2tStatus = SwStyle.text(this, 13f, SwStyle.color(this, R.color.rv_accent)).apply {
@@ -555,7 +584,7 @@ class ToolResultActivity : BaseActivity() {
         visualHost.addView(previewHost, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             if (idCardFlow) SwStyle.dp(this@ToolResultActivity, 200f)
-            else SwStyle.dp(this@ToolResultActivity, 1f)
+            else SwStyle.dp(this@ToolResultActivity, SwStyle.SPACE_6_DP * 9)
         ))
         compareView = CompareView(this).apply {
             id = R.id.ccCompare
@@ -567,6 +596,12 @@ class ToolResultActivity : BaseActivity() {
         column.addView(visualHost, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 12f) })
+        column.addView(heroBlock, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, SwStyle.SPACE_3_DP) })
+        column.addView(savedLine, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, SwStyle.SPACE_2_DP) })
 
         errorView = SwStyle.text(this, 14f, SwStyle.color(this, R.color.laser_danger), bold = true).apply {
             id = R.id.toolResultError
@@ -575,6 +610,11 @@ class ToolResultActivity : BaseActivity() {
         column.addView(errorView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 6f) })
+        column.addView(textAction(getString(R.string.rs_retry)).apply {
+            tag = "result-retry"
+            visibility = View.GONE
+            setOnClickListener { retrySave?.invoke() }
+        })
 
         if (alreadyCompact) {
             bottomBar = LinearLayout(this).apply {
@@ -628,7 +668,7 @@ class ToolResultActivity : BaseActivity() {
             id = R.id.rsMoreLocation
             visibility = View.GONE
         }
-        morePanel.addView(moreLocation, LinearLayout.LayoutParams(
+        column.addView(moreLocation, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
         moreNote = SwStyle.text(this, 14f, SwStyle.color(this, R.color.sw_text_secondary)).apply {
@@ -717,30 +757,44 @@ class ToolResultActivity : BaseActivity() {
             )
         }
         val open = button(getString(R.string.tools_result_open), R.id.toolResultOpen,
-            primary = true, icon = R.drawable.ic_sym_folder_open) { open() }
+            icon = R.drawable.ic_sym_folder_open) { open() }
         val share = button(getString(R.string.tools_result_share), R.id.toolResultShare,
+            primary = resultSpec.primary == ResultSpec.Action.SHARE,
             icon = R.drawable.ic_sym_share) { share() }
-        var proofWasVisible = false
         val more = button(getString(R.string.rs_more), R.id.toolResultMore) {
             val opening = morePanel.visibility != View.VISIBLE
-            // Options replace the proof surface instead of stacking another screenful of facts.
-            if (opening) {
-                proofWasVisible = compareView?.visibility == View.VISIBLE
-                compareView?.visibility = View.GONE
-            } else if (proofWasVisible) {
-                compareView?.visibility = View.VISIBLE
-            }
             morePanel.visibility = if (opening) View.VISIBLE else View.GONE
             findViewById<TextView>(R.id.toolResultMore)?.text = getString(
                 if (opening) R.string.tools_result_fewer_options else R.string.rs_more
             )
         }
-        val actions = listOf(open, share, more)
+        val secondary = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = "result-secondary"
+        }
+        val actions = buildList {
+            if (resultSpec.adjustIntent != null) add(
+                button(getString(R.string.rs_adjust), tag = "result-adjust") { adjust() }
+            )
+            add(open)
+            if (resultSpec.primary != ResultSpec.Action.SHARE) add(share)
+            add(more)
+        }
         actions.forEach { action ->
-            bottomBar.addView(action, LinearLayout.LayoutParams(
+            secondary.addView(action, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
+        column.addView(secondary)
+        column.removeView(morePanel)
+        column.addView(morePanel)
+        val primary = if (resultSpec.primary == ResultSpec.Action.SHARE) share else
+            button(getString(R.string.rs_save_to_phone), tag = "result-primary", primary = true,
+                icon = R.drawable.ic_sym_download) { alsoSave() }.also { phonePrimary = it }
+        primary.tag = "result-primary"
+        bottomBar.addView(primary, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         root.addView(bottomBar, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = SwStyle.dp(this@ToolResultActivity, 8f) })
@@ -760,7 +814,7 @@ class ToolResultActivity : BaseActivity() {
 
     /** A quiet tertiary control (the "More options" disclosure): text, 48dp tall, no box. */
     private fun textAction(text: String): TextView =
-        SwStyle.text(this, 15f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+        SwStyle.text(this, SwType.BODY_SP, SwStyle.color(this, R.color.text_hologram_mid)).apply {
             this.text = text
             gravity = Gravity.CENTER
             minimumHeight = SwStyle.dp(this@ToolResultActivity, 50f)
@@ -776,7 +830,7 @@ class ToolResultActivity : BaseActivity() {
         icon: Int? = null,
         onClick: () -> Unit
     ): TextView =
-        SwStyle.text(this, 15f, SwStyle.color(
+        SwStyle.text(this, SwType.BODY_SP, SwStyle.color(
             this, if (primary) R.color.sw_disc_ink else R.color.text_hologram_hi
         ), bold = true).apply {
             if (id != View.NO_ID) this.id = id
@@ -797,7 +851,7 @@ class ToolResultActivity : BaseActivity() {
                 compoundDrawablePadding = SwStyle.dp(this@ToolResultActivity, 12f)
             }
             // L3-02: every primary/secondary action clears the 56dp decision target.
-            minimumHeight = SwStyle.dp(this@ToolResultActivity, 56f)
+            minimumHeight = SwStyle.dp(this@ToolResultActivity, SwStyle.TOUCH_MIN_DP)
             background = if (primary) {
                 SwStyle.rounded(this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.cyan_primary), radiusDp = 16f)
             } else {
@@ -938,7 +992,8 @@ class ToolResultActivity : BaseActivity() {
             // measurement paragraph) is detail: it lives in More, never on the face of the screen.
             val fact = measuredFactFromNote(note)
                 ?: intent.getStringExtra(EXTRA_COMPARE_OUTCOME)?.takeIf { it.isNotBlank() }
-                ?: (if (pages > 0) resources.getQuantityString(R.plurals.rs_fact_pages, pages, pages) else null)
+                ?: (if (pages > 0) resources.getQuantityString(R.plurals.rs_fact_pages, pages, pages) +
+                    " · " + StatusLine.formatBytes(measured) else null)
                 ?: (if (measured > 0L) getString(R.string.compress_result_size, StatusLine.formatBytes(measured)) else null)
                 ?: getString(R.string.tools_result_nothing)
             summary.text = fact
@@ -959,12 +1014,7 @@ class ToolResultActivity : BaseActivity() {
             previewHost.visibility = View.VISIBLE
             preview.visibility = View.VISIBLE
             previewPreview(docs.firstOrNull()?.pageFiles?.firstOrNull())
-        } else {
-            previewHost.visibility = View.GONE
-            if (docs.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
-                showFileCard(files.first())
-            }
-        }
+        } else bindOutputPreview()
         renderMoreLocation()
         moreNote?.let { view ->
             // UX_RULES_SCANNER: never the full producer paragraph. At most a 2-line summary
@@ -1011,6 +1061,9 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun renderMoreLocation() {
+        val name = docIds.firstOrNull()?.let { repo.getDocument(it)?.name }
+            ?: files.firstOrNull()?.name.orEmpty()
+        renderSavedLine(name)
         moreLocation?.let { view ->
             val text = chosenLocationName?.let { name ->
                 getString(R.string.rs_where_chosen) + " · " + name
@@ -1021,7 +1074,7 @@ class ToolResultActivity : BaseActivity() {
             } ?: when {
                 // The saved row plus Show in library already establish this copy's location.
                 docIds.isNotEmpty() -> null
-                files.isNotEmpty() -> getString(R.string.rs_unsaved_output)
+                files.isNotEmpty() -> null
                 else -> null
             }
             view.isVisible = text != null
@@ -1072,23 +1125,53 @@ class ToolResultActivity : BaseActivity() {
             return
         }
         savedLine.isVisible = true
-        val prefix = getString(R.string.rs_saved_prefix)
-        val suffix = when {
-            sourceKept -> getString(R.string.rs_saved_suffix_kept)
-            receiptSourceId == null -> getString(R.string.rs_saved_suffix_no_source)
-            repo.getDocument(receiptSourceId!!) != null -> getString(R.string.rs_saved_suffix_kept)
-            else -> getString(R.string.rs_saved_suffix_missing)
+        savedLine.text = when {
+            docIds.any { repo.getDocument(it) != null } -> getString(R.string.rs_library_as, name)
+            chosenLocationName != null -> getString(R.string.rs_where_chosen) + "\n" + chosenLocationName
+            savedCopy != null -> getString(R.string.rs_where_documents) + "\n" + savedCopy!!.name
+            documentsExistingName != null -> getString(R.string.rs_where_documents_existing) + "\n" + documentsExistingName
+            else -> getString(R.string.rs_not_saved_yet)
         }
-        val start = prefix.length
-        val end = start + name.length
-        SpannableString(prefix + name + suffix).apply {
-            setSpan(object : ClickableSpan() {
-                override fun onClick(widget: View) = open()
-            }, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            savedLine.text = this
+        savedLine.contentDescription = savedLine.text
+    }
+
+    /** Decode only actual output bytes, with library protection rechecked on IO. */
+    private fun bindOutputPreview() {
+        previewHost.isVisible = false
+        preview.isVisible = false
+        if (toolId in noVisualTools || alreadyCompact) return
+        if (isCompressResult || toolId in markTools) return
+        lifecycleScope.launch {
+            val measured = withContext(Dispatchers.IO) {
+                val doc = docIds.firstOrNull()?.let { repo.getDocument(it) }
+                val source = receiptSourceId?.let { repo.getDocument(it) }
+                if (doc?.isLocked == true || doc?.isVaulted == true ||
+                    source?.isLocked == true || source?.isVaulted == true) return@withContext null
+                val file = doc?.pageFiles?.firstOrNull() ?: files.firstOrNull()?.takeIf {
+                    mime.startsWith("image/") && it.canonicalPath.startsWith(cacheDir.canonicalPath + File.separator)
+                } ?: return@withContext null
+                val bitmap = runCatching { ImageTools.decodeSampledFile(file, 900) }.getOrNull()
+                    ?: return@withContext null
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(file.path, bounds)
+                Triple(bitmap, bounds.outWidth, bounds.outHeight)
+            } ?: return@launch
+            if (isFinishing || undone) { measured.first.recycle(); return@launch }
+            preview.setImageBitmap(measured.first)
+            preview.isVisible = true
+            previewHost.isVisible = true
+            if (docIds.isEmpty()) {
+                val bytes = files.sumOf { it.length() }
+                val size = if (toolId == "form_ready")
+                    String.format(java.util.Locale.getDefault(), "%.1f KB", bytes / 1024.0)
+                else StatusLine.formatBytes(bytes)
+                summary.text = getString(R.string.rs_image_facts, measured.second, measured.third, size)
+            }
         }
-        savedLine.contentDescription = getString(R.string.rs_saved_line_a11y, name)
+        if (docIds.isEmpty() && files.size == 1 && isTypedFile(files.first())) {
+            previewHost.isVisible = true
+            showFileCard(files.first())
+        }
     }
 
     /** Rounding can print "1.6 MB → 1.6 MB"; the chip then states the real signed delta. */
@@ -1468,6 +1551,7 @@ class ToolResultActivity : BaseActivity() {
     }
 
     private fun save() {
+        retrySave = { save() }
         val name = suggestedName() ?: return fail(getString(R.string.tools_result_nothing))
         saveAs.launch(name)
     }
@@ -1479,6 +1563,8 @@ class ToolResultActivity : BaseActivity() {
      * and an Undo that removes only the copy this save created.
      */
     private fun alsoSave() {
+        if (phoneSaveBusy) return
+        retrySave = { alsoSave() }
         // H2-4: before Android 10 this copy lands in the public Documents folder through a plain
         // file, which needs the runtime storage grant. Ask with a plain reason instead of letting
         // the write fail on EACCES and showing its raw system text.
@@ -1497,6 +1583,9 @@ class ToolResultActivity : BaseActivity() {
         // A single document result is that document's own PDF, so the copy is recorded against
         // it like any other export of it (delete-with-document then knows the copy).
         val docId = docIds.singleOrNull()
+        phoneSaveBusy = true
+        phonePrimary?.isEnabled = false
+        clearFail()
         lifecycleScope.launch {
             try {
                 val saved = withContext(Dispatchers.IO) {
@@ -1539,6 +1628,10 @@ class ToolResultActivity : BaseActivity() {
                 throw e
             } catch (e: Exception) {
                 fail(getString(R.string.tools_result_save_failed, e.message ?: ""))
+            } finally {
+                phoneSaveBusy = false
+                if (savedCopy == null && documentsExistingName == null && chosenLocationName == null)
+                    phonePrimary?.isEnabled = true
             }
         }
     }
@@ -1548,12 +1641,22 @@ class ToolResultActivity : BaseActivity() {
         alsoSaveButton?.text = getString(R.string.rs_saved_documents)
         alsoSaveButton?.isEnabled = false
         saveAnotherCopy?.isVisible = true
+        phonePrimary?.apply {
+            text = getString(R.string.rs_saved_documents)
+            isEnabled = false
+        }
+        renderMoreLocation()
     }
 
     private fun markDocumentsNotSaved() {
         alsoSaveButton?.text = getString(R.string.tools_result_also_save)
         alsoSaveButton?.isEnabled = true
         saveAnotherCopy?.isVisible = false
+        phonePrimary?.apply {
+            text = getString(R.string.rs_save_to_phone)
+            isEnabled = true
+        }
+        renderMoreLocation()
     }
 
     /** The type the Documents copy is indexed with: a document's PDF, a ZIP, or the result's own. */
@@ -1630,6 +1733,7 @@ class ToolResultActivity : BaseActivity() {
                 // that really exists, never the suggestion we asked for.
                 val created = withContext(Dispatchers.IO) { createdName(uri, suggested) }
                 chosenLocationName = created
+                phonePrimary?.isEnabled = false
                 refreshLocationLines()
                 renderMoreLocation()
                 persistReceipt()
@@ -1734,6 +1838,12 @@ class ToolResultActivity : BaseActivity() {
         finish()
     }
 
+    private fun adjust() {
+        val target = resultSpec.adjustIntent ?: return
+        startActivity(Intent(target).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
+    }
+
     private fun undo() {
         if (undone || undoChecking) return
         undoChecking = true
@@ -1834,7 +1944,7 @@ class ToolResultActivity : BaseActivity() {
     // ---- ID card: Keep / Discard (F1/W3) ----------------------------------
 
     private fun handleBack() {
-        if (idCardFlow) confirmDiscardIdCard() else finish()
+        if (idCardFlow) confirmDiscardIdCard() else showInLibrary()
     }
 
     /** Back on a saved ID card asks before anything is deleted. */
@@ -1889,12 +1999,14 @@ class ToolResultActivity : BaseActivity() {
     private fun fail(message: String) {
         errorView.text = message
         errorView.isVisible = true
+        rootView.findViewWithTag<View>("result-retry")?.isVisible = retrySave != null
     }
 
     /** H2-4: a granted permission clears the reason line it was asked with. */
     private fun clearFail() {
         errorView.text = ""
         errorView.isVisible = false
+        rootView.findViewWithTag<View>("result-retry")?.isVisible = false
     }
 
     private fun defaultMime(): String = when {
@@ -1989,6 +2101,11 @@ class ToolResultActivity : BaseActivity() {
         /** fixidcrop: the card page's dark preview backdrop (ink fill, 1dp #33FFFFFF line). */
         private const val ID_PREVIEW_LINE = 0x33FFFFFF
         private const val ID_PREVIEW_PADDING_DP = 10f
+
+        fun intent(
+            context: Context,
+            spec: ResultSpec
+        ): Intent = Intent(context, ToolResultActivity::class.java).putExtras(spec.toBundle())
 
         fun intent(
             context: Context,

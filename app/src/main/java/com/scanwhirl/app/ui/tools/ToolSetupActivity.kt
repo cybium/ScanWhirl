@@ -1647,8 +1647,9 @@ class ToolSetupActivity : BaseActivity() {
         if (ids.isEmpty()) return fail(getString(R.string.tools_result_nothing))
         startActivity(
             ToolResultActivity.intent(
-                this, tool.id, docIds = ids, targetBytes = targetBytes,
-                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity
+                this, com.scanwhirl.app.ui.result.ResultSpec(tool.id, docIds = ids, targetBytes = targetBytes,
+                receiptSourceId = receiptSourceId, outputIdentity = outputIdentity,
+                adjustIntent = Intent(intent))
             )
         )
     }
@@ -1660,8 +1661,8 @@ class ToolSetupActivity : BaseActivity() {
         outputIdentity: String? = null
     ) {
         if (files.isEmpty()) return fail(getString(R.string.tools_result_nothing))
-        startActivity(ToolResultActivity.intent(this, tool.id, files = files,
-            mime = mime, note = note, outputIdentity = outputIdentity))
+        startActivity(ToolResultActivity.intent(this, com.scanwhirl.app.ui.result.ResultSpec(tool.id, files = files,
+            mime = mime, note = note, outputIdentity = outputIdentity, adjustIntent = Intent(intent))))
     }
 
     /** Blocking helpers: called only inside execute()'s Dispatchers.IO block. */

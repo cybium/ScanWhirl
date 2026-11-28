@@ -339,22 +339,13 @@ class ResizeFlow(
                     )
                 } else null
                 activity.startActivity(
-                    ExportResultActivity.intent(
-                        activity,
-                        outputPath = file.path,
-                        previewPath = file.path,
-                        mime = result.mime,
-                        displayName = fileName,
-                        beforeBytes = bytes.size.toLong(),
-                        afterBytes = saved.first,
-                        width = saved.second ?: result.width,
-                        height = saved.third ?: result.height,
-                        title = name,
-                        warning = warning,
-                        // No no-gain outcome from Resize: the exact requested image exists.
-                        outcome = null,
-                        toolId = "resize"
-                    )
+                    com.scanwhirl.app.ui.tools.ToolResultActivity.intent(activity,
+                        com.scanwhirl.app.ui.result.ResultSpec("resize", files = listOf(file),
+                            mime = result.mime, beforeBytes = bytes.size.toLong(), note = warning,
+                            outputIdentity = withContext(Dispatchers.IO) {
+                                com.scanwhirl.app.ui.tools.ToolResultActivity.captureOutputIdentityBlocking(
+                                    activity, emptyList(), listOf(file))
+                            }))
                 )
             } catch (e: CancellationException) {
                 throw e

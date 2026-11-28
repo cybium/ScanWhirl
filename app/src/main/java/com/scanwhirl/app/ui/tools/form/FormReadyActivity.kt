@@ -1206,13 +1206,13 @@ class FormReadyActivity : BaseActivity() {
                 val note = buildNote(file, targetW, targetH, dpiNow, minNow, maxNow)
                 lastNoteForTest = note
                 startActivity(ToolResultActivity.intent(
-                    this@FormReadyActivity, TOOL_ID,
+                    this@FormReadyActivity, com.scanwhirl.app.ui.result.ResultSpec(TOOL_ID,
                     files = listOf(file), mime = "image/jpeg", note = note,
-                    outputIdentity = identity
-                ))
+                    outputIdentity = identity, adjustIntent = android.content.Intent(intent)
+                )))
                 // SEC2 N3: ownership moves to the result screen before this exits.
                 outputHandedOff = true
-                finish()
+                // Keep this exact source, rules and framing alive for Adjust.
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OutOfMemoryError) {

@@ -2,6 +2,17 @@
 <!-- Lane rs: Hindi parity for the compact result screen. Glossary: फ़ाइल, प्रति, पन्ना,
      मूल फ़ाइल, छोटा करना, तस्वीर; no loanwords, full stop at sentence ends. -->
 <resources>
+    <string name="rs_photo_ready">फ़ोटो तैयार है</string>
+    <string name="rs_copy_ready">PDF तैयार है</string>
+    <string name="rs_file_ready">फ़ाइल तैयार है</string>
+    <string name="rs_not_saved_yet">अभी सहेजा नहीं है</string>
+    <string name="rs_library_as">आपकी ScanWhirl लाइब्रेरी में “%1$s” नाम से सहेजी गई</string>
+    <string name="rs_image_facts">%1$d × %2$d px · JPG · %3$s</string>
+    <string name="rs_save_to_phone">फ़ोन में सहेजें</string>
+    <string name="rs_adjust">बदलाव करें</string>
+    <string name="rs_retry">फिर कोशिश करें</string>
+    <string name="rs_new">नई</string>
+    <string name="rs_about_short">ScanWhirl %1$s\nदस्तावेज़ आपके फ़ोन में रहते हैं।</string>
     <string name="rs_size_hero">%1$s → %2$s</string>
     <string name="rs_chip_percent"> %1$d%% छोटी</string>
     <string name="rs_chip_ratio"> %1$d गुना छोटी</string>

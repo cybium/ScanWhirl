@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Lane rs: the compact, honest result screen. Every visible line has EN/HI parity. -->
 <resources>
+    <string name="rs_photo_ready">Photo ready</string>
+    <string name="rs_copy_ready">PDF ready</string>
+    <string name="rs_file_ready">File ready</string>
+    <string name="rs_not_saved_yet">Not saved yet</string>
+    <string name="rs_library_as">In your ScanWhirl library as “%1$s”</string>
+    <string name="rs_image_facts">%1$d × %2$d px · JPG · %3$s</string>
+    <string name="rs_save_to_phone">Save to phone</string>
+    <string name="rs_adjust">Adjust</string>
+    <string name="rs_retry">Retry</string>
+    <string name="rs_new">New</string>
+    <string name="rs_about_short">ScanWhirl %1$s\nDocuments stay on your phone.</string>
     <!-- The one hero line for a size tool. -->
     <string name="rs_size_hero">%1$s → %2$s</string>
     <string name="rs_chip_percent"> %1$d%% smaller</string>

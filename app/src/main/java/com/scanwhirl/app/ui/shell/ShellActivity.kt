@@ -598,7 +598,7 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
         bar.addView(toolsItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         // V2L device reflow: at 200 % a 86dp disc gap starves "Library" and "Tools" into
         // mid-word breaks on a 393-411dp phone. Reclaim most of it for the four cells.
-        val discGap = if (resources.configuration.fontScale >= 1.6f) 36f else 86f
+        val discGap = if (resources.configuration.fontScale >= 1.6f) 0f else 86f
         bar.addView(View(this), LinearLayout.LayoutParams(SwStyle.dp(this, discGap), 1))
         bar.addView(vaultItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(meItem, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -611,7 +611,10 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ).apply {
                 gravity = Gravity.BOTTOM
                 val m = SwStyle.dp(this@ShellActivity, 12f)
-                setMargins(m, 0, m, SwStyle.dp(this@ShellActivity, 12f))
+                // At 200% the Scan action has its own row, never a hit area over tab labels.
+                val scanRow = if (resources.configuration.fontScale >= 1.6f)
+                    SwStyle.dp(this@ShellActivity, 84f) else 0
+                setMargins(m, scanRow, m, SwStyle.dp(this@ShellActivity, 12f))
             }
         )
         container.addView(buildDisc(), FrameLayout.LayoutParams(
@@ -999,12 +1002,17 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             "\n\n" + getString(R.string.trust_offline_no_ads)
         SwSheet.builder(this)
             .setTitle(getString(R.string.about_title))
-            .setMessage(message)
+            .setMessage(getString(R.string.rs_about_short, versionName()) + "\n" + getString(R.string.trust_offline_no_ads))
             .setOptions(
-                listOf(getString(R.string.settings_privacy), getString(R.string.about_licences)),
+                listOf(getString(R.string.settings_privacy), getString(R.string.about_licences),
+                    getString(R.string.rs_more)),
                 -1
             ) { which, _ ->
-                if (which == 0) openPrivacyPolicy() else showLicences()
+                when (which) {
+                    0 -> openPrivacyPolicy()
+                    1 -> showLicences()
+                    else -> SwSheet.note(this, getString(R.string.about_title), message)
+                }
             }
             .setPrimary(R.string.sheet_got_it)
             .build()

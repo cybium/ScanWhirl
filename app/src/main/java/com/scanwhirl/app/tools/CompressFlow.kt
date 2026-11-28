@@ -548,8 +548,8 @@ class CompressFlow(
                 val before = if (doc.pdfFile.exists()) doc.pdfFile.length() else 0L
                 val out = repo.compressScanForResult(doc.id, level.quality, level.maxDim)
                 if (out == null) {
-                    activity.startActivity(ToolResultActivity.intent(activity, "compress",
-                        beforeBytes = before, receiptSourceId = doc.id, outcomeClass = "NOT_SMALLER"))
+                    activity.startActivity(ToolResultActivity.intent(activity, com.scanwhirl.app.ui.result.ResultSpec("compress",
+                        beforeBytes = before, receiptSourceId = doc.id, outcomeClass = "NOT_SMALLER")))
                     return@launch
                 }
                 val after = if (out.pdfFile.exists()) out.pdfFile.length() else 0L
@@ -589,9 +589,9 @@ class CompressFlow(
                     activity.runOnUiThread { progress.setProgress(done, total) }
                 })
                 if (out == null) {
-                    activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                    activity.startActivity(ToolResultActivity.intent(activity, com.scanwhirl.app.ui.result.ResultSpec("compress",
                         targetBytes = target, beforeBytes = before, receiptSourceId = doc.id,
-                        outcomeClass = "NOT_SMALLER"))
+                        outcomeClass = "NOT_SMALLER")))
                     return@launch
                 }
                 host.refreshList()
@@ -665,6 +665,7 @@ class CompressFlow(
         activity.startActivity(
             ToolResultActivity.intent(
                 activity,
+                com.scanwhirl.app.ui.result.ResultSpec(
                 toolId = "compress",
                 docIds = listOf(out.id), // the new copy only: Undo never touches the source
                 targetBytes = target,
@@ -675,7 +676,7 @@ class CompressFlow(
                 compressTargetMissed = missed,
                 compressGrew = grew,
                 receiptSourceId = receiptSourceId,
-                outputIdentity = outputIdentity
+                outputIdentity = outputIdentity)
             )
         )
     }
@@ -791,9 +792,9 @@ class CompressFlow(
             } catch (e: ScanRepository.NotSmaller) {
                 // Rejected inside staging: nothing was published; the durable receipt is saved.
                 sheet?.dismiss()
-                activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                activity.startActivity(ToolResultActivity.intent(activity, com.scanwhirl.app.ui.result.ResultSpec("compress",
                     targetBytes = e.target, beforeBytes = e.before.takeIf { it > 0 },
-                    outcomeClass = "NOT_SMALLER"))
+                    outcomeClass = "NOT_SMALLER")))
             } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(
@@ -859,9 +860,9 @@ class CompressFlow(
             } catch (e: ScanRepository.NotSmaller) {
                 // Rejected inside staging: nothing was published; the durable receipt is saved.
                 sheet?.dismiss()
-                activity.startActivity(ToolResultActivity.intent(activity, "compress",
+                activity.startActivity(ToolResultActivity.intent(activity, com.scanwhirl.app.ui.result.ResultSpec("compress",
                     targetBytes = e.target, beforeBytes = e.before.takeIf { it > 0 },
-                    outcomeClass = "NOT_SMALLER"))
+                    outcomeClass = "NOT_SMALLER")))
             } catch (e: Throwable) {
                 sheet?.dismiss()
                 Toast.makeText(

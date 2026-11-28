@@ -145,7 +145,7 @@ abstract class ResultRedesignRsBase {
     }
 
     @Test(timeout = 30_000)
-    fun `Open Share and More are on screen and do not overlap`() {
+    fun `Share is pinned and secondary navigation scrolls without overlapping`() {
         var controller: ActivityController<ToolResultActivity>? = null
         try {
             controller = Robolectric.buildActivity(ToolResultActivity::class.java, compressIntent())
@@ -153,9 +153,12 @@ abstract class ResultRedesignRsBase {
             idle()
             val activity = controller.get()
             layoutScreen(activity)
-            val ids = listOf(R.id.toolResultOpen, R.id.toolResultShare, R.id.toolResultMore)
+            val ids = listOf(R.id.toolResultShare)
             val views = ids.map { activity.findViewById<View>(it) }
             views.forEach { assertNotNull("action exists", it) }
+            assertNotNull("Open is reachable in the scrolling content", activity.findViewById<View>(R.id.toolResultOpen))
+            assertNotNull("More is reachable in the scrolling content", activity.findViewById<View>(R.id.toolResultMore))
+            assertNotNull("the secondary group scrolls", activity.window.decorView.findViewWithTag<View>("result-secondary"))
             val boxes = views.map { v ->
                 val loc = intArrayOf(0, 0)
                 v!!.getLocationOnScreen(loc)

@@ -337,21 +337,9 @@ class LockFlow(
             return
         }
         activity.startActivity(
-            ExportResultActivity.intent(
-                activity,
-                outputPath = doc.pdfFile.path,
-                previewPath = doc.pageFiles.firstOrNull()?.path,
-                mime = "application/pdf",
-                displayName = DownloadSaver.pdfNameFor(doc.name),
-                beforeBytes = 0L,
-                afterBytes = doc.pdfFile.length(),
-                width = 0,
-                height = 0,
-                title = activity.getString(R.string.protect_sheet_title),
-                warning = null,
-                docId = doc.id,
-                summary = activity.getString(R.string.protect_result_summary, doc.name)
-            )
+            com.scanwhirl.app.ui.tools.ToolResultActivity.intent(activity,
+                com.scanwhirl.app.ui.result.ResultSpec("protect", docIds = listOf(doc.id),
+                    mime = "application/pdf", receiptSourceId = doc.id))
         )
     }
 
@@ -438,21 +426,10 @@ class LockFlow(
                         ShareUtils.share(activity, locked)
                     } else {
                         activity.startActivity(
-                            ExportResultActivity.intent(
-                                activity,
-                                outputPath = locked.pdfFile.path,
-                                previewPath = locked.pageFiles.firstOrNull()?.path,
-                                mime = "application/pdf",
-                                displayName = DownloadSaver.pdfNameFor(locked.name),
-                                beforeBytes = before,
-                                afterBytes = locked.pdfFile.length(),
-                                width = 0,
-                                height = 0,
-                                title = activity.getString(R.string.lock_device_title),
-                                warning = activity.getString(R.string.lock_device_note),
-                                docId = locked.id, // T4.8: record the saved copy on this document
-                                summary = activity.getString(R.string.protect_result_summary, locked.name)
-                            )
+                            com.scanwhirl.app.ui.tools.ToolResultActivity.intent(activity,
+                                com.scanwhirl.app.ui.result.ResultSpec("protect",
+                                    docIds = listOf(locked.id), mime = "application/pdf",
+                                    beforeBytes = before, note = activity.getString(R.string.lock_device_note)))
                         )
                     }
                 }
@@ -545,20 +522,10 @@ class LockFlow(
                 val clean = withContext(Dispatchers.IO) { repo.unlockedPreviewPdf(doc.id, grant) }
                 progress.dismiss()
                 activity.startActivity(
-                    ExportResultActivity.intent(
-                        activity,
-                        outputPath = clean.path,
-                        previewPath = doc.pageFiles.firstOrNull()?.path,
-                        mime = "application/pdf",
-                        displayName = DownloadSaver.pdfNameFor("${doc.name} (unlocked)"),
-                        beforeBytes = before,
-                        afterBytes = clean.length(),
-                        width = 0,
-                        height = 0,
-                        title = activity.getString(R.string.unlock_pdf_title),
-                        warning = activity.getString(R.string.unlock_device_note),
-                        docId = doc.id // T4.8: record the saved copy on this document
-                    )
+                    com.scanwhirl.app.ui.tools.ToolResultActivity.intent(activity,
+                        com.scanwhirl.app.ui.result.ResultSpec("unlock", files = listOf(clean),
+                            mime = "application/pdf", beforeBytes = before,
+                            receiptSourceId = doc.id, note = activity.getString(R.string.unlock_device_note)))
                 )
             } catch (e: PdfProtection.WrongPassword) {
                 progress.dismiss()
