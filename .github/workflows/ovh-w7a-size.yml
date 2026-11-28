@@ -1,0 +1,107 @@
+name: W7a PDF engine size measurement
+
+on:
+  push:
+    branches: ["ci/ovh-w7a"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Minified release APK (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: branch
+            ref: ${{ github.sha }}
+          - label: base
+            ref: f9031f9e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Assemble minified release APK (R8 + shrinking, no keystore)
+        run: |
+          set -e
+          ./gradlew :app:assembleRelease -PciUnsignedRelease --no-daemon --stacktrace > r8-build.log 2>&1 || {
+            tail -n 100 r8-build.log
+            exit 1
+          }
+          tail -n 20 r8-build.log
+
+      - name: Record APK bytes and dex method ids
+        run: |
+          python3 - <<'PY' > size-${{ matrix.label }}.txt
+          import glob, os, struct, zipfile
+          apks = sorted(glob.glob("app/build/outputs/apk/release/*.apk"))
+          assert apks, "no release APK"
+          for apk in apks:
+              z = zipfile.ZipFile(apk)
+              methods = 0
+              for name in z.namelist():
+                  if name.startswith("classes") and name.endswith(".dex"):
+                      data = z.read(name)
+                      # dex_header.method_ids_size, little-endian, offset 56
+                      methods += struct.unpack_from("<I", data, 56)[0]
+              print(f"apk={os.path.basename(apk)} bytes={os.path.getsize(apk)} dex_method_ids={methods}")
+          PY
+          cat size-${{ matrix.label }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w7a-size-${{ matrix.label }}
+          path: size-${{ matrix.label }}.txt
+          retention-days: 7
+
+  compare:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: sizes
+
+      - name: Compute exact deltas
+        run: |
+          python3 - <<'PY' | tee w7a-size-report.txt | tee "$GITHUB_STEP_SUMMARY"
+          import glob, re
+          def read(label):
+              files = glob.glob(f"sizes/w7a-size-{label}/size-{label}.txt")
+              assert files, f"missing artifact for {label}"
+              rows = {}
+              for line in open(files[0]):
+                  m = re.match(r"apk=(\S+) bytes=(\d+) dex_method_ids=(\d+)", line.strip())
+                  if m: rows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+              assert rows, "no APK rows"
+              return rows
+          branch = read("branch")
+          base = read("base")
+          print("### W7a minified release APK delta (branch - base)")
+          print("| APK | base bytes | branch bytes | delta bytes | base methods | branch methods | delta methods |")
+          print("|---|---:|---:|---:|---:|---:|---:|")
+          for apk in sorted(set(branch) | set(base)):
+              b, bm = base.get(apk, (0, 0))
+              c, cm = branch.get(apk, (0, 0))
+              print(f"| {apk} | {b} | {c} | {c-b} | {bm} | {cm} | {cm-bm} |")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w7a-size-report
+          path: w7a-size-report.txt
+          retention-days: 7

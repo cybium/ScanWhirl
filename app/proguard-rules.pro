@@ -66,3 +66,16 @@
 # those unresolved references; nothing calls them at runtime.
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.**
+
+# ---- PDFBox-Android (W7a) ------------------------------------------------
+
+# The AAR's POM declares Bouncy Castle, but the dependency is excluded and the
+# encryption paths are never called (the app's pure-JCA PdfEncryptor/PdfDecryptor
+# handle all passwords). R8 still sees those dangling references and must not
+# fail the build on them.
+-dontwarn org.bouncycastle.**
+-dontwarn com.tom_roush.pdfbox.pdmodel.encryption.**
+
+# Standard-14 AFM resources and the embedded-font loader are reached from asset
+# names, not from bytecode references. Keep the font model intact.
+-keep class com.tom_roush.pdfbox.pdmodel.font.** { *; }

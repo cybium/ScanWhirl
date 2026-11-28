@@ -273,6 +273,15 @@ dependencies {
     // Hindi OCR (lead-approved, PM-6.3): bundled Devanagari model, works fully offline.
     implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 
+    // W7a: PDFBox page-object engine. Bouncy Castle is excluded: ScanWhirl uses its own
+    // pure-JCA PdfEncryptor/PdfDecryptor for every password operation, so PDFBox's
+    // crypto provider is never on the classpath and never called.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+        exclude(group = "org.bouncycastle", module = "bcpkix-jdk15to18")
+        exclude(group = "org.bouncycastle", module = "bcutil-jdk15to18")
+    }
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core-ktx:1.6.1")
