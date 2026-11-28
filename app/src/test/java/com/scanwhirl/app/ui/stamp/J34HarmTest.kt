@@ -9,6 +9,7 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.widget.CheckBox
+import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
@@ -102,6 +103,31 @@ class J34HarmTest {
 
     private fun cAdd(s: StampEditorActivity) {
         canvas(s).listener!!.onBox(StampCanvasView.Tool.REDACT, PageStamp.Box(.1f,.1f,.4f,.2f))
+    }
+
+    @Test fun `review shows the captured boxes on every affected page`() {
+        val s = screen(3)
+        val c = canvas(s)
+        val first = PageStamp.Box(.1f,.1f,.4f,.2f)
+        val third = PageStamp.Box(.5f,.6f,.9f,.8f)
+        c.listener!!.onBox(StampCanvasView.Tool.REDACT, first)
+        s.findViewById<View>(R.id.nextPage).performClick()
+        s.findViewById<View>(R.id.nextPage).performClick()
+        c.listener!!.onBox(StampCanvasView.Tool.REDACT, third)
+        val captured = s.editor.edits()
+        s.openReview()
+        val dialog = ShadowDialog.getLatestDialog()!!
+        val root = dialog.window!!.decorView
+        fun preview() = J34TestFlow.all(root).first { it.tag == "review-page" } as StampCanvasView
+        assertEquals("page 1 shows exactly the captured box",
+            captured.first { it.pageIndex == 0 }.marks, preview().marks)
+        val next = J34TestFlow.all(root).filterIsInstance<TextView>()
+            .first { it.text.toString() == s.getString(R.string.stamp_next_page) }
+        next.performClick()
+        assertEquals("page 3 shows its own captured box, not page 1's",
+            captured.first { it.pageIndex == 2 }.marks, preview().marks)
+        assertEquals(3, preview().pageNumber)
+        assertNotEquals(captured.first { it.pageIndex == 0 }.marks, preview().marks)
     }
 
     @Test fun `an edit invalidates the review`() {
@@ -222,10 +248,12 @@ class J34HarmTest {
         // Robolectric cannot decode the fixture page through BitmapFactory, so the canvas has no
         // page rectangle yet. Give it an upright raster; the named-node assertions stay unchanged.
         if (c.pageBitmap == null) c.pageBitmap = Bitmap.createBitmap(600,900,Bitmap.Config.ARGB_8888)
-        val provider = androidx.core.view.ViewCompat.getAccessibilityNodeProvider(c)!!
-        val node = provider.createAccessibilityNodeInfo(0)!!
+        // The platform provider delegates to ExploreByTouchHelper; ViewCompat's wrapper does not
+        // implement node creation or performAction, so it can never prove the TalkBack path.
+        val provider = requireNotNull(c.accessibilityNodeProvider) { "canvas must expose virtual nodes" }
+        val node = requireNotNull(provider.createAccessibilityNodeInfo(0)) { "area 1 must be a node" }
         assertTrue(node.contentDescription.toString().contains("Hidden area 1"))
-        assertTrue(provider.performAction(0,androidx.core.view.accessibility.AccessibilityNodeInfoCompat.ACTION_CLICK,null))
+        assertTrue(provider.performAction(0,android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK,null))
         val before = (s.editor.marks().single() as PageStamp.Mark.Redact).box
         assertTrue(provider.performAction(0,R.id.a11y_grow,null))
         val after = (s.editor.marks().single() as PageStamp.Mark.Redact).box
