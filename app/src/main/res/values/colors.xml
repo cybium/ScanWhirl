@@ -92,7 +92,7 @@
     <color name="rv_danger">@color/tok_danger</color>
     <color name="rv_warn">@color/tok_warn</color>
     <color name="rv_warn_fill">@color/tok_warn_soft</color>
-    <color name="rv_scrim_badge">@color/tok_scrim</color>
+    <color name="rv_scrim_badge">@color/tok_badge_fill</color>
 
     <!-- Capture / paper. Paper stays paper in both themes (never inverted). -->
     <color name="sw_scan">@color/tok_accent</color>

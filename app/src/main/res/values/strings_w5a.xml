@@ -3,5 +3,5 @@
 <resources>
     <string name="me_theme">Theme</string>
     <string name="me_also_save_to_documents">Also save to Documents</string>
-    <string name="me_also_save_to_documents_summary">Documents/ScanWhirl.</string>
+    <string name="me_also_save_to_documents_summary">Copies go to Documents/ScanWhirl</string>
 </resources>
