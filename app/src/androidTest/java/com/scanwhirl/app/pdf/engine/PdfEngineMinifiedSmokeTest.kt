@@ -4,13 +4,19 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.test.AndroidTestCase
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.scanwhirl.app.util.PdfEncryptor
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
 
@@ -18,11 +24,9 @@ import java.io.File
  * Runs against the MINIFIED release APK (R8 + resource shrinking). Robolectric
  * builds with -PtestBuild, which disables R8, so this is the only proof that the
  * keep rules and AAR assets survive into the shipped bytecode.
- *
- * Uses the platform AndroidTestCase runner deliberately: the AndroidX runner
- * pulls androidx.tracing into the test process, which is not part of this app.
  */
-class PdfEngineMinifiedSmokeTest : AndroidTestCase() {
+@RunWith(AndroidJUnit4::class)
+class PdfEngineMinifiedSmokeTest {
 
     private fun makePdf(file: File, marker: String): File {
         PDDocument().use { doc ->
@@ -51,8 +55,9 @@ class PdfEngineMinifiedSmokeTest : AndroidTestCase() {
         return bytes.toByteArray()
     }
 
-    fun testMinifiedEngineOpensMergesOverlaysRedactsAndRoundTripsEncryption() {
-        val ctx = context
+    @Test
+    fun minifiedEngineOpensMergesOverlaysRedactsAndRoundTripsEncryption() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val dir = File(ctx.cacheDir, "w7a-minified-${System.nanoTime()}").apply { mkdirs() }
         val engine = PdfBoxEngine(ctx)
         try {

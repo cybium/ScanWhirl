@@ -288,6 +288,7 @@ dependencies {
     // The AndroidX test runner itself is Kotlin-compiled; the test APK needs the
     // stdlib on its own classpath when instrumenting the minified target APK.
     androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.20")
+    androidTestImplementation("androidx.tracing:tracing:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
