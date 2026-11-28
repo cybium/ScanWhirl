@@ -76,6 +76,10 @@ class StampImportTest {
 
         assertEquals(1, SignatureStore(context).list().size)
         assertTrue(SignatureStore(context).list().single().isBitmap)
+        val canvas = screen.findViewById<StampCanvasView>(R.id.canvas)
+        val armed = requireNotNull(canvas.placement)
+        assertTrue("import arms placement instead of guessing a location", screen.editor.isEmpty())
+        canvas.listener!!.onPlace(armed, PageStamp.Box(.2f,.3f,.6f,.5f))
         assertTrue(screen.editor.marks().single() is PageStamp.Mark.Picture)
     }
 

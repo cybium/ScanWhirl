@@ -17,10 +17,14 @@ import kotlin.math.min
  * Marks are immutable data objects and the history holds shallow copies of each page's list,
  * so an undo can never mutate a mark the screen is still drawing.
  */
-class StampEditorState(val pageCount: Int) {
+class StampEditorState(
+    val pageCount: Int,
+    private val pageIds: List<String> = List(pageCount) { "page-$it" }
+) {
 
     init {
         require(pageCount > 0) { "A document needs at least one page" }
+        require(pageIds.size == pageCount && pageIds.distinct().size == pageCount)
     }
 
     private val pages: List<MutableList<PageStamp.Mark>> = List(pageCount) { mutableListOf() }
@@ -83,6 +87,7 @@ class StampEditorState(val pageCount: Int) {
         pages[page.coerceIn(0, pageCount - 1)].toList()
 
     fun isEmpty(): Boolean = pages.all { it.isEmpty() }
+    fun pageId(page: Int = currentPage): String = pageIds[page]
 
     /** True when any page carries a redaction: the copy then destroys pixels and OCR text. */
     fun hasRedaction(): Boolean = pages.any { page -> page.any { it is PageStamp.Mark.Redact } }
@@ -241,6 +246,7 @@ class StampEditorState(val pageCount: Int) {
         out.writeInt(pageCount)
         out.writeInt(currentPage)
         out.writeInt(selected ?: -1)
+        pageIds.forEach(out::writeUTF)
         for (list in pages) {
             out.writeInt(list.size)
             for (mark in list) writeMark(out, mark)
@@ -249,16 +255,20 @@ class StampEditorState(val pageCount: Int) {
 
     /** Restores what [writeTo] wrote; throws when the bytes are not a matching editor state. */
     fun readFrom(input: DataInputStream) {
-        check(input.readInt() == VERSION) { "Unknown stamp editor state" }
+        val version = input.readInt()
+        check(version in 1..VERSION) { "Unknown stamp editor state" }
         check(input.readInt() == pageCount) { "The stamp editor state belongs to another document" }
         val page = input.readInt().coerceIn(0, pageCount - 1)
         val selectedIndex = input.readInt()
-        for (index in pages.indices) {
+        val savedIds = if (version >= 2) List(pageCount) { input.readUTF() } else pageIds
+        check(savedIds.toSet() == pageIds.toSet()) { "The source pages changed" }
+        for (savedIndex in pages.indices) {
+            val index = pageIds.indexOf(savedIds[savedIndex])
             val count = input.readInt()
             pages[index].clear()
             repeat(count) { pages[index] += readMark(input) }
         }
-        currentPage = page
+        currentPage = pageIds.indexOf(savedIds[page])
         selected = selectedIndex.takeIf { it in pages[currentPage].indices }
         // The undo history is per-screen work; a recreation restores the marks, not the steps.
         undoStack.clear()
@@ -513,7 +523,7 @@ class StampEditorState(val pageCount: Int) {
         const val MAX_HISTORY = 50
 
         /** Bumped only when [writeTo] / [readFrom] change layout. */
-        const val VERSION = 1
+        const val VERSION = 2
 
         const val TAG_SIGNATURE = "signature"
         const val TAG_PICTURE = "picture"

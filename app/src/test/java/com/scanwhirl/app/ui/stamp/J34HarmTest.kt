@@ -213,4 +213,94 @@ class J34HarmTest {
             }
         }
     }
+
+    @Test fun `TalkBack can select and resize named areas without drawing`() {
+        val s = screen(1)
+        cAdd(s)
+        val c = canvas(s)
+        c.layout(0,0,600,900)
+        val provider = androidx.core.view.ViewCompat.getAccessibilityNodeProvider(c)!!
+        val node = provider.createAccessibilityNodeInfo(0)!!
+        assertTrue(node.contentDescription.toString().contains("Hidden area 1"))
+        assertTrue(provider.performAction(0,androidx.core.view.accessibility.AccessibilityNodeInfoCompat.ACTION_CLICK,null))
+        val before = (s.editor.marks().single() as PageStamp.Mark.Redact).box
+        assertTrue(provider.performAction(0,R.id.a11y_grow,null))
+        val after = (s.editor.marks().single() as PageStamp.Mark.Redact).box
+        assertTrue(after.right-after.left > before.right-before.left)
+        assertTrue(after.bottom-after.top > before.bottom-before.top)
+    }
+
+    @Test fun `editing while review is visible disables its Save immediately`() {
+        val s = screen(1)
+        cAdd(s)
+        s.openReview()
+        val dialog = ShadowDialog.getLatestDialog()!!
+        val check = J34TestFlow.all(dialog.window!!.decorView).first { it.tag == "review-checked" } as CheckBox
+        check.isChecked = true
+        assertTrue(dialog.findViewById<View>(R.id.swSheetPrimary).isEnabled)
+        s.editor.moveBy(0,.03f,0f)
+        s.refresh()
+        assertFalse(dialog.findViewById<View>(R.id.swSheetPrimary).isEnabled)
+    }
+
+    @Test fun `cancelled move restores exact box without an undo entry`() {
+        val s = screen(1)
+        cAdd(s)
+        val c = canvas(s)
+        c.tool = StampCanvasView.Tool.SELECT
+        c.layout(0,0,600,900)
+        c.pageBitmap = Bitmap.createBitmap(600,900,Bitmap.Config.ARGB_8888)
+        val before = s.editor.marks()
+        fun touch(action: Int,x: Float,y: Float) {
+            val e = MotionEvent.obtain(0,10,action,x,y,0)
+            c.onTouchEvent(e); e.recycle()
+        }
+        touch(MotionEvent.ACTION_DOWN,155f,140f)
+        touch(MotionEvent.ACTION_MOVE,215f,190f)
+        touch(MotionEvent.ACTION_CANCEL,215f,190f)
+        assertEquals(before,s.editor.marks())
+        assertTrue("only the original add remains in history",s.editor.undo())
+        assertTrue(s.editor.isEmpty())
+        assertFalse(s.editor.canUndo)
+    }
+
+    @Test fun `a failed save retains every edit and publishes no copy`() {
+        val s = screen(1)
+        cAdd(s)
+        val id = s.intent.getStringExtra(StampEditorActivity.EXTRA_DOC_ID)!!
+        val before = s.editor.edits()
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        StampSaveRunner.submit(id,SaveMeta(before,R.string.private_info_label,J34TestFlow.COPY_NAME)) {
+            release.await()
+            throw java.io.IOException("synthetic write failure")
+        }
+        s.findViewById<View>(R.id.saveCopy).performClick()
+        J34TestFlow.completeReview()
+        J34TestFlow.confirmName()
+        release.complete(Unit)
+        val deadline = System.currentTimeMillis()+10000
+        while (StampSaveRunner.pendingFor(id) != null && System.currentTimeMillis()<deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(20)
+        }
+        assertEquals(before,s.editor.edits())
+        assertEquals(1,repo.listDocuments().size)
+        assertTrue(s.findViewById<View>(R.id.saveCopy).isEnabled)
+        assertTrue(canvas(s).isEnabled)
+    }
+
+    @Test fun `restoring a reordered source keeps boxes on their immutable page identity`() {
+        val state = StampEditorState(3,listOf("form/a","form/b","form/c"))
+        val mark = PageStamp.Mark.Redact(PageStamp.Box(.15f,.2f,.45f,.3f))
+        state.currentPage = 2
+        state.add(mark)
+        val bytes = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bytes).use { state.writeTo(it) }
+        val restored = StampEditorState(3,listOf("form/c","form/a","form/b"))
+        java.io.DataInputStream(java.io.ByteArrayInputStream(bytes.toByteArray())).use { restored.readFrom(it) }
+        assertEquals("form/c",restored.pageId())
+        assertEquals(0,restored.currentPage)
+        assertEquals(listOf(mark),restored.marks())
+        assertTrue(restored.marks(2).isEmpty())
+    }
 }

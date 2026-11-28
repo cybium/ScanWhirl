@@ -157,4 +157,5 @@
     <string name="j34_next_candidate_page">Preview next candidate page</string>
     <string name="j34_named_mark">%1$s %2$d, page %3$d</string>
     <string name="j34_place_signature">Place signature by position</string>
+    <string name="j34_source_changed">The original changed. Reopen it before saving another copy.</string>
 </resources>

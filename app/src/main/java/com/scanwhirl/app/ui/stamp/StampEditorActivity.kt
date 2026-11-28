@@ -172,6 +172,7 @@ class StampEditorActivity : BaseActivity() {
     private var saving = false
     private var savingStartedAt = 0L
     private var review: StampReview? = null
+    private var reviewSaveButton: TextView? = null
     private var outputName = ""
     private var receiptCopyId: String? = null
     private var savedEdits: List<PageStamp.PageEdits>? = null
@@ -211,7 +212,7 @@ class StampEditorActivity : BaseActivity() {
         document = doc
         // C1: the process-scoped save reports to whichever screen is alive when it finishes.
         StampSaveRunner.setReceiver(doc.id, this)
-        editor = StampEditorState(doc.pageCount)
+        editor = StampEditorState(doc.pageCount, doc.pageFiles.map { "${doc.id}/${it.name}" })
         if (savedInstanceState != null) restoreEditorState(savedInstanceState)
 
         binding.toolbar.setNavigationOnClickListener { confirmExit() }
@@ -520,7 +521,7 @@ class StampEditorActivity : BaseActivity() {
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(SwStyle.SPACE_2_DP) }
-            setOnClickListener { run() }
+            setOnClickListener { if (!saving) run() }
         }
 
     private fun openMore() {
@@ -670,7 +671,7 @@ class StampEditorActivity : BaseActivity() {
             // V2V: long labels wrap to three full lines instead of ellipsising at 200%.
             labelView.maxLines = 3
             labelView.ellipsize = null
-            setOnClickListener { action() }
+            setOnClickListener { if (!saving) action() }
             minimumHeight = dp(68f)
             layoutParams = LinearLayout.LayoutParams(
                 dp(82f), LinearLayout.LayoutParams.WRAP_CONTENT
@@ -1216,6 +1217,7 @@ class StampEditorActivity : BaseActivity() {
     }
 
     internal fun refresh() {
+        reviewSaveButton?.isEnabled = review?.canSave(editor.revision) == true
         binding.canvas.marks = editor.marks()
         refreshSelection()
         binding.canvas.invalidate()
@@ -1234,6 +1236,10 @@ class StampEditorActivity : BaseActivity() {
         binding.nextPage.isEnabled = hasNext
         binding.undo.isEnabled = editor.canUndo
         binding.redo.isEnabled = editor.canRedo
+        binding.canvas.isEnabled = !saving
+        binding.undo.isEnabled = editor.canUndo && !saving
+        binding.redo.isEnabled = editor.canRedo && !saving
+        binding.findRedactions.isEnabled = !saving
         binding.deleteMark.isEnabled = editor.selected != null
         val dirty = !editor.isEmpty() && editor.edits() != savedEdits
         binding.saveCopy.isEnabled = dirty && !saving
@@ -1299,6 +1305,8 @@ class StampEditorActivity : BaseActivity() {
         val sheet = SwSheet.builder(this).setTitle(R.string.j34_check_title)
             .setContent(content).setPrimary(R.string.j34_save_hidden).build()
         sheet.keepOpenOnPrimary()
+        reviewSaveButton = sheet.primaryButton
+        sheet.setOnDismissListener { reviewSaveButton = null }
         fun update() {
             val page = affected[cursor]
             preview.pageBitmap = loadPreview(document.pageFiles[page])
@@ -1368,10 +1376,13 @@ class StampEditorActivity : BaseActivity() {
         if (editor.hasRedaction() && review?.canSave(editor.revision) != true) return
         saving = true
         savingStartedAt = System.currentTimeMillis()
+        refreshSelection()
         binding.saveCopy.isEnabled = false
         binding.saveCopy.setText(R.string.stamp_saving)
         val docId = document.id
         val edits = editor.edits()
+        val sourcePages = document.pageFiles.map { it.name }
+        val sourceRevision = document.revision
         // G3 F3: one decision, made now, for the name, the SaveMeta and the receipt. Never let a
         // latched Find label survive the removal of its redaction marks.
         val labelRes = hideLabelResForSave()
@@ -1386,7 +1397,11 @@ class StampEditorActivity : BaseActivity() {
             StampSaveRunner.submit(docId, meta) {
                 withContext(Dispatchers.IO) {
                     val writer = ScanRepository(app)
-                    writer.stampDocument(docId, edits, outputName.takeIf { it.isNotBlank() })
+                    val source = writer.getDocument(docId)
+                    check(source != null && source.revision == sourceRevision &&
+                        source.pageFiles.map { it.name } == sourcePages &&
+                        !source.isLocked && !source.isVaulted) { app.getString(R.string.j34_source_changed) }
+                    writer.stampDocument(docId, edits, meta.name.takeIf { it.isNotBlank() })
                 }
             }
         }
@@ -1467,12 +1482,19 @@ class StampEditorActivity : BaseActivity() {
     }
 
     /** Reports the finished save on whichever instance of the screen is alive, exactly once. */
-    internal fun deliverSave(result: Result<ScanDocument>, labelRes: Int = 0) {
+    internal fun deliverSave(
+        result: Result<ScanDocument>,
+        labelRes: Int = 0,
+        writtenEdits: List<PageStamp.PageEdits> = editor.edits()
+    ) {
         StampSaveRunner.consume(document.id)
         val alive = !isFinishing && !isDestroyed
         result.onSuccess { copy ->
             saving = false
-            savedEdits = editor.edits()
+            savedEdits = writtenEdits
+            if (alive) refreshSelection()
+            if (alive) binding.root.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30)
+                android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
             if (alive) setResult(RESULT_OK, Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id))
             val redaction = labelRes == R.string.c1_redacted_label ||
                 labelRes == R.string.private_info_label
@@ -1499,6 +1521,7 @@ class StampEditorActivity : BaseActivity() {
                 saving = false
                 binding.saveCopy.setText(R.string.stamp_save_copy)
                 binding.saveCopy.isEnabled = true
+                refresh()
                 note(failed)
             } else {
                 Toast.makeText(applicationContext, failed, Toast.LENGTH_LONG).show()
@@ -1544,8 +1567,9 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun openResult(copy: ScanDocument) {
-        val areas = editor.edits().sumOf { edit -> edit.marks.count { it is PageStamp.Mark.Redact } }
-        val pages = editor.edits().count { edit -> edit.marks.any { it is PageStamp.Mark.Redact } }
+        val written = savedEdits.orEmpty()
+        val areas = written.sumOf { edit -> edit.marks.count { it is PageStamp.Mark.Redact } }
+        val pages = written.count { edit -> edit.marks.any { it is PageStamp.Mark.Redact } }
         val facts = if (areas > 0) getString(R.string.j34_areas_pages, areas, pages)
             else getString(R.string.j34_original_unchanged)
         val adjust = intent(this, document.id).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -1712,7 +1736,8 @@ class StampEditorActivity : BaseActivity() {
             if (inkKind == InkKind.SIGNATURE) {
                 val name = getString(R.string.stamp_signature_name, signatureStore.list().size + 1)
                 val saved = signatureStore.saveBitmap(name, bitmap)
-                addMark(PageStamp.Mark.Picture(requireNotNull(saved.pngFile), signatureBox()))
+                val file = requireNotNull(saved.pngFile)
+                armPlacement(PageStamp.Mark.Picture(file, signatureBox(imageAspect(file))))
             } else {
                 val name = getString(R.string.stamp_stamp_name, stampStore.list().size + 1)
                 val saved = stampStore.save(name, bitmap)
@@ -1961,7 +1986,7 @@ internal object StampSaveRunner {
                 docId == id && receiverId == id && !it.isFinishing && !it.isDestroyed
             }
             if (live != null) {
-                live.deliverSave(result, labelRes)
+                live.deliverSave(result, labelRes, meta.edits)
             } else if (ctx != null) {
                 fallbackReceipt(result, ctx, id, labelRes)
             }

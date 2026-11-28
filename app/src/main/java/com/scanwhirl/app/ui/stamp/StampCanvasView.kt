@@ -284,7 +284,9 @@ class StampCanvasView @JvmOverloads constructor(
                 else context.getString(R.string.j34_named_mark,markLabel(mark),id+1,pageNumber)
             info.className = android.widget.Button::class.java.name
             info.isSelected = id == selectedIndex
-            info.isClickable = true
+            info.isEnabled = this@StampCanvasView.isEnabled && listener != null
+            info.isClickable = listener != null
+            if (listener == null) return
             info.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
             listOf(R.id.a11y_move_left, R.id.a11y_move_right, R.id.a11y_move_up, R.id.a11y_move_down,
                 R.id.a11y_grow, R.id.a11y_shrink, R.id.a11y_delete_mark).forEach { action ->
@@ -302,6 +304,7 @@ class StampCanvasView @JvmOverloads constructor(
         }
 
         override fun onPerformActionForVirtualView(id: Int, action: Int, args: Bundle?): Boolean {
+            if (!isEnabled || listener == null) return false
             tool = Tool.SELECT
             listener?.onSelect(id)
             if (action == AccessibilityNodeInfoCompat.ACTION_CLICK) return true
@@ -339,6 +342,7 @@ class StampCanvasView @JvmOverloads constructor(
         }
 
         override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            if (!isEnabled || listener == null) return false
             val index = selectedIndex
             val mark = marks.getOrNull(index ?: -1)
             if (index != null && mark != null) {
@@ -552,6 +556,7 @@ class StampCanvasView @JvmOverloads constructor(
     // ------------------------------------------------------------------ touch
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isEnabled) return false
         if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
             cancelActiveGesture()
             multiTouch = true
