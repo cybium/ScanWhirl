@@ -1,18 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- W5a-2 (V009): permanent redaction is a SOLID bar over the text, not an
-     eraser with a detached dash that suggests reversible deletion. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M4,5.5h16M4,9h16"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M3.3,13.4h17.4v5.8H3.3z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
+    <group android:translateY="960">
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+            <path
+                    android:pathData="M4,5.5h16M4,9h16"
+                    android:strokeColor="#FFFFFFFF"
+                    android:strokeWidth="1.75"
+                    android:strokeLineCap="round"
+                    android:fillColor="#00000000" />
+                <path
+                    android:fillColor="#FFFFFFFF"
+                    android:pathData="M3.3,13.4h17.4v5.8H3.3z" />
+        </group>
+    </group>
 </vector>

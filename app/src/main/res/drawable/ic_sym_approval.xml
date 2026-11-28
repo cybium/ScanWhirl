@@ -1,16 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- W5a-2 (V008): one connected rubber stamp — handle, neck, base and pad touch.
-     The old glyph floated the teardrop head above the base. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M9.6,3.6h4.8l-1,5.6h-2.8zM12,9.2v3.1M7.5,12.3h9l1.2,4.1H6.3zM5.4,18.6h13.2v2H5.4z"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
+    <group android:translateY="960">
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+            <path
+                    android:pathData="M9.6,3.6h4.8l-1,5.6h-2.8zM12,9.2v3.1M7.5,12.3h9l1.2,4.1H6.3zM5.4,18.6h13.2v2H5.4z"
+                    android:strokeColor="#FFFFFFFF"
+                    android:strokeWidth="1.75"
+                    android:strokeLineCap="round"
+                    android:strokeLineJoin="round"
+                    android:fillColor="#00000000" />
+        </group>
+    </group>
 </vector>
