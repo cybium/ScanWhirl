@@ -1424,22 +1424,36 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Duplicate the ticked draft pages right after the last one. */
     private fun duplicateSelectedPages() {
+        if (organize && editBusy) return
         val id = docId ?: return
         val files = pages.filter { it.path in selected }
         if (files.isEmpty()) return
         val insertAt = (pages.indexOfLast { it.path in selected } + 1).coerceAtLeast(files.size)
+        val chosen = selected.toSet()
+        if (organize) {
+            editBusy = true
+            updateSelectionUi()
+        }
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
+                    val doc = repo.getDocument(id)
+                    val before = if (organize && doc != null) draftStore.prepareOrganize(doc, chosen) else null
                     repo.draftInsertPages(id, files, insertAt)
+                    if (doc != null && before != null) draftStore.finishOrganizeBatch(doc, before)
                 }
                 reloadDocument()
+                if (organize) showEditUndo(R.string.j5_added)
             } catch (e: Exception) {
                 Toast.makeText(
                     this@DocumentViewerActivity,
                     getString(R.string.page_op_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
                     Toast.LENGTH_LONG
                 ).show()
+            } finally {
+                editBusy = false
+                updateSelectionUi()
+                updateDraftBar()
             }
         }
     }
@@ -1707,15 +1721,27 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
 
     /** Test seam and the one writer: copied pages enter the draft at [position]. */
     internal fun insertFiles(files: List<File>, position: Int) {
+        if (organize && editBusy) return
         val id = docId ?: return
         insertHere = null
+        val chosen = selected.toSet()
+        if (organize) {
+            editBusy = true
+            updateSelectionUi()
+        }
         // Picked camera/gallery pages live in `cacheDir/insert_<id>`: once the draft has copied
         // them they are plaintext copies of user pages, so the folder goes with them (B9).
         val tempDir = files.firstOrNull()?.parentFile?.takeIf { it.name.startsWith("insert_") }
         lifecycleScope.launch {
             try {
-                withContext(Dispatchers.IO) { repo.draftInsertPages(id, files, position) }
+                withContext(Dispatchers.IO) {
+                    val doc = repo.getDocument(id)
+                    val before = if (organize && doc != null) draftStore.prepareOrganize(doc, chosen) else null
+                    repo.draftInsertPages(id, files, position)
+                    if (doc != null && before != null) draftStore.finishOrganizeBatch(doc, before)
+                }
                 reloadDocument()
+                if (organize) showEditUndo(R.string.j5_added)
                 Toast.makeText(
                     this@DocumentViewerActivity,
                     resources.getQuantityString(R.plurals.insert_done, files.size, files.size),
@@ -1729,6 +1755,9 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 ).show()
             } finally {
                 tempDir?.deleteRecursively()
+                editBusy = false
+                updateSelectionUi()
+                updateDraftBar()
             }
         }
     }

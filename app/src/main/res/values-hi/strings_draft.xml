@@ -22,6 +22,7 @@
     <string name="j5_move">ले जाएँ</string>
     <string name="j5_moved">पेजों का क्रम बदला</string>
     <string name="j5_rotated">पेज घुमाए गए</string>
+    <string name="j5_added">पेज जोड़े गए</string>
     <string name="j5_deselect_all">सभी का चयन हटाएँ</string>
     <string name="j5_before">इस पेज से पहले</string>
     <string name="j5_after">इस पेज के बाद</string>

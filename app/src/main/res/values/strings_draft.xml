@@ -21,6 +21,7 @@
     <string name="j5_move">Move</string>
     <string name="j5_moved">Pages moved</string>
     <string name="j5_rotated">Pages rotated</string>
+    <string name="j5_added">Pages added</string>
     <string name="j5_deselect_all">Deselect all</string>
     <string name="j5_before">Before page</string>
     <string name="j5_after">After page</string>
