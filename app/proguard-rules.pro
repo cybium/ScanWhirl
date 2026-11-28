@@ -78,7 +78,8 @@
 
 # Standard-14 AFM resources and the embedded-font loader are reached from asset
 # names, not from bytecode references. Keep the font model intact.
--keep class com.tom_roush.pdfbox.pdmodel.font.** { *; }
+-keep class com.tom_roush.pdfbox.** { *; }
+-keep class com.tom_roush.fontbox.** { *; }
 
 # W7a engine is not yet called from any screen (W7b wiring is deferred), so R8
 # would remove the whole package from the minified APK. Keep it for the
