@@ -332,8 +332,10 @@ class PdfBoxEngine(
         if (degrees % 90 != 0) throw PdfEngineError.MalformedDocument("rotation must be a multiple of 90")
         val out = temp("rotate")
         var expected = 0
+        var actualPages = 0
         PDDocument.load(checkedInput(handle.file, started)).use { doc ->
-            if (pageIndex !in 0 until doc.numberOfPages) {
+            actualPages = doc.numberOfPages
+            if (pageIndex !in 0 until actualPages) {
                 throw PdfEngineError.MalformedDocument("page index outside the document")
             }
             val page = doc.getPage(pageIndex)
@@ -342,7 +344,7 @@ class PdfBoxEngine(
             doc.save(out)
         }
         deadline(started)
-        verifyPages(out, handle.pageCount, started)
+        verifyPages(out, actualPages, started)
         PDDocument.load(out).use { doc ->
             if (doc.getPage(pageIndex).rotation != expected) {
                 throw PdfEngineError.VerificationFailed("rotation was not preserved")
@@ -360,7 +362,9 @@ class PdfBoxEngine(
             throw PdfEngineError.MalformedDocument("page index outside the document")
         }
         val out = temp("delete")
+        var actualPages = 0
         PDDocument.load(checkedInput(handle.file, started)).use { doc ->
+            actualPages = doc.numberOfPages
             for (index in unique.sortedDescending()) {
                 checkCancelled()
                 deadline(started)
@@ -369,7 +373,7 @@ class PdfBoxEngine(
             doc.save(out)
         }
         deadline(started)
-        verifyPages(out, handle.pageCount - unique.size, started)
+        verifyPages(out, actualPages - unique.size, started)
         atomicReplace(out, handle.file)
         Unit
     }
@@ -445,8 +449,10 @@ class PdfBoxEngine(
         val started = System.nanoTime()
         if (signaturePng.size > budgets.maxInputBytes) throw PdfEngineError.LimitExceeded("overlay image bytes")
         val out = temp("overlay")
+        var actualPages = 0
         PDDocument.load(checkedInput(handle.file, started)).use { doc ->
-            if (pageIndex !in 0 until doc.numberOfPages) {
+            actualPages = doc.numberOfPages
+            if (pageIndex !in 0 until actualPages) {
                 throw PdfEngineError.MalformedDocument("page index outside the document")
             }
             val page = doc.getPage(pageIndex)
@@ -466,7 +472,7 @@ class PdfBoxEngine(
             doc.save(out)
         }
         deadline(started)
-        verifyPages(out, handle.pageCount, started)
+        verifyPages(out, actualPages, started)
         val verified = textOf(out, page = pageIndex + 1)
         if (!verified.contains(text) || !verified.contains(date)) {
             throw PdfEngineError.VerificationFailed("overlay text is not selectable")
@@ -557,7 +563,11 @@ class PdfBoxEngine(
         Durable.syncFile(out)
         val roundTrip = decryptToTemp(out.readBytes(), userPassword)
         PDDocument.load(checkedInput(roundTrip, started)).use { doc ->
-            if (doc.numberOfPages != handle.pageCount) {
+            var sourcePages = 0
+            PDDocument.load(checkedInput(handle.file, started)).use { source ->
+                sourcePages = source.numberOfPages
+            }
+            if (doc.numberOfPages != sourcePages) {
                 throw PdfEngineError.VerificationFailed("protected page count changed")
             }
             val text = PDFTextStripper().getText(doc)
