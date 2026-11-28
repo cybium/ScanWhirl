@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VQA V103–V107 / V114: one plain-language purpose line on each named tool's FIRST screen.
+         The hub tile may keep its short format noun; the tool screen must say what it does. -->
+    <string name="w5e_purpose_split">Split one PDF into separate documents by page range.</string>
+    <string name="w5e_purpose_to_word">Turn the pages into a Word document.</string>
+    <string name="w5e_purpose_to_excel">Turn tables on the pages into an Excel sheet.</string>
+    <string name="w5e_purpose_to_powerpoint">Turn the pages into slides.</string>
+    <string name="w5e_purpose_long_image">Join the pages into one long picture.</string>
+    <string name="w5e_purpose_zip">Put the selected documents in one ZIP file.</string>
+    <string name="w5e_purpose_pdfa">Make a copy that opens in PDF readers for long-term use.</string>
+    <string name="w5e_purpose_batch_tools">Apply the same action to several documents at once.</string>
+    <string name="w5e_purpose_searchable_pdf">Add a hidden text layer so words can be found in the PDF.</string>
+    <string name="w5e_purpose_link_index">Make a list of links to pages in this document.</string>
+    <string name="w5e_purpose_form_ready">Fit a photo to the exact size a form asks for.</string>
+    <string name="w5e_purpose_remove_metadata">Remove author and other hidden details from the PDF.</string>
+    <string name="w5e_purpose_qr_code">Read a code with the camera and show what is in it.</string>
+    <string name="w5e_purpose_protect">Add a password to a PDF on this phone.</string>
+    <string name="w5e_purpose_unlock">Remove the password from a PDF you can open.</string>
+    <string name="w5e_purpose_read_text">Read the words on a page and let you copy or save them.</string>
+</resources>

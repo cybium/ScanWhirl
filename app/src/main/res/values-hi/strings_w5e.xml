@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VQA V103–V107 / V114: हर नाम वाले टूल की पहली स्क्रीन पर एक सरल पंक्ति कि काम क्या करता है। -->
+    <string name="w5e_purpose_split">एक PDF के चुने पन्नों से अलग दस्तावेज़ बनाएँ।</string>
+    <string name="w5e_purpose_to_word">पन्नों को Word दस्तावेज़ में बदलें।</string>
+    <string name="w5e_purpose_to_excel">पन्नों में मौजूद तालिकाओं को Excel शीट में बदलें।</string>
+    <string name="w5e_purpose_to_powerpoint">पन्नों को स्लाइडों में बदलें।</string>
+    <string name="w5e_purpose_long_image">सभी पन्नों को एक लंबी तस्वीर में जोड़ें।</string>
+    <string name="w5e_purpose_zip">चुने दस्तावेज़ों को एक ZIP फ़ाइल में रखें।</string>
+    <string name="w5e_purpose_pdfa">ऐसी PDF प्रति बनाएँ जो लंबे समय तक हर PDF रीडर में खुले।</string>
+    <string name="w5e_purpose_batch_tools">कई दस्तावेज़ों पर एक ही काम एक साथ करें।</string>
+    <string name="w5e_purpose_searchable_pdf">PDF में ऐसी परत जोड़ें जिससे शब्द खोजे जा सकें।</string>
+    <string name="w5e_purpose_link_index">इस दस्तावेज़ के पन्नों की सूची बनाएँ।</string>
+    <string name="w5e_purpose_form_ready">फ़ोटो को फ़ॉर्म के माप में ढालें।</string>
+    <string name="w5e_purpose_remove_metadata">PDF से लेखक और छिपी जानकारी हटाएँ।</string>
+    <string name="w5e_purpose_qr_code">कैमरे से कोड पढ़ें और उसमें लिखा दिखाएँ।</string>
+    <string name="w5e_purpose_protect">PDF पर पासवर्ड लगाएँ।</string>
+    <string name="w5e_purpose_unlock">जिस PDF का पासवर्ड पता है, उससे ताला हटाएँ।</string>
+    <string name="w5e_purpose_read_text">पन्ने पर लिखा पढ़ें, उसे कॉपी या सहेजें।</string>
+</resources>

@@ -159,8 +159,16 @@
     <string name="me_about_summary">Version &amp; privacy</string>
 
     <string name="vault_tab_title">Vault</string>
-    <string name="vault_tab_encrypted">Encrypted on this phone</string>
+    <!-- VQA V049/V050/V051: unused aliases kept for old callers; no protection claim without setup. -->
+    <string name="vault_tab_encrypted">A private place for your files</string>
     <string name="vault_tab_open">Open Vault</string>
+    <string name="vault_tab_note_not_setup">A private place for your files</string>
+    <string name="vault_tab_note_locked">Locked on this phone</string>
+    <string name="vault_tab_note_unlocked">Open on this phone</string>
+    <string name="vault_tab_setup">Set up Vault</string>
+    <string name="vault_tab_unlock">Unlock Vault</string>
+    <string name="vault_tab_fact_empty">Nothing hidden here yet</string>
+    <string name="vault_tab_fact_on_phone">Files stay on this phone</string>
 
     <string name="sheet_cancel">Cancel</string>
     <string name="sheet_got_it">Got it</string>
@@ -265,8 +273,8 @@
     <string name="vault_tab_status_loading">Checking…</string>
     <string name="vault_tab_not_setup">Not set up yet</string>
     <string name="vault_tab_locked">Locked</string>
-    <string name="vault_tab_aes">AES-256 on this phone</string>
-    <string name="vault_tab_relock">Fingerprint or passcode to unlock · relocks 2 minutes after you leave</string>
+    <string name="vault_tab_aes">Files stay on this phone</string>
+    <string name="vault_tab_relock">Fingerprint or passcode opens it. Relocks 2 min after you leave.</string>
 
     <plurals name="vault_tab_unlocked">
         <item quantity="one">%1$d document · unlocked</item>

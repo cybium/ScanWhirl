@@ -10,6 +10,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.scanwhirl.app.R
+import com.scanwhirl.app.ui.ImportRasterNotice
 import com.scanwhirl.app.ui.kit.SwMotion
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
@@ -66,8 +67,10 @@ class CreateSheet(
         Entry(R.id.swCreatePhotos, R.drawable.ic_sym_photo_library, R.string.create_import_photos) {
             actions.onImportPhotos()
         },
-        Entry(R.id.swCreateImport, R.drawable.ic_sym_upload_file, R.string.home_create_import) {
-            actions.onImportPdf()
+        // VQA V086: a down arrow into a tray reads as import; the old upload arrow read as export.
+        // D1: the notice comes before the OS picker on this route (the sheet has just closed).
+        Entry(R.id.swCreateImport, R.drawable.ic_sym_download, R.string.home_create_import) {
+            ImportRasterNotice.show(context, onContinue = { actions.onImportPdf() })
         }
     )
 
@@ -263,6 +266,16 @@ class CreateSheet(
                 LinearLayout.LayoutParams(0, SwStyle.dp(context, 56f), 1f).apply {
                     if (index > 0) marginStart = SwStyle.dp(context, 10f)
                 }
+            )
+        }
+        // VQA V086: keep the same three-column rhythm as the row above. Without this spacer the
+        // two import tiles were each ~1.5x wider and the grid looked ragged at 320 dp.
+        if (items.size < 3) {
+            row.addView(
+                View(context).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                LinearLayout.LayoutParams(0, SwStyle.dp(context, 56f), (3 - items.size).toFloat())
             )
         }
         return row

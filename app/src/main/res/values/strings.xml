@@ -219,7 +219,11 @@
     <string name="import_pdf">PDF file</string>
     <string name="import_subtitle">Choose where the pages are coming from.</string>
     <string name="import_photos_desc">From your gallery</string>
-    <string name="import_pdf_desc">Each page becomes an editable page</string>
+    <!-- VQA: no "editable page" promise; the D1 notice is shown by ImportRasterNotice. -->
+    <string name="import_pdf_desc">From a PDF on this phone</string>
+    <string name="import_raster_notice_title">Before you import</string>
+    <string name="import_raster_notice">Importing turns pages into images; text won\'t be selectable.</string>
+    <string name="import_raster_notice_continue">Continue</string>
     <string name="import_order_note">The photo picker may change page order. Check it in Review before saving.</string>
     <string name="empty_scan_button">Scan a document</string>
     <string name="empty_import_button">Import photos or a PDF</string>
