@@ -1,4 +1,4 @@
-﻿package com.scanwhirl.app.pdf.engine;
+package com.scanwhirl.app.pdf.engine;
 
 import android.app.Instrumentation;
 import android.graphics.Bitmap;
