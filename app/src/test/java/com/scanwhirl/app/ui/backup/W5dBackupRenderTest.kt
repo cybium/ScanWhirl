@@ -50,6 +50,7 @@ class W5dBackupRenderTest {
 
     private lateinit var app: Application
     private lateinit var outDir: File
+    private lateinit var outDirs: List<File>
     private val names = mutableListOf<String>()
 
     @Before
@@ -63,7 +64,13 @@ class W5dBackupRenderTest {
             if (File(root, "settings.gradle.kts").exists() || File(root, ".git").exists()) break
             root = root.parentFile ?: break
         }
-        outDir = File(root, "gate-result/w5d-renders").apply { mkdirs() }
+        // Two candidates: Gradle may start the worker at the repo root or at :app.
+        val here = File(System.getProperty("user.dir") ?: ".")
+        outDirs = listOf(here, here.parentFile ?: here, root)
+            .distinctBy { it.absolutePath }
+            .map { File(it, "gate-result/w5d-renders").apply { mkdirs() } }
+        outDir = outDirs.first()
+        println("W5D_RENDER_DIRS=${outDirs.joinToString { it.absolutePath }}")
         names.clear()
     }
 
@@ -73,7 +80,8 @@ class W5dBackupRenderTest {
         VaultSession.close()
         RuntimeEnvironment.setFontScale(1f)
         RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xxhdpi")
-        File(outDir, "manifest.txt").writeText(names.joinToString("\n") + "\n")
+        val manifest = names.joinToString("\n") + "\n"
+        for (dir in outDirs) File(dir, "manifest.txt").writeText(manifest)
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -136,8 +144,10 @@ class W5dBackupRenderTest {
             canvas.restore()
         }
 
+        for (dir in outDirs) {
+            FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
         val file = File(outDir, "$name.png")
-        FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         names += file.name
         // A FLAG_SECURE screen is black in the device atlas; it must not be black here.
         val colours = HashSet<Int>()
