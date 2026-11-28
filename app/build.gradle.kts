@@ -282,6 +282,10 @@ dependencies {
         exclude(group = "org.bouncycastle", module = "bcutil-jdk15to18")
     }
 
+    // W7a minified-runtime smoke test (androidTest runs against the R8 release APK).
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core-ktx:1.6.1")

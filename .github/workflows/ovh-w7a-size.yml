@@ -45,6 +45,28 @@ jobs:
           }
           tail -n 20 r8-build.log
 
+      - name: Release runtime must not contain Bouncy Castle (branch only)
+        if: matrix.label == 'branch'
+        run: |
+          set -e
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath -PciUnsignedRelease --no-daemon > release-deps.txt
+          if grep -q 'org.bouncycastle' release-deps.txt; then
+            echo "::error::org.bouncycastle leaked into releaseRuntimeClasspath"
+            grep 'org.bouncycastle' release-deps.txt
+            exit 1
+          fi
+          echo "releaseRuntimeClasspath is free of org.bouncycastle"
+
+      - name: Minified APK keeps PDFBox assets and font classes (branch only)
+        if: matrix.label == 'branch'
+        run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
+          unzip -l "$APK" | grep -q 'assets/com/tom_roush/pdfbox/resources/afm/Helvetica.afm'
+          unzip -l "$APK" | grep -q 'assets/com/tom_roush/pdfbox/resources/glyphlist/glyphlist.txt'
+          grep -q 'com.tom_roush.pdfbox.pdmodel.font.PDType1Font' app/build/outputs/mapping/release/mapping.txt
+          echo "AAR resources and kept font classes are present in the minified APK"
+
       - name: Record APK bytes and dex method ids
         run: |
           python3 - <<'PY' > size-${{ matrix.label }}.txt
@@ -106,3 +128,41 @@ jobs:
           name: w7a-size-report
           path: w7a-size-report.txt
           retention-days: 7
+
+  minified-smoke:
+    name: Minified runtime smoke (R8 keep rules on device)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      # connectedReleaseAndroidTest installs the R8-minified release APK plus its
+      # test APK and runs PdfEngineMinifiedSmokeTest against the minified classes.
+      - name: Run engine smoke on the minified release build
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 900
+          script: ./gradlew :app:connectedReleaseAndroidTest -PciUnsignedRelease --no-daemon --stacktrace
