@@ -382,6 +382,6 @@ internal class DigitalStorage(private val context: Context) {
         }
         Durable.writeFile(File(dir, META), meta.toByteArray(Charsets.UTF_8))
         OpFaults.at("digital:meta_synced")
-        return verify(dir) ?: throw IOException("Digital verification failed")
+        return DigitalStorage.verify(dir) ?: throw IOException("Digital verification failed")
     }
 }
