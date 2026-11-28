@@ -138,11 +138,17 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     private val deleteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var pendingDownload: (() -> Unit)? = null
+    private var pendingSaveKind: String? = null
+    private var pendingSaveTarget: String? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) pendingDownload?.invoke()
-            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+            // B2: clear before invoking so a replayed result cannot save twice.
+            val action = pendingDownload
             pendingDownload = null
+            pendingSaveKind = null
+            pendingSaveTarget = null
+            if (granted) action?.invoke()
+            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
         }
 
     // Insert pages (Free, Organize): camera pages, photos or another library document.
@@ -151,24 +157,40 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
             val uris = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
                 ?.pages.orEmpty().mapNotNull { it.imageUri }
-            if (uris.isEmpty()) {
-                toast(R.string.insert_none, Toast.LENGTH_SHORT)
-                return@registerForActivityResult
+            onInsertScanUris(uris)
+        }
+
+    /**
+     * B2 F2: the camera insert owns its temp copies from the moment they exist on disk. A failed
+     * copy or a position sheet the person never confirms must delete them immediately, not wait
+     * for the cold-start PrivacySweep. Also a test seam: GMS need not be running to drive it.
+     */
+    internal fun onInsertScanUris(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) {
+            toast(R.string.insert_none, Toast.LENGTH_SHORT)
+            return
+        }
+        val dir = File(cacheDir, "insert_${UUID.randomUUID().toString().take(8)}").apply { mkdirs() }
+        lifecycleScope.launch {
+            var failure: Throwable? = null
+            val files = withContext(Dispatchers.IO) {
+                runCatching { copyInsertUris(uris, dir) }
+                    .onFailure { failure = it }
+                    .getOrNull()
             }
-            lifecycleScope.launch {
-                var failure: Throwable? = null
-                val files = withContext(Dispatchers.IO) {
-                    runCatching { copyInsertUris(uris) }
-                        .onFailure { failure = it }
-                        .getOrNull()
-                }
-                if (files.isNullOrEmpty()) {
-                    toast(getString(R.string.s1_insert_photo_failed, insertReason(failure)), Toast.LENGTH_LONG)
-                } else {
-                    askInsertPosition(files)
-                }
+            if (files.isNullOrEmpty()) {
+                // Empty/failed result: nothing handed off, so no plaintext copy may survive.
+                dir.deleteRecursively()
+                toast(getString(R.string.s1_insert_photo_failed, insertReason(failure)), Toast.LENGTH_LONG)
+            } else {
+                askInsertPosition(
+                    files,
+                    onReady = { ready, position -> insertFiles(ready, position) },
+                    onAbandon = { deleteBatch(dir) }
+                )
             }
         }
+    }
 
     private val insertPhotos =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -286,6 +308,22 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         binding.toolbar.setNavigationOnClickListener { handleEditorBack() }
 
         docId = intent.getStringExtra(EXTRA_DOC_ID)
+        // B2: a storage-permission answer may be re-delivered here after a rotation. The token
+        // carries only the action kind and document id, never the document's bytes or text.
+        PendingSaveAction.restore(savedInstanceState, ACTION_SAVE_PDF)?.let { (kind, target) ->
+            if (target == docId) {
+                pendingSaveKind = kind
+                pendingSaveTarget = target
+                pendingDownload = {
+                    val bound = repo.getDocument(target)
+                    if (bound == null || !bound.pdfFile.exists() || bound.pdfFile.length() == 0L) {
+                        Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_LONG).show()
+                    } else {
+                        savePdfCopy(bound)
+                    }
+                }
+            }
+        }
         freshImport = intent.getBooleanExtra(EXTRA_FRESH_IMPORT, false)
         // T44: a rotation must not resurrect the delete question after Keep/Discard, nor undo the
         // fact that the user already acted on this import.
@@ -452,6 +490,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         // cancelled by the recreation and cleaned up by its worker.
         pendingPhotoBatch?.takeIf { it.handedOff }?.dir
             ?.let { outState.putString(KEY_PHOTO_DIR, it.path) }
+        // B2: persist the pending save as a token; its lambda belongs to the old screen.
+        PendingSaveAction.save(outState, pendingSaveKind, pendingSaveTarget)
     }
 
     override fun onDestroy() {
@@ -1591,43 +1631,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 if (!bound.pdfFile.exists() || bound.pdfFile.length() == 0L) {
                     Toast.makeText(this, R.string.pdf_missing, Toast.LENGTH_SHORT).show()
                 } else {
-                    withStoragePermission {
-                        lifecycleScope.launch {
-                            try {
-                                val saved = withContext(Dispatchers.IO) {
-                                    DownloadSaver.savePdfFile(
-                                        this@DocumentViewerActivity,
-                                        bound.pdfFile,
-                                        DownloadSaver.pdfNameFor(bound.name)
-                                    ).also {
-                                        // T4.8: remember the copy so delete can remove it. A failure to
-                                        // record it must not turn a finished export into a failed one.
-                                        try {
-                                            repo.addExport(bound.id, it)
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                }
-                                // T44: a copy the user saved makes this import theirs; Back keeps it.
-                                noteImportUsed()
-                                SavedSnackbar.showExport(
-                                    this@DocumentViewerActivity,
-                                    binding.root,
-                                    saved,
-                                    R.string.pdf_saved_docs,
-                                    bound.id
-                                )
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                Toast.makeText(
-                                    this@DocumentViewerActivity,
-                                    getString(R.string.pdf_save_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
+                    withStoragePermission(ACTION_SAVE_PDF, bound.id) { savePdfCopy(bound) }
                 }
             }
             DocumentActionDispatcher.dispatch(
@@ -1639,6 +1643,45 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 onFinishEditing = { finishEditingThen(savePdfRun) },
                 run = savePdfRun
             )
+        }
+    }
+
+    /** B2: the PDF copy itself, separate from the permission gate so a recreated screen can re-run it. */
+    private fun savePdfCopy(bound: ScanDocument) {
+        lifecycleScope.launch {
+            try {
+                val saved = withContext(Dispatchers.IO) {
+                    DownloadSaver.savePdfFile(
+                        this@DocumentViewerActivity,
+                        bound.pdfFile,
+                        DownloadSaver.pdfNameFor(bound.name)
+                    ).also {
+                        // T4.8: remember the copy so delete can remove it. A failure to
+                        // record it must not turn a finished export into a failed one.
+                        try {
+                            repo.addExport(bound.id, it)
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+                // T44: a copy the user saved makes this import theirs; Back keeps it.
+                noteImportUsed()
+                SavedSnackbar.showExport(
+                    this@DocumentViewerActivity,
+                    binding.root,
+                    saved,
+                    R.string.pdf_saved_docs,
+                    bound.id
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@DocumentViewerActivity,
+                    getString(R.string.pdf_save_failed, V2vFailureCopy.message(this@DocumentViewerActivity, e)),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -1720,7 +1763,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
         }
     }
 
-    private fun withStoragePermission(action: () -> Unit) {
+    private fun withStoragePermission(kind: String, target: String, action: () -> Unit) {
         val granted = Build.VERSION.SDK_INT >= 29 ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
             PackageManager.PERMISSION_GRANTED
@@ -1728,6 +1771,8 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             action()
         } else {
             pendingDownload = action
+            pendingSaveKind = kind
+            pendingSaveTarget = target
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
@@ -2185,6 +2230,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
     }
 
     companion object {
+        private const val ACTION_SAVE_PDF = "viewer_save_pdf"
         private const val EXTRA_DOC_ID = "doc_id"
         private const val EXTRA_INSERT_PAGES = "insert_pages"
 

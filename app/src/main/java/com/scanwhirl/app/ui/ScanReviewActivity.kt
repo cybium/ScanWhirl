@@ -170,14 +170,20 @@ class ScanReviewActivity : BaseActivity() {
         }
 
     private var pendingDownload: (() -> Unit)? = null
+    private var pendingSaveKind: String? = null
+    private var pendingSaveTarget: String? = null
 
     /** Latest result snackbar; used to release retake backup state on dismissal. */
     private var lastSnackbar: Snackbar? = null
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) pendingDownload?.invoke()
-            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
+            // B2: clear before invoking so a replayed result cannot save twice.
+            val action = pendingDownload
             pendingDownload = null
+            pendingSaveKind = null
+            pendingSaveTarget = null
+            if (granted) action?.invoke()
+            else Toast.makeText(this, R.string.storage_perm_needed, Toast.LENGTH_LONG).show()
         }
 
     /** V2C: the page being retaken (kept across rotation until the capture returns). */
@@ -297,6 +303,21 @@ class ScanReviewActivity : BaseActivity() {
             retakeTargetIndex = it.getInt(STATE_RETAKE_INDEX, -1)
         }
         currentIndex = currentIndex.coerceIn(0, pages.lastIndex)
+        // B2: save is gated by a storage prompt on old Android. If the answer arrives on this
+        // recreated screen, rebuild the commit from the token (kind + staging dir, no page bytes).
+        PendingSaveAction.restore(savedInstanceState, ACTION_SAVE_REVIEW, ACTION_SAVE_REVIEW_NEW)
+            ?.let { (kind, target) ->
+                if (target == stagingDir.path) {
+                    pendingSaveKind = kind
+                    pendingSaveTarget = target
+                    pendingDownload = {
+                        commitSave(
+                            if (kind == ACTION_SAVE_REVIEW_NEW) SavedCopyPolicy.SAVE_AS_NEW
+                            else SavedCopyPolicy.ASK
+                        )
+                    }
+                }
+            }
         showLatestReceipt()
 
         binding.pageGrid.filterFor = { f -> filters[f.path] ?: ScanFilter.ORIGINAL }
@@ -420,6 +441,8 @@ class ScanReviewActivity : BaseActivity() {
         outState.putBoolean(STATE_FILTERS_EDITED, filtersEdited)
         outState.putBoolean(STATE_EDITED, isEdited())
         outState.putInt(STATE_RETAKE_INDEX, retakeTargetIndex)
+        // B2: the pending commit's lambda cannot be saved; persist only its operation token.
+        PendingSaveAction.save(outState, pendingSaveKind, pendingSaveTarget)
         if (reviewStateReady) {
             outState.putString(REVIEW_STATE, PendingScans.encodeReviewState(stagingDir, reviewState()))
             persistReviewState()
@@ -1459,103 +1482,112 @@ class ScanReviewActivity : BaseActivity() {
         if (saving) return
         if (pages.isEmpty()) return
         clearRetakeBackups()
-        withStoragePermission {
-            reviewStateHandler.removeCallbacks(persistReviewStateTask)
-            saving = true
-            val state = reviewState()
-            val progress = showProgress()
-            lifecycleScope.launch {
-                try {
-                    val written = try {
-                        withContext(Dispatchers.IO) {
-                            PendingScans.queueReviewState(stagingDir, state).get()
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        false
-                    }
-                    if (!written) {
-                        // Name/category not committed (disk fault, or superseded): nothing is
-                        // saved, staged pages are untouched, and the owner can retry.
-                        saving = false
-                        progress.dismiss()
-                        recordReceipt(
-                            getString(R.string.v2c_receipt_save_failed),
-                            getString(R.string.review_state_failed)
-                        )
-                        Toast.makeText(this@ScanReviewActivity, R.string.review_state_failed,
-                            Toast.LENGTH_LONG).show()
-                        return@launch
-                    }
-                    val uris = pages.map { Uri.fromFile(it) }
-                    // Complete map: every page defaults to Original unless changed.
-                    val perPage = pages.mapIndexed { i, f ->
-                        i to (filters[f.path] ?: ScanFilter.ORIGINAL)
-                    }.toMap()
-                    // Transactional (WP-05): returns only once the document is published and
-                    // verified. The staging folder carries the stable transaction identity, so
-                    // a retry after process death resumes this save instead of duplicating it.
-                    // The staging pages stay untouched until the verified document is in hand.
-                    val doc = repo.saveScan(
-                        uris,
-                        null,
-                        state.title.trim().ifBlank { state.defaultName },
-                        pageFilters = perPage,
-                        category = state.category,
-                        reviewDir = stagingDir,
-                        ifSavedCopyDiffers = policy
-                    )
-                    saved = true
+        val kind = if (policy == SavedCopyPolicy.SAVE_AS_NEW) {
+            ACTION_SAVE_REVIEW_NEW
+        } else {
+            ACTION_SAVE_REVIEW
+        }
+        withStoragePermission(kind, stagingDir.path) { commitSave(policy) }
+    }
 
-                    // T4.7 (N10): only place a copy in Documents/ScanWhirl when the
-                    // owner opted in — no more silent copies on every save. Streamed from
-                    // the saved PDF (never loaded whole); the original is only read.
-                    // M08: shared with the direct save after Google's scanner.
-                    val exported: String? = withContext(Dispatchers.IO) {
-                        com.scanwhirl.app.store.AutoExport.afterSave(this@ScanReviewActivity, repo, doc)
+    /** B2: the transactional commit itself, separated from the permission gate for re-dispatch. */
+    private fun commitSave(policy: SavedCopyPolicy) {
+        clearRetakeBackups()
+        reviewStateHandler.removeCallbacks(persistReviewStateTask)
+        saving = true
+        val state = reviewState()
+        val progress = showProgress()
+        lifecycleScope.launch {
+            try {
+                val written = try {
+                    withContext(Dispatchers.IO) {
+                        PendingScans.queueReviewState(stagingDir, state).get()
                     }
-
-                    // Verified committed document in hand: only now is the staging source released.
-                    stagingDir.deleteRecursively()
-                    progress.dismiss()
-                    val message = if (exported != null) {
-                        exported
-                    } else {
-                        getString(R.string.scan_saved)
-                    }
-                    recordReceipt(getString(R.string.v2c_receipt_saved), doc.name)
-                    Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
-                    // M06: back on Home, the new document is scrolled into view.
-                    com.scanwhirl.app.ui.home.HomeReveal.request(doc.id)
-                    startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
-                    // Index the pages for text search in the background (Free, survives screen close).
-                    // Indexing failure can never invalidate the saved PDF.
-                    ScanWhirlApp.from(this@ScanReviewActivity).indexer.enqueue(doc.id)
-                    finish()
                 } catch (e: CancellationException) {
-                    // Not a failed save: the transaction already cleaned up (or had committed).
-                    saving = false
-                    progress.dismiss()
                     throw e
-                } catch (e: SavedReviewConflictException) {
-                    // An earlier save of this review exists but is not a faithful save of what is
-                    // on screen now. Nothing was saved, replaced or deleted; the owner chooses.
-                    saving = false
-                    progress.dismiss()
-                    confirmSavedCopyConflict(e)
                 } catch (e: Exception) {
+                    false
+                }
+                if (!written) {
+                    // Name/category not committed (disk fault, or superseded): nothing is
+                    // saved, staged pages are untouched, and the owner can retry.
                     saving = false
                     progress.dismiss()
-                    val page = V2cFailureMap.pageNumberOf(e)
-                    val reason = if (page != null) {
-                        getString(R.string.v2c_error_page_unreadable, page)
-                    } else {
-                        V2cFailureMap.message(this@ScanReviewActivity, e)
-                    }
-                    recordReceipt(getString(R.string.v2c_receipt_save_failed), reason)
-                    Toast.makeText(this@ScanReviewActivity, reason, Toast.LENGTH_LONG).show()
+                    recordReceipt(
+                        getString(R.string.v2c_receipt_save_failed),
+                        getString(R.string.review_state_failed)
+                    )
+                    Toast.makeText(this@ScanReviewActivity, R.string.review_state_failed,
+                        Toast.LENGTH_LONG).show()
+                    return@launch
                 }
+                val uris = pages.map { Uri.fromFile(it) }
+                // Complete map: every page defaults to Original unless changed.
+                val perPage = pages.mapIndexed { i, f ->
+                    i to (filters[f.path] ?: ScanFilter.ORIGINAL)
+                }.toMap()
+                // Transactional (WP-05): returns only once the document is published and
+                // verified. The staging folder carries the stable transaction identity, so
+                // a retry after process death resumes this save instead of duplicating it.
+                // The staging pages stay untouched until the verified document is in hand.
+                val doc = repo.saveScan(
+                    uris,
+                    null,
+                    state.title.trim().ifBlank { state.defaultName },
+                    pageFilters = perPage,
+                    category = state.category,
+                    reviewDir = stagingDir,
+                    ifSavedCopyDiffers = policy
+                )
+                saved = true
+
+                // T4.7 (N10): only place a copy in Documents/ScanWhirl when the
+                // owner opted in — no more silent copies on every save. Streamed from
+                // the saved PDF (never loaded whole); the original is only read.
+                // M08: shared with the direct save after Google's scanner.
+                val exported: String? = withContext(Dispatchers.IO) {
+                    com.scanwhirl.app.store.AutoExport.afterSave(this@ScanReviewActivity, repo, doc)
+                }
+
+                // Verified committed document in hand: only now is the staging source released.
+                stagingDir.deleteRecursively()
+                progress.dismiss()
+                val message = if (exported != null) {
+                    exported
+                } else {
+                    getString(R.string.scan_saved)
+                }
+                recordReceipt(getString(R.string.v2c_receipt_saved), doc.name)
+                Toast.makeText(this@ScanReviewActivity, message, Toast.LENGTH_LONG).show()
+                // M06: back on Home, the new document is scrolled into view.
+                com.scanwhirl.app.ui.home.HomeReveal.request(doc.id)
+                startActivity(DocumentViewerActivity.intent(this@ScanReviewActivity, doc.id))
+                // Index the pages for text search in the background (Free, survives screen close).
+                // Indexing failure can never invalidate the saved PDF.
+                ScanWhirlApp.from(this@ScanReviewActivity).indexer.enqueue(doc.id)
+                finish()
+            } catch (e: CancellationException) {
+                // Not a failed save: the transaction already cleaned up (or had committed).
+                saving = false
+                progress.dismiss()
+                throw e
+            } catch (e: SavedReviewConflictException) {
+                // An earlier save of this review exists but is not a faithful save of what is
+                // on screen now. Nothing was saved, replaced or deleted; the owner chooses.
+                saving = false
+                progress.dismiss()
+                confirmSavedCopyConflict(e)
+            } catch (e: Exception) {
+                saving = false
+                progress.dismiss()
+                val page = V2cFailureMap.pageNumberOf(e)
+                val reason = if (page != null) {
+                    getString(R.string.v2c_error_page_unreadable, page)
+                } else {
+                    V2cFailureMap.message(this@ScanReviewActivity, e)
+                }
+                recordReceipt(getString(R.string.v2c_receipt_save_failed), reason)
+                Toast.makeText(this@ScanReviewActivity, reason, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1597,7 +1629,7 @@ class ScanReviewActivity : BaseActivity() {
         finish()
     }
 
-    private fun withStoragePermission(action: () -> Unit) {
+    private fun withStoragePermission(kind: String, target: String, action: () -> Unit) {
         val granted = Build.VERSION.SDK_INT >= 29 ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
             PackageManager.PERMISSION_GRANTED
@@ -1605,6 +1637,8 @@ class ScanReviewActivity : BaseActivity() {
             action()
         } else {
             pendingDownload = action
+            pendingSaveKind = kind
+            pendingSaveTarget = target
             permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
@@ -1614,6 +1648,8 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     companion object {
+        private const val ACTION_SAVE_REVIEW = "review_save"
+        private const val ACTION_SAVE_REVIEW_NEW = "review_save_new"
         private const val EXTRA_STAGING = "staging_dir"
         private const val EXTRA_PDF = "pdf_path"
         private const val EXTRA_NAME = "default_name"
