@@ -2,6 +2,7 @@ package com.scanwhirl.app.ui.kit
 
 import android.app.Activity
 import android.app.Application
+import android.graphics.Rect
 import android.os.Looper
 import android.util.TypedValue
 import android.view.View
@@ -198,29 +199,37 @@ class W5aFoundationsTest {
         val ink = ContextCompat.getColor(app, R.color.tok_text)
         assertTrue("snackbar/picker ink on surface-2 ${ratio(ink, surface2)}",
             ratio(ink, surface2) >= 4.5)
-        // Alpha matters: a raw ratio against a #730a19.. scrim ignored the white
-        // page thumbnail showing through and was a false green. Composite the
-        // scrim over the worst-case (white) background before measuring, in both
-        // themes, and check the opaque label chip too.
+        // Alpha matters: a raw ratio against a translucent scrim ignored what
+        // shows through. Composite EVERY scrim pair over every page background
+        // (white, paper, dark scan) in both themes. White ink uses the deep scrim;
+        // page-count / film-number / review-step badges use an opaque fill with
+        // rv_ink, which is why raising the scrim alpha alone regressed them.
         fun composite(fg: Int, bg: Int): Int {
             val a = (fg ushr 24 and 0xFF) / 255.0
             fun ch(shift: Int) = (((fg shr shift and 0xFF) * a) +
                 ((bg shr shift and 0xFF) * (1 - a))).toInt().coerceIn(0, 255)
             return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
         }
+        val pages = listOf(
+            "white" to 0xFFFFFF,
+            "paper" to 0xFFE9E8E3.toInt(),
+            "dark scan" to 0xFF162024.toInt()
+        )
+        val scrimPairs = listOf(
+            "white ink on scrim" to (R.color.tok_on_scrim to R.color.tok_scrim),
+            "badge ink on badge fill" to (R.color.rv_ink to R.color.rv_scrim_badge),
+            "opaque page label" to (R.color.tok_on_scrim to R.color.tok_preview_backdrop)
+        )
         for (q in listOf("notnight", "night")) {
             RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
-            val scrim = ContextCompat.getColor(app, R.color.tok_scrim)
-            val onScrim = ContextCompat.getColor(app, R.color.tok_on_scrim)
-            val overWhite = composite(scrim, 0xFFFFFF)
-            val overPaper = composite(scrim, 0xFFE9E8E3.toInt())
-            val chip = ContextCompat.getColor(app, R.color.tok_preview_backdrop)
-            assertTrue("$q scrim label over white ${ratio(onScrim, overWhite)}",
-                ratio(onScrim, overWhite) >= 4.5)
-            assertTrue("$q scrim label over paper ${ratio(onScrim, overPaper)}",
-                ratio(onScrim, overPaper) >= 4.5)
-            assertTrue("$q opaque label chip ${ratio(onScrim, chip)}",
-                ratio(onScrim, chip) >= 4.5)
+            for ((name, pair) in scrimPairs) {
+                val ink = ContextCompat.getColor(app, pair.first)
+                val fill = ContextCompat.getColor(app, pair.second)
+                for ((pageName, page) in pages) {
+                    val ratioOnPage = ratio(ink, composite(fill, page))
+                    assertTrue("$q $name over $pageName = $ratioOnPage", ratioOnPage >= 4.5)
+                }
+            }
         }
         RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-notnight-xhdpi")
         val text3 = ContextCompat.getColor(app, R.color.tok_text_3)
@@ -289,6 +298,60 @@ class W5aFoundationsTest {
     fun `API 27 plus uses the themed nav bar with light icons`() {
         assertEquals("themed nav bar on SDK ${RuntimeEnvironment.getApiLevel()}",
             ContextCompat.getColor(app, R.color.tok_bg), themedNavigationBarColor())
+    }
+
+    @Test(timeout = 60_000)
+    fun `switches are not clipped at 320dp and font 2 in Me or Settings`() {
+        RuntimeEnvironment.setQualifiers("en-rUS-w320dp-h640dp-xhdpi")
+        RuntimeEnvironment.setFontScale(2f)
+        try {
+            ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+                openMe(scenario)
+                scenario.onActivity { activity ->
+                    val root = activity.window.decorView
+                    val dm = activity.resources.displayMetrics
+                    repeat(3) {
+                        root.measure(
+                            View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+                        )
+                        root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+                    }
+                    val toggle = activity.findViewById<SwitchCompat>(R.id.swMeAlsoSaveSwitch)
+                    val card = toggle.parent as ViewGroup
+                    val tb = Rect(); val cb = Rect()
+                    toggle.getGlobalVisibleRect(tb); card.getGlobalVisibleRect(cb)
+                    assertTrue("Me switch whole (track left) $tb vs $cb",
+                        tb.left >= cb.left + card.paddingLeft - 1)
+                    assertTrue("Me switch whole (track right) $tb vs $cb",
+                        tb.right <= cb.right - card.paddingRight + 1)
+                }
+            }
+            ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val root = activity.window.decorView
+                    val dm = activity.resources.displayMetrics
+                    repeat(3) {
+                        root.measure(
+                            View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+                        )
+                        root.layout(0, 0, dm.widthPixels, dm.heightPixels)
+                    }
+                    val toggle = activity.findViewById<SwitchCompat>(R.id.switchAutoCopyToDocuments)
+                    val card = toggle.parent as ViewGroup
+                    val tb = Rect(); val cb = Rect()
+                    toggle.getGlobalVisibleRect(tb); card.getGlobalVisibleRect(cb)
+                    assertTrue("Settings switch whole (track left) $tb vs $cb",
+                        tb.left >= cb.left + card.paddingLeft - 1)
+                    assertTrue("Settings switch whole (track right) $tb vs $cb",
+                        tb.right <= cb.right - card.paddingRight + 1)
+                }
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1f)
+            RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-xhdpi")
+        }
     }
 
     // ---- 4. one "save to Documents" preference ----------------------------
