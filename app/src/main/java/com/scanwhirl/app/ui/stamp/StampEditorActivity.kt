@@ -372,8 +372,16 @@ class StampEditorActivity : BaseActivity() {
         // receiver registered in onCreate, so a recreation must not start a second delivery.
     }
 
-    /** 0 means a plain edit; otherwise the label of a hide/Find save. */
-    private fun hideLabelResForSave(): Int = if (hideMode) hideLabelRes else 0
+    /**
+     * 0 means a plain edit; otherwise the label of a hide/Find save.
+     *
+     * G3 F3: [hideMode] only records WHICH hide flow ran and what it called the copy. Whether the
+     * copy really hides anything is decided here, at Save time, from the marks that are actually
+     * on the page: Undo / Delete can remove every Redact box after a Find, and a "private info
+     * hidden" receipt on that copy would be a false privacy claim.
+     */
+    private fun hideLabelResForSave(): Int =
+        if (hideMode && editor.hasRedaction()) hideLabelRes else 0
 
     override fun onDestroy() {
         super.onDestroy()
@@ -1019,9 +1027,11 @@ class StampEditorActivity : BaseActivity() {
         val docId = document.id
         val sourceName = document.name
         val edits = editor.edits()
-        val hide = hideMode
-        val labelRes = hideLabelRes
-        val meta = SaveMeta(edits, if (hide) labelRes else 0)
+        // G3 F3: one decision, made now, for the name, the SaveMeta and the receipt. Never let a
+        // latched Find label survive the removal of its redaction marks.
+        val labelRes = hideLabelResForSave()
+        val hide = labelRes != 0
+        val meta = SaveMeta(edits, labelRes)
         val app = applicationContext
         // C1 review P1: a write for this source document AND these exact marks may already be in
         // flight (this screen was recreated, or a timed-out editor was reopened). Join it — say so
@@ -1102,7 +1112,12 @@ class StampEditorActivity : BaseActivity() {
             val redaction = labelRes == R.string.c1_redacted_label ||
                 labelRes == R.string.private_info_label
             if (alive && redaction) {
-                // V2V V2: the redaction outcome is permanent until dismissed.
+                // V2V V2: the redaction outcome is permanent until dismissed, but the WRITE is
+                // over. G3 F1: release the Save lock before showing it, or Back / close keeps
+                // reporting "still saving" behind the receipt and the button stays disabled.
+                saving = false
+                binding.saveCopy.setText(R.string.stamp_save_copy)
+                refreshSelection()
                 showPersistentReceipt(copy)
             } else {
                 val saved = if (labelRes != 0) {
