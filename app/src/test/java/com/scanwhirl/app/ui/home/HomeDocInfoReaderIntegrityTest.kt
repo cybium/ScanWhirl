@@ -16,6 +16,7 @@ import com.scanwhirl.app.util.CategoryRules
 import com.scanwhirl.app.util.Prefs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -110,31 +111,65 @@ class HomeDocInfoReaderIntegrityTest {
 
     @Test
     fun `the indexer finishing a document re-reads its status on the live Library row`() {
+        // A genuinely pending document: the real save path writes ocr_pending and NO ocr.txt.
         val dir = fixture("Lecture notes", 1)
         File(dir, "ocr_pending").writeText("")
+        assertFalse("no stored OCR text before indexing", File(dir, "ocr.txt").exists())
         assertEquals(TextState.WAITING, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
 
-        ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
-            scenario.onActivity { shell ->
-                assertTrue("the live Library shows the document",
-                    pollUntil { shell.findViewById<ViewGroup>(R.id.swDocList)?.childCount == 1 })
+        val application = ScanWhirlApp.from(app)
+        val savedIndexer = application.indexer
+        // Real OcrIndexer bookkeeping; only the OCR engine's text output is stubbed, through
+        // the indexer's existing recognize seam (ML Kit cannot run on the JVM).
+        application.indexer = com.scanwhirl.app.store.OcrIndexer(
+            application.repository,
+            application.appScope,
+            recognize = {
+                com.scanwhirl.app.util.OcrEngine.OcrResult(
+                    "hello", com.scanwhirl.app.model.OcrPage(60, 85, emptyList())
+                )
+            },
+            autoRun = false,
+            afterIndexed = { id -> application.repository.refreshPdfAfterIndex(id) }
+        )
+        try {
+            ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
+                scenario.onActivity { shell ->
+                    assertTrue("the live Library shows the document",
+                        pollUntil { shell.findViewById<ViewGroup>(R.id.swDocList)?.childCount == 1 })
+                    val search = shell.findViewById<EditText>(R.id.swHomeSearch)
+                    val snippet = {
+                        shell.findViewById<ViewGroup>(R.id.swDocList)?.getChildAt(0)
+                            ?.findViewById<TextView>(R.id.swSearchSnippet)
+                            ?.text?.toString().orEmpty()
+                    }
 
-                // The real indexing worker the live Library enqueues: store text, clear the
-                // pending marker, then run OcrIndexer.indexNow (no fake reader swap).
-                File(dir, "ocr.txt").writeText("#scanwhirl-ocr-v2\npage_001.jpg\taGVsbG8=\n")
-                File(dir, "ocr_pending").delete()
-                runBlocking { ScanWhirlApp.from(shell).indexer.indexNow(dir.name) }
+                    // NEGATIVE CONTROL: without indexNow the row stays "waiting to read text"
+                    // and shows no page snippet, even though the search is already typed.
+                    search.setText("hello")
+                    assertTrue("pending row settles", pollUntil { snippet().isEmpty() })
+                    assertEquals("no index call: still pending",
+                        TextState.WAITING, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
+                    assertFalse("no index call: no page hit", snippet().contains("hello"))
 
-                // The live Library row rebinds with page evidence from the indexed text.
-                shell.findViewById<EditText>(R.id.swHomeSearch).setText("hello")
-                assertTrue("the live row shows the page hit after indexing", pollUntil {
-                    val card = shell.findViewById<ViewGroup>(R.id.swDocList)?.getChildAt(0)
-                    card?.findViewById<TextView>(R.id.swSearchSnippet)
-                        ?.text?.toString().orEmpty().contains("hello")
-                })
-                assertEquals("status refreshes to Search ready",
-                    TextState.READY, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
+                    // Now run the real indexing pass: it recognizes the page, stores the text
+                    // through OcrStore and clears ocr_pending itself.
+                    runBlocking { application.indexer.indexNow(dir.name) }
+                    assertFalse("the worker cleared the pending marker",
+                        File(dir, "ocr_pending").exists())
+
+                    // Re-run the live search so the Library row rebinds from stored text.
+                    search.setText("")
+                    search.setText("hello")
+                    assertTrue("the live row shows the page hit after indexing", pollUntil {
+                        snippet().contains("hello")
+                    })
+                    assertEquals("status refreshes to Search ready",
+                        TextState.READY, HomeDocInfoReader.read(repo.docsDir, doc(dir)).text)
+                }
             }
+        } finally {
+            application.indexer = savedIndexer
         }
     }
 }
