@@ -1214,7 +1214,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             R.id.btnSelRotate, R.id.btnSelDelete, R.id.btnSelExtract,
             R.id.btnSelShare, R.id.btnSelMore
         )
-        val actions = ids.mapNotNull { findViewById<View>(it) }
+        val actions = ids.mapNotNull { findViewById<TextView>(it) }
         if (actions.isEmpty()) return
         for (action in actions) (action.parent as? ViewGroup)?.removeView(action)
         bar.orientation = LinearLayout.VERTICAL
