@@ -66,12 +66,11 @@ class SettingsActivity : BaseActivity() {
         binding.switchGreeting.minimumWidth = com.scanwhirl.app.ui.kit.SwStyle.dp(this, 48f)
         binding.switchGreeting.isFocusable = true
 
-        // test25 Phase 5A / D1: Orbital-only dark theme — the row stays in the
-        // XML (locked ID) but is hidden. Its pinned summary is a resource, not a
-        // hardcoded literal in this screen. The row lives inside the grouped Appearance
-        // card, so hiding it leaves no empty card behind.
-        binding.rowTheme.visibility = android.view.View.GONE
-        binding.subTheme.text = getString(R.string.sh1_theme_summary)
+        // B2: the theme is a real choice again — System (default) / Light / Dark.
+        // The row stays in the grouped Appearance card; its summary follows the pref.
+        binding.rowTheme.visibility = android.view.View.VISIBLE
+        // A clickable row must carry its own name: the label lives on child TextViews.
+        binding.rowTheme.contentDescription = getString(R.string.settings_theme)
 
         binding.rowTheme.setOnClickListener { chooseTheme() }
         binding.rowFont.setOnClickListener { chooseFont() }
@@ -472,6 +471,14 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun updateSummaries() {
+        // B2: name the active theme, including the follow-system default.
+        binding.subTheme.setText(
+            when (Prefs.themeMode(this)) {
+                Prefs.THEME_LIGHT -> R.string.theme_light
+                Prefs.THEME_SYSTEM -> R.string.theme_system
+                else -> R.string.theme_dark
+            }
+        )
         binding.subFont.setText(
             when (Prefs.fontStyle(this)) {
                 Prefs.FONT_SERIF -> R.string.font_serif
@@ -768,11 +775,12 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun chooseTheme() {
-        val values = arrayOf(Prefs.THEME_LIGHT, Prefs.THEME_DARK, Prefs.THEME_SYSTEM)
+        // One canonical order, shared with Me: System / Light / Dark.
+        val values = arrayOf(Prefs.THEME_SYSTEM, Prefs.THEME_LIGHT, Prefs.THEME_DARK)
         val labels = arrayOf(
+            getString(R.string.theme_system),
             getString(R.string.theme_light),
-            getString(R.string.theme_dark),
-            getString(R.string.theme_system)
+            getString(R.string.theme_dark)
         )
         val checked = values.indexOf(Prefs.themeMode(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)

@@ -89,11 +89,11 @@ class ProCopyDietRolesTest {
         try {
             pro.setPrice("$4.99")
             val price = pro.findViewById<TextView>(R.id.swProPrice)
-            assertEquals(Color.parseColor("#FFFFFF"), price.currentTextColor)
+            assertEquals(activity.getColor(R.color.copydiet_pro2_primary), price.currentTextColor)
             assertEquals(sp(activity, 28f), price.textSize, 0.5f)
 
             val line = texts(pro).single { it.text.toString() == "One payment. No subscription." }
-            assertEquals(Color.parseColor("#B3BCC2"), line.currentTextColor)
+            assertEquals(activity.getColor(R.color.copydiet_pro2_secondary), line.currentTextColor)
             assertEquals(sp(activity, 14f), line.textSize, 0.5f)
             assertTrue("the single payment line is shown", line.isShown)
 
@@ -113,16 +113,16 @@ class ProCopyDietRolesTest {
         try {
             pro.setPrice(null)
             val price = pro.findViewById<TextView>(R.id.swProPrice)
-            assertEquals(Color.parseColor("#FFFFFF"), price.currentTextColor)
+            assertEquals(activity.getColor(R.color.copydiet_pro2_primary), price.currentTextColor)
             assertEquals(sp(activity, 16f), price.textSize, 0.5f)
 
             val status = pro.findViewById<TextView>(R.id.swProPriceStatus)
             assertEquals("Price unavailable", status.text.toString())
-            assertEquals(Color.parseColor("#FFFFFF"), status.currentTextColor)
+            assertEquals(activity.getColor(R.color.copydiet_pro2_primary), status.currentTextColor)
             assertEquals(sp(activity, 16f), status.textSize, 0.5f)
 
             val retry = pro.findViewById<TextView>(R.id.swProPriceRetry)
-            assertEquals(Color.parseColor("#62E1F1"), retry.currentTextColor)
+            assertEquals(activity.getColor(R.color.copydiet_pro2_accent), retry.currentTextColor)
             assertTrue("Try again stays visible", retry.isShown)
             assertFalse("buy is not purchasable without Play's price", pro.buyButton.isEnabled)
         } finally {
@@ -137,9 +137,9 @@ class ProCopyDietRolesTest {
             "en" to "All Pro tools unlocked",
             "hi" to "Pro के सभी काम खुले हैं"
         )) {
-            val (_, pro) = screen(lang = lang, active = true)
+            val (activity, pro) = screen(lang = lang, active = true)
             val status = texts(pro).single { it.text.toString() == expected }
-            assertEquals("owned status is P on $lang", Color.parseColor("#FFFFFF"), status.currentTextColor)
+            assertEquals("owned status is P on $lang", activity.getColor(R.color.copydiet_pro2_primary), status.currentTextColor)
             assertFalse("no grey thank-you paragraph on $lang", status.text.toString().contains("धन्यवाद"))
             controller?.pause()?.stop()?.destroy()
             controller = null
@@ -150,7 +150,7 @@ class ProCopyDietRolesTest {
     fun `no tertiary text on the gold tile and the All tools action passes contrast`() {
         val (activity, pro) = screen()
         try {
-            val tertiary = Color.parseColor("#8D979E")
+            val tertiary = activity.getColor(R.color.copydiet_pro2_tertiary)
             assertFalse(
                 "T (#8D979E) is never body text on the Pro screen",
                 texts(pro).any { it.currentTextColor == tertiary }
@@ -160,15 +160,15 @@ class ProCopyDietRolesTest {
             )
             val action = texts(pro).single { it.text.toString() == expected }
             assertEquals("the single All tools action is P, not T",
-                Color.parseColor("#FFFFFF"), action.currentTextColor)
-            val goldTile = Color.parseColor("#433A14")
+                activity.getColor(R.color.copydiet_pro2_primary), action.currentTextColor)
+            val goldTile = activity.getColor(R.color.gold_pro_surface)
             assertTrue(
-                "P on the sampled gold tile is >= 4.5:1, got ${ratio(action.currentTextColor, goldTile)}",
+                "P on the gold tile is >= 4.5:1, got ${ratio(action.currentTextColor, goldTile)}",
                 ratio(action.currentTextColor, goldTile) >= 4.5
             )
             assertTrue(
-                "T on the same tile would fail (documented 3.80:1)",
-                ratio(tertiary, goldTile) < 4.5
+                "T has less contrast than P in either theme",
+                ratio(tertiary, goldTile) < ratio(action.currentTextColor, goldTile)
             )
         } finally {
             controller?.pause()?.stop()?.destroy()

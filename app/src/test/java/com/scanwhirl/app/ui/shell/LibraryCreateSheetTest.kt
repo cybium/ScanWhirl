@@ -272,13 +272,29 @@ class LibraryCreateSheetTest {
      * itself; the Library's own Add sheet keeps the two-option chooser.
      */
     @Test
-    fun `Import PDF entry opens the PDF picker in one tap`() {
+    fun `Import PDF shows the rasterise notice before the picker`() {
+        // DQA D1: deliberately updated — this test used to pin "one tap to picker and no
+        // intermediate sheet". The approved D1 notice must be seen before the OS picker opens.
         launch { activity ->
             val dialog = openSheet(activity)
             entry(dialog, R.id.swCreateImport).performClick()
             idle()
+            val notice = ShadowDialog.getLatestDialog()!!
+            assertTrue("the notice is showing", notice.isShowing)
+            assertEquals(
+                activity.getString(R.string.import_raster_notice_title),
+                notice.findViewById<TextView>(R.id.swSheetTitle).text.toString()
+            )
+            assertTrue(
+                "the notice states pages become images and text is not selectable",
+                notice.findViewById<TextView>(R.id.swSheetMessage).text.toString()
+                    .contains(activity.getString(R.string.import_raster_notice))
+            )
+            assertNull("no picker before the person continues", shadowOf(activity).nextStartedActivityForResult)
+            notice.findViewById<View>(R.id.swSheetPrimary).performClick()
+            idle()
             val req = shadowOf(activity).nextStartedActivityForResult
-            assertNotNull("the PDF row opens the OS PDF picker itself", req)
+            assertNotNull("continuing opens the OS PDF picker", req)
             assertEquals(
                 android.content.Intent.ACTION_OPEN_DOCUMENT,
                 req!!.intent.action
@@ -287,10 +303,7 @@ class LibraryCreateSheetTest {
                 req.intent.getStringArrayExtra(android.content.Intent.EXTRA_MIME_TYPES)
                     ?.contains("application/pdf") == true
             )
-            assertNull(
-                "no intermediate import chooser",
-                ShadowDialog.getLatestDialog()?.takeIf { it.isShowing && it !== dialog }
-            )
+            assertFalse("the Create sheet is gone", dialog.isShowing)
         }
     }
 

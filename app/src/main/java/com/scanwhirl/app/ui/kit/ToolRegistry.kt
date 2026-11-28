@@ -28,6 +28,18 @@ enum class ToolJob(val title: Int, val pro: Boolean = false) {
 
 enum class ToolStatus { READY, BUILD, SOON }
 
+/**
+ * B3: the three named student jobs that lead the Tools hub, in the approved order
+ * (`frontend-v09/core/shell.js:77-81`, APPROVALS B3). Each is a direct door to a real
+ * tool — the same [ToolHost.launchTool] path a tile uses — not a paragraph or a
+ * second "All tools" tap. The copy is one short line in both languages.
+ */
+enum class StudentJob(val toolId: String, val title: Int) {
+    FORM_READY("form_ready", R.string.student_job_form_ready),
+    SIGN("sign", R.string.student_job_sign),
+    HIDE_INFO("redact", R.string.student_job_hide_info)
+}
+
 /** What a tool does when it is tapped; implemented by the v2 shell. */
 interface ToolHost {
     /** Open the real screen (or the closest real action) for a tool. */
@@ -124,7 +136,7 @@ object ToolRegistry {
         ),
 
         // Organize (8)
-        ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        ready("merge", ToolGroup.ORGANIZE, R.string.tool_merge, R.drawable.ic_sym_call_merge, "merge join combine together combine जोड़ें मिलाएँ", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("split", ToolGroup.ORGANIZE, R.string.tool_split, R.drawable.ic_sym_call_split, "split range separate", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("extract", ToolGroup.ORGANIZE, R.string.tool_extract, R.drawable.ic_sym_content_cut, "extract pages pick remove", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         // V2L: the selectable document grid is real — page selection, reorder, duplicate and
@@ -132,7 +144,7 @@ object ToolRegistry {
         // its document chooser keeps the honest empty-library state.
         ready(
             "organize_pages", ToolGroup.ORGANIZE, R.string.tool_organize_pages,
-            R.drawable.ic_sym_view_module, "organize organize pages reorder move",
+            R.drawable.ic_sym_view_module, "organize organize pages reorder rearrange move क्रम बदलें फिर से सजाएँ",
             launch = { host, tool ->
                 val activity = host as? android.app.Activity
                 if (activity != null) {
@@ -161,10 +173,15 @@ object ToolRegistry {
             pro = true, note = R.string.soon_batch_rename
         ),
         // Council §2: Batch owns `apps`; `view_module` belongs to Pages/Reorder.
-        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sym_apps, "batch batch tools many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // W5a-2 (V099): one Batch glyph replaces the alternating nine-dot / page-grid
+        // / check-circle pictures used for the same feature.
+        ready("batch_tools", ToolGroup.ORGANIZE, R.string.tools_tool_batch, R.drawable.ic_sw_batch, "batch batch tools many documents bulk apply", pro = true, launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Optimize (3) — FORM1 is Free (PRO_PLAN.md does not list it, so it never moves behind Pro).
-        ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress, "compress smaller size reduce mb छोटा", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // Plain-language aliases, EN + HI (B4): "make smaller" / "reduce size" and
+        // "छोटा करें" / "आकार घटाएँ" all land here, not only the jargon word "compress".
+        ready("compress", ToolGroup.OPTIMIZE, R.string.tool_compress, R.drawable.ic_sym_compress,
+            "compress smaller size reduce mb make smaller reduce size छोटा छोटा करें आकार घटाएँ", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
         ready("resize", ToolGroup.OPTIMIZE, R.string.tool_resize, R.drawable.ic_sym_aspect_ratio, "resize dimensions pixels"),
         // The tile value lives in lane N's strings; strings_form1.xml (lane F) keeps the
         // longer setup-screen header. Both are "Form photo" / "फ़ॉर्म फ़ोटो".
@@ -185,7 +202,8 @@ object ToolRegistry {
         ready("searchable_pdf", ToolGroup.CONVERT, R.string.tool_searchable_pdf, R.drawable.ic_sym_picture_as_pdf, "ocr ocr pdf searchable searchable pdf search search pdf text layer pdf"),
         SwTool(
             // Council §2: PDF/A owns `archive`; Stamp keeps `approval`.
-            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sym_archive,
+            // W5a-2 (V101): PDF/A no longer shares the ZIP/Backup archive glyph.
+            "pdfa", ToolGroup.CONVERT, R.string.tool_pdfa, R.drawable.ic_sw_pdfa,
             true, ToolStatus.READY, "pdf a archive long term pdfa 2b",
             launch = { host, tool ->
                 val activity = host as? androidx.appcompat.app.AppCompatActivity
@@ -201,7 +219,8 @@ object ToolRegistry {
         ),
 
         // Edit & sign (8) — L5: built in ui/stamp; a document is picked, then the editor opens armed.
-        ready("sign", ToolGroup.EDIT, R.string.tool_sign, R.drawable.ic_sym_signature, "sign signature ink", pro = true).copy(
+        ready("sign", ToolGroup.EDIT, R.string.tool_sign, R.drawable.ic_sym_signature,
+            "sign signature ink signature हस्ताक्षर हस्ताक्षर करें", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "sign") } ?: host.comingSoon(tool) }
         ),
         ready("add_text", ToolGroup.EDIT, R.string.tool_add_text, R.drawable.ic_sym_text_fields, "add text type write", pro = true).copy(
@@ -222,7 +241,10 @@ object ToolRegistry {
         ready("stamp", ToolGroup.EDIT, R.string.tool_stamp, R.drawable.ic_sym_approval, "stamp paid approved date badge", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "stamp") } ?: host.comingSoon(tool) }
         ),
-        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser, "hide private info confidential masking redact aadhaar pan card phone email iban ssn account driving licence passport", pro = true).copy(
+        // B4: the tile says "Hide info"; the OLD word "redact" and the plain words
+        // "blackout" / "hide" stay as aliases, in both languages, so a search still lands here.
+        ready("redact", ToolGroup.EDIT, R.string.tool_redact, R.drawable.ic_sym_ink_eraser,
+            "hide private info confidential masking redact blackout hide info निजी जानकारी छिपाएँ छिपाना काला करें aadhaar pan card phone email iban ssn account driving licence passport", pro = true).copy(
             launch = { host, tool -> (host as? android.app.Activity)?.let { com.scanwhirl.app.ui.stamp.StampToolLauncher.open(it, "redact") } ?: host.comingSoon(tool) }
         ),
 
@@ -276,7 +298,8 @@ object ToolRegistry {
                 }
             }
         ),
-        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sym_visibility_off, "clear clear metadata remove metadata metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
+        // W5a-2 (V011): a struck-through metadata page, not the password eye.
+        ready("remove_metadata", ToolGroup.SECURE, R.string.tool_remove_metadata, R.drawable.ic_sw_clear_metadata, "clear clear metadata remove metadata metadata remove exif author", launch = { host, tool -> ToolLaunch.start(host, tool.id) }),
 
         // Council §1: OCR is the single text tile; `to_text` and `hindi_text` are not tools.
         // Hindi is a language chip inside OCR, and .txt export is the Save .txt button there.
@@ -289,8 +312,10 @@ object ToolRegistry {
         // LX: Pro with one free successful use. The Activity owns the disclosure,
         // the counter and the ProOffer gate after that first use.
         ready(
+            // W5a-2 (V100): the numbered list belongs to Page numbers; Link index
+            // gets its own linked-list glyph.
             "link_index", ToolGroup.TEXT, R.string.lx_tool_title,
-            R.drawable.ic_sym_format_list_numbered,
+            R.drawable.ic_sw_link_index,
             "link index contents table of contents bookmarks outline titles pages सूची लिंक",
             pro = true,
             launch = { host, tool ->
@@ -316,6 +341,20 @@ object ToolRegistry {
      * hub's PRO tags then agree.
      */
     fun proCount(): Int = all.count { it.pro && it.status != ToolStatus.SOON }
+
+    /**
+     * The tools a person can actually use. The catalogue holds 38 entries; one
+     * (`batch_rename`) is SOON and is never rendered in the hub or returned by search.
+     * The remaining 37 are the "usual 37 tools" in the B3 spec — no count is hardcoded.
+     */
+    fun shippingCount(): Int = all.count { it.status == ToolStatus.READY }
+
+    /** B3: the three named student jobs, in founder-approved order. */
+    fun studentJobs(): List<StudentJob> = StudentJob.entries
+
+    /** The real tool behind a student job; a renamed tool id can never leave a dead row. */
+    fun toolFor(job: StudentJob): SwTool = byId(job.toolId)
+        ?: error("student job ${job.name} points at a tool that is not in the catalogue")
 
     fun byGroup(group: ToolGroup): List<SwTool> = all.filter { it.group == group }
 
@@ -424,6 +463,8 @@ object ToolRegistry {
         val q = query.trim().lowercase(Locale.getDefault())
         if (q.isEmpty()) return emptyList()
         val hits = all.withIndex().mapNotNull { (index, tool) ->
+            // A Coming-soon entry has no working tool to open: it is not a search result.
+            if (tool.status == ToolStatus.SOON) return@mapNotNull null
             val title = (titleOf(tool) ?: tool.id.replace('_', ' ')).lowercase(Locale.getDefault())
             val idWords = tool.id.replace('_', ' ')
             val keywords = tool.keywords.lowercase(Locale.getDefault())

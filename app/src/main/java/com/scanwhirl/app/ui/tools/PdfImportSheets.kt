@@ -10,6 +10,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.scanwhirl.app.R
 import com.scanwhirl.app.store.ScanRepository
+import com.scanwhirl.app.ui.ImportRasterNotice
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
 import com.scanwhirl.app.util.PdfImportBudget
@@ -39,11 +40,16 @@ object PdfImportSheets {
         }
         val sheet = SwSheet.builder(activity)
             .setTitle(activity.getString(R.string.tools_import_plan_title, plan.pageCount))
+            // D1: the import plan is the last door before rasterisation; the notice is the same
+            // sentence used by the Library and Scan FAB doors (single helper, no copy drift).
             .setMessage(
-                activity.getString(
-                    R.string.tools_import_plan_msg,
-                    formatSize(plan.estimateBytes),
-                    formatSize(plan.freeBytes)
+                ImportRasterNotice.appendTo(
+                    activity,
+                    activity.getString(
+                        R.string.tools_import_plan_msg,
+                        formatSize(plan.estimateBytes),
+                        formatSize(plan.freeBytes)
+                    )
                 )
             )
             .setSecondary(R.string.sheet_cancel)

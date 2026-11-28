@@ -14,7 +14,8 @@
         <item quantity="one">%d फ़ाइल</item>
         <item quantity="other">%d फ़ाइलें</item>
     </plurals>
-    <string name="vault_stats_body">AES-256 · उँगली के निशान या गुप्त नंबर से खुलती है\nऐप छोड़ने के 2 मिनट बाद तिजोरी पर ताला लग जाता है</string>
+    <!-- VQA V113: कोड का नाम न दिखाएँ; काम की बात सीधी भाषा में कहें। -->
+    <string name="vault_stats_body">उँगली के निशान या गुप्त नंबर से खुलती है\nऐप छोड़ने के 2 मिनट बाद ताला लग जाता है</string>
     <string name="vault_locked_title">तिजोरी पर ताला है</string>
     <string name="vault_locked_body">अपनी निजी फ़ाइलें देखने के लिए उँगली का निशान लगाएँ या गुप्त नंबर डालें।</string>
     <string name="vault_not_setup_title">आपकी निजी जगह</string>

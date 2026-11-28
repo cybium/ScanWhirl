@@ -69,10 +69,11 @@ abstract class CopyDietRsBase {
             val density = app.resources.displayMetrics.density
             val hero = activity.findViewById<TextView>(R.id.toolResultSummary)
             assertEquals(28f * density, hero.textSize, 1f)
-            assertEquals(Color.WHITE, hero.currentTextColor)
+            // W5a: P-hero and S roles resolve through the one token palette.
+            assertEquals(app.getColor(R.color.tok_text), hero.currentTextColor)
             val receipt = activity.findViewById<TextView>(R.id.toolResultName)
             assertEquals(14f * density, receipt.textSize, 1f)
-            assertEquals(Color.parseColor("#B3BCC2"), receipt.currentTextColor)
+            assertEquals(app.getColor(R.color.tok_text_2), receipt.currentTextColor)
         } finally {
             controller?.destroy()
         }

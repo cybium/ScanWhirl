@@ -37,7 +37,12 @@ object Prefs {
 
     private fun sp(c: Context) = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    fun themeMode(c: Context): String = sp(c).getString(KEY_THEME, THEME_DARK) ?: THEME_DARK
+    /**
+     * B2: follow the system until the person chooses otherwise. An explicit earlier
+     * choice of Light or Dark is kept; no migration is needed (all three values
+     * were already written by the theme sheet).
+     */
+    fun themeMode(c: Context): String = sp(c).getString(KEY_THEME, THEME_SYSTEM) ?: THEME_SYSTEM
     fun setThemeMode(c: Context, v: String) = sp(c).edit().putString(KEY_THEME, v).apply()
 
     fun nightMode(value: String): Int = when (value) {

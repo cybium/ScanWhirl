@@ -355,10 +355,16 @@ class ScanReviewFocusArrangeTest {
             await { !scenario.get { it.pageOpBusy } }
             scenario.onActivity { a ->
                 a.findViewById<View>(R.id.btnToolDelete).performClick()
+                // Delete is synchronous: it renames the page to `.del` and calls
+                // reloadFromDisk() -> renderPages() -> renderStatus() on this very
+                // call. A wall-clock await here only added a 20s flake window on a
+                // loaded runner (the merge's 3.9k-test gate hit it once); assert the
+                // real product effect at the point it must exist instead.
+                assertFalse("delete refused while busy", a.pageOpBusy)
+                assertTrue("page was not hidden", File(dir, "page_001.jpg.del").exists())
+                assertTrue("status did not follow the delete: " + a.text(R.id.reviewStatus),
+                    a.text(R.id.reviewStatus).contains("Page 2 of 2"))
             }
-            // The rename + re-list can settle a tick after the click; wait for the
-            // combined status line to show the new count (bounded wait, no hang).
-            await { scenario.get { it.text(R.id.reviewStatus).contains("Page 2 of 2") } }
             scenario.onActivity { a ->
                 assertTrue(File(dir, "page_001.jpg.del").exists())
                 assertEquals(1, a.currentIndex)
@@ -370,11 +376,13 @@ class ScanReviewFocusArrangeTest {
             scenario.onActivity { a ->
                 a.findViewById<View>(com.google.android.material.R.id.snackbar_action).performClick()
             }
-            await {
-                scenario.get {
-                    File(dir, "page_001.jpg").exists() &&
-                        it.text(R.id.btnSavePdf) == "Save 3 pages"
-                }
+            // Undo is synchronous too: the action click restores the `.del` page and
+            // re-renders the Save label before performClick() returns.
+            scenario.onActivity { a ->
+                assertTrue("undo did not restore the page: " + deleteSnapshot(a, dir),
+                    File(dir, "page_001.jpg").exists())
+                assertEquals("Save label did not follow the undo: " + deleteSnapshot(a, dir),
+                    "Save 3 pages", a.text(R.id.btnSavePdf))
             }
         }
     }
@@ -541,6 +549,14 @@ class ScanReviewFocusArrangeTest {
 
     private fun snackbarText(a: Activity): String? =
         a.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)?.text?.toString()
+
+    private fun deleteSnapshot(a: ScanReviewActivity, dir: File): String =
+        "status=" + a.text(R.id.reviewStatus) +
+            " save=" + a.text(R.id.btnSavePdf) +
+            " busy=" + a.pageOpBusy + " index=" + a.currentIndex +
+            " files=" + (dir.listFiles()?.map { it.name }?.sorted() ?: emptyList<String>()) +
+            " snack=" + snackbarText(a) +
+            " action=" + a.findViewById<View>(com.google.android.material.R.id.snackbar_action)
 
     private fun <T> SwActivitySession<ScanReviewActivity>.get(block: (ScanReviewActivity) -> T): T =
         block(activity)

@@ -169,7 +169,9 @@ class W7CreateImportRoutingTest : W7CreateBase() {
     }
 
     @Test(timeout = 60_000)
-    fun `Import PDF opens the PDF picker in one tap with no chooser sheet`() {
+    fun `Import PDF shows the rasterise notice before the picker`() {
+        // DQA D1: deliberately updated — "one tap to picker" is superseded by the approved
+        // notice. The picker still opens directly from the notice, with no Photos/PDF chooser.
         ActivityScenario.launch(ShellActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 idle()
@@ -177,6 +179,15 @@ class W7CreateImportRoutingTest : W7CreateBase() {
                 val sheet = openCreate(activity)
 
                 sheet.findViewById<View>(R.id.swCreateImport).performClick()
+                idle()
+                val notice = ShadowDialog.getLatestDialog()!!
+                assertTrue("the rasterise notice opens", notice.isShowing)
+                assertEquals(
+                    activity.getString(R.string.import_raster_notice),
+                    notice.findViewById<TextView>(R.id.swSheetMessage).text.toString()
+                )
+                assertNull("nothing is picked before Continue", shadowOf(activity).nextStartedActivityForResult)
+                notice.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
 
                 val shadow = shadowOf(activity)
@@ -254,6 +265,9 @@ class W7CreateImportRoutingTest : W7CreateBase() {
                 val disc = activity.findViewById<View>(R.id.swNavScan)
                 val sheet = openCreate(activity)
                 sheet.findViewById<View>(R.id.swCreateImport).performClick()
+                idle()
+                val notice = ShadowDialog.getLatestDialog()!!
+                notice.findViewById<View>(R.id.swSheetPrimary).performClick()
                 idle()
 
                 val shadow = shadowOf(activity)
@@ -386,8 +400,8 @@ class W7ToolsExpansionTest : W7CreateBase() {
                 root(activity).findFocus() === search
             )
             assertEquals(
-                "the seven job cards are back",
-                ToolRegistry.jobs().size,
+                "the B3 student-jobs card and the seven job cards are back",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
         }
@@ -569,8 +583,8 @@ abstract class W7ToolsStateBase : W7CreateBase() {
 
             assertTrue("the field is empty again", search.text.isNullOrEmpty())
             assertEquals(
-                "the seven job cards are back",
-                ToolRegistry.jobs().size,
+                "the B3 student-jobs card and the seven job cards are back",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
             assertTrue(
@@ -641,8 +655,8 @@ abstract class W7ToolsStateBase : W7CreateBase() {
             layoutRoot(activity)
 
             assertEquals(
-                "the jobs render after a retry",
-                ToolRegistry.jobs().size,
+                "the student jobs and the grouped jobs render after a retry",
+                ToolRegistry.jobs().size + 1,
                 body.childCount
             )
             assertNull(

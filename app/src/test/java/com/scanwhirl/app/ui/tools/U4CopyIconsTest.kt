@@ -56,7 +56,7 @@ abstract class U4CopyIconsBase {
     }
 
     @Test fun meBackupIsShortButBackupWarningsRemain() {
-        assertEquals(if (hi) "कूटबद्ध प्रति सहेजें और वापस लाएँ।" else "Encrypted backup and restore.",
+        assertEquals(if (hi) "कूटबद्ध प्रतियाँ।" else "Encrypted backups.",
             app.getString(R.string.me_backup_summary))
         val backup = source("backup/BackupActivity.kt")
         assertTrue(backup.contains("R.string.backup_explain"))

@@ -44,11 +44,19 @@ class ScannerFallbackResumeTest {
     @Before fun reset() {
         File(app.filesDir, PendingScans.ROOT).deleteRecursively()
         ScanLauncher.resetColdStartOfferForTest()
+        // Merge interaction: these are process-wide seams. Sibling resume tests reset them in
+        // @Before/@After; without that, a leaked "sheet showing" guard or a queued test dispatcher
+        // from another test in the same fork silently suppresses this test's offer and the await
+        // below times out. The product behaviour and this test's assertion are unchanged.
+        ScanLauncher.resetResumeOfferStateForTest()
+        ScanLauncher.offerDispatcherForTest = null
         ShadowDialog.reset()
     }
 
     @After fun clean() {
         File(app.filesDir, PendingScans.ROOT).deleteRecursively()
+        ScanLauncher.resetResumeOfferStateForTest()
+        ScanLauncher.offerDispatcherForTest = null
         ShadowDialog.reset()
     }
 

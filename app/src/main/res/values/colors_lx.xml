@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- LX-local semantic roles from COPY_DIET A1, now theme-aware. -->
 <resources>
-    <!-- LX-local semantic roles from COPY_DIET §1. Shared role tokens belong to CD-core;
-         these are scoped to the Link index screen so this lane does not recolor the app. -->
-    <color name="lx_primary">#FFFFFF</color>
-    <color name="lx_secondary">#B3BCC2</color>
-    <color name="lx_tertiary">#8D979E</color>
-    <color name="lx_action">#62E1F1</color>
-    <color name="lx_warning">#F2B654</color>
+    <color name="lx_primary">@color/tok_text</color>
+    <color name="lx_secondary">@color/tok_text_2</color>
+    <color name="lx_tertiary">@color/tok_text_3</color>
+    <color name="lx_action">@color/tok_accent</color>
+    <color name="lx_warning">@color/tok_warn</color>
 </resources>

@@ -30,6 +30,5 @@
     <string name="v2c_error_no_space">पर्याप्त खाली जगह नहीं है। जगह खाली करके फिर कोशिश करें।</string>
     <string name="v2c_error_scanner">स्कैन उपलब्ध नहीं है। तस्वीरें चुनें।</string>
     <string name="v2c_error_generic">यह काम पूरा नहीं हो सका। फिर कोशिश करें।</string>
-    <string name="v2c_book_failed">किताब नहीं बन सकी: %1$s</string>
     <string name="v2c_capture_failed">तस्वीर लेना विफल रहा: %1$s</string>
 </resources>

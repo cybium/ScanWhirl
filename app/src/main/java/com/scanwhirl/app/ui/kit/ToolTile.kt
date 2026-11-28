@@ -275,6 +275,29 @@ class ToolTile(context: Context) : FrameLayout(context) {
         // its column must not touch the one beside it.
         val inset = SwStyle.dp(context, 2f)
         labelView.setPadding(inset, 0, inset, 0)
+        // VQA V081: the strip scrolls, so the last tile is only partly on screen. Keep the
+        // glyph and label against the tile's LEFT edge instead of centring them: the visible
+        // part of a clipped neighbour still shows the whole icon and its whole name.
+        inner.gravity = Gravity.TOP or Gravity.START
+        val edge = SwStyle.dp(context, 4f)
+        inner.setPadding(edge, inner.paddingTop, edge, inner.paddingBottom)
+        labelView.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+    }
+
+    /**
+     * VQA V023: on a 640dp-tall phone (the API 24 leg) a 94dp tile pushes the second row's
+     * labels under the dock. Reclaim the badge band and the generous gaps: the 48dp icon
+     * container, the whole label and the 48dp touch target all stay; only empty space goes.
+     */
+    fun compact() {
+        val d = resources.displayMetrics.density
+        inner.setPadding(
+            SwStyle.dp(context, 4f), (2f * d).toInt(),
+            SwStyle.dp(context, 4f), (2f * d).toInt()
+        )
+        // Keep a 4dp band above the 48dp plate so the PRO word still clears the glyph.
+        (iconSlot.layoutParams as LinearLayout.LayoutParams).height = (52f * d).toInt()
+        (labelView.layoutParams as LinearLayout.LayoutParams).topMargin = (2f * d).toInt()
     }
 
     private fun setImageResourceInternal(res: Int) {

@@ -108,7 +108,9 @@ class CategoryPickerSheetTest {
                 )
                 assertEquals(
                     "row tint must come from CategoryStyle for ${row.tag}",
-                    com.scanwhirl.app.util.CategoryStyle.color(row.tag as String),
+                    // W5a: the painted tint is the theme-aware token, not the frozen
+                    // dark identity constant.
+                    com.scanwhirl.app.util.CategoryStyle.color(row.tag as String, activity),
                     (row.getChildAt(0).background as android.graphics.drawable.GradientDrawable)
                         .color?.defaultColor
                 )

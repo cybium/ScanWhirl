@@ -29,6 +29,7 @@ import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.tools.ToolFirstScreenCopy
 import com.scanwhirl.app.util.AppLocale
 import com.scanwhirl.app.util.ClipboardPrivacy
 import com.scanwhirl.app.util.SecureView
@@ -90,6 +91,19 @@ class QrActivity : BaseActivity() {
             background = SwStyle.gradient(this@QrActivity, 0x1200F0FF, SwStyle.color(this@QrActivity, R.color.rv_bg), radiusDp = 0f)
         }
         root.addView(appBar())
+        // VQA V103: "QR code scan" can mean create or read; the first screen says it reads a code.
+        ToolFirstScreenCopy.text(this, "qr_code")?.let { purpose ->
+            root.addView(
+                SwStyle.text(this, 13f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                    id = R.id.toolFirstPurpose
+                    text = purpose
+                    setPadding(
+                        SwStyle.dp(this@QrActivity, 18f), 0,
+                        SwStyle.dp(this@QrActivity, 18f), SwStyle.dp(this@QrActivity, 8f)
+                    )
+                }
+            )
+        }
         root.addView(header())
         val scroll = ScrollView(this).apply { isFillViewport = true }
         contentHost = LinearLayout(this).apply {

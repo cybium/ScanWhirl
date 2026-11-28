@@ -96,7 +96,15 @@ abstract class ExportResultCompareBase {
                 assertEquals(
                     app.getString(R.string.cc_no_before_image), view.emptyLabel().text.toString()
                 )
-                assertEquals(View.GONE, view.beforeImageView().visibility)
+                // The before pane is hidden after an async decode; wait for that
+                // state before asserting it (the assertion itself is unchanged).
+                val beforeView = view.beforeImageView()
+                val deadline = System.currentTimeMillis() + 3_000
+                while (beforeView.visibility != View.GONE && System.currentTimeMillis() < deadline) {
+                    idle()
+                    Thread.sleep(10)
+                }
+                assertEquals(View.GONE, beforeView.visibility)
                 val hero = activity.findViewById<TextView>(R.id.resultStats).text.toString()
                 assertTrue("before size still in hero: $hero", hero.contains("290 KB"))
                 assertTrue("measured after size still in hero: $hero",

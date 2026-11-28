@@ -2,7 +2,7 @@
 <!-- Full Backup 2.0: वापसी और प्रति सहेजना. -->
 <resources>
     <string name="me_backup">प्रति सहेजना और वापस लाना</string>
-    <string name="me_backup_summary">कूटबद्ध प्रति सहेजें और वापस लाएँ।</string>
+    <string name="me_backup_summary">कूटबद्ध प्रतियाँ।</string>
 
     <string name="backup_title">प्रति सहेजना और वापस लाना</string>
     <string name="backup_explain">स्कैन, हस्ताक्षर और सेटिंग की ऐसी स्थानीय प्रति बनाएँ जिसे पासवर्ड या कोड के बिना पढ़ा नहीं जा सकता। तिजोरी तैयार होने पर ही उसकी फ़ाइलें जुड़ेंगी। भरोसा करने से पहले चेतावनियाँ देखें।</string>

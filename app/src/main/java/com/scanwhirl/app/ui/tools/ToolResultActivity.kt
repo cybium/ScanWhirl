@@ -536,7 +536,9 @@ class ToolResultActivity : BaseActivity() {
                 setPadding(pad, pad, pad, pad)
             }
             background = SwStyle.rounded(
-                this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.void_abyss),
+                // A white paper card needs a dark backdrop in BOTH themes; the old
+                // void_abyss alias is light in light mode and erased the edge line.
+                this@ToolResultActivity, SwStyle.color(this@ToolResultActivity, R.color.tok_preview_backdrop),
                 radiusDp = 16f, stroke = ID_PREVIEW_LINE
             )
             clipToOutline = true

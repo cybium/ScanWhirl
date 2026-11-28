@@ -187,16 +187,16 @@ class Phase5ScreensTest {
     // --- 5A Settings --------------------------------------------------------
 
     @Test(timeout = 60_000)
-    fun `settings hides the theme row and pins orbital dark`() {
+    fun `settings shows the theme row and follows the system by default`() {
+        app.getSharedPreferences("scanwhirl_prefs", 0).edit().remove("theme_mode").commit()
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                // D1: row stays in the XML (locked ID) but is hidden at runtime.
+                // B2: the row is a real choice again, and the default is Follow system.
                 val rowTheme = activity.findViewById<View>(R.id.rowTheme)
                 assertNotNull("rowTheme must remain in the tree", rowTheme)
-                assertEquals(View.GONE, rowTheme.visibility)
-                // …and the summary is pinned to the one theme we ship.
+                assertEquals(View.VISIBLE, rowTheme.visibility)
                 val subTheme = activity.findViewById<TextView>(R.id.subTheme)
-                assertEquals("Orbital Dark", subTheme.text.toString())
+                assertEquals("Follow system", subTheme.text.toString())
             }
         }
     }

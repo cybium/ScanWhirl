@@ -272,7 +272,7 @@ class ToolSetupActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             val side = SwStyle.dp(this@ToolSetupActivity, 18f)
             setPadding(side, SwStyle.dp(this@ToolSetupActivity, 10f), side, SwStyle.dp(this@ToolSetupActivity, 12f))
-            setBackgroundColor(0xFF0E1316.toInt())
+            setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.tok_surface))
             addView(View(this@ToolSetupActivity).apply {
                 setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.sw_cyan_hair))
             }, LinearLayout.LayoutParams(
@@ -343,6 +343,21 @@ class ToolSetupActivity : BaseActivity() {
         levelRows.clear()
         levelSizes.clear()
         column.addView(header())
+        // VQA V114/V104/V105/V107: the first screen must say what the tool does, not just its
+        // format name. One short line; no extra choice and no promise about the output.
+        ToolFirstScreenCopy.text(this, tool.id)?.let { purpose ->
+            column.addView(
+                SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
+                    id = R.id.toolSetupPurpose
+                    text = purpose
+                    hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                    setPadding(0, SwStyle.dp(this@ToolSetupActivity, 8f), 0, 0)
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
         column.addView(sectionLabel(getString(R.string.tools_pick_choose_doc)))
         column.addView(documentSource())
         column.addView(sectionLabel(getString(R.string.tools_setup_options)))

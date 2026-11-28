@@ -1,34 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- L3 v2 "Book pages" tool (70_APP_DESIGN.md §3, Create). -->
-    <string name="book_title">Book pages</string>
-    <string name="book_hint">Choose a photo of each two-page spread. Drag the line if the fold is not right.</string>
-    <string name="book_pick">Choose photos</string>
-    <string name="book_add">Add photos</string>
-    <string name="book_create">Create document</string>
-    <string name="book_loading">Preparing the previews…</string>
-    <string name="book_splitting">Splitting the spreads…</string>
-    <string name="book_spread">Spread %1$d</string>
-    <string name="book_gutter_found">Gutter found. Drag to adjust.</string>
-    <string name="book_gutter_middle">Check the line.</string>
     <string name="book_gutter_horizontal">Pages will be turned upright.</string>
-    <string name="book_gutter_moved">Gutter set by hand.</string>
-    <string name="book_one_page_note">Looks like one page.</string>
-    <string name="book_keep_one_page">Keep as one page</string>
-    <string name="book_rotate">Flip pages</string>
-    <string name="book_add_spread">Add a spread</string>
-    <string name="book_add_spread_note">The scanner crops the book edges; you can adjust the corners there.</string>
-    <string name="book_scan_camera">Scan with camera</string>
-    <string name="book_from_photos">From photos</string>
     <string name="book_scanner_fallback">The scanner is not available. Pick photos instead.</string>
-    <string name="book_doc_name">Book %1$s</string>
-    <plurals name="book_created">
-        <item quantity="one">%1$d page created</item>
-        <item quantity="other">%1$d pages created</item>
-    </plurals>
     <string name="book_failed">Could not split the photos: %1$s</string>
-    <string name="book_no_images">No photos chosen yet.</string>
-    <string name="book_read_failed">Could not read one of those photos.</string>
-    <string name="book_preview_desc">Two-page spread with a draggable gutter line</string>
-    <string name="book_close">Close</string>
 </resources>

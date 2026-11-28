@@ -1150,7 +1150,8 @@ class LibraryScreen(
             if (chosen.isNotEmpty()) callbacks.onShareDocs(chosen)
         }
         // v2 UI: 03_tools_hub — L4's Batch screen opens with these ids preselected.
-        action(actions, R.id.swSelBatch, R.drawable.ic_sym_view_module, R.string.sel_batch) {
+        // W5a-2 (V099): Batch has ONE glyph across tools, results, Pro and selection.
+        action(actions, R.id.swSelBatch, R.drawable.ic_sw_batch, R.string.sel_batch) {
             val ids = docs.filter { it.id in selected }.map { it.id }
             if (ids.isEmpty()) return@action
             requirePro {

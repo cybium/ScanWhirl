@@ -1,27 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ScanWhirl icon family: "rotate" (Rotate). Original 24x24 glyph, 1.75 stroke,
-     round caps; pathData ported 1:1 from visual/src/icons.js. Tinted by the host. -->
+<!-- W5a-2 (V109): the kit rotate glyph — the same connected circular arrow as
+     ic_sym_rotate_left, so editor and page actions share one meaning. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:pathData="M4.5 10.5h8.5v10h-8.5z"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M8 6.8A8 8 0 0 1 19.8 13"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M17.3 12.4l2.5.9.9-2.6"
+        android:pathData="M4.8,11.2a7.4,7.4 0 1,1 2.4,6.6M4.6,5.6v5.8h5.8"
         android:strokeColor="#FFFFFFFF"
         android:strokeWidth="1.75"
         android:strokeLineCap="round"

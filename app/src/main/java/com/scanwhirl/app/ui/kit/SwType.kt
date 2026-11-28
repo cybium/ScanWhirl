@@ -15,6 +15,17 @@ import java.util.WeakHashMap
  */
 object SwType {
 
+    /**
+     * W5a: the one type scale (frontend-v09/core/tokens.css `--fs-*`). Screens ask for
+     * a role, never an ad-hoc sp literal. Values are sp at font scale 1.0 and are
+     * exposed as `sw_text_*` dimens for XML that cannot call Kotlin.
+     */
+    const val TITLE_SP = 20f
+    const val HEADING_SP = 17f
+    const val BODY_SP = 15f
+    const val SMALL_SP = 13f
+    const val CAPTION_SP = 12f
+
     const val REGULAR = 400
     const val MEDIUM = 500
     const val SEMIBOLD = 600

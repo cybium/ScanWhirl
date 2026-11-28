@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SH2 copy diet roles (COPY_DIET §1). Lane-local prefix so CD-core's planned
-     sw_text_* aliases can land without a collision. No global restyling. -->
+<!-- SH2 copy-diet roles. Lane-local names, one shared token palette. -->
 <resources>
-    <color name="sw_sh2_text_primary">#FFFFFF</color>
-    <color name="sw_sh2_text_secondary">#B3BCC2</color>
-    <color name="sw_sh2_text_tertiary">#8D979E</color>
-    <color name="sw_sh2_text_danger">#FF8C82</color>
-    <color name="sw_sh2_text_warning">#F2B654</color>
+    <color name="sw_sh2_text_primary">@color/tok_text</color>
+    <color name="sw_sh2_text_secondary">@color/tok_text_2</color>
+    <color name="sw_sh2_text_tertiary">@color/tok_text_3</color>
+    <color name="sw_sh2_text_danger">@color/tok_danger</color>
+    <color name="sw_sh2_text_warning">@color/tok_warn</color>
 </resources>

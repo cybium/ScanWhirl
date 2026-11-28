@@ -1,9 +1,25 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Rounded 'call_merge', Apache License 2.0, Google. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="960" android:viewportHeight="960">
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Symbols contract: 960 viewport; paths authored on a 24 grid and scaled. -->
     <group android:translateY="960">
-        <path android:fillColor="@android:color/white" android:pathData="M257-216q0-17 11-28l172-172v-269l-75 75q-12 12-28 12t-28-12q-12-12-12-28.5t12-28.5l143-144q6-6 13-8.5t15-2.5q8 0 15 2.5t13 8.5l145 145q12 12 12 28t-12 28q-12 12-28.5 12T596-610l-76-75v268q0 16-6 30.5T497-361L324-188q-11 11-28 11t-28-11q-11-11-11-28Zm435 29q-11 11-28 11t-28-11l-72-71q-12-12-12-28t12-28q12-12 28.5-12t28.5 12l71 71q11 11 11.5 27.5T692-187Z" />
+        <group android:scaleX="40" android:scaleY="40" android:translateY="-960">
+        <path
+                android:pathData="M4,4.8v3c0,2 1.6,3.6 3.6,3.6H12M20,4.8v3c0,2 -1.6,3.6 -3.6,3.6H12M12,11.4v7.2"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+            <path
+                android:pathData="M9.7,16.1 12,18.6l2.3,-2.5"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.75"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:fillColor="#00000000" />
+        </group>
     </group>
 </vector>

@@ -304,7 +304,7 @@ class TrashActivity : BaseActivity() {
             b.btnTrashDelete.contentDescription = getString(R.string.trash_delete_forever_named, doc.name)
 
             // At large text the two labelled actions stack instead of clipping.
-            val stacked = resources.configuration.fontScale >= MainActivity.LARGE_TEXT_SCALE
+            val stacked = resources.configuration.fontScale >= 1.3f // legacy Home threshold; it owned this constant
             b.trashActions.orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             listOf(b.btnTrashDelete, b.btnTrashRestore).forEach { v ->
                 (v.layoutParams as LinearLayout.LayoutParams).apply {

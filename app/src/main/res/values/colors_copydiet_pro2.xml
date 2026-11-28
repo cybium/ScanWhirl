@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PRO2 role aliases from COPY_DIET §1. Pro-only; no global restyling of legacy mid/dim callers.
-     Gold-tile text uses P or S here: T (#8D979E) is 3.80:1 on #433A14 and must never be used. -->
+<!-- PRO2 role aliases from COPY_DIET A1. Gold-tile text uses P or S; T is never used there. -->
 <resources>
-    <color name="copydiet_pro2_primary">#FFFFFF</color>
-    <color name="copydiet_pro2_secondary">#B3BCC2</color>
-    <color name="copydiet_pro2_tertiary">#8D979E</color>
-    <color name="copydiet_pro2_accent">#62E1F1</color>
+    <color name="copydiet_pro2_primary">@color/tok_text</color>
+    <color name="copydiet_pro2_secondary">@color/tok_text_2</color>
+    <color name="copydiet_pro2_tertiary">@color/tok_text_3</color>
+    <color name="copydiet_pro2_accent">@color/tok_accent</color>
 </resources>

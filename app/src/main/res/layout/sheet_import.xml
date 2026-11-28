@@ -171,6 +171,16 @@
                     android:text="@string/import_pdf_desc"
                     android:textColor="@color/rv_ink_2"
                     android:textSize="13sp" />
+
+                <!-- D1: the same sentence as every other PDF door, from ImportRasterNotice. -->
+                <TextView
+                    android:id="@+id/importPdfRasterNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/import_raster_notice"
+                    android:textColor="@color/rv_ink_3"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <ImageView

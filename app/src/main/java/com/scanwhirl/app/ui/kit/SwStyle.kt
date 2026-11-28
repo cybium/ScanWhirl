@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -25,6 +26,22 @@ import com.scanwhirl.app.util.AppLanguage
  */
 object SwStyle {
 
+    /** W5a: the one space scale (frontend-v09/core/tokens.css `--sp1`..`--sp6`). */
+    const val SPACE_1_DP = 4f
+    const val SPACE_2_DP = 8f
+    const val SPACE_3_DP = 12f
+    const val SPACE_4_DP = 16f
+    const val SPACE_5_DP = 20f
+    const val SPACE_6_DP = 24f
+
+    /** W5a: the one shape scale (`--r-card`, `--r-ctl`, `--r-sheet`). */
+    const val RADIUS_CARD_DP = 16f
+    const val RADIUS_CONTROL_DP = 12f
+    const val RADIUS_SHEET_DP = 24f
+
+    /** W5a: `--touch`. Every tappable kit control keeps at least this box. */
+    const val TOUCH_MIN_DP = 48f
+
     fun dp(context: Context, value: Float): Int =
         (value * context.resources.displayMetrics.density).toInt()
 
@@ -32,8 +49,12 @@ object SwStyle {
         if (SwTheme.isGold(context)) SwTheme.accent(context, res)
         else ContextCompat.getColor(context, res)
 
-    /** Glass card: `#1C252A → #161D21`, 1dp cyan hairline, radius 18/26. */
-    fun card(context: Context, radiusDp: Float = 18f): GradientDrawable =
+    /**
+     * Kit card. The two surfaces are semantic tokens (light: white/#eef3f4,
+     * dark: #162024/#1d2a2f), so no dark-only literal survives the card paint.
+     * Radius is the token card radius; callers may still pass an explicit legacy value.
+     */
+    fun card(context: Context, radiusDp: Float = RADIUS_CARD_DP): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(color(context, R.color.glass_surface_raised), color(context, R.color.glass_surface))
@@ -139,11 +160,11 @@ object SwStyle {
     fun quietAction(
         context: Context,
         view: TextView,
-        radiusDp: Float = 16f,
+        radiusDp: Float = RADIUS_CONTROL_DP,
         strokeDp: Float = 1f
     ): TextView = asButton(view).apply {
         isClickable = true
-        minimumHeight = dp(context, 48f)
+        minimumHeight = dp(context, TOUCH_MIN_DP)
         val padH = dp(context, 12f)
         setPadding(padH, dp(context, 8f), padH, dp(context, 8f))
         val rest = rounded(
@@ -164,7 +185,7 @@ object SwStyle {
             setImageResource(iconRes)
             imageTintList = android.content.res.ColorStateList.valueOf(tint)
             background = rounded(context, Color.TRANSPARENT, 999f)
-            val size = dp(context, 48f)
+            val size = dp(context, TOUCH_MIN_DP)
             layoutParams = LinearLayout.LayoutParams(size, size)
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             // CENTER_INSIDE never upscales the intrinsic 24dp vector. Retain 8dp padding:
@@ -172,16 +193,48 @@ object SwStyle {
             setPadding(dp(context, 8f), dp(context, 8f), dp(context, 8f), dp(context, 8f))
         }
 
+    /**
+     * W5a-2 (V072): a kit label that never splits a word. At font 2.0 on a 320dp
+     * screen a long single word would otherwise be broken mid-glyph ("Messa / ges").
+     * Two whole lines are allowed; anything longer ellipsizes.
+     */
+    fun twoLineLabel(
+        context: Context,
+        sizeSp: Float,
+        textColor: Int,
+        maxLines: Int = 2
+    ): TextView = text(context, sizeSp, textColor).apply {
+        this.maxLines = maxLines
+        ellipsize = TextUtils.TruncateAt.END
+        hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+        breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+        includeFontPadding = false
+    }
+
+    /**
+     * W5a-2 (V063/V091): the one kit divider. It stops at the card's padding on
+     * both ends instead of running into the border, and uses the visible
+     * functional hairline so "Results" separators no longer vanish in dark.
+     */
+    fun divider(context: Context, insetDp: Float = SPACE_4_DP): View = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1f).coerceAtLeast(1)
+        ).apply {
+            setMargins(dp(context, insetDp), 0, dp(context, insetDp), 0)
+        }
+        setBackgroundColor(color(context, R.color.tok_hairline_functional))
+    }
+
     /** Section header: uppercase label + count, on a glass card. */
     fun sectionHeader(context: Context, title: String, count: Int): LinearLayout =
         LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val label = text(context, 12f, color(context, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f)
+            val label = text(context, SwType.CAPTION_SP, color(context, R.color.text_hologram_mid), bold = true, letterSpacing = 0.08f)
             label.text = title.uppercase(java.util.Locale.getDefault())
             addView(label, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(
-                text(context, 12f, color(context, R.color.text_hologram_mid), bold = true).apply {
+                text(context, SwType.CAPTION_SP, color(context, R.color.text_hologram_mid), bold = true).apply {
                     text = count.toString()
                 }
             )

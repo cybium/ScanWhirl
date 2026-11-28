@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VQA V103–V107 / V114: one plain-language purpose line on each named tool's FIRST screen.
+         The hub tile may keep its short format noun; the tool screen must say what it does.
+         Kept under 40 characters so font 2.0 does not clip at 320 dp. -->
+    <string name="w5e_purpose_split">Split a PDF by page range.</string>
+    <string name="w5e_purpose_to_word">Turn pages into a Word file.</string>
+    <string name="w5e_purpose_to_excel">Turn tables into an Excel sheet.</string>
+    <string name="w5e_purpose_to_powerpoint">Turn pages into slides.</string>
+    <string name="w5e_purpose_long_image">Join pages into one long picture.</string>
+    <string name="w5e_purpose_zip">Put documents in one ZIP file.</string>
+    <string name="w5e_purpose_pdfa">Make a copy for long-term use.</string>
+    <string name="w5e_purpose_batch_tools">Do one action on many documents.</string>
+    <string name="w5e_purpose_searchable_pdf">Make words in the PDF findable.</string>
+    <string name="w5e_purpose_link_index">List links to pages in this file.</string>
+    <string name="w5e_purpose_form_ready">Fit a photo to the form\'s size.</string>
+    <string name="w5e_purpose_remove_metadata">Remove hidden details from the PDF.</string>
+    <string name="w5e_purpose_qr_code">Read a code with the camera.</string>
+    <string name="w5e_purpose_protect">Add a password to a PDF.</string>
+    <string name="w5e_purpose_unlock">Remove a PDF password.</string>
+    <string name="w5e_purpose_read_text">Find and edit words already on a page.</string>
+    <!-- V107: the distinction lives in an overflow sheet, not on the budgeted OCR screen. -->
+    <string name="w5e_ocr_about_title">About reading text</string>
+    <string name="w5e_ocr_about_p1">Reading finds words already on a page and lets you copy or edit them.</string>
+    <string name="w5e_ocr_about_p2">Searchable PDF adds those words to the PDF so you can find them later.</string>
+    <string name="w5e_ocr_about_p3">A scanned image has no words until they are read.</string>
+</resources>
