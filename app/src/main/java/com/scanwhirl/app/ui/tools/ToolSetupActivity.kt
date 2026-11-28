@@ -121,8 +121,6 @@ class ToolSetupActivity : BaseActivity() {
     private lateinit var compressSizeBlock: View
     private lateinit var compressQualityMode: TextView
     private lateinit var compressSizeMode: TextView
-    /** J2: the only late callbacks allowed to paint this screen are this render's. */
-    private var compressRenderSeq: Long = 0L
 
     /** V2T T2: a caller may hand us one verified output document to act on. */
     private var preselectedDocId: String? = null
@@ -858,7 +856,6 @@ class ToolSetupActivity : BaseActivity() {
      * other are Activity state, so each aim keeps its own choice across a switch or a rotation.
      */
     private fun buildCompressOptions() {
-        val seq = ++compressRenderSeq
         levelRows.clear()
         levelSizes.clear()
         compressTargetChips.clear()
@@ -893,7 +890,7 @@ class ToolSetupActivity : BaseActivity() {
         buildCompressSizeRows()
         applyCompressMode()
         compressRetry.isVisible = false
-        startEstimate(seq)
+        startEstimate()
         // A re-render (selection change, onResume) rebuilds the size labels: show the
         // estimates already measured instead of a fresh empty row.
         updateEstimateLines()
@@ -948,6 +945,7 @@ class ToolSetupActivity : BaseActivity() {
         val stack = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             id = R.id.toolSetupLevels
+            tag = COMPRESS_QUALITY_BLOCK_TAG
         }
         for (level in levels) {
             val check = ImageView(this).apply {
@@ -1001,8 +999,31 @@ class ToolSetupActivity : BaseActivity() {
                 marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f)
                 if (stackEstimate) bottomMargin = SwStyle.dp(this@ToolSetupActivity, 4f)
             })
-            row.addView(
+            // The recommended badge sits BELOW its label: beside it would steal the width
+            // "Balanced" needs and made the label wrap at 320 dp in the fit test.
+            val labelWrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            labelWrap.addView(
                 label,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+            if (level.index == 1) {
+                labelWrap.addView(
+                    SwStyle.text(
+                        this, 12f, SwStyle.color(this, R.color.cyan_primary), bold = true
+                    ).apply {
+                        tag = COMPRESS_RECOMMENDED_TAG
+                        text = getString(R.string.ux130_l3_compress_recommended)
+                        maxLines = Int.MAX_VALUE
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+            row.addView(
+                labelWrap,
                 if (stackEstimate) {
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1013,20 +1034,6 @@ class ToolSetupActivity : BaseActivity() {
                     }
                 }
             )
-            if (level.index == 1) {
-                row.addView(
-                    SwStyle.text(
-                        this, 12f, SwStyle.color(this, R.color.cyan_primary), bold = true
-                    ).apply {
-                        tag = COMPRESS_RECOMMENDED_TAG
-                        text = getString(R.string.ux130_l3_compress_recommended)
-                        maxLines = Int.MAX_VALUE
-                    },
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) }
-                )
-            }
             row.addView(size, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { if (stackEstimate) topMargin = SwStyle.dp(this@ToolSetupActivity, 4f) })
@@ -1043,7 +1050,10 @@ class ToolSetupActivity : BaseActivity() {
 
     /** Four decimal targets plus a Custom numeric field and its KB/MB choice. */
     private fun buildCompressSizeRows() {
-        val block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val block = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = COMPRESS_SIZE_BLOCK_TAG
+        }
         block.addView(
             SwStyle.text(this, 14f, SwStyle.color(this, R.color.text_hologram_mid)).apply {
                 text = getString(R.string.compress_target_help)
@@ -1088,7 +1098,8 @@ class ToolSetupActivity : BaseActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 12f) }
         )
-        val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // The numeric field keeps the FULL row width so its hint fits at 320/360 dp;
+        // the unit choice is a separate labelled row directly beneath it.
         val field = field(
             R.string.tools_pick_custom_size, R.id.toolSetupTarget, targetText,
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -1101,9 +1112,10 @@ class ToolSetupActivity : BaseActivity() {
                 compressRetry.isVisible = false
             }
         }
-        pair.addView(field, LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-        ).apply { marginEnd = SwStyle.dp(this@ToolSetupActivity, 8f) })
+        block.addView(field, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        val unitRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val unitKb = compressModeButton(
             getString(R.string.ux130_l3_compress_target_200kb).substringAfter(' '),
             UNIT_KB, COMPRESS_UNIT_KB_TAG
@@ -1130,14 +1142,16 @@ class ToolSetupActivity : BaseActivity() {
             paintCompressTargets()
             errorView.isVisible = false
         }
-        pair.addView(unitKb, LinearLayout.LayoutParams(
+        unitRow.addView(unitKb, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
-        pair.addView(unitMb, LinearLayout.LayoutParams(
+        unitRow.addView(unitMb, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { marginStart = SwStyle.dp(this@ToolSetupActivity, 4f) })
         paintCompressUnits(unitKb, unitMb)
-        block.addView(pair)
+        block.addView(unitRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = SwStyle.dp(this@ToolSetupActivity, 6f) })
         compressSizeBlock = block
         optionsHost.addView(block)
     }
@@ -1221,7 +1235,7 @@ class ToolSetupActivity : BaseActivity() {
     }
 
     /** Estimates each level on two sample pages (the same extrapolation as CompressFlow). */
-    private fun startEstimate(seq: Long) {
+    private fun startEstimate() {
         val doc = selected.firstOrNull()?.let { id -> docs.firstOrNull { it.id == id } } ?: return
         if (estimatesFor == doc.id) return
         estimatesFor = doc.id
@@ -1243,8 +1257,9 @@ class ToolSetupActivity : BaseActivity() {
                     }
                 }.getOrNull()
             }
-            // J2: a mode switch or a re-render replaces the rows; never paint into them late.
-            if (estimates != null && seq == compressRenderSeq && selected.firstOrNull() == doc.id) {
+            // A re-render replaces the row views, but updateEstimateLines() reads the saved
+            // values and paints every current row, so a late result still lands in place.
+            if (estimates != null && selected.firstOrNull() == doc.id) {
                 compressEstimates = estimates
                 updateEstimateLines()
             }
@@ -2146,6 +2161,8 @@ class ToolSetupActivity : BaseActivity() {
         const val NAME_ERROR_TAG = "co_name_required"
         /** J2: tags let tests and the atlas find the two-mode setup without new shared ids. */
         const val COMPRESS_MODES_TAG = "j2:compress-modes"
+        const val COMPRESS_QUALITY_BLOCK_TAG = "j2:compress-quality-block"
+        const val COMPRESS_SIZE_BLOCK_TAG = "j2:compress-size-block"
         const val COMPRESS_MODE_QUALITY_TAG = "j2:compress-mode-quality"
         const val COMPRESS_MODE_SIZE_TAG = "j2:compress-mode-size"
         const val COMPRESS_RECOMMENDED_TAG = "j2:compress-recommended"

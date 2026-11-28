@@ -19,7 +19,7 @@
     <string name="ux130_l3_compress_target_500kb">500 KB</string>
     <string name="ux130_l3_compress_target_1mb">1 MB</string>
     <string name="ux130_l3_compress_target_2mb">2 MB</string>
-    <string name="ux130_l3_compress_custom">कस्टम</string>
+    <string name="ux130_l3_compress_custom">अपना आकार</string>
     <string name="ux130_l3_compress_invalid_custom">KB या MB में मान्य आकार दर्ज करें।</string>
     <!-- J2: वास्तविक पृष्ठ गणना और रद्द करने पर कुछ भी नहीं बनता. -->
     <string name="ux130_l3_compress_progress_page">पृष्ठ %1$d / %2$d</string>

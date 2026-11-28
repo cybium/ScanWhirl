@@ -13,6 +13,7 @@ import com.scanwhirl.app.R
 import com.scanwhirl.app.store.DocFixtures
 import com.scanwhirl.app.store.ScanRepository
 import com.scanwhirl.app.store.V2tResultReceiptStore
+import com.scanwhirl.app.util.StatusLine
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,7 +79,6 @@ class J2CompressHarmTest {
     }
 
     private fun openSetup(block: (ActivityScenario<ToolSetupActivity>) -> Unit) {
-        DocFixtures.saved(repo, app, pages = 2, name = "J2 Physics notes")
         ActivityScenario.launch<ToolSetupActivity>(
             ToolSetupActivity.intent(app, "compress")
         ).use(block)
@@ -88,6 +88,7 @@ class J2CompressHarmTest {
 
     @Test
     fun `both modes never show at once`() {
+        DocFixtures.saved(repo, app, pages = 2, name = "J2 Physics notes")
         openSetup { scenario ->
             ready(scenario) { activity ->
                 val quality = activity.window.decorView.findViewWithTag<View>(ToolSetupActivity.COMPRESS_MODE_QUALITY_TAG)
@@ -96,15 +97,19 @@ class J2CompressHarmTest {
                 assertNotNull("the size aim is offered", size)
                 assertTrue("Balanced starts as the chosen aim", quality.isSelected)
                 assertFalse("the size aim is not shown with it", size.isSelected)
-                val levels = activity.findViewById<View>(R.id.toolSetupLevels)
-                val field = activity.findViewById<View>(R.id.toolSetupTarget)
-                assertEquals(View.VISIBLE, levels.visibility)
-                assertEquals(View.GONE, field.visibility)
+                val qualityBlock = activity.window.decorView
+                    .findViewWithTag<View>(ToolSetupActivity.COMPRESS_QUALITY_BLOCK_TAG)
+                val sizeBlock = activity.window.decorView
+                    .findViewWithTag<View>(ToolSetupActivity.COMPRESS_SIZE_BLOCK_TAG)
+                assertNotNull("the quality panel exists", qualityBlock)
+                assertNotNull("the size panel exists", sizeBlock)
+                assertEquals(View.VISIBLE, qualityBlock.visibility)
+                assertEquals(View.GONE, sizeBlock.visibility)
 
                 size.performClick()
                 idle()
-                assertEquals(View.GONE, levels.visibility)
-                assertEquals(View.VISIBLE, field.visibility)
+                assertEquals(View.GONE, qualityBlock.visibility)
+                assertEquals(View.VISIBLE, sizeBlock.visibility)
                 assertTrue("the size aim is now selected", size.isSelected)
                 assertFalse("the quality aim is deselected", quality.isSelected)
 
@@ -128,6 +133,7 @@ class J2CompressHarmTest {
 
     @Test
     fun `estimate never presented as guaranteed`() {
+        DocFixtures.saved(repo, app, pages = 2, name = "J2 Physics notes")
         openSetup { scenario ->
             ready(scenario) { activity ->
                 val sizes = mutableListOf<TextView>()
@@ -182,7 +188,10 @@ class J2CompressHarmTest {
                     activity.findViewById<TextView>(R.id.rsTitle).text.toString()
                 )
                 val hero = activity.findViewById<TextView>(R.id.toolResultSummary).text.toString()
-                assertTrue("the closest achieved size is shown: $hero", hero.contains("1 KB") || hero.contains("2 KB"))
+                assertTrue(
+                    "the closest achieved size is shown: $hero",
+                    hero.contains(StatusLine.formatBytes(bytes))
+                )
                 val successHeadline = activity.window.decorView.findViewWithTag<View>("result-headline")
                 assertNotNull("the headline slot exists", successHeadline)
                 assertEquals("no success headline is shown", View.GONE, successHeadline.visibility)
@@ -217,7 +226,14 @@ class J2CompressHarmTest {
                     app.getString(R.string.rs_not_smaller_title),
                     activity.findViewById<TextView>(R.id.rsTitle).text.toString()
                 )
-                assertNull("there is no saved copy to show", activity.findViewById<View>(R.id.toolResultName))
+                assertNull(
+                    "no removable copy exists on a no-gain result",
+                    activity.findViewById<View>(R.id.toolResultUndo)
+                )
+                assertFalse(
+                    "no saved copy is named",
+                    activity.findViewById<TextView>(R.id.toolResultName).isVisible
+                )
             }
         }
         assertEquals("no duplicate was published", before, repo.listDocuments().size)
@@ -234,6 +250,7 @@ class J2CompressHarmTest {
             release.await(10, TimeUnit.SECONDS)
             Unit
         }
+        DocFixtures.saved(repo, app, pages = 2, name = "J2 Physics notes")
         val before = repo.listDocuments().size
         openSetup { scenario ->
             var started: Intent? = null
@@ -266,6 +283,7 @@ class J2CompressHarmTest {
 
     @Test
     fun `invalid custom size blocks start`() {
+        DocFixtures.saved(repo, app, pages = 2, name = "J2 Physics notes")
         val before = repo.listDocuments().size
         openSetup { scenario ->
             scenario.onActivity { activity ->
