@@ -555,7 +555,7 @@ class ScanReviewFocusArrangeTest {
         "status=" + a.text(R.id.reviewStatus) +
             " save=" + a.text(R.id.btnSavePdf) +
             " busy=" + a.pageOpBusy + " index=" + a.currentIndex +
-            " files=" + (dir.listFiles()?.map { it.name }?.sorted() ?: emptyList()) +
+            " files=" + (dir.listFiles()?.map { it.name }?.sorted() ?: emptyList<String>()) +
             " snack=" + snackbarText(a) +
             " action=" + a.findViewById<View>(com.google.android.material.R.id.snackbar_action)
 
