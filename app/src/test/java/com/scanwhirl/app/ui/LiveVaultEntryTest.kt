@@ -103,11 +103,13 @@ class LiveVaultEntryTest {
                 val wrong = legacyPinSheet()
                 assertNotNull(wrong)
                 submitPin(wrong!!, "1111")
-                val error = wrong.findViewById<TextView>(R.id.swPasswordError)
-                assertNotNull("the wrong PIN has an error line", error)
-                assertEquals("the wrong PIN is reported on the field, not as a toast",
-                    app.getString(R.string.vault_legacy_wrong), error!!.text?.toString())
-                assertTrue("the error line is shown", error.isVisible)
+                // The legacy PIN check is a suspending derivation off the main thread.
+                assertTrue("the wrong PIN is reported on the field, not as a toast",
+                    await {
+                        val error = wrong.findViewById<TextView>(R.id.swPasswordError)
+                        error?.text?.toString() == app.getString(R.string.vault_legacy_wrong) &&
+                            error.isVisible
+                    })
                 assertNotNull("the PIN sheet stays open after a wrong try", legacyPinSheet())
                 assertFalse("wrong PIN must not open the Vault",
                     activity.findViewById<View>(R.id.vaultBanner) != null)
