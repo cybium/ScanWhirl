@@ -392,6 +392,12 @@ class LibraryScreen(
             // L1-04: reserve the fast-scroll strip's gutter so its >=48dp target never covers
             // a card's Share/More hit area. The last card still clears the real dock (M5).
             setPadding(0, 0, 0, listBottomInset())
+            // U5: the lifted Scan disc grows the measured dock AFTER the first layout pass.
+            // Re-read it on every layout so the last card always clears the real dock.
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val inset = listBottomInset()
+                if (paddingBottom != inset) setPadding(paddingLeft, paddingTop, paddingRight, inset)
+            }
         }
 
         emptyView = LinearLayout(context).apply {
@@ -1049,8 +1055,9 @@ class LibraryScreen(
             .setContent(scroll)
             .setSecondary(R.string.sheet_cancel)
             .build()
-        // V027: "New folder" is the one plain row right under "All"; a second filled
-        // footer button for the same action made the chooser look duplicated.
+        // The footer stays the reachable creation action in the empty state; the row under
+        // "All folders" is the same action's quick entry point (both pinned by tests).
+        built.setPrimary(R.string.folder_new) { post { newFolderSheet() } }
         chooserSheet = built
         built.show()
     }
@@ -1813,8 +1820,9 @@ class LibraryScreen(
         }
         val wrap = LinearLayout(context).apply {
             orientation = VERTICAL
-            // V026: the field owns the one outline; a second band around the wrapper drew
-            // an offset edge beneath and to the left of it.
+            // V026: the field owns the one visible outline. The wrapper keeps an explicit
+            // transparent drawable (not a second band) so the exposed row still has a surface.
+            background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
         }
         wrap.addView(box, LayoutParams(LayoutParams.MATCH_PARENT, SwStyle.dp(context, 50f)))
         wrap.addView(searchStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {

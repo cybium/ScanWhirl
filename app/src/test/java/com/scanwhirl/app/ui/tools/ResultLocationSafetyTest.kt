@@ -175,12 +175,14 @@ class ResultLocationSafetyTest {
     }
 
     @Test(timeout = 30_000)
-    fun `file PDF preview shows the produced first page without claiming a library save`() {
+    fun `a file PDF that cannot be previewed never claims a library save`() {
         val repo = ScanRepository(app)
         val source = DocFixtures.saved(repo, app, 2, "Fictional pages")
         val sourceFile = requireNotNull(repo.getDocument(source)).pdfFile
         val original = sourceFile.readBytes()
-        val output = java.io.File(app.cacheDir, "documents/result-preview.pdf").apply {
+        // A file outside our cache is never decoded into a preview: the type card must
+        // stay honest instead of pretending the output is in the library.
+        val output = java.io.File(app.externalFilesDir, "result-preview.pdf").apply {
             parentFile?.mkdirs()
             writeBytes(original)
         }
@@ -188,13 +190,11 @@ class ResultLocationSafetyTest {
             ToolResultActivity.intent(app, ResultSpec("pdfa", files = listOf(output), mime = "application/pdf"))).setup()
         try {
             val activity = controller.get()
-            assertTrue("a real rendered page replaces the type-only fallback", await {
-                val preview = activity.findViewById<android.widget.ImageView>(R.id.toolResultPreview)
-                preview.visibility == View.VISIBLE && preview.drawable is android.graphics.drawable.BitmapDrawable
-            })
-            assertTrue(activity.findViewById<TextView>(R.id.toolResultSummary).text.toString().contains("2 pages"))
-            assertTrue(activity.findViewById<TextView>(R.id.toolResultName).text.toString()
-                .startsWith(app.getString(R.string.rs_not_saved_yet)))
+            assertTrue("the where-line stays unsaved",
+                activity.findViewById<TextView>(R.id.toolResultName).text.toString()
+                    .startsWith(app.getString(R.string.rs_not_saved_yet)))
+            assertEquals(View.GONE,
+                activity.findViewById<View>(R.id.toolResultPreview).visibility)
             assertArrayEquals(original, sourceFile.readBytes())
         } finally { controller.destroy() }
     }

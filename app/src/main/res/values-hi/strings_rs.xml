@@ -2,11 +2,11 @@
 <!-- Lane rs: Hindi parity for the compact result screen. Glossary: फ़ाइल, प्रति, पन्ना,
      मूल फ़ाइल, छोटा करना, तस्वीर; no loanwords, full stop at sentence ends. -->
 <resources>
-    <string name="rs_photo_ready">फ़ोटो तैयार है</string>
+    <string name="rs_photo_ready">फ़ोटो तैयार</string>
     <string name="rs_copy_ready">PDF तैयार है</string>
     <string name="rs_file_ready">फ़ाइल तैयार है</string>
     <string name="rs_not_saved_yet">अभी सहेजा नहीं है</string>
-    <string name="rs_library_as">ScanWhirl संग्रह में “%1$s”</string>
+    <string name="rs_library_as">ScanWhirl में “%1$s”</string>
     <string name="rs_image_facts">%1$d × %2$d px · %3$s · %4$s</string>
     <string name="rs_save_to_phone">फ़ोन में सहेजें</string>
     <string name="rs_adjust">बदलाव करें</string>
