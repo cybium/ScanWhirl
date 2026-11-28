@@ -168,7 +168,15 @@ jobs:
           script: |
             set -e
             set -o pipefail
-            ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PciUnsignedRelease --no-daemon --stacktrace
+            cat > w7a-init.gradle <<'GRADLE'
+            allprojects { p ->
+              p.plugins.withId('com.android.application') {
+                p.extensions.getByName('android').defaultConfig.testInstrumentationRunner =
+                  'androidx.test.runner.AndroidJUnitRunner'
+              }
+            }
+            GRADLE
+            ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PciUnsignedRelease -I w7a-init.gradle --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/release/app-release.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell pm list instrumentation | grep -i scanwhirl || true
