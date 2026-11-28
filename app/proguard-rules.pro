@@ -84,3 +84,4 @@
 # resolves Intrinsics from the target APK's class loader. Keep it in the
 # minified release build so the runtime smoke test can start.
 -keep class kotlin.jvm.internal.Intrinsics { *; }
+-keep class androidx.tracing.** { *; }

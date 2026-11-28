@@ -259,6 +259,8 @@ dependencies {
     // first use; keeps the APK small, consistent with the scanner).
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:18.0.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // W7a: AndroidX test runner resolves Trace from the target APK at runtime.
+    implementation("androidx.tracing:tracing:1.2.0")
     // Vault unlock (70_APP_DESIGN §4.1): in-app fingerprint/face sheet with device-credential fallback. Offline, no permission beyond USE_BIOMETRIC.
     implementation("androidx.biometric:biometric:1.1.0")
     // Play Billing for the one-time Pro unlock. The store talks to Play itself; ScanWhirl keeps
