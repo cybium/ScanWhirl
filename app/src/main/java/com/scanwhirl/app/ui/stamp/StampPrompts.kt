@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -87,6 +88,10 @@ object StampPrompts {
         onImportPhoto: () -> Unit = {}
     ) {
         val saved = store.list()
+        if (saved.isEmpty()) {
+            pad(activity, store, onPick, onImportPhoto)
+            return
+        }
         val list = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             id = R.id.stampSignatureRows
@@ -120,7 +125,7 @@ object StampPrompts {
         sheet = SwSheet.builder(activity)
             .setTitle(R.string.stamp_signature_title)
             .setContent(list)
-            .setSecondary(R.string.stamp_signature_new) { pad(activity, store, onPick) }
+            .setSecondary(R.string.stamp_signature_new) { pad(activity, store, onPick, onImportPhoto) }
             .build()
         sheet.show()
     }
@@ -128,7 +133,8 @@ object StampPrompts {
     fun pad(
         activity: Activity,
         store: SignatureStore,
-        onSaved: (SignatureStore.SavedSignature) -> Unit
+        onSaved: (SignatureStore.SavedSignature) -> Unit,
+        onImportPhoto: () -> Unit = {}
     ) {
         val pad = SignaturePadView(activity).apply {
             id = R.id.stampSignaturePad
@@ -138,10 +144,30 @@ object StampPrompts {
             )
             background = SwStyle.rounded(activity, Color.WHITE, radiusDp = 14f)
         }
+        val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; addView(pad) }
+        val remember = CheckBox(activity).apply {
+            setText(R.string.j34_remember_signature)
+            tag = "remember-signature"
+            minHeight = SwStyle.dp(activity, SwStyle.TOUCH_MIN_DP)
+        }
+        content.addView(remember)
+        val clear = SwStyle.quietAction(activity, SwStyle.text(activity,
+            com.scanwhirl.app.ui.kit.SwType.BODY_SP, SwStyle.color(activity, R.color.text_hologram_hi))).apply {
+            setText(R.string.j34_clear)
+            tag = "signature-clear"
+            setOnClickListener { pad.clear() }
+        }
+        val undo = SwStyle.quietAction(activity, SwStyle.text(activity,
+            com.scanwhirl.app.ui.kit.SwType.BODY_SP, SwStyle.color(activity, R.color.text_hologram_hi))).apply {
+            setText(R.string.stamp_undo)
+            setOnClickListener { pad.undo() }
+        }
+        content.addView(clear); content.addView(undo)
         val sheet = SwSheet.builder(activity)
             .setTitle(R.string.stamp_signature_sheet_title)
-            .setContent(pad)
+            .setContent(content)
             .setPrimary(R.string.stamp_signature_save)
+            .setSecondary(R.string.stamp_import_photo) { onImportPhoto() }
             .build()
         // Owner F14: the pad owns the gesture area. The sheet never drags away under a downward
         // stroke; it closes only through its X or Save.
@@ -154,8 +180,11 @@ object StampPrompts {
             }
             val name = activity.getString(R.string.stamp_signature_name, store.list().size + 1)
             try {
-                val saved = store.save(name, pad.vectorStrokes())
+                val saved = if (remember.isChecked) store.save(name, pad.vectorStrokes())
+                    else SignatureStore.SavedSignature("session", name, pad.vectorStrokes(), System.currentTimeMillis())
                 sheet.dismiss()
+                pad.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30)
+                    android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 onSaved(saved)
             } catch (e: Exception) {
                 Toast.makeText(

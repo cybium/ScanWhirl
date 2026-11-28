@@ -36,6 +36,16 @@ class StampEditorState(val pageCount: Int) {
     private var gestureActive = false
     private var gestureChanged = false
     private var gestureSnapshot: Snapshot? = null
+    /** Monotonic: even undoing back to the same geometry requires a fresh privacy review. */
+    var revision: Long = 0
+        private set
+
+    fun cancelGesture() {
+        gestureSnapshot?.let(::restore)
+        gestureActive = false
+        gestureChanged = false
+        gestureSnapshot = null
+    }
 
     /** Opens one coalesced undo step. Safe to call again while a gesture is already open. */
     fun beginGesture() {
@@ -137,6 +147,7 @@ class StampEditorState(val pageCount: Int) {
 
     fun undo(): Boolean {
         if (undoStack.isEmpty()) return false
+        revision++
         redoStack.addLast(snapshot())
         restore(undoStack.removeLast())
         return true
@@ -144,6 +155,7 @@ class StampEditorState(val pageCount: Int) {
 
     fun redo(): Boolean {
         if (redoStack.isEmpty()) return false
+        revision++
         undoStack.addLast(snapshot())
         restore(redoStack.removeLast())
         return true
@@ -175,7 +187,17 @@ class StampEditorState(val pageCount: Int) {
     /** Resize handle: replaces the box of a boxed mark, keeping it on the page and usable. */
     fun resizeTo(index: Int, box: PageStamp.Box): Boolean {
         val mark = pages[currentPage].getOrNull(index) ?: return false
-        val fitted = fitted(box)
+        val requested = fitted(box)
+        val old = when (mark) {
+            is PageStamp.Mark.Signature -> mark.box
+            is PageStamp.Mark.Picture -> mark.box
+            else -> null
+        }
+        val fitted = if (old == null) requested else {
+            val ratio = (old.right - old.left) / (old.bottom - old.top)
+            val w = min(requested.right - requested.left, (requested.bottom - requested.top) * ratio)
+            PageStamp.Box(requested.left, requested.top, requested.left + w, requested.top + w / ratio)
+        }
         val resized = when (mark) {
             is PageStamp.Mark.Text -> mark.copy(box = fitted)
             is PageStamp.Mark.Signature -> mark.copy(box = fitted)
@@ -416,6 +438,7 @@ class StampEditorState(val pageCount: Int) {
     private fun snapshot() = Snapshot(pages.map { it.toList() }, currentPage, selected)
 
     private fun record() {
+        revision++
         if (gestureActive) {
             // A transform already opened a gesture: do not add a step for every move. The
             // pre-gesture snapshot kept by beginGesture is committed once by endGesture.

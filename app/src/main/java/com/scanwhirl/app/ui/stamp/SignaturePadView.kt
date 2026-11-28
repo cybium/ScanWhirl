@@ -30,7 +30,7 @@ class SignaturePadView @JvmOverloads constructor(
         strokeWidth = 2.4f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        color = Color.parseColor("#1A1A1A")
+        color = Color.BLACK
     }
 
     fun isEmpty(): Boolean = strokes.all { it.size < 2 }
@@ -41,7 +41,17 @@ class SignaturePadView @JvmOverloads constructor(
         .map { stroke -> PageStamp.Stroke(stroke.map { PageStamp.Point(it.x, it.y) }) }
 
     fun clear() {
+        history += strokes.map { it.toMutableList() }
         strokes.clear()
+        active = null
+        invalidate()
+    }
+    private val history = ArrayDeque<List<MutableList<PointF>>>()
+
+    fun undo() {
+        if (history.isEmpty()) return
+        strokes.clear()
+        strokes.addAll(history.removeLast())
         active = null
         invalidate()
     }
@@ -73,6 +83,7 @@ class SignaturePadView @JvmOverloads constructor(
                 // The pad lives in a pull-down-to-close sheet: claim the gesture so a downward
                 // stroke draws ink instead of dragging the sheet away (owner, 11-15).
                 parent?.requestDisallowInterceptTouchEvent(true)
+                history += strokes.map { it.toMutableList() }
                 active = mutableListOf(point)
                 strokes += active!!
                 invalidate()
@@ -86,7 +97,11 @@ class SignaturePadView @JvmOverloads constructor(
                     invalidate()
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_CANCEL -> {
+                undo()
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            MotionEvent.ACTION_UP -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
                 active = null
                 invalidate()

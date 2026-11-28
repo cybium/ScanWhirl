@@ -13,6 +13,8 @@ import android.os.Bundle
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.view.HapticFeedbackConstants
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import androidx.core.view.AccessibilityDelegateCompat
@@ -53,12 +55,45 @@ class StampCanvasView @JvmOverloads constructor(
         /** E1: brackets a drag / resize / rotate so the editor records ONE undo step per gesture. */
         fun onGestureStart() {}
         fun onGestureEnd() {}
+        fun onGestureCancel() {}
+        fun onPlace(mark: PageStamp.Mark, box: PageStamp.Box) {}
 
         /** Accessibility "Delete mark"; hosts without a delete path ignore it. */
         fun onDelete(index: Int) {}
     }
 
     var listener: Listener? = null
+    var placement: PageStamp.Mark? = null
+    var originalReview = false
+        set(value) { field = value; rebuild() }
+    var zoom = 1f
+        private set
+    private var panX = 0f
+    private var panY = 0f
+    private var multiTouch = false
+    private var span = 0f
+    private var centroid = PointF()
+    private var down = PointF()
+    private var origin = PointF()
+    private var dragged = false
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop
+
+    fun setZoom(value: Float) {
+        zoom = value.coerceIn(1f, 5f)
+        boundPan()
+        invalidate()
+    }
+
+    fun cancelActiveGesture(): Boolean {
+        if (mode == Mode.NONE) return false
+        listener?.onGestureCancel()
+        mode = Mode.NONE
+        previewStroke.clear()
+        previewBox = null
+        stopEdgePan()
+        invalidate()
+        return true
+    }
 
     var pageBitmap: Bitmap? = null
         set(value) {
@@ -112,7 +147,7 @@ class StampCanvasView @JvmOverloads constructor(
     /** v2 kit: the selection chrome is cyan_primary on void_abyss, handles sized by dimens_v2. */
     private val cyan = ContextCompat.getColor(context, R.color.cyan_primary)
     private val voidInk = ContextCompat.getColor(context, R.color.void_abyss)
-    private val handleRadius = resources.getDimension(R.dimen.sw_space_2)
+    private val handleRadius = dp(6f)
 
     private val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -281,7 +316,7 @@ class StampCanvasView @JvmOverloads constructor(
     private val previewStroke = ArrayList<PointF>()
     private var previewBox: RectF? = null
 
-    private enum class Mode { NONE, MOVE, RESIZE, ROTATE, DRAWING, BOXING }
+    private enum class Mode { NONE, MOVE, RESIZE, ROTATE, DRAWING, BOXING, PLACE, PAN }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -308,14 +343,19 @@ class StampCanvasView @JvmOverloads constructor(
             canvas.drawPath(path, inkPreviewPaint)
         }
         previewBox?.let { box ->
-            canvas.drawRect(toView(box, page), previewPaint)
+            if (tool == Tool.REDACT && !originalReview) {
+                canvas.drawRect(toView(box, page), Paint().apply { color = Color.BLACK })
+            } else canvas.drawRect(toView(box, page), previewPaint)
+        }
+        if (originalReview) marks.filterIsInstance<PageStamp.Mark.Redact>().forEach {
+            canvas.drawRect(toView(box(it.box), page), previewPaint)
         }
     }
 
     private fun drawSelection(canvas: Canvas, page: RectF) {
         val mark = marks.getOrNull(selectedIndex ?: return) ?: return
         val bounds = normalizedBounds(mark) ?: return
-        val rect = toView(bounds, page)
+        val rect = toView(bounds, page).apply { inset(-dp(6f), -dp(6f)) }
         canvas.drawRect(rect, selectionPaint)
         if (tool != Tool.SELECT) return
 
@@ -342,10 +382,10 @@ class StampCanvasView @JvmOverloads constructor(
         val availableW = max(1f, width - 2 * pad)
         val availableH = max(1f, height - 2 * pad)
         val scale = min(availableW / bmp.width, availableH / bmp.height)
-        val w = bmp.width * scale
-        val h = bmp.height * scale
-        val left = (width - w) / 2f
-        val top = (height - h) / 2f
+        val w = bmp.width * scale * zoom
+        val h = bmp.height * scale * zoom
+        val left = (width - w) / 2f + panX
+        val top = (height - h) / 2f + panY
         return RectF(left, top, left + w, top + h)
     }
 
@@ -427,6 +467,32 @@ class StampCanvasView @JvmOverloads constructor(
     // ------------------------------------------------------------------ touch
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+            cancelActiveGesture()
+            multiTouch = true
+            span = pointerSpan(event)
+            centroid = pointerCenter(event)
+            return true
+        }
+        if (multiTouch) {
+            if (event.actionMasked == MotionEvent.ACTION_MOVE && event.pointerCount >= 2) {
+                val center = pointerCenter(event)
+                val nextSpan = pointerSpan(event)
+                val old = zoom
+                zoom = (zoom * nextSpan / span.coerceAtLeast(1f)).coerceIn(1f, 5f)
+                val ratio = zoom / old
+                panX = center.x - width / 2f - (centroid.x - width / 2f - panX) * ratio
+                panY = center.y - height / 2f - (centroid.y - height / 2f - panY) * ratio
+                centroid = center
+                span = nextSpan
+                boundPan()
+                invalidate()
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                multiTouch = false
+            }
+            return true
+        }
         val page = pageRect()
         if (page.isEmpty) return false
         val norm = toNormalised(event.x, event.y, page)
@@ -434,6 +500,13 @@ class StampCanvasView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
                 lastNorm.set(norm)
+                origin.set(norm)
+                down.set(event.x, event.y)
+                dragged = false
+                if (placement != null) {
+                    mode = Mode.PLACE
+                    return true
+                }
                 when (tool) {
                     Tool.DRAW -> {
                         previewStroke.clear()
@@ -455,6 +528,14 @@ class StampCanvasView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (!dragged && distanceTo(event.x, event.y, down) > slop) {
+                    dragged = true
+                    if (mode != Mode.PAN && mode != Mode.NONE) {
+                        performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30)
+                            HapticFeedbackConstants.GESTURE_START else HapticFeedbackConstants.VIRTUAL_KEY)
+                    }
+                }
+                if (!dragged) return true
                 when (mode) {
                     Mode.DRAWING -> {
                         val last = previewStroke.lastOrNull()
@@ -464,10 +545,9 @@ class StampCanvasView @JvmOverloads constructor(
                         }
                     }
                     Mode.BOXING -> {
-                        val origin = previewBox ?: return true
                         previewBox = RectF(
-                            min(origin.left, norm.x), min(origin.top, norm.y),
-                            max(origin.left, norm.x), max(origin.top, norm.y)
+                            min(origin.x, norm.x), min(origin.y, norm.y),
+                            max(origin.x, norm.x), max(origin.y, norm.y)
                         )
                         invalidate()
                     }
@@ -480,10 +560,22 @@ class StampCanvasView @JvmOverloads constructor(
                         }
                     }
                     Mode.RESIZE -> {
-                        val box = PageStamp.Box(
+                        var box = PageStamp.Box(
                             min(resizeAnchor.x, norm.x), min(resizeAnchor.y, norm.y),
                             max(resizeAnchor.x, norm.x), max(resizeAnchor.y, norm.y)
                         )
+                        val mark = marks.getOrNull(resizeIndex)
+                        if (mark is PageStamp.Mark.Signature || mark is PageStamp.Mark.Picture) {
+                            val old = mark?.let(::normalizedBounds)
+                            if (old != null) {
+                                val ratio = old.width() / old.height()
+                                val w = min(box.right - box.left, (box.bottom - box.top) * ratio)
+                                val h = w / ratio
+                                val l = if (norm.x < resizeAnchor.x) resizeAnchor.x - w else resizeAnchor.x
+                                val t = if (norm.y < resizeAnchor.y) resizeAnchor.y - h else resizeAnchor.y
+                                box = PageStamp.Box(l, t, l + w, t + h)
+                            }
+                        }
                         listener?.onResize(resizeIndex, box)
                     }
                     Mode.ROTATE -> {
@@ -504,15 +596,29 @@ class StampCanvasView @JvmOverloads constructor(
                             }
                         }
                     }
+                    Mode.PLACE -> {
+                        previewBox = RectF(min(origin.x, norm.x), min(origin.y, norm.y),
+                            max(origin.x, norm.x), max(origin.y, norm.y))
+                        invalidate()
+                    }
+                    Mode.PAN -> {
+                        panX += event.x - down.x
+                        panY += event.y - down.y
+                        down.set(event.x, event.y)
+                        boundPan()
+                        invalidate()
+                    }
                     Mode.NONE -> Unit
                 }
+                updateEdgePan(event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL
                 // Closes the undo step opened on DOWN (a no-op when this was a draw / box or a
                 // bare tap). CANCEL ends it too, so a half-done gesture is still one step.
-                listener?.onGestureEnd()
+                stopEdgePan()
+                if (cancelled) listener?.onGestureCancel() else listener?.onGestureEnd()
                 when (mode) {
                     Mode.DRAWING -> {
                         if (!cancelled && previewStroke.isNotEmpty()) {
@@ -523,7 +629,8 @@ class StampCanvasView @JvmOverloads constructor(
                     }
                     Mode.BOXING -> {
                         val box = previewBox
-                        if (!cancelled && box != null && box.width() > 0.02f && box.height() > 0.02f) {
+                        if (!cancelled && dragged && box != null && box.width() * 612f >= 4f &&
+                            box.height() * pagePointsHeight() >= 4f) {
                             val armed = tool
                             listener?.onBox(
                                 armed,
@@ -532,13 +639,31 @@ class StampCanvasView @JvmOverloads constructor(
                         }
                         previewBox = null
                     }
+                    Mode.PLACE -> if (!cancelled) {
+                        val mark = placement
+                        if (mark != null) {
+                            val default = normalizedBounds(mark) ?: RectF(.2f, .5f, .6f, .6f)
+                            val ratio = default.width() / default.height()
+                            val requested = previewBox
+                            val w = if (dragged && requested != null)
+                                min(requested.width(), requested.height() * ratio)
+                                else default.width()
+                            val h = w / ratio
+                            if (w > 0f && h > 0f) {
+                                val l = (requested?.left ?: (origin.x - w / 2)).coerceIn(0f, 1f - w)
+                                val t = (requested?.top ?: (origin.y - h / 2)).coerceIn(0f, 1f - h)
+                                listener?.onPlace(mark, PageStamp.Box(l, t, l + w, t + h))
+                                placement = null
+                            }
+                        }
+                    }
                     else -> Unit
                 }
                 mode = Mode.NONE
                 previewStroke.clear()
                 previewBox = null
                 invalidate()
-                performClick()
+                if (!cancelled) performClick()
                 return true
             }
         }
@@ -556,7 +681,7 @@ class StampCanvasView @JvmOverloads constructor(
             val mark = marks.getOrNull(selected)
             val bounds = mark?.let { normalizedBounds(it) }
             if (mark != null && bounds != null) {
-                val rect = toView(bounds, page)
+                val rect = toView(bounds, page).apply { inset(-dp(6f), -dp(6f)) }
                 if (canRotate(mark)) {
                     val knob = PointF(rect.centerX(), rect.top - dp(30f))
                     if (distanceTo(event.x, event.y, knob) <= dp(22f)) {
@@ -572,9 +697,10 @@ class StampCanvasView @JvmOverloads constructor(
                     }
                 }
                 if (mark !is PageStamp.Mark.Freehand) {
-                    val corner = corners(rect).indexOfFirst {
-                        distanceTo(event.x, event.y, it) <= dp(22f)
-                    }
+                    val corner = corners(rect).withIndex().filter {
+                        kotlin.math.abs(event.x - it.value.x) <= dp(24f) &&
+                            kotlin.math.abs(event.y - it.value.y) <= dp(24f)
+                    }.minByOrNull { distanceTo(event.x, event.y, it.value) }?.index ?: -1
                     if (corner >= 0) {
                         mode = Mode.RESIZE
                         resizeIndex = selected
@@ -594,8 +720,56 @@ class StampCanvasView @JvmOverloads constructor(
         if (hit >= 0) {
             mode = Mode.MOVE
             moveIndex = hit
+        } else mode = Mode.PAN
+    }
+
+    fun pagePointsHeight(): Float = pageBitmap?.let { 612f * it.height / it.width } ?: 792f
+
+    private fun pointerCenter(e: MotionEvent) = PointF(
+        (e.getX(0) + e.getX(1)) / 2f, (e.getY(0) + e.getY(1)) / 2f)
+    private fun pointerSpan(e: MotionEvent): Float =
+        kotlin.math.hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))
+
+    private fun boundPan() {
+        val bmp = pageBitmap ?: return
+        val scale = min((width - dp(20f)) / bmp.width, (height - dp(20f)) / bmp.height)
+        val maxX = max(0f, (bmp.width * scale * zoom - width) / 2f + dp(10f))
+        val maxY = max(0f, (bmp.height * scale * zoom - height) / 2f + dp(10f))
+        panX = panX.coerceIn(-maxX, maxX)
+        panY = panY.coerceIn(-maxY, maxY)
+    }
+
+    private var edgeX = 0f
+    private var edgeY = 0f
+    private var edgePosted = false
+    private val edgePan = object : Runnable {
+        override fun run() {
+            edgePosted = false
+            if (zoom <= 1f || mode !in listOf(Mode.MOVE, Mode.RESIZE)) return
+            fun speed(p: Float, size: Int): Float = when {
+                p < dp(32f) -> (dp(32f) - p).coerceAtMost(dp(32f)) / dp(32f)
+                p > size - dp(32f) -> -(p - size + dp(32f)).coerceAtMost(dp(32f)) / dp(32f)
+                else -> 0f
+            } * dp(240f) / 60f
+            val dx = speed(edgeX, width)
+            val dy = speed(edgeY, height)
+            if (dx == 0f && dy == 0f) return
+            panX += dx; panY += dy
+            boundPan()
+            val e = MotionEvent.obtain(0, android.os.SystemClock.uptimeMillis(),
+                MotionEvent.ACTION_MOVE, edgeX, edgeY, 0)
+            onTouchEvent(e)
+            e.recycle()
         }
     }
+    private fun updateEdgePan(x: Float, y: Float) {
+        edgeX = x; edgeY = y
+        if (!edgePosted && zoom > 1f && mode in listOf(Mode.MOVE, Mode.RESIZE)) {
+            edgePosted = true
+            postOnAnimation(edgePan)
+        }
+    }
+    private fun stopEdgePan() { removeCallbacks(edgePan); edgePosted = false }
 
     private fun distance(a: PointF, b: PointF): Float {
         val dx = a.x - b.x
@@ -625,7 +799,8 @@ class StampCanvasView @JvmOverloads constructor(
             null
         }
         if (next != null) {
-            PageStamp.render(next, marks, pageNumber, pageCount)
+            PageStamp.render(next, if (originalReview) marks.filterNot { it is PageStamp.Mark.Redact }
+                else marks, pageNumber, pageCount)
         }
         composite?.let { if (!it.isRecycled && it !== next) it.recycle() }
         composite = next
@@ -634,7 +809,7 @@ class StampCanvasView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         // A view torn down mid-gesture (screen close) must not leave the editor's undo step open.
-        listener?.onGestureEnd()
+        cancelActiveGesture()
         composite?.let { if (!it.isRecycled) it.recycle() }
         composite = null
         if (pageBitmap?.isRecycled == false) pageBitmap?.recycle()

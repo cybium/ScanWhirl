@@ -17,6 +17,8 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -38,6 +40,9 @@ import com.scanwhirl.app.ui.BaseActivity
 import com.scanwhirl.app.ui.applySystemBarsPadding
 import com.scanwhirl.app.ui.kit.SwSheet
 import com.scanwhirl.app.ui.kit.SwStyle
+import com.scanwhirl.app.ui.kit.SwType
+import com.scanwhirl.app.ui.result.ResultSpec
+import com.scanwhirl.app.ui.tools.ToolResultActivity
 import com.scanwhirl.app.ui.kit.SwTool
 import com.scanwhirl.app.ui.kit.ToolGroup
 import com.scanwhirl.app.ui.kit.ToolStatus
@@ -166,6 +171,13 @@ class StampEditorActivity : BaseActivity() {
 
     private var saving = false
     private var savingStartedAt = 0L
+    private var review: StampReview? = null
+    private var outputName = ""
+    private var receiptCopyId: String? = null
+    private var savedEdits: List<PageStamp.PageEdits>? = null
+    private val hideJourney get() = intent.getStringExtra(EXTRA_TOOL) in
+        setOf(TOOL_REDACT, TOOL_MASK_AADHAAR)
+    private var advancedTools: LinearLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -191,7 +203,7 @@ class StampEditorActivity : BaseActivity() {
             finish()
             return
         }
-        if (doc.isLocked) {
+        if (doc.isLocked || doc.isVaulted) {
             note(getString(R.string.stamp_locked))
             finish()
             return
@@ -229,6 +241,21 @@ class StampEditorActivity : BaseActivity() {
 
             override fun onGestureEnd() {
                 editor.endGesture()
+                refresh()
+            }
+            override fun onGestureCancel() {
+                editor.cancelGesture()
+                refresh()
+            }
+
+            override fun onPlace(mark: PageStamp.Mark, box: PageStamp.Box) {
+                val placed = when (mark) {
+                    is PageStamp.Mark.Signature -> mark.copy(box = box)
+                    is PageStamp.Mark.Picture -> mark.copy(box = box)
+                    else -> return
+                }
+                editor.add(placed)
+                disarm()
                 refresh()
             }
 
@@ -298,6 +325,12 @@ class StampEditorActivity : BaseActivity() {
         })
 
         showPage()
+        receiptCopyId = savedInstanceState?.getString("j34_receipt")
+        outputName = savedInstanceState?.getString("j34_name").orEmpty()
+        if (receiptCopyId != null) {
+            savedEdits = editor.edits()
+            receiptCopyId?.let { repo.getDocument(it) }?.let { showPersistentReceipt(it) }
+        }
         if (savedInstanceState == null) {
             applyRequestedTool(intent.getStringExtra(EXTRA_TOOL))
         } else {
@@ -322,6 +355,8 @@ class StampEditorActivity : BaseActivity() {
         outState.putString(KEY_INK_KIND, inkKind.name)
         outState.putBoolean(KEY_HIDE_MODE, hideMode)
         outState.putInt(KEY_HIDE_LABEL, hideLabelRes)
+        outState.putString("j34_receipt", receiptCopyId)
+        outState.putString("j34_name", outputName)
         val dir = File(cacheDir, STATE_DIR).apply { mkdirs() }
         val file = File(dir, "state_${document.id}_${UUID.randomUUID().toString().take(8)}.bin")
         try {
@@ -363,7 +398,7 @@ class StampEditorActivity : BaseActivity() {
      * one, so the library never gains a silent duplicate. The marks stay on screen meanwhile.
      */
     private fun resumeRunningSave() {
-        if (StampSaveRunner.pendingFor(document.id, SaveMeta(editor.edits(), hideLabelResForSave())) == null) return
+        if (StampSaveRunner.pendingFor(document.id, SaveMeta(editor.edits(), hideLabelResForSave(), outputName)) == null) return
         saving = true
         savingStartedAt = System.currentTimeMillis()
         binding.saveCopy.setText(R.string.c1_still_saving)
@@ -381,7 +416,7 @@ class StampEditorActivity : BaseActivity() {
      * hidden" receipt on that copy would be a false privacy claim.
      */
     private fun hideLabelResForSave(): Int =
-        if (hideMode && editor.hasRedaction()) hideLabelRes else 0
+        if (editor.hasRedaction()) hideLabelRes else 0
 
     override fun onDestroy() {
         super.onDestroy()
@@ -402,8 +437,13 @@ class StampEditorActivity : BaseActivity() {
      */
     private fun buildToolRow() {
         val row = binding.stampToolRow
+        val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        advancedTools = advanced
+        binding.root.addView(advanced)
         fun add(id: Int, title: Int, icon: Int, action: () -> Unit) {
-            row.addView(tile(id, title, icon, action))
+            val lead = if (hideJourney) id == R.id.toolRedact else
+                id == R.id.toolSignature || id == R.id.toolText
+            (if (lead) row else advanced).addView(tile(id, title, icon, action))
         }
         add(R.id.toolSignature, R.string.stamp_tool_signature, R.drawable.ic_sym_signature) {
             pickSignature()
@@ -420,7 +460,7 @@ class StampEditorActivity : BaseActivity() {
             labelView.text = getString(R.string.v2v_apply_to_all_count, editor.pageCount)
             layoutParams.width = dp(100f)
             contentDescription = getString(R.string.cdf1_apply_signature)
-            row.addView(this)
+            advanced.addView(this)
         }
         add(R.id.toolText, R.string.stamp_tool_text, R.drawable.ic_sym_text_fields) {
             promptText()
@@ -444,8 +484,154 @@ class StampEditorActivity : BaseActivity() {
             arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
         }
         add(R.id.toolSuggest, R.string.stamp_suggest, R.drawable.ic_sym_auto_fix_high) {
-            suggestRedactions()
+            openFindSheet()
         }
+        if (hideJourney) {
+            row.addView(action(R.string.j34_find) { openFindSheet() })
+            row.addView(action(R.string.j34_select) { disarm(); refresh() })
+        } else row.addView(action(R.string.j34_date) {
+            StampPrompts.text(this, R.string.j34_date, R.string.stamp_text_hint,
+                java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT).format(java.util.Date())) {
+                addMark(PageStamp.Mark.Text(it, PageStamp.Box(.08f, .7f, .35f, .75f), size = .035f))
+            }
+        })
+        row.addView(action(R.string.j34_more) { openMore() })
+        // Secondary controls live in More, not in two extra rows that consume the form.
+        (binding.deleteMark.parent as View).visibility = View.GONE
+        (binding.undo.parent as LinearLayout).apply {
+            removeView(binding.undo); removeView(binding.redo)
+        }
+        advanced.addView(binding.undo)
+        advanced.addView(binding.redo)
+        binding.toolbar.title = document.name
+    }
+
+    private fun action(label: Int, run: () -> Unit): TextView =
+        SwStyle.quietAction(this, SwStyle.text(this, SwType.BODY_SP,
+            SwStyle.color(this, R.color.text_hologram_hi))).apply {
+            setText(label)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(SwStyle.SPACE_2_DP) }
+            setOnClickListener { run() }
+        }
+
+    private fun openMore() {
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        lateinit var sheet: SwSheet
+        fun entry(label: Int, run: () -> Unit) {
+            content.addView(action(label) { sheet.dismiss(); run() })
+        }
+        entry(R.string.stamp_undo) { if (editor.undo()) refresh() }
+        entry(R.string.stamp_redo) { if (editor.redo()) refresh() }
+        entry(R.string.j34_marks) { marksSheet() }
+        entry(R.string.j34_position) { positionSheet() }
+        entry(R.string.j34_add_box) {
+            editor.add(PageStamp.Mark.Redact(PageStamp.Box(.1f, .1f, .5f, .15f)))
+            disarm(); refresh(); positionSheet()
+        }
+        entry(R.string.stamp_delete) { if (editor.removeSelected()) refresh() }
+        entry(R.string.j34_zoom_in) { binding.canvas.setZoom(binding.canvas.zoom * 1.5f) }
+        entry(R.string.j34_zoom_out) { binding.canvas.setZoom(binding.canvas.zoom / 1.5f) }
+        entry(R.string.j34_page_jump) { jumpSheet() }
+        entry(R.string.j34_help) {
+            SwSheet.builder(this).setTitle(R.string.j34_help)
+                .setMessage(R.string.j34_help_body).setPrimary(R.string.sheet_got_it).build().show()
+        }
+        advancedTools?.let { tools ->
+            for (i in 0 until tools.childCount) {
+                val tool = tools.getChildAt(i)
+                if (tool is ToolTile) content.addView(action(tool.titleResForEditor()) { tool.performClick() })
+            }
+        }
+        sheet = SwSheet.builder(this).setTitle(R.string.j34_more).setContent(content).build()
+        sheet.show()
+    }
+
+    private fun View.titleResForEditor(): Int = when (id) {
+        R.id.toolSignature -> R.string.stamp_tool_signature
+        R.id.v2vApplySignature -> R.string.v2v_apply_signature_short
+        R.id.toolText -> R.string.stamp_tool_text
+        R.id.toolDraw -> R.string.stamp_tool_draw
+        R.id.toolHighlight -> R.string.stamp_tool_highlight
+        R.id.toolWatermark -> R.string.stamp_tool_watermark
+        R.id.toolPageNumbers -> R.string.stamp_tool_page_numbers
+        R.id.toolStamp -> R.string.stamp_tool_stamp
+        R.id.toolRedact -> R.string.stamp_tool_redact
+        else -> R.string.j34_find
+    }
+
+    private fun jumpSheet() {
+        SwSheet.builder(this).setTitle(R.string.j34_page_jump)
+            .setOptions((0 until editor.pageCount).map { getString(R.string.j34_page, it + 1) }) { i, _ ->
+                binding.canvas.cancelActiveGesture()
+                editor.currentPage = i
+                showPage()
+            }.build().show()
+    }
+
+    private fun marksSheet() {
+        val marks = editor.marks()
+        SwSheet.builder(this).setTitle(R.string.j34_marks)
+            .setOptions(marks.mapIndexed { i, mark ->
+                getString(if (mark is PageStamp.Mark.Redact) R.string.j34_area else R.string.j34_mark,
+                    i + 1, editor.currentPage + 1)
+            }) { i, _ -> editor.select(i); disarm(); refresh(); positionSheet() }.build().show()
+    }
+
+    private fun positionSheet() {
+        val index = editor.selected ?: return
+        val mark = editor.marks().getOrNull(index) ?: return
+        val box = when (mark) {
+            is PageStamp.Mark.Signature -> mark.box
+            is PageStamp.Mark.Picture -> mark.box
+            is PageStamp.Mark.Text -> mark.box
+            is PageStamp.Mark.Redact -> mark.box
+            is PageStamp.Mark.Highlight -> mark.box
+            is PageStamp.Mark.Badge -> mark.box
+            else -> return
+        }
+        val height = binding.canvas.pagePointsHeight()
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val values = listOf(box.left * 612f, box.top * height,
+            (box.right - box.left) * 612f, (box.bottom - box.top) * height)
+        val labels = listOf(R.string.j34_x, R.string.j34_y, R.string.j34_width, R.string.j34_height)
+        val fields = values.mapIndexed { i, value ->
+            EditText(this).apply {
+                hint = getString(labels[i])
+                contentDescription = hint
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                setText(String.format(Locale.US, "%.2f", value))
+                minHeight = dp(SwStyle.TOUCH_MIN_DP)
+                content.addView(this)
+            }
+        }
+        listOf(R.string.a11y_move_left to (-1f to 0f), R.string.a11y_move_right to (1f to 0f),
+            R.string.a11y_move_up to (0f to -1f), R.string.a11y_move_down to (0f to 1f)).forEach { (label, delta) ->
+            content.addView(action(label) {
+                editor.moveBy(index, delta.first / 612f, delta.second / height)
+                refresh()
+                val x = fields[0].text.toString().toFloatOrNull() ?: 0f
+                val y = fields[1].text.toString().toFloatOrNull() ?: 0f
+                fields[0].setText((x + delta.first).coerceAtLeast(0f).toString())
+                fields[1].setText((y + delta.second).coerceAtLeast(0f).toString())
+            })
+        }
+        val sheet = SwSheet.builder(this).setTitle(R.string.j34_position).setContent(content)
+            .setPrimary(R.string.j34_apply).build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            val v = fields.map { it.text.toString().toFloatOrNull() }
+            if (v.any { it == null || !it.isFinite() || it < 0f } || v[2]!! <= 0 || v[3]!! <= 0 ||
+                v[0]!! + v[2]!! > 612f || v[1]!! + v[3]!! > height) {
+                fields[0].error = getString(R.string.j34_position_error)
+            } else {
+                editor.resizeTo(index, PageStamp.Box(v[0]!! / 612f, v[1]!! / height,
+                    (v[0]!! + v[2]!!) / 612f, (v[1]!! + v[3]!!) / height))
+                refresh(); sheet.dismiss()
+            }
+        }
+        sheet.show()
     }
 
     private fun tile(id: Int, title: Int, icon: Int, action: () -> Unit): ToolTile {
@@ -476,16 +662,15 @@ class StampEditorActivity : BaseActivity() {
 
     /** V2V V2: preview the multi-page placement, then apply it as one undoable step. */
     private fun promptApplySignature() {
-        val saved = signatureStore.list().firstOrNull { it.pngFile?.isFile == true }
-        val file = saved?.pngFile
-        if (file == null) {
+        val saved = signatureStore.list().firstOrNull()
+        if (saved == null) {
             note(getString(R.string.v2v_no_saved_signature))
             return
         }
         SwSheet.builder(this)
             .setTitle(R.string.cdf1_apply_signature)
             .setMessage(R.string.v2v_apply_signature_preview)
-            .setPrimary(R.string.cdf1_apply_signature_apply) { applySignatureToAllForTest(file) }
+            .setPrimary(R.string.cdf1_apply_signature_apply) { applySignatureToAll(saved) }
             .setSecondary(R.string.stamp_keep_editing) { }
             .build()
             .show()
@@ -508,7 +693,17 @@ class StampEditorActivity : BaseActivity() {
 
     /** Test seam: place a saved signature on every page via the editor's undoable batch. */
     internal fun applySignatureToAllForTest(file: java.io.File) {
-        addMarkToAll(PageStamp.Mark.Picture(file, signatureBox()))
+        applySignatureMarkToAll(PageStamp.Mark.Picture(file, signatureBox()))
+    }
+
+    internal fun applySignatureToAll(saved: SignatureStore.SavedSignature) {
+        val mark = saved.pngFile?.let { PageStamp.Mark.Picture(it, signatureBox()) }
+            ?: PageStamp.Mark.Signature(saved.strokes, signatureBox())
+        applySignatureMarkToAll(mark)
+    }
+
+    private fun applySignatureMarkToAll(mark: PageStamp.Mark) {
+        addMarkToAll(mark)
         // FX1: the old toast named no number and vanished before the person reached page 2,
         // so the mark looked as if it had gone missing. Keep a countable receipt ON the screen
         // and announce it politely only when the batch really covered every page.
@@ -526,7 +721,7 @@ class StampEditorActivity : BaseActivity() {
 
     /** COPY_DIET: the receipt and Undo are two distinct controls, not one sentence. */
     private fun noteWithUndo(message: String) {
-        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG)
+        Snackbar.make(binding.root, message, 6000)
             .setAction(R.string.cdf1_undo) { if (editor.undo()) refresh() }
             .show()
     }
@@ -556,7 +751,7 @@ class StampEditorActivity : BaseActivity() {
 
     private fun applyRequestedTool(tool: String?) {
         when (tool) {
-            TOOL_SIGN -> pickSignature()
+            TOOL_SIGN -> Unit // Page first. Sign opens the offline pad from the single rail.
             TOOL_TEXT -> promptText()
             TOOL_DRAW -> arm(StampCanvasView.Tool.DRAW, R.string.stamp_hint_draw)
             TOOL_HIGHLIGHT -> arm(StampCanvasView.Tool.HIGHLIGHT, R.string.stamp_hint_highlight)
@@ -570,17 +765,18 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun arm(tool: StampCanvasView.Tool, hintRes: Int) {
+        binding.canvas.cancelActiveGesture()
+        binding.canvas.placement = null
         editor.select(null)
         binding.canvas.tool = tool
         binding.hint.setText(hintRes)
         binding.hint.visibility = android.view.View.VISIBLE
-        binding.findRedactions.visibility =
-            if (tool == StampCanvasView.Tool.REDACT) android.view.View.VISIBLE
-            else android.view.View.GONE
+        binding.findRedactions.visibility = View.GONE
         refreshSelection()
     }
 
     private fun disarm() {
+        binding.canvas.placement = null
         binding.canvas.tool = StampCanvasView.Tool.SELECT
         binding.hint.visibility = android.view.View.GONE
         binding.findRedactions.visibility = android.view.View.GONE
@@ -588,7 +784,7 @@ class StampEditorActivity : BaseActivity() {
 
     private fun addMark(mark: PageStamp.Mark) {
         editor.add(cascade(mark, editor.marks().size))
-        disarm()
+        if (mark !is PageStamp.Mark.Redact) disarm()
         refresh()
     }
 
@@ -639,9 +835,9 @@ class StampEditorActivity : BaseActivity() {
             onPick = { saved ->
                 val file = saved.pngFile
                 if (file != null) {
-                    addMark(PageStamp.Mark.Picture(file, signatureBox()))
+                    armPlacement(PageStamp.Mark.Picture(file, signatureBox()))
                 } else {
-                    addMark(
+                    armPlacement(
                         PageStamp.Mark.Signature(
                             strokes = saved.strokes,
                             box = signatureBox(),
@@ -652,6 +848,15 @@ class StampEditorActivity : BaseActivity() {
             },
             onImportPhoto = { startInkImport(InkKind.SIGNATURE) }
         )
+    }
+
+    private fun armPlacement(mark: PageStamp.Mark) {
+        disarm()
+        editor.select(null)
+        binding.canvas.placement = mark
+        binding.hint.setText(R.string.j34_place)
+        binding.hint.visibility = View.VISIBLE
+        refresh()
     }
 
     private fun suggestRedactions() {
@@ -669,7 +874,7 @@ class StampEditorActivity : BaseActivity() {
         val before = editor.marks().size
         editor.addAll(suggestions.map { PageStamp.Mark.Redact(it.box) })
         editor.select(before + suggestions.size - 1)
-        disarm()
+        arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
         refresh()
     }
 
@@ -940,7 +1145,7 @@ class StampEditorActivity : BaseActivity() {
         hideMode = true
         // C1: only claim "private info hidden" when every found item was actually hidden.
         hideLabelRes = if (checked.all { it }) R.string.private_info_label else R.string.c1_redacted_label
-        disarm()
+        arm(StampCanvasView.Tool.REDACT, R.string.stamp_hint_redact)
         refresh()
         showPage()
         binding.hint.setText(
@@ -961,7 +1166,6 @@ class StampEditorActivity : BaseActivity() {
         binding.canvas.pageNumber = editor.currentPage + 1
         binding.canvas.pageCount = document.pageCount
         binding.canvas.pageBitmap = bitmap
-        disarm()
         refresh()
     }
 
@@ -985,14 +1189,16 @@ class StampEditorActivity : BaseActivity() {
         binding.undo.isEnabled = editor.canUndo
         binding.redo.isEnabled = editor.canRedo
         binding.deleteMark.isEnabled = editor.selected != null
-        binding.saveCopy.isEnabled = !editor.isEmpty() && !saving
+        val dirty = !editor.isEmpty() && editor.edits() != savedEdits
+        binding.saveCopy.isEnabled = dirty && !saving
+        if (!saving) binding.saveCopy.setText(if (editor.hasRedaction()) R.string.j34_review else R.string.stamp_save_copy)
         // v2 kit: a flat TextView does not dim itself when disabled, so say so plainly.
         binding.prevPage.alpha = if (hasPrev) 1f else DISABLED_ALPHA
         binding.nextPage.alpha = if (hasNext) 1f else DISABLED_ALPHA
         binding.undo.alpha = if (editor.canUndo) 1f else DISABLED_ALPHA
         binding.redo.alpha = if (editor.canRedo) 1f else DISABLED_ALPHA
         binding.deleteMark.alpha = if (editor.selected != null) 1f else DISABLED_ALPHA
-        binding.saveCopy.alpha = if (!editor.isEmpty() && !saving) 1f else DISABLED_ALPHA
+        binding.saveCopy.alpha = if (dirty && !saving) 1f else DISABLED_ALPHA
         binding.selectionHint.setText(
             if (editor.selected != null) R.string.cdf1_stamp_hint_select else R.string.stamp_no_selection
         )
@@ -1004,34 +1210,126 @@ class StampEditorActivity : BaseActivity() {
             note(getString(R.string.stamp_no_marks))
             return
         }
-        // I9/E10: redaction destroys pixels and text in the copy — warn before anything is written.
         if (editor.hasRedaction()) {
-            SwSheet.builder(this)
-                .setTitle(R.string.stamp_redact_warn_title)
-                .setMessage(R.string.stamp_redact_warn_message)
-                .setPrimary(R.string.stamp_redact_warn_save) { writeCopy() }
-                .setSecondary(R.string.stamp_keep_editing)
-                .build()
-                .show()
+            openReview()
             return
         }
-        writeCopy()
+        nameSheet()
+    }
+
+    internal fun openReview() {
+        binding.canvas.cancelActiveGesture()
+        val edits = editor.edits()
+        val affected = edits.filter { it.marks.any { mark -> mark is PageStamp.Mark.Redact } }
+            .map { it.pageIndex }
+        if (affected.isEmpty()) return
+        val gate = StampReview(editor.revision, affected.toSet())
+        review = gate
+        var cursor = 0
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val status = SwStyle.text(this, SwType.BODY_SP, SwStyle.color(this, R.color.text_hologram_hi))
+        status.tag = "review-status"
+        val preview = StampCanvasView(this).apply {
+            tag = "review-page"
+            isEnabled = false
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300f))
+        }
+        val hidden = action(R.string.j34_hidden) { }
+        hidden.tag = "review-hidden"
+        val original = action(R.string.j34_original) { }
+        original.tag = "review-original"
+        val check = CheckBox(this).apply {
+            setText(R.string.j34_checked)
+            tag = "review-checked"
+            minHeight = dp(SwStyle.TOUCH_MIN_DP)
+            setTextColor(SwStyle.color(this@StampEditorActivity, R.color.text_hologram_hi))
+            typeface = SwType.regular(this@StampEditorActivity)
+        }
+        content.addView(hidden); content.addView(original); content.addView(status)
+        content.addView(preview)
+        val prev = action(R.string.stamp_prev_page) { }
+        val next = action(R.string.stamp_next_page) { }
+        content.addView(prev); content.addView(next); content.addView(check)
+        val sheet = SwSheet.builder(this).setTitle(R.string.j34_check_title)
+            .setContent(content).setPrimary(R.string.j34_save_hidden).build()
+        sheet.keepOpenOnPrimary()
+        fun update() {
+            val page = affected[cursor]
+            preview.pageBitmap = loadPreview(document.pageFiles[page])
+            preview.pageNumber = page + 1
+            preview.pageCount = document.pageCount
+            preview.marks = edits.first { it.pageIndex == page }.marks
+            preview.originalReview = !gate.hidden
+            gate.visit(page)
+            status.text = getString(if (gate.hidden) R.string.j34_review_hidden_page else R.string.j34_review_original_page,
+                page + 1, cursor + 1, affected.size)
+            hidden.isSelected = gate.hidden
+            original.isSelected = !gate.hidden
+            check.isEnabled = gate.hidden && gate.allVisited()
+            check.isChecked = gate.acknowledged
+            prev.isEnabled = cursor > 0
+            next.isEnabled = cursor < affected.lastIndex
+            sheet.primaryButton.isEnabled = gate.canSave(editor.revision)
+        }
+        hidden.setOnClickListener { gate.showHidden(); update() }
+        original.setOnClickListener { gate.showOriginal(); update() }
+        prev.setOnClickListener { if (cursor > 0) { cursor--; update() } }
+        next.setOnClickListener { if (cursor < affected.lastIndex) { cursor++; update() } }
+        check.setOnCheckedChangeListener { _, value ->
+            gate.acknowledged = value
+            sheet.primaryButton.isEnabled = gate.canSave(editor.revision)
+        }
+        sheet.primaryButton.setOnClickListener {
+            if (gate.canSave(editor.revision)) { sheet.dismiss(); nameSheet() }
+        }
+        update()
+        sheet.show()
+    }
+
+    private fun nameSheet() {
+        val suggested = outputName.ifBlank {
+            OutputNames.forTool(document.name, getString(if (editor.hasRedaction())
+                R.string.j34_hidden_label else R.string.j34_signed_label), repo.listDocuments().map { it.name })
+        }
+        val input = EditText(this).apply {
+            tag = "editor-copy-name"
+            setText(suggested)
+            hint = getString(R.string.j34_file_name)
+            minHeight = dp(SwStyle.TOUCH_MIN_DP)
+            setSelectAllOnFocus(true)
+        }
+        val sheet = SwSheet.builder(this).setTitle(R.string.j34_name_title)
+            .setMessage(R.string.j34_original_unchanged)
+            .setContent(input).setPrimary(R.string.stamp_save_copy).build()
+        sheet.keepOpenOnPrimary()
+        sheet.primaryButton.setOnClickListener {
+            val name = input.text.toString().trim().removeSuffix(".pdf")
+            if (name.isBlank() || name.any { it in "/\\\u0000\r\n" }) {
+                input.error = getString(R.string.j34_name_error)
+            } else if (editor.hasRedaction() && review?.canSave(editor.revision) != true) {
+                sheet.dismiss(); openReview()
+            } else {
+                outputName = name
+                sheet.dismiss()
+                writeCopy()
+            }
+        }
+        sheet.show()
     }
 
     private fun writeCopy() {
         if (saving || editor.isEmpty()) return
+        if (editor.hasRedaction() && review?.canSave(editor.revision) != true) return
         saving = true
         savingStartedAt = System.currentTimeMillis()
         binding.saveCopy.isEnabled = false
         binding.saveCopy.setText(R.string.stamp_saving)
         val docId = document.id
-        val sourceName = document.name
         val edits = editor.edits()
         // G3 F3: one decision, made now, for the name, the SaveMeta and the receipt. Never let a
         // latched Find label survive the removal of its redaction marks.
         val labelRes = hideLabelResForSave()
-        val hide = labelRes != 0
-        val meta = SaveMeta(edits, labelRes)
+        val meta = SaveMeta(edits, labelRes, outputName)
         val app = applicationContext
         // C1 review P1: a write for this source document AND these exact marks may already be in
         // flight (this screen was recreated, or a timed-out editor was reopened). Join it — say so
@@ -1042,13 +1340,7 @@ class StampEditorActivity : BaseActivity() {
             StampSaveRunner.submit(docId, meta) {
                 withContext(Dispatchers.IO) {
                     val writer = ScanRepository(app)
-                    val suggested = if (hide) {
-                        val existing = writer.listDocuments(includeVaulted = true).map { it.name }
-                        OutputNames.forTool(sourceName, app.getString(labelRes), existing)
-                    } else {
-                        null
-                    }
-                    writer.stampDocument(docId, edits, suggested)
+                    writer.stampDocument(docId, edits, outputName.takeIf { it.isNotBlank() })
                 }
             }
         }
@@ -1066,11 +1358,12 @@ class StampEditorActivity : BaseActivity() {
      * a NAMED, CONFIRMED Trash route. Nothing is deleted automatically.
      */
     private fun showPersistentReceipt(copy: ScanDocument) {
+        receiptCopyId = copy.id
         SwSheet.builder(this)
             .setTitle(R.string.v2v_redact_receipt_title)
             .setMessage(getString(R.string.cdf1_redact_receipt_body, copy.name))
             // P2: the safe, reversible choice is primary; Trash is the secondary.
-            .setPrimary(R.string.v2v_keep_original) { }
+            .setPrimary(R.string.v2v_keep_original) { receiptCopyId = null; openResult(copy) }
             .setSecondary(R.string.v2v_move_original_to_trash) {
                 confirmTrashOriginal(document.id)
             }
@@ -1108,6 +1401,8 @@ class StampEditorActivity : BaseActivity() {
         StampSaveRunner.consume(document.id)
         val alive = !isFinishing && !isDestroyed
         result.onSuccess { copy ->
+            saving = false
+            savedEdits = editor.edits()
             if (alive) setResult(RESULT_OK, Intent().putExtra(EXTRA_NEW_DOC_ID, copy.id))
             val redaction = labelRes == R.string.c1_redacted_label ||
                 labelRes == R.string.private_info_label
@@ -1126,7 +1421,7 @@ class StampEditorActivity : BaseActivity() {
                 // App context after a bounded-timeout exit: still one honest receipt.
                 Toast.makeText(applicationContext, saved, Toast.LENGTH_LONG).show()
             }
-            if (alive && !redaction) finish()
+            if (alive && !redaction) openResult(copy)
         }.onFailure { error ->
             val failed = getString(R.string.stamp_save_failed,
                 V2vFailureCopy.message(this@StampEditorActivity, error))
@@ -1142,6 +1437,7 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun confirmExit() {
+        if (binding.canvas.cancelActiveGesture()) return
         // A leftover IME would consume the first Back; drop it before asking.
         (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(binding.root.windowToken, 0)
@@ -1160,17 +1456,41 @@ class StampEditorActivity : BaseActivity() {
             }
             return
         }
-        if (editor.isEmpty()) {
+        if (editor.isEmpty() || editor.edits() == savedEdits) {
             finish()
             return
         }
-        SwSheet.builder(this)
-            .setTitle(R.string.stamp_discard_title)
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        lateinit var sheet: SwSheet
+        content.addView(action(R.string.stamp_discard) { sheet.dismiss(); finish() })
+        sheet = SwSheet.builder(this)
+            .setTitle(R.string.j34_save_changes)
             .setMessage(R.string.stamp_discard_message)
-            .setPrimary(R.string.stamp_discard) { finish() }
+            .setContent(content)
+            .setPrimary(R.string.stamp_save_copy) { save() }
             .setSecondary(R.string.stamp_keep_editing)
             .build()
-            .show()
+        sheet.show()
+    }
+
+    private fun openResult(copy: ScanDocument) {
+        val areas = editor.edits().sumOf { edit -> edit.marks.count { it is PageStamp.Mark.Redact } }
+        val pages = editor.edits().count { edit -> edit.marks.any { it is PageStamp.Mark.Redact } }
+        val facts = if (areas > 0) getString(R.string.j34_areas_pages, areas, pages)
+            else getString(R.string.j34_original_unchanged)
+        val adjust = intent(this, document.id).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        startActivity(ToolResultActivity.intent(this, ResultSpec(
+            toolId = if (areas > 0) TOOL_REDACT else TOOL_SIGN,
+            docIds = listOf(copy.id), mime = "application/pdf", note = facts,
+            sourceKept = true, adjustIntent = adjust,
+            facts = ResultSpec.Facts(copy.pdfFile.length(), pages = copy.pageCount)
+        )))
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Adjust resumes this retained editor. Do not apply the entry tool or reload the source.
+        refresh()
     }
 
     private fun dp(value: Float): Int = SwStyle.dp(this, value)
@@ -1216,22 +1536,42 @@ class StampEditorActivity : BaseActivity() {
     }
 
     private fun loadInk(file: File) {
-        val bitmap = InkExtract.decodeSampled(file)
-        if (bitmap == null) {
-            note(getString(R.string.stamp_ink_none))
-            return
+        // NonCancellable owns bitmap cleanup even if rotation destroys this Activity on IO.
+        lifecycleScope.launch(kotlinx.coroutines.NonCancellable) {
+            val loaded = withContext(Dispatchers.IO) {
+                var source: Bitmap? = null
+                try {
+                    source = InkExtract.decodeSampled(file)
+                    val extracted = source?.let { InkExtract.extract(it, InkExtract.Recolor.ORIGINAL) }
+                    if (source == null || extracted == null) {
+                        source?.recycle()
+                        null
+                    } else source to extracted
+                } catch (_: OutOfMemoryError) {
+                    source?.recycle()
+                    null
+                } catch (_: Exception) {
+                    source?.recycle()
+                    null
+                }
+            }
+            if (loaded == null) {
+                if (!isDestroyed && !isFinishing) note(getString(R.string.stamp_ink_none))
+            } else if (isDestroyed || isFinishing) {
+                loaded.first.recycle(); loaded.second.bitmap.recycle()
+            } else showInkPreview(loaded.first, loaded.second)
         }
-        showInkPreview(bitmap)
     }
 
     /** Preview on a checkerboard, with Original / Black / Blue for a signature. */
-    private fun showInkPreview(source: Bitmap) {
-        var current: InkExtract.Extracted? =
-            InkExtract.extract(source, InkExtract.Recolor.ORIGINAL)
-        if (current == null) {
-            source.recycle()
-            note(getString(R.string.stamp_ink_none))
-            return
+    private fun showInkPreview(source: Bitmap, initial: InkExtract.Extracted) {
+        var current: InkExtract.Extracted? = initial
+        var closed = false
+        var busy = false
+        lateinit var sheet: SwSheet
+        fun release() {
+            if (!source.isRecycled) source.recycle()
+            current?.bitmap?.let { if (!it.isRecycled) it.recycle() }
         }
 
         val preview = ImageView(this).apply {
@@ -1267,21 +1607,40 @@ class StampEditorActivity : BaseActivity() {
                     text = getString(label)
                     gravity = Gravity.CENTER
                     minWidth = dp(84f)
-                    minHeight = dp(44f)
+                    minHeight = dp(SwStyle.TOUCH_MIN_DP)
                     setPadding(dp(10f), 0, dp(10f), 0)
                 }
                 chip.setOnClickListener {
-                    val next = InkExtract.extract(source, recolor) ?: return@setOnClickListener
-                    current?.bitmap?.recycle()
-                    current = next
-                    preview.setImageBitmap(next.bitmap)
+                    if (busy || closed) return@setOnClickListener
+                    busy = true
+                    sheet.primaryButton.isEnabled = false
+                    lifecycleScope.launch(kotlinx.coroutines.NonCancellable) {
+                        val next = withContext(Dispatchers.IO) {
+                            try { InkExtract.extract(source, recolor) }
+                            catch (_: OutOfMemoryError) { null }
+                            catch (_: Exception) { null }
+                        }
+                        busy = false
+                        if (closed || isDestroyed) {
+                            next?.bitmap?.recycle()
+                            release()
+                        } else {
+                            if (next != null) {
+                                val previous = current
+                                current = next
+                                preview.setImageBitmap(next.bitmap)
+                                previous?.bitmap?.let { if (!it.isRecycled) it.recycle() }
+                            } else note(getString(R.string.stamp_ink_none))
+                            sheet.primaryButton.isEnabled = true
+                        }
+                    }
                 }
                 chips.addView(chip, LinearLayout.LayoutParams(0, dp(48f), 1f))
             }
             content.addView(chips)
         }
 
-        SwSheet.builder(this)
+        sheet = SwSheet.builder(this)
             .setTitle(R.string.stamp_ink_title)
             .setContent(content)
             .setPrimary(R.string.stamp_ink_save) {
@@ -1290,7 +1649,12 @@ class StampEditorActivity : BaseActivity() {
             }
             .setSecondary(android.R.string.cancel)
             .build()
-            .show()
+        sheet.setOnDismissListener {
+            closed = true
+            preview.setImageDrawable(null)
+            if (!busy) release()
+        }
+        sheet.show()
     }
 
     private fun saveInk(bitmap: Bitmap) {
@@ -1342,7 +1706,7 @@ class StampEditorActivity : BaseActivity() {
         fun paint(view: TextView, fill: Int, ink: Int, stroke: Int?, radius: Float) {
             view.background = SwStyle.rounded(this, fill, radiusDp = radius, stroke = stroke)
             view.setTextColor(ink)
-            view.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            view.typeface = SwType.bold(this)
             view.gravity = Gravity.CENTER
             // UX-L4-04: these painted TextViews are actions. TalkBack must hear a
             // Button with its enabled state, and keyboard focus must reach them.
@@ -1455,7 +1819,8 @@ class StampEditorActivity : BaseActivity() {
  */
 internal data class SaveMeta(
     val edits: List<PageStamp.PageEdits> = emptyList(),
-    val labelRes: Int = 0
+    val labelRes: Int = 0,
+    val name: String = ""
 )
 
 /** The same honest receipt on the live screen and in the app-context fallback. */
