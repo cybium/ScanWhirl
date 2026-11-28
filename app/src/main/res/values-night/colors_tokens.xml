@@ -10,7 +10,9 @@
 
     <color name="tok_text">#e8f1f3</color>
     <color name="tok_text_2">#9db2b8</color>
-    <color name="tok_text_3">#6f878e</color>
+    <!-- tokens.css dark text-3 #6f878e is only 3.45:1 on surface_3; the original
+         shipped #9db2b8 clears 5.91:1 there and remains the body-safe value. -->
+    <color name="tok_text_3">#9db2b8</color>
     <color name="tok_boundary">#9db2b8</color>
 
     <color name="tok_accent">#2fd3e3</color>
@@ -32,6 +34,9 @@
 
     <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
     <color name="tok_on_paper">#13252a</color>
+    <color name="tok_on_scrim">#ffffff</color>
+    <color name="tok_preview_backdrop">#162024</color>
+    <color name="tok_nav_bar_dark">#0d1315</color>
 
     <!-- The shipped dark category hues. -->
     <color name="tok_cat_study">#38ef7d</color>

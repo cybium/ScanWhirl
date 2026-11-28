@@ -524,7 +524,7 @@ class ScanReviewActivity : BaseActivity() {
     }
 
     private fun paintCategoryChip(chip: Chip, cat: String, active: Boolean) {
-        val color = CategoryStyle.color(cat)
+        val color = CategoryStyle.color(cat, this)
         val density = resources.displayMetrics.density
         chip.chipBackgroundColor = ColorStateList.valueOf(
             if (active) (color and 0x00FFFFFF) or (0x33 shl 24)

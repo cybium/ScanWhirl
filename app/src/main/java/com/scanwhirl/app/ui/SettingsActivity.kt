@@ -775,11 +775,12 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun chooseTheme() {
-        val values = arrayOf(Prefs.THEME_LIGHT, Prefs.THEME_DARK, Prefs.THEME_SYSTEM)
+        // One canonical order, shared with Me: System / Light / Dark.
+        val values = arrayOf(Prefs.THEME_SYSTEM, Prefs.THEME_LIGHT, Prefs.THEME_DARK)
         val labels = arrayOf(
+            getString(R.string.theme_system),
             getString(R.string.theme_light),
-            getString(R.string.theme_dark),
-            getString(R.string.theme_system)
+            getString(R.string.theme_dark)
         )
         val checked = values.indexOf(Prefs.themeMode(this)).coerceAtLeast(0)
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)

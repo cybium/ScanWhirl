@@ -272,7 +272,7 @@ class ToolSetupActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             val side = SwStyle.dp(this@ToolSetupActivity, 18f)
             setPadding(side, SwStyle.dp(this@ToolSetupActivity, 10f), side, SwStyle.dp(this@ToolSetupActivity, 12f))
-            setBackgroundColor(0xFF0E1316.toInt())
+            setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.tok_surface))
             addView(View(this@ToolSetupActivity).apply {
                 setBackgroundColor(SwStyle.color(this@ToolSetupActivity, R.color.sw_cyan_hair))
             }, LinearLayout.LayoutParams(

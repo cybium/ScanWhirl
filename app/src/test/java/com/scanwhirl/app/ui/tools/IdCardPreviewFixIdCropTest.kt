@@ -122,7 +122,7 @@ class IdCardPreviewFixIdCropTest {
 
                     // W5a: the backdrop is a theme token, so it is the light canvas when
                     // Follow system resolves to light. Compare pixels to the resolved token.
-                    val expectedBackdrop = SwStyle.color(activity, R.color.void_abyss)
+                    val expectedBackdrop = SwStyle.color(activity, R.color.tok_preview_backdrop)
                     val cr = (expectedBackdrop shr 16 and 0xFF) * 0.2126 +
                         (expectedBackdrop shr 8 and 0xFF) * 0.7152 +
                         (expectedBackdrop and 0xFF) * 0.0722
@@ -131,11 +131,11 @@ class IdCardPreviewFixIdCropTest {
                         kotlin.math.abs(aroundPage - cr) < 12
                     )
                     assertTrue("the page is white ($pageTop)", pageTop > 200)
-                    // W5a: the edge line is a token too, so in light mode it can be
-                    // lighter than the old navy paper-edge. Assert it is visible.
+                    // Original tolerance restored: the backdrop is dark in both themes
+                    // now, so the translucent white edge clears the 10-level delta.
                     assertTrue(
                         "a thin line marks the preview edge ($border vs $aroundPage)",
-                        border > aroundPage
+                        border > aroundPage + 10
                     )
                 } finally {
                     rendered.recycle()

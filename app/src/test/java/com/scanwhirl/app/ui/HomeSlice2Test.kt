@@ -584,8 +584,14 @@ class HomeSlice2Test {
             CategoryRules.OTHER to R.color.cat_other
         )
         for ((cat, res) in categoryRes) {
-            val r = contrast(c(res), c(R.color.rv_bg))
-            assertTrue("$cat label contrast $r", r >= 4.5)
+            val tokenRatio = contrast(c(res), c(R.color.rv_bg))
+            assertTrue("$cat token contrast $tokenRatio", tokenRatio >= 4.5)
+            // The call sites paint CategoryStyle.color(cat, context); check that
+            // the colour actually used is the token, not the frozen dark literal.
+            val painted = com.scanwhirl.app.util.CategoryStyle.color(cat, app)
+            assertEquals("call sites use the themed $cat token", c(res), painted)
+            assertTrue("$cat painted contrast ${contrast(painted, c(R.color.rv_bg))}",
+                contrast(painted, c(R.color.rv_bg)) >= 4.5)
         }
         assertTrue("Scan label on the cyan pill", contrast(c(R.color.sw_on_scan), c(R.color.sw_scan)) >= 4.5)
         assertTrue("Add label on the ink pill", contrast(c(R.color.rv_on_commit), c(R.color.rv_commit)) >= 4.5)

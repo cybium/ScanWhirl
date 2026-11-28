@@ -4,5 +4,6 @@
 <resources>
     <style name="Theme.ScanWhirl" parent="Base.Theme.ScanWhirl">
         <item name="android:windowLightNavigationBar">@bool/sw_light_system_bars</item>
+        <item name="android:navigationBarColor">@color/tok_bg</item>
     </style>
 </resources>

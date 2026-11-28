@@ -31,7 +31,9 @@
         <item name="colorOutline">@color/sf_outline</item>
         <item name="colorOutlineVariant">@color/sf_outline_variant</item>
         <item name="android:statusBarColor">@color/sf_surface</item>
-        <item name="android:navigationBarColor">@color/sf_background</item>
+        <!-- API 24-26 draw white system nav icons, so the bar stays dark there.
+             values-v27/ overrides with the themed bar + light icons (API 27+). -->
+        <item name="android:navigationBarColor">@color/tok_nav_bar_dark</item>
         <item name="android:windowLightStatusBar">@bool/sw_light_system_bars</item>
         <item name="android:textColorPrimary">@color/text_hologram_hi</item>
         <item name="android:textColorSecondary">@color/text_hologram_mid</item>

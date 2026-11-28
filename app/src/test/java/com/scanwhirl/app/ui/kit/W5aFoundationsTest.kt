@@ -156,6 +156,56 @@ class W5aFoundationsTest {
         assertNotNull("sheet exit easing exists", SwMotion.emphasizedExit())
     }
 
+    // ---- 3b. review fixes: no light-theme dark-on-dark --------------------
+
+    @Test
+    fun `category painters use themed tokens in both qualifiers`() {
+        val cats = listOf(
+            com.scanwhirl.app.util.CategoryRules.STUDY to R.color.cat_study,
+            com.scanwhirl.app.util.CategoryRules.RECEIPTS to R.color.cat_receipts,
+            com.scanwhirl.app.util.CategoryRules.IDS to R.color.cat_ids,
+            com.scanwhirl.app.util.CategoryRules.FORMS to R.color.cat_forms,
+            com.scanwhirl.app.util.CategoryRules.OTHER to R.color.cat_other
+        )
+        for (q in listOf("notnight", "night")) {
+            RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
+            for ((cat, res) in cats) {
+                assertEquals("$cat painter follows $q token",
+                    ContextCompat.getColor(app, res),
+                    com.scanwhirl.app.util.CategoryStyle.color(cat, app))
+            }
+        }
+    }
+
+    @Test
+    fun `all functional light surfaces clear AA for their ink`() {
+        RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-notnight-xhdpi")
+        fun lum(c: Int): Double {
+            fun ch(shift: Int): Double {
+                val v = (c shr shift and 0xFF) / 255.0
+                return if (v <= 0.04045) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0)
+        }
+        fun ratio(a: Int, b: Int): Double {
+            val x = lum(a); val y = lum(b)
+            return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
+        }
+        val surface2 = ContextCompat.getColor(app, R.color.tok_surface_2)
+        val ink = ContextCompat.getColor(app, R.color.tok_text)
+        assertTrue("snackbar/picker ink on surface-2 ${ratio(ink, surface2)}",
+            ratio(ink, surface2) >= 4.5)
+        val scrim = ContextCompat.getColor(app, R.color.tok_scrim_sheet)
+        val onScrim = ContextCompat.getColor(app, R.color.tok_on_scrim)
+        assertTrue("page scrim label ${ratio(onScrim, scrim)}", ratio(onScrim, scrim) >= 4.5)
+        val text3 = ContextCompat.getColor(app, R.color.tok_text_3)
+        for (bg in listOf(R.color.tok_surface, R.color.tok_surface_2,
+            R.color.tok_surface_3, R.color.tok_canvas)) {
+            assertTrue("text-3 on ${app.resources.getResourceEntryName(bg)} ${ratio(text3, ContextCompat.getColor(app, bg))}",
+                ratio(text3, ContextCompat.getColor(app, bg)) >= 4.5)
+        }
+    }
+
     // ---- 4. one "save to Documents" preference ----------------------------
 
     private fun openMe(scenario: ActivityScenario<ShellActivity>) {

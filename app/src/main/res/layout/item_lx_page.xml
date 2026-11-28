@@ -31,9 +31,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="#CC000000"
+        android:background="@color/tok_scrim_sheet"
         android:gravity="center"
         android:importantForAccessibility="no"
-        android:textColor="@color/lx_primary"
+        android:textColor="@color/tok_on_scrim"
         android:textSize="14sp" />
 </FrameLayout>

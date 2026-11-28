@@ -645,7 +645,10 @@ class MainActivity : BaseActivity(), HomeHost {
                     docs,
                     state,
                     normalizedText = { ocrTextCache.normalized(it) },
-                    originalText = { ocrTextCache.original(it) }
+                    originalText = { ocrTextCache.original(it) },
+                    highlightColor = com.scanwhirl.app.ui.kit.SwStyle.color(
+                        context, com.scanwhirl.app.R.color.tok_accent
+                    )
                 )
                 // Retrieval slice 5: which pages hold every term (text hits only; the
                 // document list and its order above are unchanged).
@@ -671,7 +674,8 @@ class MainActivity : BaseActivity(), HomeHost {
             allDocs,
             state,
             normalizedText = { ocrTextCache.normalized(it) },
-            originalText = { ocrTextCache.original(it) }
+            originalText = { ocrTextCache.original(it) },
+            highlightColor = com.scanwhirl.app.ui.kit.SwStyle.color(this, com.scanwhirl.app.R.color.tok_accent)
         )
         showResult(result)
     }
@@ -911,7 +915,7 @@ class MainActivity : BaseActivity(), HomeHost {
                 // Home slice 2: a category swatch instead of a dashed outline / glow.
                 if (key != null) {
                     chipIcon = ContextCompat.getDrawable(context, R.drawable.bg_home_swatch)
-                    chipIconTint = ColorStateList.valueOf(CategoryStyle.color(key))
+                    chipIconTint = ColorStateList.valueOf(CategoryStyle.color(key, context))
                     isChipIconVisible = true
                 }
                 // Tapping the chip that is already active falls back to All.

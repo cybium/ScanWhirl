@@ -12,10 +12,10 @@
 
     <color name="tok_text">#13252a</color>
     <color name="tok_text_2">#566d74</color>
-    <!-- tokens.css light text-3 is #87999e (2.97:1 on white). The accessibility floor
-         raises it to the same hue family at 5.1:1 so secondary facts stay readable in
-         the real light palette; dark keeps the tokens.css value unchanged. -->
-    <color name="tok_text_3">#5f7176</color>
+    <!-- tokens.css light text-3 #87999e is 2.97:1 on white. Deepened to #52646a:
+         worst case 4.9:1 on canvas (surface_3 is 5.09:1, white 6.2:1), so body
+         text clears AA on every light surface. -->
+    <color name="tok_text_3">#52646a</color>
     <!-- Derived from the tokens.css line role: a functional boundary clears 3:1 on surface. -->
     <color name="tok_boundary">#61747a</color>
 
@@ -41,6 +41,12 @@
 
     <!-- Paper is never inverted, so ink printed on it stays dark in both themes. -->
     <color name="tok_on_paper">#13252a</color>
+    <!-- Ink on the dark sheet/page scrim is white in both themes. -->
+    <color name="tok_on_scrim">#ffffff</color>
+    <!-- The preview backdrop behind a white paper card stays dark in both themes. -->
+    <color name="tok_preview_backdrop">#162024</color>
+    <!-- API 24-26 cannot draw light nav icons; keep the bar dark there in both themes. -->
+    <color name="tok_nav_bar_dark">#0d1315</color>
 
     <!-- Category identity hues keep their hue family but are deep enough in light
          mode to clear 4.5:1 on the light background (dark keeps the shipped hues). -->

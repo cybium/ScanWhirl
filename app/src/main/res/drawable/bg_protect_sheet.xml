@@ -9,8 +9,8 @@
                 android:topRightRadius="28dp" />
             <gradient
                 android:angle="270"
-                android:endColor="#1C252A"
-                android:startColor="#161D21" />
+                android:endColor="@color/tok_surface_2"
+                android:startColor="@color/tok_surface" />
             <stroke
                 android:width="1dp"
                 android:color="@color/protect_hair" />
@@ -24,7 +24,7 @@
                 android:width="42dp"
                 android:height="5dp" />
             <corners android:radius="3dp" />
-            <solid android:color="#2EFFFFFF" />
+            <solid android:color="@color/tok_boundary" />
         </shape>
     </item>
 </layer-list>
