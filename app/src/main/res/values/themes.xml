@@ -215,6 +215,9 @@
     <style name="Widget.ScanWhirl.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
         <item name="thumbTint">@color/sel_switch_thumb</item>
         <item name="trackTint">@color/sel_switch_track</item>
+        <!-- A visible hairline outline keeps the OFF thumb distinct on the track. -->
+        <item name="strokeColor">@color/tok_boundary</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <!-- Popup Menu Styles -->

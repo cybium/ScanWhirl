@@ -47,6 +47,10 @@
     <color name="tok_preview_backdrop">#162024</color>
     <!-- API 24-26 cannot draw light nav icons; keep the bar dark there in both themes. -->
     <color name="tok_nav_bar_dark">#0d1315</color>
+    <!-- M3 switch: an OFF track/thumb that clear 3:1 on the card surface; the
+         ON pair is tok_accent / tok_on_accent. -->
+    <color name="tok_switch_track_off">#707980</color>
+    <color name="tok_switch_thumb_off">#ffffff</color>
 
     <!-- Category identity hues keep their hue family but are deep enough in light
          mode to clear 4.5:1 on the light background (dark keeps the shipped hues). -->

@@ -37,6 +37,8 @@
     <color name="tok_on_scrim">#ffffff</color>
     <color name="tok_preview_backdrop">#162024</color>
     <color name="tok_nav_bar_dark">#0d1315</color>
+    <color name="tok_switch_track_off">#7c8a91</color>
+    <color name="tok_switch_thumb_off">#e8f1f3</color>
 
     <!-- The shipped dark category hues. -->
     <color name="tok_cat_study">#38ef7d</color>

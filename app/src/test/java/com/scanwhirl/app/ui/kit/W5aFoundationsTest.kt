@@ -206,6 +206,38 @@ class W5aFoundationsTest {
         }
     }
 
+    @Test
+    fun `switch off track and thumb clear 3 to 1 on the card in both themes`() {
+        fun lum(c: Int): Double {
+            fun ch(shift: Int): Double {
+                val v = (c shr shift and 0xFF) / 255.0
+                return if (v <= 0.04045) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0)
+        }
+        fun ratio(a: Int, b: Int): Double {
+            val x = lum(a); val y = lum(b)
+            return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
+        }
+        for (q in listOf("notnight", "night")) {
+            RuntimeEnvironment.setQualifiers("en-rUS-w360dp-h800dp-$q-xhdpi")
+            val track = ContextCompat.getColorStateList(app, R.color.sel_switch_track)!!
+            val thumb = ContextCompat.getColorStateList(app, R.color.sel_switch_thumb)!!
+            val offTrack = track.getColorForState(intArrayOf(), 0)
+            val offThumb = thumb.getColorForState(intArrayOf(), 0)
+            val onTrack = track.getColorForState(intArrayOf(android.R.attr.state_checked), 0)
+            val onThumb = thumb.getColorForState(intArrayOf(android.R.attr.state_checked), 0)
+            val offTrackDisabled = track.getColorForState(intArrayOf(-android.R.attr.state_enabled), 0)
+            val offThumbDisabled = thumb.getColorForState(intArrayOf(-android.R.attr.state_enabled), 0)
+            val card = ContextCompat.getColor(app, R.color.tok_surface)
+            assertTrue("$q OFF track on card ${ratio(offTrack, card)}", ratio(offTrack, card) >= 3.0)
+            assertTrue("$q OFF thumb on track ${ratio(offThumb, offTrack)}", ratio(offThumb, offTrack) >= 3.0)
+            assertTrue("$q ON thumb on accent ${ratio(onThumb, onTrack)}", ratio(onThumb, onTrack) >= 3.0)
+            assertTrue("$q disabled is distinguishable",
+                offTrackDisabled != offTrack && offThumbDisabled != offThumb)
+        }
+    }
+
     // ---- 4. one "save to Documents" preference ----------------------------
 
     private fun openMe(scenario: ActivityScenario<ShellActivity>) {
