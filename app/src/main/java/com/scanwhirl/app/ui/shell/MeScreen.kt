@@ -93,9 +93,8 @@ class MeScreen(
         // Saving: one switch, shared with Settings (the same preference, not a second one).
         list.addView(
             toggleRow(
-                // V003: this persistent save preference is not the Settings gear. Match
-                // Settings' document glyph until the kit ships a dedicated save icon.
-                R.drawable.ic_document,
+                // V003 (W5a-2 wiring): the kit's dedicated save-to-Documents glyph.
+                R.drawable.ic_sw_save_documents,
                 context.getString(R.string.me_also_save_to_documents),
                 context.getString(R.string.me_also_save_to_documents_summary),
                 R.id.swMeAlsoSave,
@@ -115,7 +114,8 @@ class MeScreen(
         )
         list.addView(
             row(
-                R.drawable.ic_sym_archive,
+                // V101 (W5a-2 wiring): the kit backup glyph, distinct from ZIP/PDF-A.
+                R.drawable.ic_sw_backup,
                 context.getString(R.string.me_backup),
                 context.getString(R.string.me_backup_summary),
                 R.id.swMeBackup
@@ -289,8 +289,9 @@ class MeScreen(
             card.addView(
                 ImageView(context).apply {
                     setImageResource(R.drawable.ic_sym_chevron_right)
+                    // V061 (W5a-2 token): the chevron affordance, not decorative text ink.
                     imageTintList = ColorStateList.valueOf(
-                        SwStyle.color(context, R.color.text_hologram_dim)
+                        SwStyle.color(context, R.color.sf_outline)
                     )
                 },
                 LayoutParams(SwStyle.dp(context, chevronDp), SwStyle.dp(context, chevronDp))

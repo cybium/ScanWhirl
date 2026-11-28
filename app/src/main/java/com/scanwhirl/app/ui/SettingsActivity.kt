@@ -212,8 +212,9 @@ class SettingsActivity : BaseActivity() {
         }
         row.addView(
             android.widget.ImageView(this).apply {
-                // W5d V062/U7: a text-reading glyph, never the App language globe.
-                setImageResource(R.drawable.ic_ocr)
+                // W5d V062/U7 (W5a-2 wiring): the kit text-scan glyph, never the
+                // App language translate glyph.
+                setImageResource(R.drawable.ic_sw_ocr_language)
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 imageTintList = android.content.res.ColorStateList.valueOf(
                     com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
@@ -593,6 +594,21 @@ class SettingsActivity : BaseActivity() {
                 isSelected = index == checked
                 setBackgroundResource(android.R.drawable.list_selector_background)
                 setPadding((6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt())
+                // V059 (W5a-2): the same radio role and control the kit list uses.
+                androidx.core.view.ViewCompat.setAccessibilityDelegate(
+                    this,
+                    object : androidx.core.view.AccessibilityDelegateCompat() {
+                        override fun onInitializeAccessibilityNodeInfo(
+                            host: android.view.View,
+                            info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                        ) {
+                            super.onInitializeAccessibilityNodeInfo(host, info)
+                            info.className = android.widget.RadioButton::class.java.name
+                            info.isCheckable = true
+                            info.isChecked = index == checked
+                        }
+                    }
+                )
             }
             val text = android.widget.TextView(this).apply {
                 this.text = label
@@ -607,18 +623,22 @@ class SettingsActivity : BaseActivity() {
                     0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f
                 )
             )
-            if (index == checked) {
-                row.addView(
-                    android.widget.ImageView(this).apply {
-                        setImageResource(R.drawable.ic_sym_check)
-                        imageTintList = android.content.res.ColorStateList.valueOf(
-                            com.scanwhirl.app.ui.kit.SwStyle.color(this@SettingsActivity, R.color.cyan_primary)
+            // V059: a real radio control in both states, not a lone tick when selected.
+            row.addView(
+                android.widget.ImageView(this).apply {
+                    setImageResource(
+                        if (index == checked) R.drawable.ic_sw_radio_on else R.drawable.ic_sw_radio_off
+                    )
+                    imageTintList = android.content.res.ColorStateList.valueOf(
+                        com.scanwhirl.app.ui.kit.SwStyle.color(
+                            this@SettingsActivity,
+                            if (index == checked) R.color.cyan_primary else R.color.text_hologram_dim
                         )
-                        importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    },
-                    android.widget.LinearLayout.LayoutParams((20 * d).toInt(), (20 * d).toInt())
-                )
-            }
+                    )
+                    importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                android.widget.LinearLayout.LayoutParams((20 * d).toInt(), (20 * d).toInt())
+            )
             row.setOnClickListener {
                 onPick(index)
                 sheet?.dismiss()
@@ -980,7 +1000,7 @@ class SettingsActivity : BaseActivity() {
         com.scanwhirl.app.ui.kit.SwSheet.builder(this)
             .setTitle(R.string.about_title)
             .setContent(view.root)
-            .setPrimary(android.R.string.ok)
+            // D5: the header X is the one dismissal (no duplicate footer OK).
             .build()
             .show()
     }

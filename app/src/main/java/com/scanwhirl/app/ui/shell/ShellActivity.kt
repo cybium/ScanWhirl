@@ -1008,7 +1008,8 @@ class ShellActivity : com.scanwhirl.app.ui.BaseActivity(), ToolHost, HomeHost {
             ) { which, _ ->
                 if (which == 0) openPrivacyPolicy() else showLicences()
             }
-            .setPrimary(R.string.sheet_got_it)
+            // W5d round 3 (D5): the header X is the one dismissal; the old footer
+            // "Got it" was a second control doing exactly the same thing.
             .build()
             .show()
     }

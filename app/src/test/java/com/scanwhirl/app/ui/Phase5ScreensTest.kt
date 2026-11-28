@@ -240,10 +240,11 @@ class Phase5ScreensTest {
                 val density = activity.resources.displayMetrics.density
                 val rows = mapOf(
                     R.id.rowTheme to R.drawable.ic_palette,
-                    R.id.rowFont to R.drawable.ic_font,
+                    R.id.rowFont to R.drawable.ic_sw_font,
+                    R.id.rowTextSize to R.drawable.ic_sw_text_size,
                     R.id.rowGreeting to R.drawable.ic_greeting,
                     R.id.rowWallpaper to R.drawable.ic_wallpaper,
-                    R.id.rowLanguage to R.drawable.ic_language,
+                    R.id.rowLanguage to R.drawable.ic_sw_app_language,
                     R.id.rowViewer to R.drawable.ic_viewer,
                     R.id.rowAutoEnhance to R.drawable.ic_auto,
                     R.id.rowAbout to R.drawable.ic_info,

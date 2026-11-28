@@ -17,6 +17,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -134,8 +135,8 @@ class W5dSettingsCopyTest {
                 val ocrIcon = ocrRow.getChildAt(0) as? ImageView
                 assertNotNull("App language leads with an icon", appIcon)
                 assertNotNull("OCR language leads with an icon", ocrIcon)
-                val enGlobe = iconBitmap(appIcon, R.drawable.ic_language)
-                val enOcr = iconBitmap(ocrIcon, R.drawable.ic_ocr)
+                val enGlobe = iconBitmap(appIcon, R.drawable.ic_sw_app_language)
+                val enOcr = iconBitmap(ocrIcon, R.drawable.ic_sw_ocr_language)
                 assertNotNull("globe fixture renders", enGlobe)
                 assertNotNull("OCR fixture renders", enOcr)
                 assertTrue("the two glyphs are different", !enGlobe!!.sameAs(enOcr!!))
@@ -154,6 +155,61 @@ class W5dSettingsCopyTest {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         d.draw(Canvas(bmp))
         return bmp
+    }
+
+    @Test(timeout = 60_000)
+    fun oneDismissalPerSheet() {
+        // D5: a header X plus a footer Cancel (or "Got it") is two controls for one
+        // dismissal. Cancel sheets keep only Cancel; an informational About sheet keeps
+        // only its named close.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.rowTheme).performClick()
+            }
+            idle()
+            scenario.onActivity {
+                val dialog = ShadowDialog.getLatestDialog()!!
+                assertFalse("theme sheet: Cancel is the one dismissal",
+                    dialog.findViewById<View>(R.id.swSheetClose).isVisible)
+                assertTrue(dialog.findViewById<View>(R.id.swSheetSecondary).isVisible)
+            }
+        }
+        ActivityScenario.launch(com.scanwhirl.app.ui.shell.ShellActivity::class.java).use { shell ->
+            shell.onActivity { activity ->
+                activity.findViewById<View>(com.scanwhirl.app.R.id.swNavMe).performClick()
+                idle()
+                activity.findViewById<View>(com.scanwhirl.app.R.id.swMeAbout).performClick()
+            }
+            idle()
+            shell.onActivity {
+                val dialog = ShadowDialog.getLatestDialog()!!
+                assertTrue("About keeps its header close",
+                    dialog.findViewById<View>(R.id.swSheetClose).isVisible)
+                assertFalse("About has no duplicate footer dismissal",
+                    dialog.findViewById<View>(R.id.swSheetPrimary).isVisible)
+            }
+        }
+    }
+
+    @Test(timeout = 60_000)
+    fun fontAndTextSizeRowsUseDifferentGlyphs() {
+        // D6: "TT" on both rows read as one icon for two meanings. The W5a-2 kit
+        // ships a font glyph and a size glyph; they must render differently.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val font = iconBitmap(
+                    activity.findViewById<ViewGroup>(R.id.rowFont).getChildAt(0) as ImageView,
+                    R.drawable.ic_sw_font
+                )
+                val size = iconBitmap(
+                    activity.findViewById<ViewGroup>(R.id.rowTextSize).getChildAt(0) as ImageView,
+                    R.drawable.ic_sw_text_size
+                )
+                assertNotNull("font glyph renders", font)
+                assertNotNull("text-size glyph renders", size)
+                assertTrue("Font and Text size glyphs differ", !font!!.sameAs(size!!))
+            }
+        }
     }
 
     @Test(timeout = 60_000)

@@ -545,7 +545,7 @@ class BackupActivity : BaseActivity() {
                 SwSheet.builder(this@BackupActivity)
                     .setTitle(R.string.backup_choose)
                     .setMessage(R.string.backup_explain)
-                    .setPrimary(R.string.sheet_got_it)
+                    // D5: the header X is the one dismissal (no duplicate "Got it").
                     .build()
                     .secure()
                     .show()
