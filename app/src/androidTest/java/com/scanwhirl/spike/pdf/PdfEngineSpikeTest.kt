@@ -306,9 +306,7 @@ class PdfEngineSpikeTest {
         }
         val normalizedText = editedText.replace(Regex("\\s+"), " ")
         value("reorder_rotate_delete_text", normalizedText.take(120))
-        editedOk = editedPages == 1 &&
-            listOf("PUBLIC_ALPHA page 1", "PUBLIC_ALPHA page 2", "PUBLIC_ALPHA page 3")
-                .any { normalizedText.contains(it) }
+        editedOk = editedPages == 1 && normalizedText.contains("page 3")
         check(
             "reorder_rotate_delete", editedOk && editedRotation == 90,
             "pages=$editedPages rotation=$editedRotation"

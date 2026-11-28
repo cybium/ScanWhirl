@@ -116,11 +116,9 @@ jobs:
           disable-linux-hw-accel: false
           emulator-boot-timeout: 600
           script: |
-            ./gradlew :app:connectedDebugAndroidTest --stacktrace || echo failed > gradle-failed.txt
-            adb pull /sdcard/pdf_spike_results.json results-api-${{ matrix.api }}.json || true
+            ( for i in $(seq 1 180); do if adb pull /sdcard/Android/data/com.scanwhirl.spike.pdf/files/pdf_spike_results.json results-api-${{ matrix.api }}.json 2>/dev/null && [ -s results-api-${{ matrix.api }}.json ]; then break; fi; sleep 2; done ) & P=$!; ./gradlew :app:connectedDebugAndroidTest --stacktrace || echo failed > gradle-failed.txt; wait $P; test ! -f gradle-failed.txt
+            if [ ! -s results-api-${{ matrix.api }}.json ]; then adb pull /sdcard/pdf_spike_results.json results-api-${{ matrix.api }}.json || true; fi
             if [ ! -s results-api-${{ matrix.api }}.json ]; then adb pull /sdcard/Download/pdf_spike_results.json results-api-${{ matrix.api }}.json || true; fi
-            if [ ! -s results-api-${{ matrix.api }}.json ]; then adb pull /sdcard/Android/data/com.scanwhirl.spike.pdf/files/pdf_spike_results.json results-api-${{ matrix.api }}.json || true; fi
-            test ! -f gradle-failed.txt
 
       - name: Verify and show JSON results
         if: always()
