@@ -87,6 +87,14 @@ class FlagTest(unittest.TestCase):
         parent.append(child)
         self.assertEqual(atlas.analyze(self.root_with(parent), 1.0, 1080, 2400)["overlaps"], [])
 
+    def test_bottom_sheet_touch_outside_is_not_an_overlap(self):
+        outside = node("[0,0][1080,2400]", clickable="true",
+                       **{"resource-id": "com.google.android.material:id/touch_outside"})
+        close = node("[900,100][1000,200]", clickable="true", text="Close",
+                     **{"resource-id": "pkg:id/swSheetClose"})
+        flags = atlas.analyze(self.root_with(outside, close), 1.0, 1080, 2400)
+        self.assertEqual(flags["overlaps"], [])
+
     def test_multiple_primary_buttons(self):
         one = node("[0,0][200,100]", clickable="true",
                    **{"resource-id": "pkg:id/swSheetPrimary"})

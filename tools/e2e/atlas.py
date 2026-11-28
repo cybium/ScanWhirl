@@ -51,6 +51,9 @@ PRIMARY_RE = re.compile(
 INSTRUCTION_ID_RE = re.compile(
     r"(message|hint|instruction|note|reason|summary|subtitle|body|receipt)", re.I
 )
+# Bottom-sheet window chrome: a full-screen "touch outside" surface legitimately
+# overlaps every control in the sheet, so it is not a UI-quality finding.
+NON_CONTENT_IDS = {"touch_outside", "design_bottom_sheet", "swSheetRoot"}
 
 # Every READY tile in ToolRegistry (the Coming-soon tile is never rendered).
 TOOLS = [
@@ -74,6 +77,7 @@ SCREENS = []
 ERRORS = []
 COVERAGE = {"tools_total": len(TOOLS), "tools_visited": [], "tools_failed": []}
 N = 0
+DIALOGS = 0
 DENSITY = 1.0
 WIDTH = 1080
 HEIGHT = 2400
@@ -169,7 +173,8 @@ def analyze(root, density=DENSITY, width=WIDTH, height=HEIGHT):
     parents = parent_map(root)
     nodes = visible_nodes(root, width, height)
     clickable = [(n, b) for n, b in nodes
-                 if n.get("clickable") == "true" and not is_system_node(n)]
+                 if n.get("clickable") == "true" and not is_system_node(n)
+                 and rid_name(n) not in NON_CONTENT_IDS]
 
     # 1. Touch targets below 48x48 dp (pixels converted with the display density).
     for node, bounds in clickable:
@@ -360,13 +365,36 @@ def has_secure_flag():
 
 # -------------------------------------------------------- uiautomator navigation
 def hierarchy():
+    """Fresh hierarchy; tap 'Wait' on a system ANR dialog that stole focus.
+
+    The Pixel Launcher routinely ANRs on a cold runner and its dialog becomes the
+    focused window, hiding the app from every dump. It is emulator noise, not an
+    app finding; smoke.sh handles it the same way. Never tap 'Close app'.
+    """
+    global DIALOGS
     data = dump_xml()
     if not data:
         return None
     try:
-        return ET.fromstring(data)
+        root = ET.fromstring(data)
     except ET.ParseError:
         return None
+    for _ in range(4):
+        dialog = find(root, rid="aerr_wait")
+        if dialog is None:
+            break
+        tap_node(root, dialog)
+        DIALOGS += 1
+        print("dismissed system 'not responding' dialog (#%d)" % DIALOGS, flush=True)
+        time.sleep(1.2)
+        data = dump_xml()
+        if not data:
+            return None
+        try:
+            root = ET.fromstring(data)
+        except ET.ParseError:
+            return None
+    return root
 
 
 def match(node, rid=None, desc=None, text=None, regex=None, cls=None,
@@ -431,7 +459,7 @@ def tap_node(root, node):
 
 def tap(want, timeout=8.0):
     root = hierarchy()
-    node = find(root, **want) if root else None
+    node = find(root, **want) if root is not None else None
     if node is None and timeout > 0:
         node = wait_for(want, timeout)
         root = hierarchy()
@@ -501,6 +529,16 @@ def launch():
     return wait_for({"rid": "swNavLibrary"}, timeout=40) is not None
 
 
+def open_create_sheet():
+    """The disc's first tap can be swallowed by its ring animation; retry once."""
+    for _ in range(2):
+        if tap({"rid": "swNavScan"}, timeout=8):
+            if wait_for({"rid": "swCreateScan"}, timeout=10) is not None:
+                return True
+        time.sleep(1.0)
+    return False
+
+
 def recover(reason):
     """Never leave the walk lost: try Back, then a cold relaunch of the shell."""
     print("recover: %s" % reason, flush=True)
@@ -523,6 +561,7 @@ def capture(area, slug, path, note=None):
     name = "%03d-%s" % (N, slugify(slug))
     png_path = OUT / (name + ".png")
     xml_path = OUT / (name + ".xml")
+    hierarchy()  # dismiss a launcher ANR dialog before the evidence is taken
     data = dump_xml()
     if data:
         xml_path.write_bytes(data)
@@ -603,9 +642,8 @@ def seed():
 def import_fixture():
     """Import the generated PDF through DocumentsUI, as a person would."""
     launch()
-    if not tap({"rid": "swNavScan"}, timeout=12):
+    if not open_create_sheet():
         return False
-    wait_for({"rid": "swCreateScan"}, timeout=15)
     capture("create", "create-sheet", ["Library", "Create"], "Create sheet before import")
     if not tap({"rid": "swCreateImport"}, timeout=6):
         return False
@@ -629,7 +667,7 @@ def import_fixture():
         return False
     capture("import", "picker-fixture", ["Library", "Create", "Import PDF", FIXTURE_PDF])
     tap({"text": FIXTURE_PDF}, timeout=6)
-    opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=110) is not None
+    opened = (wait_for({"rid": "ux130_l4_select_pages"}, timeout=70) is not None
               or wait_for({"rid": "btnMore"}, timeout=8) is not None)
     if not opened:
         capture("import", "import-stuck", ["Library", "Create", "Import PDF", "open"],
@@ -946,9 +984,8 @@ def walk_me():
 def walk_create():
     def action():
         launch()
-        if not tap({"rid": "swNavScan"}, timeout=8):
+        if not open_create_sheet():
             return "Create disc missing"
-        wait_for({"rid": "swCreateScan"}, timeout=12)
         capture("create", "sheet", ["Library", "Create"])
         dismiss_sheet()
         return "create sheet"
@@ -959,8 +996,8 @@ def walk_create():
                       ("swCreateImport", "import-picker")):
         def picker(rid=rid, slug=slug):
             launch()
-            tap({"rid": "swNavScan"}, timeout=8)
-            wait_for({"rid": "swCreateScan"}, timeout=12)
+            if not open_create_sheet():
+                return "Create sheet missing"
             if not tap({"rid": rid}, timeout=6):
                 return "%s missing" % rid
             time.sleep(1.4)
@@ -991,6 +1028,7 @@ def write_outputs():
         "elapsed_minutes": round((time.monotonic() - STARTED) / 60, 1),
         "screens": SCREENS, "coverage": COVERAGE, "navigation_errors": ERRORS,
         "totals": {"screens": len(SCREENS), "secure": sum(1 for s in SCREENS if s["secure"]),
+                   "system_dialogs_dismissed": DIALOGS,
                    "by_flag": by_flag, "worst": worst},
     }
     (OUT / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False),
@@ -1008,9 +1046,11 @@ def write_outputs():
            ".secure{color:#8fd3ff}table{border-collapse:collapse}td,th{padding:4px 10px;border:1px solid #27404d}"
            "</style></head><body>",
            "<h1>ScanWhirl screen atlas - %s (API %s)</h1>" % (html.escape(LEG), html.escape(str(API))),
-           "<p>%d screens, %d secure, %.1f min. Density %.2f, %dx%d. Commit %s.</p>" % (
-               len(SCREENS), report["totals"]["secure"], report["elapsed_minutes"],
-               DENSITY, WIDTH, HEIGHT, html.escape(str(report["sha"])[:12])),
+           "<p>%d screens, %d secure, %d system dialogs dismissed, %.1f min. "
+           "Density %.2f, %dx%d. Commit %s.</p>" % (
+               len(SCREENS), report["totals"]["secure"], DIALOGS,
+               report["elapsed_minutes"], DENSITY, WIDTH, HEIGHT,
+               html.escape(str(report["sha"])[:12])),
            "<h2>Flags by type</h2><table><tr><th>check</th><th>hits</th></tr>"]
     for key, count in by_flag.items():
         doc.append("<tr><td>%s</td><td>%d</td></tr>" % (html.escape(key), count))
