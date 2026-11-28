@@ -5,6 +5,7 @@ import android.app.Dialog
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.R
@@ -102,9 +103,11 @@ class LiveVaultEntryTest {
                 val wrong = legacyPinSheet()
                 assertNotNull(wrong)
                 submitPin(wrong!!, "1111")
+                val error = wrong.findViewById<TextView>(R.id.swPasswordError)
+                assertNotNull("the wrong PIN has an error line", error)
                 assertEquals("the wrong PIN is reported on the field, not as a toast",
-                    app.getString(R.string.vault_legacy_wrong),
-                    wrong.findViewById<EditText>(R.id.vaultLegacyPin).error?.toString())
+                    app.getString(R.string.vault_legacy_wrong), error!!.text?.toString())
+                assertTrue("the error line is shown", error.isVisible)
                 assertNotNull("the PIN sheet stays open after a wrong try", legacyPinSheet())
                 assertFalse("wrong PIN must not open the Vault",
                     activity.findViewById<View>(R.id.vaultBanner) != null)
