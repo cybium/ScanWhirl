@@ -339,7 +339,8 @@ class ScanRepository(private val context: Context) {
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return null
         val lines = try { meta.readLines() } catch (_: IOException) { return null }
-        if (lines.isEmpty() || lines.drop(3).any { it.startsWith("content_kind=") && it != "content_kind=raster" }) return null
+        if (lines.isEmpty() || File(dir, DigitalStorage.PAGES).exists() ||
+            lines.drop(3).any { it.startsWith("content_kind=") && it != "content_kind=raster" }) return null
         // Visibility rule (WP-05): meta.txt is read FIRST, the marker SECOND. meta.txt is
         // only ever written after the save's marker exists and its content is complete,
         // so "meta present + marker absent" can only mean a published document.
@@ -418,9 +419,12 @@ class ScanRepository(private val context: Context) {
      * Returns false when the document has no meta.txt.
      */
     private fun updateMeta(dir: File, change: (MutableList<String>) -> Unit): Boolean = synchronized(META_LOCK) {
+        val isDigital = dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING)
+        if (isDigital && DigitalStorage.read(dir) == null) return@synchronized false
         val meta = File(dir, "meta.txt")
         if (!meta.exists()) return false
-        val lines = meta.readLines().toMutableList()
+        val lines = if (isDigital) DigitalStorage.boundedLines(meta, DigitalStorage.MAX_META_BYTES).toMutableList()
+            else meta.readLines().toMutableList()
         change(lines)
         Durable.atomicWriteText(meta, lines.joinToString("\n") + "\n")
         true
@@ -440,9 +444,11 @@ class ScanRepository(private val context: Context) {
 
     /** Preserve timestamps, category, exports and unknown metadata while resolving just the title. */
     internal fun resolveNameBeforePublish(dir: File) {
-        updateMeta(dir) { lines ->
+        val updated = updateMeta(dir) { lines ->
             if (lines.isNotEmpty()) lines[0] = uniqueDocumentName(dir, lines[0])
         }
+        if (!updated && dir.parentFile?.name in setOf(DigitalStorage.LIVE, DigitalStorage.TRASH, DigitalStorage.STAGING))
+            throw IOException("Digital metadata unavailable")
     }
 
     private fun padMeta(lines: MutableList<String>) {
@@ -1358,15 +1364,14 @@ class ScanRepository(private val context: Context) {
                     com.scanwhirl.app.store.resultauthority.ResultOutputAuthority.invalidateIfTracked(context, id)
                     val root = if (digitalStorage.hasLive(id)) digitalStorage.root(DigitalStorage.TRASH) else trashDir
                     val hidden = File(root, "$PURGE_PREFIX$id-${UUID.randomUUID().toString().take(8)}")
-                    if (dir.renameTo(hidden)) {
-                        if (root != trashDir) {
-                            Durable.syncDir(dir.parentFile!!)
-                            Durable.syncDir(root)
-                        }
+                    if (root != trashDir) {
+                        digitalStorage.beginPurge(dir, hidden)
+                        trashFault(TrashStage.PURGE_HIDDEN)
+                        if (!digitalStorage.finishPurge(hidden)) throw IOException("Could not finish removing digital copy")
+                    } else if (dir.renameTo(hidden)) {
                         trashFault(TrashStage.PURGE_HIDDEN)
                         if (!hidden.deleteRecursively()) throw IOException("Could not finish removing the copy")
                     } else {
-                        if (root != trashDir) throw IOException("Could not move digital copy for removal")
                         if (!dir.deleteRecursively()) throw IOException("Could not finish removing the copy")
                     }
                 }
@@ -1478,7 +1483,10 @@ class ScanRepository(private val context: Context) {
      */
     private fun recordedTrashTime(dir: File): Long? {
         val lines = try {
-            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.let {
+                if (dir.parentFile?.name == DigitalStorage.TRASH) DigitalStorage.boundedLines(it, 512)
+                else it.readLines()
+            }
         } catch (_: IOException) {
             null
         } ?: return null
@@ -1500,7 +1508,10 @@ class ScanRepository(private val context: Context) {
     private fun trashedIn(dir: File): TrashedDocument? {
         val doc = loadDocument(dir) ?: return null
         val marker = try {
-            File(dir, TRASH_MARKER).takeIf { it.isFile }?.readLines()
+            File(dir, TRASH_MARKER).takeIf { it.isFile }?.let {
+                if (dir.parentFile?.name == DigitalStorage.TRASH) DigitalStorage.boundedLines(it, 512)
+                else it.readLines()
+            }
         } catch (_: IOException) {
             null
         }
@@ -1562,6 +1573,13 @@ class ScanRepository(private val context: Context) {
             if (!src.exists() || key.startsWith(".")) return
             val originalId = trashedIn(src)?.originalId
             val hidden = File(src.parentFile, "$PURGE_PREFIX${src.name}-${UUID.randomUUID().toString().take(8)}")
+            if (key.startsWith("digital:")) {
+                digitalStorage.beginPurge(src, hidden)
+                trashFault(TrashStage.PURGE_HIDDEN)
+                if (!digitalStorage.finishPurge(hidden)) throw IOException("Could not delete digital item")
+                originalId?.let { dropDerivedCaches(it) }
+                return
+            }
             if (!src.renameTo(hidden)) throw IOException("Could not delete this item")
             trashFault(TrashStage.PURGE_HIDDEN)
             // SEC1 1.3.0: a partial recursive delete is NOT a completed deletion.
@@ -1652,9 +1670,11 @@ class ScanRepository(private val context: Context) {
     fun recoverTrash(now: Long = System.currentTimeMillis()): Int {
         var finished = 0
         synchronized(TRASH_LOCK) {
-            (trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }.orEmpty().toList() +
-                digitalStorage.dirs(DigitalStorage.TRASH).filter { it.name.startsWith(PURGE_PREFIX) }).forEach { f ->
+            trashDir.listFiles { f -> f.name.startsWith(PURGE_PREFIX) }?.forEach { f ->
                 if (f.deleteRecursively()) finished++
+            }
+            digitalStorage.dirs(DigitalStorage.TRASH).filter { it.name.startsWith(PURGE_PREFIX) }.forEach { f ->
+                try { if (digitalStorage.finishPurge(f)) finished++ } catch (_: IOException) { /* retain */ }
             }
             (trashDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty().toList() +
                 digitalStorage.dirs(DigitalStorage.TRASH).filterNot { it.name.startsWith(".") }).forEach { dir ->
@@ -1674,7 +1694,14 @@ class ScanRepository(private val context: Context) {
                     return@forEach
                 }
                 if (trashed.previousToken == null && now - recorded >= TRASH_RETENTION_MS) {
-                    if (dir.deleteRecursively()) {
+                    val removed = if (trashed.document.contentKind == com.scanwhirl.app.model.ContentKind.DIGITAL) {
+                        try {
+                            val hidden = File(dir.parentFile, "$PURGE_PREFIX${dir.name}-${UUID.randomUUID().toString().take(8)}")
+                            digitalStorage.beginPurge(dir, hidden)
+                            digitalStorage.finishPurge(hidden)
+                        } catch (_: IOException) { false }
+                    } else dir.deleteRecursively()
+                    if (removed) {
                         finished++
                         dropDerivedCaches(trashed.originalId)
                     }
@@ -1729,7 +1756,7 @@ class ScanRepository(private val context: Context) {
             File(context.cacheDir, "preview_$id.pdf").delete()
             File(File(context.cacheDir, "documents"), "preview_$id.pdf").delete()
             val digitalPreview = File(context.cacheDir.canonicalFile, "digital_previews/$id")
-            if (DigitalStorage.owned(digitalPreview)) digitalPreview.deleteRecursively()
+            DigitalStorage.deleteOwnedTree(digitalPreview)
         } catch (_: Exception) {
         }
     }

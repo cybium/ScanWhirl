@@ -84,7 +84,7 @@ class ImportDiscardStore(
     }
 
     private fun read(dir: File): Record? = runCatching {
-        val lines = File(dir, "manifest").readLines()
+        val lines = if (digital(dir)) DigitalStorage.boundedLines(File(dir, "manifest"), 1024) else File(dir, "manifest").readLines()
         require(lines.size >= 6 && lines[2] == idOf(dir))
         require(lines[1] in listOf("STAGING", "PENDING", "RESTORING", "PURGING"))
         val start = lines[3].toLong()
@@ -281,7 +281,7 @@ class ImportDiscardStore(
             // A torn, never-moved transaction is not authority to touch the live document.
             val identity = File(dir, "identity")
             if (!identity.isFile && !hadPayload) {
-                if (!dir.deleteRecursively()) throw IOException("Could not clean empty escrow")
+                if (!DigitalStorage.deleteOwnedTree(dir)) throw IOException("Could not clean empty escrow")
                 return
             }
             val expected = DigitalStorage.boundedLines(identity, 128)
@@ -321,7 +321,8 @@ class ImportDiscardStore(
         if (marker.isFile && marker.readText() == dir.name && !marker.delete()) {
             throw IOException("Could not finish restoring import")
         }
-        if (!dir.deleteRecursively()) throw IOException("Could not finish restoring import")
+        if (!(if (isDigital) DigitalStorage.deleteOwnedTree(dir) else dir.deleteRecursively()))
+            throw IOException("Could not finish restoring import")
         Durable.syncDir(dir.parentFile!!)
     }
 
@@ -343,7 +344,8 @@ class ImportDiscardStore(
             if (payload.exists()) requireOwnedTree(payload)
             if (payload.exists() && !payload.deleteRecursively()) throw IOException("Could not finish discard")
         }
-        if (!dir.deleteRecursively()) throw IOException("Could not finish discard")
+        if (!(if (digital(dir)) DigitalStorage.deleteOwnedTree(dir) else dir.deleteRecursively()))
+            throw IOException("Could not finish discard")
         Durable.syncDir(dir.parentFile!!)
     }
 
@@ -384,7 +386,7 @@ class ImportDiscardStore(
         val isDigital = payload.parentFile?.let { digital(it) } == true
         if (isDigital) {
             val preview = File(app.cacheDir.canonicalFile, "digital_previews/$id")
-            if (DigitalStorage.owned(preview) && preview.exists() && !preview.deleteRecursively())
+            if (preview.exists() && !DigitalStorage.deleteOwnedTree(preview))
                 throw IOException("Could not clear digital preview")
         } else {
             payload.walkTopDown().filter { it.isFile }.forEach {

@@ -29,6 +29,7 @@ internal class DigitalStorage(private val context: Context) {
         const val PDF = "scan.pdf"
         const val META = "meta.txt"
         const val PAGES = "pages.v1"
+        const val PURGE_INTENT = ".purge-intent"
         const val MAX_PDF_BYTES = 64L * 1024 * 1024
         const val MAX_META_BYTES = 64L * 1024
         const val MAX_MANIFEST_BYTES = 1024L * 1024
@@ -45,6 +46,43 @@ internal class DigitalStorage(private val context: Context) {
             runCatching { child.canonicalFile == File(parent.canonicalFile, child.name) }.getOrDefault(false)
         fun owned(file: File): Boolean =
             runCatching { file.canonicalFile == file.absoluteFile }.getOrDefault(false)
+        /** Do not recursively follow any symlink, including one below an owned root. */
+        fun deleteOwnedTree(dir: File): Boolean {
+            if (!owned(dir)) return false
+            if (!dir.exists()) return true
+            val paths = mutableListOf<File>()
+            fun collect(node: File, depth: Int): Boolean {
+                if (depth > 16 || paths.size >= 10000 || !owned(node)) return false
+                paths += node
+                if (node.isDirectory) {
+                    val children = node.listFiles() ?: return false
+                    return children.all { collect(it, depth + 1) }
+                }
+                return node.isFile
+            }
+            if (!collect(dir, 0)) return false
+            return paths.asReversed().all { it.delete() }
+        }
+
+        fun boundedHash(file: File): String {
+            require(file.isFile && file.length() in 1..MAX_PDF_BYTES)
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > MAX_PDF_BYTES) throw IOException("Digital PDF too large")
+                    digest.update(buffer, 0, n)
+                }
+                if (total == 0L) throw IOException("Digital PDF empty")
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
         fun boundedLines(file: File, max: Long): List<String> {
             if (!owned(file) || !file.isFile || file.length() !in 1..max) throw IOException("Invalid digital member")
             val bytes = file.inputStream().use { input ->
@@ -112,7 +150,7 @@ internal class DigitalStorage(private val context: Context) {
             // No locked/Vault or other authoritative members until W7b-7. Markers
             // belong to storage moves, never to a PDF object or legacy raster builder.
             require(names.all { owned(it) && it.isFile && it.name in
-                (members + listOf(".ready", ".intent", "meta.txt.tmp", ".ready.tmp", "trashed.txt", "trashed.txt.tmp", ".import-discard", ".import-discard.tmp")) })
+                (members + listOf(".ready", ".intent", "meta.txt.tmp", ".ready.tmp", "trashed.txt", "trashed.txt.tmp", ".import-discard", ".import-discard.tmp", PURGE_INTENT, "$PURGE_INTENT.tmp")) })
             val meta = File(dir, META)
             val lines = boundedLines(meta, MAX_META_BYTES)
             require(lines.size >= 10 && lines[0].isNotBlank())
@@ -156,9 +194,9 @@ internal class DigitalStorage(private val context: Context) {
     }
 
     fun existingRoot(name: String): File = File(context.filesDir.canonicalFile, name)
-    fun child(root: String, id: String): File {
+    fun child(rootName: String, id: String): File {
         require(safeId(id))
-        val parent = root(root)
+        val parent = root(rootName)
         val file = File(parent, id)
         if (!isDirectChild(parent, file)) throw IOException("Invalid digital path")
         return file
@@ -172,19 +210,65 @@ internal class DigitalStorage(private val context: Context) {
         return parent.listFiles { f -> f.isDirectory && isDirectChild(parent, f) }.orEmpty().toList()
     }
     fun reserves(id: String, ignoreStage: Boolean = false, ignoreTrash: Boolean = false): Boolean {
-        if (!safeId(id)) return true
+        if (id.isEmpty() || id.length > 64 || !id.all { it.isLetterOrDigit() || it == '-' || it == '_' }) return true
         return listOf(LIVE, TRASH, ESCROW, STAGING, DRAFTS).filterNot { (ignoreStage && it == STAGING) || (ignoreTrash && it == TRASH) }.any { name ->
             val parent = existingRoot(name)
             if (!owned(parent)) return@any true
             parent.listFiles().orEmpty().any { f ->
                 f.name == id || f.name.startsWith("$id~") || f.name.startsWith("$id--") ||
-                    f.name.startsWith(".purge-$id-")
+                    f.name.startsWith(".purge-$id-") || f.name.startsWith(".purge-$id~")
             }
         }
     }
     fun writesEnabled(): Boolean {
         val flags = context.getSharedPreferences("digital_capabilities", Context.MODE_PRIVATE)
         return flags.getBoolean("digital_store_read", false) && flags.getBoolean("digital_import", false)
+    }
+
+    /** Called under repository writer locks, after a user-authorized delete/expiry. */
+    fun beginPurge(dir: File, hidden: File) {
+        val doc = read(dir) ?: throw IOException("Digital document unavailable")
+        val trash = root(TRASH)
+        if (hidden.parentFile != trash || !isDirectChild(trash, hidden) ||
+            !hidden.name.startsWith(".purge-") || trash.list()?.contains(hidden.name) == true)
+            throw IOException("Invalid digital purge target")
+        val text = "scanwhirl-digital-purge-v1\n${hidden.name}\n${doc.contentGeneration}\n${doc.contentSha256}\n"
+        Durable.atomicWriteText(File(dir, PURGE_INTENT), text)
+        Durable.syncDir(dir)
+        OpFaults.at("digital:purge_marked")
+        if (!dir.renameTo(hidden)) throw IOException("Could not stage digital deletion")
+        Durable.syncDir(dir.parentFile!!)
+        Durable.syncDir(trash)
+    }
+
+    /** Marker is deleted last. Unknown, linked or inconsistent payload is retained. */
+    fun finishPurge(hidden: File): Boolean {
+        val trash = existingRoot(TRASH)
+        if (!owned(trash) || !isDirectChild(trash, hidden) || !owned(hidden) ||
+            !hidden.name.startsWith(".purge-") || !hidden.isDirectory) return false
+        val files = hidden.listFiles() ?: return false
+        if (files.isEmpty()) return hidden.delete()
+        val marker = File(hidden, PURGE_INTENT)
+        val lines = try { boundedLines(marker, 512) } catch (_: Exception) { return false }
+        if (lines.size != 4 || lines[0] != "scanwhirl-digital-purge-v1" ||
+            lines[1] != hidden.name || !token(lines[2]) || !shaPattern.matches(lines[3])) return false
+        val allowed = members + listOf(".ready", ".intent", "meta.txt.tmp", ".ready.tmp",
+            "trashed.txt", "trashed.txt.tmp", ".import-discard", ".import-discard.tmp", PURGE_INTENT, "$PURGE_INTENT.tmp")
+        if (!files.all { owned(it) && it.isFile && it.name in allowed }) return false
+        val pdf = File(hidden, PDF)
+        if (pdf.exists() && (pdf.length() !in 1..MAX_PDF_BYTES || boundedHash(pdf) != lines[3])) return false
+        val full = read(hidden)
+        if (full != null && (full.contentGeneration != lines[2] || full.contentSha256 != lines[3])) return false
+        for (file in files.filter { it.name != PURGE_INTENT }) {
+            if (!file.delete()) return false
+            OpFaults.at("digital:purge_member:${file.name}")
+        }
+        Durable.syncDir(hidden)
+        if (!marker.delete()) return false
+        Durable.syncDir(hidden)
+        if (!hidden.delete()) return false
+        Durable.syncDir(trash)
+        return true
     }
 
     /** Bounded copy of immutable input, verify staged bytes, not the caller's path. */

@@ -250,4 +250,73 @@ class DigitalStorageTest {
             assertEquals(before, snapshot(File(repo.docsDir, old.name)))
         } finally { archive.delete() }
     }
+    @Test fun startupDoesNotPurgeUnprovenAuthorityOrFollowLinks() {
+        enable()
+        val doc = publish()
+        val other = publish()
+        val hidden = File(repo.digitalStorage.root(DigitalStorage.TRASH), ".purge-unproven")
+        assertTrue(doc.pdfFile.parentFile!!.renameTo(hidden))
+        val before = snapshot(hidden)
+        repo.recoverTrash()
+        assertEquals(before, snapshot(hidden))
+        // Host CI is Linux; prove the digital parser does not follow an unexpected child link.
+        val pdf = other.pdfFile
+        assertTrue(pdf.delete())
+        java.nio.file.Files.createSymbolicLink(pdf.toPath(), File(hidden, DigitalStorage.PDF).toPath())
+        assertNull(repo.getDocument(other.id))
+        try { repo.deleteDocument(other.id); fail("linked authority must not be purged") } catch (_: IOException) {}
+        assertEquals(before, snapshot(hidden))
+        assertTrue(pdf.delete())
+    }
+
+    @Test fun interruptedAuthorizedPurgeDeletesOnlyThatAuthority() {
+        enable()
+        val first = publish()
+        val second = publish()
+        val secondHash = snapshot(second.pdfFile.parentFile!!)
+        OpFaults.hook = { if (it.startsWith("digital:purge_member:")) throw SimulatedProcessDeath(it) }
+        try { repo.deleteDocument(first.id); fail("expected interrupted deletion") } catch (_: SimulatedProcessDeath) {}
+        OpFaults.reset()
+        assertNull(repo.getDocument(first.id))
+        assertTrue(repo.digitalStorage.reserves(first.id))
+        repo.recoverTrash()
+        assertFalse(repo.digitalStorage.reserves(first.id))
+        assertEquals(secondHash, snapshot(second.pdfFile.parentFile!!))
+    }
+
+    @Test fun interruptedDigitalRestoreRetriesFromUnchangedBackup() {
+        enable()
+        val doc = publish()
+        val archive = File(app.cacheDir, "restore-interrupted-${UUID.randomUUID()}.swbackup")
+        val password = "fictional password 123"
+        val backup = FullBackup(app)
+        try {
+            backup.write(archive, password, FullBackup.Wrap.PASSWORD)
+            val archiveHash = Sha256.of(archive)
+            repo.digitalStorage.existingRoot(DigitalStorage.LIVE).deleteRecursively()
+            flags.edit().clear().commit()
+            OpFaults.hook = { if (it == "digital:restore_member:pages.v1") throw SimulatedProcessDeath(it) }
+            try { backup.restore(archive, password); fail("expected interrupted restore") } catch (_: SimulatedProcessDeath) {}
+            OpFaults.reset()
+            assertNull(repo.getDocument(doc.id))
+            assertEquals(archiveHash, Sha256.of(archive))
+            repo.digitalTransaction.recover()
+            assertNull(repo.getDocument(doc.id))
+            assertEquals(1, backup.restore(archive, password).documents)
+            assertEquals(doc.contentSha256, repo.getDocument(doc.id)!!.contentSha256)
+            assertEquals(archiveHash, Sha256.of(archive))
+        } finally { archive.delete() }
+    }
+
+    @Test fun renameInEitherRootCannotDuplicateTitle() {
+        val old = raster()
+        enable()
+        val doc = publish(name = "Digital")
+        repo.renameDocument(old.name, doc.name)
+        assertNotEquals(repo.getDocument(old.name)!!.name, repo.getDocument(doc.id)!!.name)
+        repo.renameDocument(doc.id, repo.getDocument(old.name)!!.name)
+        val names = repo.listDocuments().map { it.name }
+        assertEquals(names.toSet().size, names.size)
+    }
+
 }

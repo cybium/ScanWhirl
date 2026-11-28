@@ -396,12 +396,15 @@ class FullBackup(
             }
             val skippedText = replay(plain, staging)
             val digitalStage = staging.resolve(DigitalStorage.LIVE)
-            if (digitalStage.exists()) {
+            if (header.version == VERSION || digitalStage.exists()) {
                 // v1/v2 archives must never be interpreted as carrying a new authority.
                 val manifestFile = staging.resolve("manifest.json")
                 val format = runCatching { JSONObject(readBoundedText(manifestFile, MAX_SETTINGS_BYTES)).getInt("format") }.getOrNull()
                 if (header.version != VERSION || format != VERSION || !digitalStage.isDirectory)
                     throw VaultAuthException("Invalid digital backup format")
+                val rasterIds = staging.resolve("documents").list().orEmpty().toSet()
+                if (digitalStage.list().orEmpty().any { it in rasterIds })
+                    throw VaultAuthException("Conflicting digital backup identity")
             }
             val oldVaultKey = staging.resolve(VAULT_KEY_ENTRY).takeIf { it.isFile }?.let {
                 if (it.length() != 32L) throw VaultAuthException("Damaged backup key")
@@ -734,7 +737,7 @@ class FullBackup(
                 File(dir, "meta.txt").takeIf { it.isFile }?.let { readBoundedText(it, MAX_META_BYTES) }
                     ?.lineSequence()?.drop(3)?.any { it.startsWith("content_kind=") && it != "content_kind=raster" }
             }.getOrDefault(true)
-            if (kind == true) { c.docsFailed++; return@forEach }
+            if (kind == true || File(dir, DigitalStorage.PAGES).exists()) { c.docsFailed++; return@forEach }
             val name = File(dir, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) } ?: id
             var targetId = id
             if (name in existingNames) {
@@ -749,6 +752,11 @@ class FullBackup(
             val target = File(docsDir, targetId)
             val placed = repo.withImportDiscardLock {
                 if (target.exists() || digital.reserves(targetId)) return@withImportDiscardLock false
+                // A digital import might have claimed the title after the restore snapshot.
+                val currentName = File(dir, "meta.txt").takeIf { it.isFile }?.let { nameOf(it) }
+                if (currentName != null && repo.listDocuments(includeVaulted = true).any { it.name == currentName }) {
+                    repo.resolveNameBeforePublish(dir)
+                }
                 val renamed = try {
                     dir.renameTo(target)
             } catch (_: SecurityException) {
@@ -784,7 +792,7 @@ class FullBackup(
                 return@forEach
             }
             repo.withImportDiscardLock {
-                if (repo.resolveDocDir(id) != null) {
+                if (repo.getDocument(id) != null) {
                     c.docsAlreadyHere++
                     return@withImportDiscardLock
                 }

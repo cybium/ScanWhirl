@@ -25,7 +25,7 @@ internal class DigitalTransaction(private val repo: ScanRepository) {
         require(DigitalStorage.token(token))
         if (!storage.writesEnabled()) throw IOException("Digital import is not enabled")
         require(source.isFile && source.length() in 1..DigitalStorage.MAX_PDF_BYTES)
-        val hash = Sha256.of(source)
+        val hash = DigitalStorage.boundedHash(source)
         return transact(token, token, hash, source.length(), "import") { stage ->
             storage.writeVerified(stage, source, name, token, verify)
         }
@@ -111,7 +111,7 @@ internal class DigitalTransaction(private val repo: ScanRepository) {
                 publishSealed(stage)
             }
         } catch (e: Exception) {
-            if (!sealed && stage.exists()) stage.deleteRecursively()
+            if (!sealed && stage.exists()) DigitalStorage.deleteOwnedTree(stage)
             throw e
         } finally {
             repo.withImportDiscardLock { active.remove(stage.path) }
