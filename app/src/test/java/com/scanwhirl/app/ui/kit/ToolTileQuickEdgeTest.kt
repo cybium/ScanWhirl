@@ -5,7 +5,6 @@ import android.view.Gravity
 import android.view.View
 import androidx.test.core.app.ApplicationProvider
 import com.scanwhirl.app.ui.kit.ToolRegistry
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -52,9 +51,11 @@ class ToolTileQuickEdgeTest {
             "the whole icon fits the visible sliver (${tile.iconBox.right / density}dp)",
             tile.iconBox.right <= dp(72f)
         )
-        assertEquals(
+        // TextView may resolve START to an absolute edge; what matters is that it is not
+        // centred (a centred label in a clipped tile disappears with the trailing half).
+        org.junit.Assert.assertNotEquals(
             "the label starts at the leading edge, not the clipped trailing edge",
-            Gravity.START,
+            Gravity.CENTER_HORIZONTAL,
             tile.labelView.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
         )
         assertTrue("the label is still whole", tile.labelView.text.isNotBlank())

@@ -295,7 +295,7 @@ class ToolTile(context: Context) : FrameLayout(context) {
             SwStyle.dp(context, 4f), (2f * d).toInt(),
             SwStyle.dp(context, 4f), (2f * d).toInt()
         )
-        (iconSlot.layoutParams as FrameLayout.LayoutParams).height = (48f * d).toInt()
+        (iconSlot.layoutParams as LinearLayout.LayoutParams).height = (48f * d).toInt()
         (labelView.layoutParams as LinearLayout.LayoutParams).topMargin = (2f * d).toInt()
     }
 
