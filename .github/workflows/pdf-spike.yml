@@ -116,12 +116,9 @@ jobs:
           disable-linux-hw-accel: false
           emulator-boot-timeout: 600
           script: |
-            set +e
-            ./gradlew :app:connectedDebugAndroidTest --stacktrace
-            RC=$?
-            # Pull while the emulator is still up, even when a check fails.
+            ./gradlew :app:connectedDebugAndroidTest --stacktrace || echo failed > gradle-failed.txt
             adb exec-out run-as com.scanwhirl.spike.pdf cat files/pdf_spike_results.json > results-api-${{ matrix.api }}.json || true
-            exit $RC
+            test ! -f gradle-failed.txt
 
       - name: Verify and show JSON results
         if: always()
