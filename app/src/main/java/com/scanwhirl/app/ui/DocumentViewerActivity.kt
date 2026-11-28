@@ -569,7 +569,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
             button.typeface = SwType.medium(this)
             button.maxLines = Int.MAX_VALUE
             button.minHeight = dp(SwStyle.TOUCH_MIN_DP)
-            button.minWidth = dp(SwStyle.TOUCH_MIN_DP)
+            button.minimumWidth = dp(SwStyle.TOUCH_MIN_DP)
             button.isVisible = !(narrow && button == binding.btnSelExtract)
         }
         if (narrow) {
@@ -1227,7 +1227,7 @@ class DocumentViewerActivity : BaseActivity(), HomeHost {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            action.minWidth = dp(SwStyle.TOUCH_MIN_DP)
+            action.minimumWidth = dp(SwStyle.TOUCH_MIN_DP)
             flow.addView(action)
         }
         bar.addView(
